@@ -1,6 +1,6 @@
 # F iOS 全盘静态审计
 
-> 实时更新（2026-10-26）：最新 Apple CI run `40296924473` 已完成Swift Package/FCore XCTest 119/119、XcodeGen、iOS Device Build及Simulator Build，App UI XCTest 3/3通过，未签名IPA已上传。随后工作树新增已清仓证券详情/持仓周期展示Swift修改，待CI验证。人工视觉、图表手势、横屏/多尺寸及真机仍未验证。历史审计中“App仅有骨架”的结论已过期；余下旧记录只作追溯。
+> 实时更新（2026-10-26）：最新 Apple CI run `40298657796` 已完成Swift Package/FCore XCTest 119/119、XcodeGen、iOS Device Build及Simulator Build，App UI XCTest 3/3通过，未签名IPA已上传。已清仓证券详情/持仓周期展示Swift修改包含于本次编译，实际历史数据的设备视觉验收仍待验证。人工视觉、图表手势、横屏/多尺寸及真机仍未验证。历史审计中“App仅有骨架”的结论已过期；余下旧记录只作追溯。
 
 ## 2026-10-26 行情刷新增量复核
 
