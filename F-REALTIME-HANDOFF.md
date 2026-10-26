@@ -2,15 +2,15 @@
 
 > 给主聊天读取的工作区现场快照。状态以本文生成时的 F 工作树和源码为准；commit 仅供追溯，不定义当前开发状态。每个明显开发阶段完成或用户要求汇报时更新本文，不为更新本文强制提交或停止开发。
 
-更新时间：2026-10-26 17:27（Asia/Shanghai）
+更新时间：2026-10-26 17:31（Asia/Shanghai）
 
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
-- 当前真实开发状态：清仓证券详情入口修复已通过Actions run `40298657796` 的Swift编译、FCore 119/119、Device/Simulator Build及App UI 3/3；未签名IPA已上传。历史证券现在显示清仓状态、Episode和各轮盈亏，并可进入行情/历史分钟/Security Advisor；测试未注入持仓，未覆盖实际清仓账户数据的画面表现。
+- 当前真实开发状态：清仓证券详情入口修复已通过Actions run `40298657796` 的Swift编译、FCore 119/119、Device/Simulator Build及App UI 3/3；未签名IPA已上传。当前在统一图表的价格范围/覆盖线回归上新增2项 XCTest 定义，仍待 Apple CI 执行；本工作树 FCore defined=121，最新已执行证据仍是119/119。
 - 最近完成模块：资产页视图切换/现金流水区可发现性测试实际通过；它不创建或注入持仓。上一轮UI测试也通过导航和Advisor状态入口检查。两轮测试均在GitHub macOS Simulator运行，不等同于人工视觉验收或真机验证。
-- 当前已验证代码提交 `83318fa` 发布为远端提交 `7244dd8`，提交树相同；工作树在更新本交接/状态文档后有文档改动待提交。
-- 正在开发：回到统一图表行为收口，重点检查历史日K/分时曲线与Candidate/成本overlay交互；下一步用CI和图表专项覆盖验证。
+- 当前已验证代码提交 `83318fa` 发布为远端提交 `7244dd8`，提交树相同；当前未提交变更是图表模型的2项 XCTest 和本次实时状态文档。
+- 正在开发：验证可见价格纵轴同时包含真实 overlay/IOPV，以及仅显示末根K线时也把历史数据决定的MA250纳入范围；下一步推送现有 Apple CI 执行新增覆盖。
 - 仍未完成：Simulator截图/人工视觉、交互、横屏/多尺寸验收与真机；图表均价/前收可靠来源和横屏全屏；NAS历史分钟、DeepSeek及行情真实服务端到端联调。
 
 ## 二、功能真实完成度
@@ -27,7 +27,7 @@
 - 原生 iOS 首页五布局、独立主导航入口、真实 Ledger 只读展示、Portfolio/Security scope、行情请求、NAS 历史分钟日期查询、日K与均线展示。已清仓证券详情历史入口代码已编译，但UI未以真实清仓记录专项验收。
 - Advisor 请求流水线：Ledger 快照/现金持仓、行情和 NAS Evidence、DecisionContext、Risk/AI Guard、DeepSeek JSON 候选、Candidate Plan 展示、Profile/Memory 输入及决策持久化。
 - buy/sell Candidate 的用户确认表单、二次输入成交事实、摘要复核、`FConfirmedLedgerWriter` 写入及成交后重新判断。
-- 当前Swift测试源码含FCore XCTest 119项定义、App UI XCTest 3项定义；run `40298657796` 实际执行FCore 119/119、App UI 3/3通过。已清仓详情Swift修改包含在本轮编译中。
+- 当前Swift测试源码含FCore XCTest 121项定义（本轮新增2项、尚未执行）、App UI XCTest 3项定义；最新 run `40298657796` 实际执行FCore 119/119、App UI 3/3通过。已清仓详情Swift修改包含在该轮编译中。
 - 统一 renderer 已接入首页行情卡、详情当前分时、NAS历史分钟及日K；日K绘制实际成交量和 MA5/10/20/60/250；账本持仓按 bookCost/units 显示真实单位成本线；同证券 buy/sell Candidate 可绘制候选价线。价格范围将纳入可见蜡烛、均线及有效价格 overlay。
 - 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；已随 App target 成功编译，但未被 UI XCTest覆盖，也没有人工视觉/手势验收，不能标为可用完成。
 - GitHub Actions run `40298657796`：FCore XCTest 119/119通过，XcodeGen、Device Release Build、Simulator Build、App UI XCTest 3/3通过；未签名 IPA 已打包并上传。该run包含已清仓详情修改。CI使用Xcode 16.4/macOS 15；本机仍无Swift/Xcode/XcodeGen。
@@ -112,11 +112,11 @@
 
 | 测试范围 | defined | executed | passed | failed |
 |---|---:|---:|---:|---:|
-| FCore XCTest target（当前测试源码逐文件统计） | 119 | 119 | 119 | 0 |
+| FCore XCTest target（当前测试源码逐文件统计） | 121 | 119（新2项待CI） | 119 | 0 |
 | App UI XCTest | 3 | 3 | 3 | 0 |
 | Python/NAS | 不在本次执行 | 0（本交接期间） | 0（本交接期间） | 0（本交接期间） |
 
-- 当前 FCore 定义数为 119；GitHub Actions run `40298657796` 的 Swift package build与XCTest实际结果为 119 executed / 119 passed / 0 failed。
+- 当前 FCore 定义数为 121；GitHub Actions run `40298657796` 的 Swift package build与XCTest实际结果为 119 executed / 119 passed / 0 failed。本轮新增2项价格范围回归尚未执行。
 - Python/NAS：当前文档最后记录的完整套件是 93/93；随后独立 NAS 部署包记录 7/7。该数字是历史执行记录，本次没有运行 Python/NAS，不能作为当前新代码的 fresh pass，也不可将两个不同阶段简单相加。
 - Swift编译：远端 macOS 已编译 FCore/FAdvisor/FLedgerWrite 与 GuanpanF App target。
 - 远端 iOS CI：run `40298657796` 中 FCore XCTest 119/119、XcodeGen/Device Build/Simulator Build和App UI XCTest 3/3全部通过，已包含当前已清仓详情Swift改动。
@@ -152,16 +152,16 @@
 
 F_CURRENT_STATUS_BEGIN
 
-当前开发阶段：真实资产生命周期修复已编译通过，转入统一图表行为收口
-当前正在开发：统一图表分时/历史分时/日K共用渲染器的产品行为与视觉验收
+当前开发阶段：真实资产生命周期修复已编译通过，统一图表行为收口
+当前正在开发：验证统一图表的可见价格范围覆盖真实叠加值与MA250；新增2项FCore XCTest待CI执行
 刚刚完成：Actions run 40298657796验证FCore XCTest 119/119、App UI XCTest 3/3、Device/Simulator Build与IPA artifact全部成功
-未提交工作：本交接、状态、矩阵与审计文档更新；Swift代码已提交并通过run 40298657796
+未提交工作：图表价格范围2项测试及实时状态文档；当前FCore定义121，最近一次真实执行仍为119通过
 iOS完成度：当前FCore/App target已在macOS CI编译，FCore119/119与App UI3/3通过；已清仓详情编译通过但未做真实清仓数据的UI验收
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
 统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K且App target已编译；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码但未视觉/交互专项验证；均价/前收/IOPV unavailable，横屏未完成
 NAS历史数据完成度：NAS精确日期归档及iOS按日查询/研究接线已编码；实机与生产端到端待验证，存在Missing/Partial/Stale
 Apple编译验证：FCore/App target已由macOS成功编译；Device/Simulator Build与App UI XCTest通过；未签名IPA artifact已上传
-当前测试：FCore XCTest defined=119/executed=119/passed=119/failed=0；App UI defined=3/executed=3/passed=3/failed=0（Actions run 40298657796）；Python/NAS本阶段未执行
+当前测试：FCore XCTest defined=121/executed=119/passed=119/failed=0（新增2项待CI）；App UI defined=3/executed=3/passed=3/failed=0（Actions run 40298657796）；Python/NAS本阶段未执行
 最大缺口：统一图表视觉/手势与横屏专项验收；真实成交App路径端到端；NAS历史分钟/DeepSeek/行情真实服务联调
 下一步：检查统一图表当前分钟/日K与成本/Candidate overlay显示和手势，补专项UI覆盖，再做Simulator横屏/尺寸验收
 

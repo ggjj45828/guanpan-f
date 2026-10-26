@@ -109,6 +109,51 @@ final class MarketChartAcceptanceTests: XCTestCase {
                                                           hitRadius: 8), 2)
     }
 
+    func testChartPriceRangeIncludesVisibleRealOverlaysAndIOPV() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = fetchedAt.addingTimeInterval(-120)
+        let second = fetchedAt.addingTimeInterval(-60)
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "verified-chart-source", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352", window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: 10),
+                             FMinuteSample(timestamp: second, price: 11)]),
+            quality: .complete, temporalMetadata: metadata)
+        let cost = try FChartPriceOverlay(securityCode: "159352", kind: .cost,
+            points: [FChartOverlayPoint(timestamp: first, value: 12),
+                     FChartOverlayPoint(timestamp: second, value: 12)],
+            quality: .complete, source: "confirmed ledger", fetchedAt: fetchedAt)
+        let iopv = try FIOPVObservation(securityCode: "159352", value: 13,
+            observedAt: second, fetchedAt: fetchedAt, source: "verified IOPV source",
+            quality: .complete)
+        let model = try FChartOverlayModel(chart: chart, priceOverlays: [cost], iopv: iopv)
+
+        let range = try XCTUnwrap(model.priceRange())
+        XCTAssertLessThan(range.lowerBound, 10)
+        XCTAssertGreaterThan(range.upperBound, 13)
+    }
+
+    func testDailyVisibleRangeKeepsOffscreenHistoryMA250InPriceRange() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let start = fetchedAt.addingTimeInterval(-250 * 86_400)
+        let bars = (0..<250).map { index -> FDailyBar in
+            let close: Decimal = index == 249 ? 1_000 : 1
+            return FDailyBar(tradingDate: start.addingTimeInterval(Double(index) * 86_400),
+                open: close, close: close, high: close + 1, low: close, volume: 100)
+        }
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "verified-daily-source", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352", window: .daily,
+            series: .daily(bars), quality: .complete, temporalMetadata: metadata)
+        let viewport = try FChartInteractionModel(visibleRange: 249..<250, selectedIndex: nil,
+            zoomScale: 12, crosshairEnabled: false, presentation: .inline, pointCount: 250)
+
+        let range = try XCTUnwrap(FChartOverlayModel(chart: chart).priceRange(interaction: viewport))
+        XCTAssertLessThan(range.lowerBound, 5) // visible MA250 is ~4.996; only the visible candle is near 1,000.
+    }
+
     func testHitTestingRejectsInvalidOrUnsortedCoordinates() {
         XCTAssertNil(FChartHitTesting.nearestPointIndex(tapX: .nan,
                                                         renderedCenters: [10, 20], hitRadius: 4))
