@@ -144,9 +144,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testQuestionRequestCarriesPrebuiltPortfolioContext() throws {
-        let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 100)
         let holding = FPosition(instrumentCode: "159352", name: "中证A500ETF", units: 200,
                                 bookCost: 210)
+        let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 100,
+                                              positions: [holding])
         let book = FAccountBook(openingSnapshot: opening, cashBalance: 100, positions: [holding],
                                 updatedAt: now.addingTimeInterval(-60))
         let snapshot = try book.readOnlySnapshot(capturedAt: now)
@@ -213,9 +214,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertTrue(FAIGuard.evaluate(grid, in: context, now: now).findings
             .contains(.missingQualifiedResearch("gridSpacingReplay:159352")))
 
-        let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 100)
         let holding = FPosition(instrumentCode: "159352", name: "中证A500ETF", units: 200,
                                 bookCost: 210)
+        let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 100,
+                                              positions: [holding])
         let book = FAccountBook(openingSnapshot: opening, cashBalance: 100, positions: [holding],
                                 updatedAt: now.addingTimeInterval(-60))
         let positionSnapshot = try book.readOnlySnapshot(capturedAt: now)
@@ -566,10 +568,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testExpiredEvidenceConflictDoesNotClaimASelectedVersion() throws {
-        let firstJSON = evidenceJSON(qualified: true).replacingOccurrences(
-            of: "2026-10-23T07:59:00Z", with: "2026-10-23T07:58:30Z")
-        let secondJSON = evidenceJSON(qualified: true).replacingOccurrences(
-            of: String(repeating: "a", count: 64), with: String(repeating: "b", count: 64))
+        let firstJSON = recomputedEvidenceJSON(evidenceJSON(qualified: true).replacingOccurrences(
+            of: "2026-10-23T07:59:00Z", with: "2026-10-23T07:58:30Z"))
+        let secondJSON = recomputedEvidenceJSON(evidenceJSON(qualified: true).replacingOccurrences(
+            of: String(repeating: "a", count: 64), with: String(repeating: "b", count: 64)))
         let first = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: Data(firstJSON.utf8))
         let second = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: Data(secondJSON.utf8))
         let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [], researchEvidence: [

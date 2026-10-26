@@ -7,6 +7,13 @@ import Darwin
 import Glibc
 #endif
 
+/// Darwin record locks coordinate processes; the additional local mutex is required
+/// because POSIX record locks do not conflict between file descriptors in one process.
+private final class FLedgerInProcessLock: @unchecked Sendable {
+    static let shared = FLedgerInProcessLock()
+    let lock = NSRecursiveLock()
+}
+
 /// Persistence failures are explicit so callers can keep the last published account value
 /// when disk I/O, validation, or optimistic concurrency checks fail.
 public enum FLedgerPersistenceError: Error, Equatable, Sendable {
@@ -443,6 +450,8 @@ public actor FAccountBookStore {
     }
 
     private func withProcessLock<T>(_ operation: () throws -> T) throws -> T {
+        FLedgerInProcessLock.shared.lock.lock()
+        defer { FLedgerInProcessLock.shared.lock.unlock() }
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let descriptor: Int32 = processLockURL.path.withCString { path in

@@ -42,7 +42,7 @@ jobs:
       - name: Run F Swift package tests
         run: |
           set -o pipefail
-          swift test --parallel 2>&1 | tee F-core-tests.log
+          swift test 2>&1 | tee F-core-tests.log
 
       - name: Generate F Xcode project
         working-directory: GuanpanFApp

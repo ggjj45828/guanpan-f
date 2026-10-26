@@ -20,7 +20,7 @@ final class MarketMinuteDataTests: XCTestCase {
     }
 
     func testParserSortsCurrentSessionRowsAndDropsOpeningAuction() throws {
-        let fetched = stamp("20261026 0942")
+        let fetched = stamp("20261026 0932")
         let payload = #"{"data":{"sz159352":{"data":{"date":"20261026","data":["0932 1.201 1120","0930 1.199 900","0931 1.200 1000"]}}}}"#
         let result = try FTencentMinuteParser.parse(Data(payload.utf8), securityCode: "159352",
                                                     fetchedAt: fetched, timeZone: shanghai)

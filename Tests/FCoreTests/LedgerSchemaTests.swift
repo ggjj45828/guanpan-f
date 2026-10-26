@@ -271,7 +271,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.cashFlow.last?.resultingCashBalance, book.cashBalance)
         XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
                        Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 3))
-        XCTAssertEqual(snapshot.cashFlow.map(\.cashDelta), [-1_000.10, 1_199.90, -550.10])
+        XCTAssertEqual(snapshot.cashFlow.map(\.cashDelta), [10_000, -1_000.10, 1_199.90, -550.10])
         let context = FDecisionContext(snapshot: snapshot, observations: [])
         let request = try FAdvisorQuestionRequest(question: "A500 历史上一共赚了多少？",
                                                  scope: .instrument(code), decisionContext: context, now: now)

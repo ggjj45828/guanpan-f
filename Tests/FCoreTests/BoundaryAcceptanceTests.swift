@@ -38,7 +38,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
                                       "outOfSampleDays": 8, "maxMonthlySampleShare": 0.25,
                                       "maximumMonthlySampleShare": 0.5]
         let payload: [String: Any] = [
-            "schemaVersion": 1, "methodologyVersion": "minute-research-1", "evidenceId": id,
+            "schemaVersion": 1, "methodologyVersion": "minute-research-1", "evidenceId": String(repeating: "0", count: 64),
             "securityCode": "159352", "market": "CN",
             "range": ["start": "2026-10-01", "end": "2026-10-23"],
             "asOf": formatter.string(from: now.addingTimeInterval(-120)),
@@ -46,8 +46,12 @@ final class BoundaryAcceptanceTests: XCTestCase {
             "sessionCoverage": ["complete": 28, "partial": 0, "missing": 0],
             "qualifiedIndependentDays": 28, "minimumQuality": 90, "sources": ["fixture-source"],
             "evidence": ["vwapBreak": ["windows": ["5": metrics]]],
-            "limitations": ["fixture only"], "rawMinuteBarsIncluded": false, "tradePlan": NSNull()
+            "limitations": ["fixture only \(id)"], "rawMinuteBarsIncluded": false, "tradePlan": NSNull()
         ]
+        let initialBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let initialEnvelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: initialBytes)
+        let digest = try initialEnvelope.calculatedContentDigest()
+        payload["evidenceId"] = digest
         let bytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
         let envelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: bytes)
         return FDecisionResearchEvidence(envelope: envelope, capturedAt: now)
@@ -843,7 +847,10 @@ final class BoundaryAcceptanceTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: folder) }
         let store = FAccountBookStore(fileURL: folder.appendingPathComponent("account.json"))
         let writer = FConfirmedLedgerWriter(store: store)
-        _ = try await writer.confirmInitialLedger(makeBook(), confirmation: confirmed(), now: now)
+        let ledgerCreatedAt = now.addingTimeInterval(-60)
+        _ = try await writer.confirmInitialLedger(
+            makeBook(), confirmation: .init(confirmedAt: ledgerCreatedAt, confirmationNote: "用户已确认"),
+            now: now)
         let tradedAt = now.addingTimeInterval(-30)
         let fill = FConfirmedFill(sequence: 1, tradedAt: tradedAt, instrumentCode: "159941", side: .buy,
                                   units: 100, price: 1, fee: 0,
