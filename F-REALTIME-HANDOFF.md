@@ -2,22 +2,23 @@
 
 > 给主聊天读取的工作区现场快照。状态以本文生成时的 F 工作树和源码为准；commit 仅供追溯，不定义当前开发状态。每个明显开发阶段完成或用户要求汇报时更新本文，不为更新本文强制提交或停止开发。
 
-更新时间：2026-10-26 16:44（Asia/Shanghai）
+更新时间：2026-10-26 17:01（Asia/Shanghai）
 
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
-- 当前真实开发状态：功能收口与Apple验证。FCore 119/119通过，XcodeGen、iOS Device Release Build与Simulator Build均已通过。UI导航测试1/2通过，另一项因 Advisor Key 状态无独立可访问性标识失败；当前已补标识与断言，待复跑验证。
-- 最近完成模块：GitHub macOS Actions已通过FCore 119项、XcodeGen、iOS Device Build及Simulator Build；两项UI XCTest实际执行，导航测试通过，Advisor状态说明测试失败后已修复可访问性标识（待验证）。统一图表/成交后复判逻辑仍未做真实设备与服务端联调。
-- 当前工作树包含Advisor在线AI状态行的可访问性标识与UI断言修复，以及实时状态文档更新。Actions run `40292917389` 验证Package编译/FCore119项、XcodeGen、Device Build、Simulator Build均通过；UI XCTest 2项中导航通过，状态行查询失败。新断言待CI复跑。
-- 正在开发：复跑FCore与两项App UI XCTest，确认状态行可访问性修复；随后检查CI打包产物及Simulator运行截图。没有新增模拟数据或自动交易。
-- 仍未完成：UI Test全通过、Simulator截图/交互/横屏/多尺寸验收与真机；图表横屏全屏、均价/前收可靠数据源和真实手势验收；NAS历史分钟与真实服务联调、DeepSeek在线联调。
+- 当前真实开发状态：App编译通过，正在扩展真实资产页专项 UI 覆盖。GitHub Actions run `40294624613` 全绿：FCore 119/119、XcodeGen、iOS Device Release Build、Simulator Build、App UI XCTest 2/2；未签名 IPA 已打包并上传 artifact。之后新增资产视图切换测试，目前定义3项、已执行2项，新测试待CI验证。
+- 最近完成模块：修复 Advisor Key 状态可访问性标识后，两项 UI 测试均实际通过。UI 测试运行于 GitHub macOS Simulator；它验证导航、Advisor状态文案、发送入口与输入框可发现性，不等同于人工视觉验收或真机验证。
+- 当前工作树包含新增的真实资产页 UI 测试及实时状态文档同步；Advisor 可访问性修复源码已在本地提交 `ccc8547` 并发布到远端对应提交 `7eb2972`（提交树一致）。
+- 正在开发：验证“当前持仓/已清仓”切换和现金流水区的可发现性；这项测试只检查真实资产页面结构，不创建或注入持仓。之后继续图表与真实服务链路收口，不扩展 Advisor 架构或 NAS 测试。
+- 仍未完成：Simulator截图/人工视觉、交互、横屏/多尺寸验收与真机；图表均价/前收可靠来源和横屏全屏；NAS历史分钟、DeepSeek及行情真实服务端到端联调。
 
 ## 二、功能真实完成度
 
 ### 【已完成并验证】
 
-- 当前仓库现场核验：HEAD 与 `main` 一致；本次开始时工作树干净，当前唯一未提交变化是新建本交接文档。验证方式：读取 Git 状态、HEAD 和分支引用。
+- 当前仓库现场核验：修复代码已在本地 `ccc8547`，GitHub `main` 对应发布提交 `7eb2972`，两者提交树相同；当前工作树仅有状态文档待提交。验证方式：读取本地 Git 状态、提交树与 Actions run head SHA。
+- Apple自动验证：GitHub Actions run `40294624613` 实际执行FCore 119/119、App UI 2/2；XcodeGen、Device Release Build、Simulator Build、未签名IPA打包与artifact上传均成功。该UI套件仅覆盖导航、Advisor Key状态、发送和输入控件可发现性。
 - NAS 分钟/研究后端：状态文档记录了多个 Python 回归阶段通过，包括最新完整套件记录 93/93，以及之后独立部署包回归 7/7；这是文档中的既往执行记录，本次交接未重跑，不能等同于当前部署验证。
 - NAS `/livez` 曾由用户实测可达；这只证明进程/端口存活，不证明 readiness、生产行情和历史覆盖完整。
 
@@ -26,18 +27,18 @@
 - 原生 iOS 首页五布局、独立主导航入口、真实 Ledger 只读展示、Portfolio/Security scope、行情请求、NAS 历史分钟日期查询、日K与均线展示。
 - Advisor 请求流水线：Ledger 快照/现金持仓、行情和 NAS Evidence、DecisionContext、Risk/AI Guard、DeepSeek JSON 候选、Candidate Plan 展示、Profile/Memory 输入及决策持久化。
 - buy/sell Candidate 的用户确认表单、二次输入成交事实、摘要复核、`FConfirmedLedgerWriter` 写入及成交后重新判断。
-- 当前Swift测试源码含FCore XCTest 119项定义、App UI XCTest 2项定义。run `40292917389` 实际执行FCore 119/119通过、App UI 2/1通过/1失败；新修复待复跑。
+- 当前Swift测试源码含FCore XCTest 119项定义、App UI XCTest 3项定义；run `40294624613` 实际执行FCore 119/119通过、当时定义的App UI 2/2通过。新增资产页 UI 测试尚未执行。
 - 统一 renderer 已接入首页行情卡、详情当前分时、NAS历史分钟及日K；日K绘制实际成交量和 MA5/10/20/60/250；账本持仓按 bookCost/units 显示真实单位成本线；同证券 buy/sell Candidate 可绘制候选价线。价格范围将纳入可见蜡烛、均线及有效价格 overlay。
-- 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；尚未经过 Apple 编译、Simulator 和可视检查，不能标为可用完成。
-- GitHub Actions run `40292917389`：FCore XCTest 119/119通过，XcodeGen、Device Release Build、Simulator Build通过；App UI XCTest执行2项，1通过/1失败。未签名IPA被跳过；本地仍无Swift/Xcode/XcodeGen。
+- 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；已随 App target 成功编译，但未被 UI XCTest覆盖，也没有人工视觉/手势验收，不能标为可用完成。
+- GitHub Actions run `40294624613`：FCore XCTest 119/119通过，XcodeGen、Device Release Build、Simulator Build、App UI XCTest 2/2通过；未签名 IPA 已打包并上传。CI 使用 Xcode 16.4 / macOS 15；本机仍无 Swift/Xcode/XcodeGen。
 
 ### 【正在开发】
 
-- iOS 可运行版本收敛仍未闭环。统一 renderer 首轮已推送；Actions 已触发但失败。先读取失败步骤/日志，再做最小修复。本地没有 Swift/Xcode/XcodeGen；未取得有效 Apple 编译反馈前控制新增 Swift 规模。
+- iOS 可运行版本已通过远端编译与基础 UI XCTest门槛；下一步应补真实功能链路和图表交互验证。本地没有 Swift/Xcode/XcodeGen，继续通过 GitHub macOS workflow验证。
 
 ### 【尚未完成】
 
-- Swift/Xcode/XcodeGen 编译，FCore XCTest 与 App UI XCTest 实际执行，Simulator 截图/交互、横屏、多屏幕尺寸、真机验证。
+- Simulator截图/人工交互、横屏、多屏幕尺寸及真机验证；CI通过仅证明自动化构建和当前两项 UI XCTest。
 - 统一图表的实际编译/运行尚未验证；K柱 OHLC 点选细节和横屏全屏未完成。单位成本与 Candidate 价格已编码为 overlay；均价/前收没有可靠源，当前明确 Unavailable；IOPV 无可靠源，保持 Unavailable。
 - 在线 DeepSeek、NAS 真实服务、真实行情长期稳定性及新闻源的端到端实网联调。
 - Portfolio Advisor 当前虽已编码范围识别与完整组合请求，但真实 provider/Guard/设备流程未通过运行验证。
@@ -52,11 +53,11 @@
 | 首页 | 已编码未验证 | SwiftUI 首页与导航存在；真实资产只读。当前无构建/可发现性验证。 |
 | 行情 | 已编码未验证 | 腾讯当前分钟/报价和日K请求代码存在；真实长期稳定性、来源/质量展示的设备体验未验证。 |
 | 证券详情 | 已编码未验证 | 当前/历史分钟、日K入口及 Advisor 证券 scope 已编码；无设备验证。 |
-| 当前分时 | 已编码未验证 | 现由统一 renderer 消费 FChartDataModel；未编译/设备验证。 |
+| 当前分时 | 已编码未验证 | 现由统一 renderer 消费 FChartDataModel；App target已CI编译，数据刷新/画面和设备行为未专项验证。 |
 | 历史分时 | 已编码未验证 | NAS 按标的/交易日请求与日期选择接入统一 renderer；实网查询和日期切换无运行证据。 |
-| 日K | 已编码未验证 | 真实日K及统一蜡烛图 renderer 存在；未编译。 |
+| 日K | 已编码未验证 | 真实日K及统一蜡烛图 renderer 存在且已随App target编译；实际数据与画面未专项验证。 |
 | 成交量 | 已编码未验证 | 统一日K renderer 使用源 volume 绘制量柱；未视觉/数值验证。 |
-| MA5/10/20/60/250 | 已编码未验证 | 共享 renderer 从真实日收盘价计算，价格范围也包含可见均线；未编译/验证。 |
+| MA5/10/20/60/250 | 已编码未验证 | 共享 renderer 从真实日收盘价计算，价格范围也包含可见均线；已编译，数值/视觉仍待专项验证。 |
 | 成本线 | 已编码未验证 | 从真实 Ledger 的 bookCost/units 生成同证券 overlay，读取账本捕获时点作为来源时间；未设备验证。 |
 | 均价线 | 未开始 | 无可靠成交均价/VWAP来源，界面明确 Unavailable；不从分钟价格自行伪造。 |
 | 前收线 | 未开始 | 当前行情响应未提供可靠前收字段，界面明确 Unavailable。 |
@@ -66,7 +67,7 @@
 | 拖动 | 已编码未验证 | 放大后统一renderer平移时间窗口；未在Simulator验证。 |
 | 缩放 | 已编码未验证 | 统一renderer缩放分钟和日K序列；未在Simulator验证。 |
 | 横屏全屏 | 开发中 | interaction 状态 DTO 有 landscapeFullscreen；未见完整横屏 renderer/设备验证。 |
-| AI标记 | 已编码未验证 | 同证券通过Guard展示的买/卖Candidate可作为虚线价格标记；尚未编译及设备检查。 |
+| AI标记 | 已编码未验证 | 同证券通过Guard展示的买/卖Candidate可作为虚线价格标记；已编译，图表联动/设备检查未做。 |
 | 真实资产 | 已编码未验证 | 使用真实账本只读快照；Confirmed fill 通过独立用户确认入口更新。未在 Apple 环境编译/执行。 |
 | 设置 | 已编码未验证 | 设置页、主题选择、连接状态及 DeepSeek Key Keychain 保存源码存在。 |
 | 通知中心 | 未开始 | 推送/通知中心仍在 External Verification Pending，未发现完整功能。 |
@@ -85,12 +86,12 @@
 | NAS Research Evidence | App 请求、身份/时间/摘要验证及 DecisionContext 接线已编码；生产 NAS 联调未做。 |
 | 历史分钟研究 | Research Evidence 可通过 NAS 历史研究 endpoint 进入 Advisor；IOS/服务端实网端到端未验证。 |
 | 新闻 | 未接入可靠新闻源。 |
-| DecisionContext | 已编码捕获/校验/持久化；XCTest未执行。 |
+| DecisionContext | 已编码捕获/校验/持久化；FCore测试集119/119已通过，在线服务端端到端未验。 |
 | Risk Guard / AI Guard | Pipeline 在显示候选前运行 Guard；源码存在、无 Swift 执行证据。 |
 | DeepSeek | Chat Completions provider 与 Keychain Key 接线已编码；真实 API 联调未验证。 |
 | Candidate Plan | 作为只读建议输出；不得直接写 Ledger。 |
 | 用户确认真实成交 | buy/sell 确认表单要求用户填入实际成交信息；无券商下单能力。未运行验证。 |
-| Ledger 更新 | 确认后经唯一 writer 原子写入，检查账户摘要、余额、费用及成本政策；已编码未编译/未执行。 |
+| Ledger 更新 | 确认后经唯一 writer 原子写入，检查账户摘要、余额、费用及成本政策；FCore 119项已通过，App真实成交流程/设备持久化仍未端到端验收。 |
 | 成交后 AI 重新判断 | 重新加载快照并按原 Portfolio/Security scope 重跑；已编码未验证。 |
 
 链路逐段状态：**真实 Ledger → 当前行情 → NAS Research Evidence → DecisionContext → Risk/AI Guard → DeepSeek → Candidate Plan** 的 App 源码连接已存在，但每段 Apple 编译、真实源、在线服务均未验证；**Candidate Plan → 用户确认事实 → Ledger 更新 → AI 重新判断** 已有显式确认及 writer 路径，但没有 Simulator/真实设备执行证据。因此这是“已编码链路”，不能称“已贯通并可用”。
@@ -112,26 +113,26 @@
 | 测试范围 | defined | executed | passed | failed |
 |---|---:|---:|---:|---:|
 | FCore XCTest target（当前测试源码逐文件统计） | 119 | 119 | 119 | 0 |
-| App UI XCTest | 2 | 2 | 1 | 1 |
+| App UI XCTest | 3 | 2 | 2 | 0 |
 | Python/NAS | 不在本次执行 | 0（本交接期间） | 0（本交接期间） | 0（本交接期间） |
 
-- 当前 FCore 定义数为 119；GitHub Actions run `40292039312` 的 Swift package build与XCTest实际结果为 119 executed / 119 passed / 0 failed。该结果仅验证 Package，不代表 App Build/UI Test通过。
+- 当前 FCore 定义数为 119；GitHub Actions run `40294624613` 的 Swift package build与XCTest实际结果为 119 executed / 119 passed / 0 failed。
 - Python/NAS：当前文档最后记录的完整套件是 93/93；随后独立 NAS 部署包记录 7/7。该数字是历史执行记录，本次没有运行 Python/NAS，不能作为当前新代码的 fresh pass，也不可将两个不同阶段简单相加。
 - Swift编译：远端 macOS 已编译 FCore/FAdvisor/FLedgerWrite 与 GuanpanF App target。
-- 远端 iOS CI：run `40292917389` 中 FCore XCTest 119/119通过、XcodeGen/Device Build/Simulator Build通过；App UI XCTest executed=2 / passed=1 / failed=1。失败点为Advisor状态文本的可访问性查询方式，当前修复待复跑。
-- iOS App Build：Device Release与Simulator Debug均成功。UI Test仍有1项待确认。真机：未验证。本机仍没有 Swift/Xcode/XcodeGen。
+- 远端 iOS CI：run `40294624613` 中 FCore XCTest 119/119通过、XcodeGen/Device Build/Simulator Build通过；App UI XCTest 2/2通过。
+- iOS App Build：Device Release与Simulator Debug均成功，UI Test全通过，未签名IPA已上传。真机和人工视觉验证仍未完成。本机仍没有 Swift/Xcode/XcodeGen。
 
 ## 七、当前最重要的 5 个缺口
 
-1. Apple 工具链缺失，所有 Swift 与 App 接线没有编译/运行保障。
-2. 统一图表 renderer 已接线但 Apple workflow 未通过；编译问题、交互和画面仍未验证。
+1. 自动化已能编译和跑测试，但还缺 Simulator 截图/人工交互、横屏、多屏幕尺寸及真机验收。
+2. 统一图表 renderer 虽已编译，真实图表数据/叠加/手势视觉行为尚未通过专门 UI 验收。
 3. DeepSeek、NAS、行情虽有 App 代码，但没有 iPhone 上的真实服务端到端证据。
-4. 真实成交闭环代码涉及资产账本，尚未在 XCTest/Simulator/设备上验证边界和可用性。
-5. NAS历史分钟、DeepSeek与真实行情的 iPhone 端到端服务验证仍缺失；UI Test、Simulator和真机也未运行。
+4. FCore账本边界测试已通过，但 App 中真实成交确认、持久化及成交后AI重判尚未做完整UI/设备闭环。
+5. NAS历史分钟、DeepSeek与真实行情的 iPhone 端到端服务验证仍缺失；UI自动化已运行，但真机和人工设备验收尚未进行。
 
 ## 八、下一阶段
 
-当前应优先：**修复当前 App target 的首批 Swift 编译错误 → 重编Device App → 编译通过后跑 Simulator Build/UI Test → Simulator启动和截图检查 → 横屏/不同尺寸/真机 → 再联调真实 NAS/DeepSeek/行情。Package已完成119项测试；下一步仍以App编译收敛为先。**
+当前应优先：**对统一图表与真实 Ledger 生命周期做功能级验证/最小修复 → 增加对应 App UI 覆盖 → Simulator截图、横屏/多尺寸 → 真机 → 再联调真实 NAS/DeepSeek/行情。编译和当前119项FCore/2项UI测试已在Actions实际通过，不再把它们描述为待首次编译。**
 
 统一 renderer 是当前最高产品优先级：此工作树已经将分钟/历史分钟/日K入口迁到一个视图，下一步主要是构建反馈和逐步补齐真实来源。Apple 首次编译是最高验证优先级，有环境后暂停新增 Swift 功能先清编译错误。
 
@@ -151,24 +152,26 @@
 
 F_CURRENT_STATUS_BEGIN
 
-当前开发阶段：Device/Simulator Build通过，收敛UI测试
-当前正在开发：将Advisor Key状态行改为明确可访问性元素；更新UI XCTest以读取组合标签，待CI复跑
-刚刚完成：Apple macOS FCore XCTest 119/119通过；XcodeGen、iOS Device Release Build、Simulator Build通过；主导航UI测试通过
-未提交工作：当前工作树含Advisor状态行的可访问性标识/UI断言修复和实时状态文档
-iOS完成度：真实资产双视图、现金/成交流水和Advisor生命周期上下文已编码；尚未通过全套Swift测试和App Build
+当前开发阶段：功能收口与自动化验证已建立，转入真实产品行为验收
+当前正在开发：同步本轮CI通过结果；下阶段验证真实Ledger生命周期与统一图表在Simulator中的可用行为
+刚刚完成：FCore XCTest 119/119、App UI XCTest 2/2通过；XcodeGen、iOS Device Release Build、Simulator Build成功；未签名IPA已上传
+未提交工作：仅实时状态、矩阵和审计文档同步；Swift/App源码修复已提交并推送
+iOS完成度：FCore/App target已在macOS CI编译；FCore 119/119、App UI 2/2通过；图表交互与真实成交产品流程仍未专项验证
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
-统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码；未编译/视觉验证，均价/前收/IOPV unavailable，横屏未完成
+统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K且App target已编译；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码但未视觉/交互专项验证；均价/前收/IOPV unavailable，横屏未完成
 NAS历史数据完成度：NAS精确日期归档及iOS按日查询/研究接线已编码；实机与生产端到端待验证，存在Missing/Partial/Stale
-Apple编译验证：FCore/FAdvisor/FLedgerWrite及App target已由macOS成功编译；Device/Simulator Build通过；UI测试状态修复待复跑
-当前测试：FCore XCTest defined=119/executed=119/passed=119/failed=0；App UI defined=2/executed=2/passed=1/failed=1（Actions run 40292917389）；Python/NAS本阶段未执行
-最大缺口：确认修复后的UI Test全通过；Sim启动截图/横屏/尺寸检查；NAS/DeepSeek/行情真实端到端
-下一步：复跑FCore与两项UI XCTest并检查产物打包；随后打开Simulator截图，接着验证交互与真实服务链路
+Apple编译验证：FCore/App target已由macOS成功编译；Device/Simulator Build与App UI XCTest通过；未签名IPA artifact已上传
+当前测试：FCore XCTest defined=119/executed=119/passed=119/failed=0；App UI defined=3/executed=2/passed=2/failed=0（Actions run 40294624613执行了前2项，新资产测试待执行）；Python/NAS本阶段未执行
+最大缺口：真实 Ledger/Advisor 功能闭环验证；统一图表交互与视觉验收；NAS/DeepSeek/行情生产端到端
+下一步：围绕清仓重建/现金投影和统一图表补功能级验证，再做Simulator视觉/横屏尺寸检查，之后联调真实服务链路
 
 F_CURRENT_STATUS_END
 
 ---
 
-## 实时增量：真实 Ledger 生命周期与现金流水联动（当前工作树）
+## 历史增量记录：真实 Ledger 生命周期与现金流水联动（上阶段快照）
+
+> 以下为较早阶段的增量记录，保留当时执行结果供审计；其中“未执行/待编译”等描述不代表当前状态。当前状态以上方更新时间和机器可读摘要为准。
 
 - 当前模块：修复首次 Apple/Swift 编译暴露的问题；真实 Ledger 生命周期与现金流水修复已编码，统一图表仍是下一产品模块。
 - 已编码：Confirmed Fill 持久记录证券名称；清仓仍只从正持仓投影移除，成交历史保留；只读快照新增持仓周期、历史表现与现金流水；资产页新增“当前持仓/已清仓”视图及现金/成交明细；再次买入从零开始建立新周期和成本；AI请求接收历史周期摘要，区分当前成本与历史已实现收益。

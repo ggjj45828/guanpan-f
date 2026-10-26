@@ -34,4 +34,21 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["发送"].exists)
         XCTAssertTrue(app.textFields.firstMatch.exists || app.textViews.firstMatch.exists)
     }
+
+    func testRealAssetsExposeCurrentClosedAndCashSections() {
+        let app = XCUIApplication()
+        app.launch()
+        app.tabBars.buttons["真实资产"].tap()
+
+        XCTAssertTrue(app.navigationBars["真实资产"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["现金与成交流水"].exists)
+
+        let closedView = app.buttons["已清仓"]
+        XCTAssertTrue(closedView.waitForExistence(timeout: 3))
+        closedView.tap()
+        XCTAssertTrue(app.staticTexts["已清仓 / 历史持仓"].exists)
+
+        app.buttons["当前持仓"].tap()
+        XCTAssertTrue(app.staticTexts["当前持仓"].exists)
+    }
 }

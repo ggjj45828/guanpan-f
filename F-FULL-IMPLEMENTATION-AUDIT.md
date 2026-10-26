@@ -1,6 +1,6 @@
 # F 全盘未完成功能审计
 
-> 实时更新（2026-10-26）：GitHub Actions run `40292917389` 已通过 Swift Package、FCore XCTest 119/119、XcodeGen、iOS Device及Simulator Build；App UI XCTest执行2项，1通过/1失败。失败后的Advisor状态可访问性修复待复跑；下方旧记录只用于追溯。
+> 实时更新（2026-10-26）：GitHub Actions run `40294624613` 已通过 Swift Package/FCore XCTest 119/119、XcodeGen、iOS Device及Simulator Build、当时定义的App UI XCTest 2/2；未签名IPA已打包上传。当前工作树新增第3项资产视图/现金流水UI测试，尚待CI执行。人工视觉/真机和真实服务联调仍待验证；下方旧记录只用于追溯。
 
 审计起始checkpoint：提交 `622c9079307aef6f1af61d9b18e83528702c081f`；本报告后续追加至队列修补提交 `4175bdad598d050e548ce4e1a60b16f17fa4d5ff`。（审计前 `main` / `F-CHECKPOINT`）。本报告区分源码、静态检查、Python实跑、Swift测试定义和目标环境验证；任何一层都不替代另一层。
 
