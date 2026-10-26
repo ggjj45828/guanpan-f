@@ -4,7 +4,7 @@
 
 ## 当前 F 验证快照（2026-10-26）
 
-FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed。App UI XCTest当前源码：3 defined / 2 executed / 2 passed / 0 failed；Actions run `40294624613`执行的是新增资产页测试前的2项。XcodeGen、iOS Device Release Build、Simulator Build成功，未签名IPA已上传。该结果不等于人工视觉、真机或真实NAS/DeepSeek联调通过；下表状态列是验收范围定义，不表示自动通过。
+FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed。App UI XCTest：3 defined / 3 executed / 3 passed / 0 failed，Actions run `40296924473`成功。其后工作树新增已清仓证券详情Swift改动，不包含于该run，待下一轮CI编译验证。Device/Simulator Build成功，未签名IPA已上传；人工视觉、真机与NAS/DeepSeek联调仍待验证。
 
 | ID | F 验收范围 | 状态 | F 验证证据 |
 |---|---|---|---|
@@ -48,13 +48,13 @@ FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed。App UI XCTes
 | F-38 | 原生主导航、只读真实资产、显著AI输入、设置和NAS安全配置 | defined | 五Tab/独立导航栈、AI上下文状态、只读账本页、主题设置、NAS URL与Keychain token、只读`/readyz`检查已编码；本轮2项UI XCTest实际执行并通过（run 40294624613），当前新增第3项资产视图测试待执行；已通过用例覆盖主导航及Advisor控件可发现性，不代表完整功能验收 |
 | F-39 | NAS部署包在大小写敏感的Compose项目名校验下可解析 | defined | Compose固定`name: guanpan-f`；部署包显式包含Python package markers；修复entrypoint CRLF shebang，并在Dockerfile构建时校验`#!/bin/sh`；部署包测试7/7与shell语法检查通过。NAS挂载卷属主初始化后降权至UID 10001；Docker/NAS目标环境仍External Verification Pending |
 | F-40 | 真实持仓 Advisor：组合级 + 证券级 Ledger→行情/研究→DecisionContext→Risk/AI Guard→Candidate Plan | defined | App源码现按入口/问题区分组合与证券范围；真实账本空仓时组合Advisor仍可分析现金；明确六位代码/证券入口可分析尚未持有的证券；组合问题纳入全部真实持仓/现金、逐证券报价和 NAS Evidence/缺失状态。单笔买入/卖出 Candidate 现可由用户填写实际成交并显式确认后调用唯一 Ledger writer，成功后失效旧 Candidate、重读账本并重跑相同作用域 Advisor；做T/网格/回本不自动写入。ETF单笔0.10元及做T双边0.20元估费由iOS校验。基础做T不强制盘口，但要求连续时段可信新鲜行情及同标的合格vwapBreak研究。证券详情页接入NAS按日历史分钟；分钟折线支持长按/按钮十字光标、拖动选点/平移、提示和缩放。Swift/Xcode及真实端到端未验证；日K/均线/IOPV/成本成交量线/横屏仍待实现 |
-| EXT-1 | GitHub DNS / 远端可达性和跨机同步验证 | external pending | 私有 `ggjj45828/guanpan-f` 已通过GitHub API发布F源码；Actions run `40294624613` 成功。跨机克隆/恢复及持续同步仍待验证 |
+| EXT-1 | GitHub DNS / 远端可达性和跨机同步验证 | external pending | 私有 `ggjj45828/guanpan-f` 已通过GitHub API发布F源码；Actions run `40296924473` 成功。跨机克隆/恢复及持续同步仍待验证 |
 | EXT-2 | NAS 端口 8788 与部署/恢复链验证 | external pending | 用户确认 `/livez` 返回 `status=alive`；`/readyz`、token、Provider/Calendar readiness、历史数据和备份恢复仍待验证 |
-| EXT-3 | macOS、Swift/Xcode 构建和模拟器测试 | external pending | GitHub macOS Actions run `40294624613` 用Xcode 16.4完成Swift编译、Device/Simulator Build、FCore 119/119及App UI 2/2；人工截图/交互、横屏/多尺寸和真机仍待验证 |
+| EXT-3 | macOS、Swift/Xcode 构建和模拟器测试 | external pending | GitHub macOS Actions run `40296924473` 用Xcode 16.4完成Swift编译、Device/Simulator Build、FCore 119/119及App UI 3/3；人工截图/交互、横屏/多尺寸和真机仍待验证 |
 | EXT-4 | iPhone 真机、横屏和推送通知验收 | external pending | 需设备环境 |
 | EXT-5 | 实际行情、新闻与在线 AI 服务接入验证 | external pending | 外部服务配置/联调待做 |
 
-当前矩阵为40项 `defined`、5项 `external pending`。FCore XCTest defined=119 / executed=119 / passed=119 / failed=0；App UI XCTest defined=3 / executed=2 / passed=2 / failed=0（run `40294624613`执行新增资产页测试前的2项）。这不代表所有产品验收项已通过；Python结果和静态检查也不代表真机、生产NAS或在线服务通过。不得继承A/B状态。
+当前矩阵为40项 `defined`、5项 `external pending`。FCore XCTest defined=119 / executed=119 / passed=119 / failed=0；App UI XCTest defined=3 / executed=3 / passed=3 / failed=0（run `40296924473`）。该run未验证其后工作树中新增的已清仓详情Swift代码。这不代表所有产品验收项已通过；Python结果和静态检查也不代表真机、生产NAS或在线服务通过。不得继承A/B状态。
 
 
 
