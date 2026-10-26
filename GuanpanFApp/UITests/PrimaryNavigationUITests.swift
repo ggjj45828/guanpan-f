@@ -23,14 +23,13 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["market.refresh.159352"].exists)
         XCTAssertTrue(app.staticTexts["NAS 历史分时"].exists)
         attachScreenshot("03-security-detail-top", app: app)
-        let detailScroll = app.scrollViews.firstMatch
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
-        scrollUntilHittable(dailyChartHeading, in: detailScroll)
-        XCTAssertTrue(dailyChartHeading.isHittable)
+        scrollUntilHittable(dailyChartHeading, in: app)
+        XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
         attachScreenshot("04-security-daily-chart", app: app)
         let historyHeading = app.staticTexts["NAS 历史分时"]
-        scrollUntilHittable(historyHeading, in: detailScroll)
-        XCTAssertTrue(historyHeading.isHittable)
+        scrollUntilHittable(historyHeading, in: app)
+        XCTAssertTrue(historyHeading.isHittable, app.debugDescription)
         attachScreenshot("05-security-history-chart", app: app)
 
         app.tabBars.buttons["AI顾问"].tap()
@@ -74,9 +73,8 @@ final class PrimaryNavigationUITests: XCTestCase {
         closedView.tap()
         let closedHeading = app.staticTexts["已清仓 / 历史持仓"]
         XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
-        let assetsList = app.tables.firstMatch
-        scrollUntilHittable(closedHeading, in: assetsList)
-        XCTAssertTrue(closedHeading.isHittable)
+        scrollUntilHittable(closedHeading, in: app)
+        XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
         attachScreenshot("09-real-assets-closed", app: app)
 
         app.buttons["当前持仓"].tap()
@@ -90,9 +88,9 @@ final class PrimaryNavigationUITests: XCTestCase {
         add(attachment)
     }
 
-    private func scrollUntilHittable(_ element: XCUIElement, in scrollView: XCUIElement) {
+    private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 where !element.isHittable {
-            scrollView.swipeUp(velocity: .slow)
+            app.swipeUp(velocity: .fast)
         }
     }
 }

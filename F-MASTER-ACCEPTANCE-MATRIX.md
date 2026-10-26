@@ -1,5 +1,18 @@
 # F Master Acceptance Matrix
 
+## CI续记（2026-10-26 19:20 Asia/Shanghai；覆盖下方旧快照）
+
+- HEAD `1c10912` 已推送；当前源码后续修改未提交，尚无其编译/测试证据。
+- Actions run `40312257829` 对应提交：FCore 121/121通过；XcodeGen、Device Build、Simulator Build成功；UI XCTest 3执行、2通过、1失败（一个测试用例内两个标题可见断言失败）；截图导出成功；IPA跳过。
+- UI失败表明证券详情日K、历史分钟标题未被当前滚动方式滚动到可见。新本地修正未验证；不把矩阵需求改绿。Python/NAS本轮未执行。
+
+## 最新实时验证覆盖（2026-10-26 18:20 Asia/Shanghai）
+
+- 本地工作树 HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20` 相对 origin/main ahead 1；CLEAN；该本地UI/窄屏布局修正尚未推送或验证，不更改任何验收项为通过。
+- 最新远端成功运行 `40305133985` 对应 `04b0deb`，UI XCTest 3/3通过并导出8张截图；截图人工查看发现刷新行右侧裁切、页面滚动未被旧用例验证到，故相应可用性验收仍未通过。
+- FCore最近明确工件结果来自run `40303339340`：121/121 passed、0 failed。当前本地HEAD不含于该运行。精确当前提交测试状态：FCore 121项defined，当前提交executed=0/pass=0/fail=0；UI 3项defined，当前提交executed=0/pass=0/fail=0。旧CI结果保留为追溯证据，不继承到新代码。
+- 本轮 Python/NAS未执行。Simulator视觉通过、图表数据/交互通过、真实服务联调及真机仍待验收。
+
 本矩阵由 F 产品红线、A/B Frozen 源码裁决、F 自身实施范围及 B 版 Master Acceptance Matrix 的 145 项需求共同形成。B 145 项需求追踪见 [F-B-145-TRACEABILITY.md](F-B-145-TRACEABILITY.md)：保留原编号和需求来源，逐项标注 F 处理结论；不继承 B 实现状态或测试证据。A/B 的测试结果都不算 F 通过。每项先标为 `defined`；只有 F 自身执行并保留证据后才能更新为 `executed`、`passed` 或 `failed`。外部条件另标 `external pending`。
 
 ## 当前 F 验证快照（2026-10-26）

@@ -4,6 +4,15 @@
 
 更新时间：2026-10-26 18:07（Asia/Shanghai）
 
+## 最新现场覆盖（2026-10-26 18:20 Asia/Shanghai）
+
+- 当前源码提交：`main` HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20`，相对本地 `origin/main` ahead 1；Swift源码相对HEAD干净，F-REALTIME-HANDOFF/F-STATUS/Matrix/Audit四份文档有本轮未提交状态更新。该提交是本地待推送的窄幅可用性修复，不把它当已编译版本。推送遇到 GitHub 443 网络连接失败，尚无此提交对应 CI。
+- 最近远端已验证提交：`1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20`，Actions run `40312257829`。FCore 121/121通过；XcodeGen、iOS Device Build、Simulator Build成功。UI 3项均执行，2项通过、1项失败（失败用例中2个目标可见性断言失败）；截图导出成功，IPA因UI步骤失败而跳过。此前 `04b0deb` run `40305133985` 的旧版UI 3/3通过。
+- 已从 run `40305133985` 导出8张、从 `40312257829` 导出9张 Simulator 截图并人工查看。证券详情价格/刷新仍裁切；日K与历史标题截图仍与详情顶部相同。已清仓标题可见性断言通过且其截图与当前资产不同。旧截图不能算图表交互或视觉验收通过。
+- 当前未提交源码修正：价格和刷新按钮改为纵向排布，避免横向裁切；UI用例改用整屏向上手势寻找日K/历史/已清仓标题，失败时附调试树。`1c10912` 当时版本结果已明确：121项FCore通过、Device/Simulator Build通过、UI 2 pass / 1 failed，IPA skipped。新工作树改动尚未推送、编译、执行。
+- 当前正在开发：修正 `1c10912` 验收失败后推送并重跑同一 Apple CI，再看新截图。之后仍需图表真实曲线/手势、横屏、多尺寸、真实Ledger成交闭环及真实NAS/DeepSeek/行情联调。
+- 此刻区分：已完成并验证＝commit 1c10912的FCore 121/121及两种App Build；已编码但本地后续改动未验证＝价格行纵向排布和整屏滚动方式；正在开发＝使截图断言指向真实可见的图表与历史区；未完成＝Simulator图表视觉/手势、横屏、多尺寸、真实服务和真机验收。
+
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`

@@ -1,5 +1,20 @@
 # F 云端开发状态
 
+## CI续记（2026-10-26 19:20 Asia/Shanghai；覆盖下方18:20记录）
+
+- HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20` 已推送并与 origin/main 对齐。随后源码两文件及四份状态文档有本地未提交修改。
+- Actions `40312257829`：FCore XCTest 121/121通过；XcodeGen、Device Build、Simulator Build通过。UI XCTest 3项执行、2项通过、1项失败（同一用例的两个标题可见性断言失败）；截图导出成功，IPA因UI失败跳过。
+- 新截图显示价格/刷新仍裁切；日K/历史截图与证券页顶部重复。已清仓标题测试可见性断言通过，截图与当前资产截图不同。
+- 当前本地再修：价格与刷新纵向排布，UI改用整屏滚动。此后代码未编译/测试，待推送重跑。Python/NAS本轮 executed 0 / passed 0 / failed 0。
+
+## 最新实时覆盖（2026-10-26 18:20 Asia/Shanghai）
+
+- 当前源码提交 HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20`，相对本地 origin/main ahead 1；源码干净，四份状态文档有本次未提交更新。该提交尚未推送；GitHub 443 当前连接失败，因此本提交无 Apple 编译/测试证据。
+- 最新远端成功 workflow 为 `40305133985` / commit `04b0deb`：XcodeGen、Device Release Build、Simulator Build、App UI 3/3、截图导出、未签名 IPA步骤成功。其8张Simulator截图经人工查看发现详情刷新行横向截断，并且旧测试未滚动导致日K/历史、当前资产/已清仓图重复；人工视觉验收未通过。
+- 精确 FCore 数字最近由run `40303339340` 工件确认：121 defined / 121 executed / 121 passed / 0 failed。当前本地UI修正尚未执行，不能继承为当前提交通过证据。App UI当前定义3项；最近远端版本3/3通过，当前新源码待跑。Python/NAS本轮未执行（0/0/0）。
+- 本地窄幅修正已编码：缩短证券详情刷新按钮并收敛价格行；UI自动滚动到日K、历史分钟、已清仓的可见区域后截图。该代码未编译、未运行，等待恢复网络后推送CI。
+- 最新视觉证据附件：GitHub Actions run `40305133985` 的 `guanpan-f-ios-build-evidence` / `UI-Screenshots`（8张）；仅旧版界面快照，不能代表修正后的布局。
+
 ## 当前工作树快照（2026-10-26 18:07 Asia/Shanghai）
 
 - F 当前阶段：可用性验收 + 真实链路联调 + 缺口收口。Actions run `40303339340` 实际执行FCore XCTest 121/121、旧版App UI XCTest 3/3，XcodeGen、Device Release Build、Simulator Build、未签名IPA均成功。
