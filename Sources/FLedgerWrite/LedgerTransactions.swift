@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+@_spi(LedgerStorage) import FCore
 
 public enum FLedgerMutationError: Error, Equatable, Sendable {
     case duplicateFill(UUID)

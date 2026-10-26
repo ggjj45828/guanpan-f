@@ -1,4 +1,5 @@
 import Foundation
+import FCore
 
 public struct FAdvisorMemoryEvidenceProjection: Codable, Equatable, Sendable {
     public let kind: FDecisionEvidenceKind

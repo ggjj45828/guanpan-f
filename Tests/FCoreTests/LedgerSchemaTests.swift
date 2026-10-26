@@ -242,6 +242,11 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(book.fills.map(\.instrumentName), ["A500", "A500"])
         XCTAssertEqual(try FRealizedPerformanceSnapshot.derive(from: book, now: now).netRealizedProfit,
                        Decimal(string: "199.80")!)
+        let closedSnapshot = try book.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(closedSnapshot.instrumentHistories.first?.activeUnits, 0)
+        XCTAssertFalse(closedSnapshot.instrumentHistories.first?.isCurrentlyHeld ?? true)
+        XCTAssertEqual(closedSnapshot.instrumentHistories.first?.episodes.first?.closedAt, sell.tradedAt)
+        XCTAssertEqual(closedSnapshot.cashFlow.last?.resultingCashBalance, book.cashBalance)
 
         let buy2 = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-10),
                                   instrumentCode: code, side: .buy, units: 50, price: 11,
@@ -291,6 +296,36 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNil(snapshot.instrumentHistories.first?.episodes.first?.closedAt)
         XCTAssertEqual(snapshot.cashFlow.last?.cashDelta, Decimal(string: "479.90"))
         XCTAssertEqual(snapshot.cashFlow.last?.resultingCashBalance, 5_479.90)
+    }
+
+    func testRepeatedCloseAndReopenCreatesIndependentEpisodesAndFixedPerFillFees() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-60))
+        var sequence: UInt64 = 0
+        for episode in 1...3 {
+            sequence += 1
+            let buy = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(TimeInterval(episode - 10)),
+                                     instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                     fee: FETFTradeFeePolicy.perConfirmedFill,
+                                     userConfirmation: confirmation(), instrumentName: "A500")
+            book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
+            sequence += 1
+            let sell = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(TimeInterval(episode - 9)),
+                                      instrumentCode: "159352", side: .sell, units: 10, price: 11,
+                                      fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 100.10,
+                                      userConfirmation: confirmation(), instrumentName: "A500")
+            book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+        }
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let history = try XCTUnwrap(snapshot.instrumentHistories.first)
+        XCTAssertEqual(history.instrumentCode, "159352")
+        XCTAssertEqual(history.instrumentName, "A500")
+        XCTAssertEqual(history.episodes.count, 3)
+        XCTAssertTrue(history.episodes.allSatisfy { $0.closedAt != nil && $0.currentUnits == 0 })
+        XCTAssertEqual(history.lifetimeRealizedProfit, Decimal(string: "29.40"))
+        XCTAssertEqual(book.fills.count, 6)
+        XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
+                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 6))
     }
 
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {

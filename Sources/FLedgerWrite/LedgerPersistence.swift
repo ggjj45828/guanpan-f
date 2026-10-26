@@ -465,7 +465,12 @@ public actor FAccountBookStore {
         while true {
             let result: Int32
             #if canImport(Darwin)
-            result = Darwin.flock(descriptor, LOCK_EX)
+            var lock = Darwin.flock()
+            lock.l_type = Int16(F_WRLCK)
+            lock.l_whence = Int16(SEEK_SET)
+            lock.l_start = 0
+            lock.l_len = 0
+            result = Darwin.fcntl(descriptor, F_SETLKW, &lock)
             #elseif canImport(Glibc)
             result = Glibc.flock(descriptor, LOCK_EX)
             #else
@@ -477,7 +482,12 @@ public actor FAccountBookStore {
         }
         defer {
             #if canImport(Darwin)
-            _ = Darwin.flock(descriptor, LOCK_UN)
+            var lock = Darwin.flock()
+            lock.l_type = Int16(F_UNLCK)
+            lock.l_whence = Int16(SEEK_SET)
+            lock.l_start = 0
+            lock.l_len = 0
+            _ = Darwin.fcntl(descriptor, F_SETLK, &lock)
             #elseif canImport(Glibc)
             _ = Glibc.flock(descriptor, LOCK_UN)
             #endif

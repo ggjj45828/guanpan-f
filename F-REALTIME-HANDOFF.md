@@ -173,8 +173,9 @@ F_CURRENT_STATUS_END
 - 当前模块：真实资产/账本收敛；图表与后续 Apple 首次构建路线仍按用户给定次序排在本阶段之后。
 - 已编码：Confirmed Fill 持久记录证券名称；清仓仍只从正持仓投影移除，成交历史保留；只读快照新增持仓周期、历史表现与现金流水；资产页新增“当前持仓/已清仓”视图及现金/成交明细；再次买入从零开始建立新周期和成本；AI请求接收历史周期摘要，区分当前成本与历史已实现收益。
 - 现金规则：每笔买入现金减少“成交额+手续费”，每笔卖出现金增加“成交额-手续费”；现金转入/转出按已确认 FCashMovement 投影；展示的期末现金来自当前真实 Ledger，并应与流水最后余额一致。App 成交手续费采用 FETFTradeFeePolicy 的每笔 0.10 元。AI Candidate 仍无 Ledger 写权限，只有用户确认实际成交后才写入。
-- 测试定义：新增两项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账）。FCore 静态定义总数 118；本地执行 0 / 通过 0 / 失败 0。当前机器没有 Swift、Xcode、XcodeGen，未编译；Apple External Verification Pending。
+- 测试定义：新增三项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账；连续三轮清仓重建及每笔0.10手续费）。FCore 静态定义总数 119；本地执行 0 / 通过 0 / 失败 0。当前机器没有 Swift、Xcode、XcodeGen，未编译；Apple External Verification Pending。
 - 当前工作树含未提交修改：Ledger schema/write/snapshot/history projection、DecisionContext/Advisor request、iOS资产页与成交记录、LedgerSchemaTests，以及本交接文件。此状态是实时开发状态，不由 commit 定义。
-- 尚未验证：旧账本 JSON 解码兼容、macOS/Xcode 编译、118项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
+- 尚未验证：旧账本 JSON 解码兼容、macOS/Xcode 编译、119项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
+- 远端验证：已推送触发现有 macOS workflow；本次 GitHub Actions 页面读取连续超时，未认证 REST 查询受到 GitHub API rate limit，当前不能确认该提交的 workflow 状态/结果。
 - 方向检查：没有新增模拟账户/虚拟资产/自动交易；没有给缺失历史补造证券名（旧流水无名称时显示“名称未记录”）；当前没有发现 F watchlist 删除接口，未增加 watchlist 能力。
 - 下一阶段顺序：完成本阶段静态审查与CI反馈 → 继续统一图表 → 获取 Apple 环境后先编译、运行118项 XCTest、App Build、UI Test、Simulator → 再验证真实 NAS/DeepSeek/行情端到端。用户随后明确的路线优先于旧 handoff 中图表作为当前进行项的描述。
