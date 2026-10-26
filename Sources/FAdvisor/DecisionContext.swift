@@ -446,16 +446,32 @@ public enum FRiskGuard {
                 if units > context.holdingUnits(for: code) { findings.append(.insufficientUnits) }
             }
             if candidate.action == .buy || candidate.action == .dayTrade || candidate.action == .grid {
-                let usage = price * Decimal(units) + candidate.estimatedFee
-                if usage.isNaN {
+                guard let usage = checkedTradeUsage(price: price, units: units,
+                                                    fee: candidate.estimatedFee) else {
                     findings.append(.invalidCandidate)
-                } else if usage > context.cashBalance {
+                    return FDecisionGuardResult(allowedForReview: false, findings: findings)
+                }
+                if usage > context.cashBalance {
                     findings.append(.insufficientCash)
                 }
             }
         }
 
         return FDecisionGuardResult(allowedForReview: findings.isEmpty, findings: findings)
+    }
+
+    private static func checkedTradeUsage(price: Decimal, units: Int64, fee: Decimal) -> Decimal? {
+        var price = price
+        var quantity = Decimal(units)
+        var notional = Decimal.zero
+        guard NSDecimalMultiply(&notional, &price, &quantity, .plain) == .noError else { return nil }
+
+        var notionalForAddition = notional
+        var fee = fee
+        var usage = Decimal.zero
+        guard NSDecimalAdd(&usage, &notionalForAddition, &fee, .plain) == .noError,
+              !usage.isNaN else { return nil }
+        return usage
     }
 }
 
