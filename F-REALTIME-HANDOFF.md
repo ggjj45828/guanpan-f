@@ -7,10 +7,10 @@
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
-- 当前真实开发状态：iOS 可运行版本收敛，当前工作树正在把共享 FChartDataModel/FChartOverlayModel 接入首页行情、证券详情、NAS 历史分钟和日K，形成一个 App renderer。
-- 最近完成模块：确认成交后 Ledger 原子更新并按原 Advisor scope 重新判断；Advisor 读取 Profile/Memory 并持久化 DecisionContext/Memory；NAS 历史分钟按交易日查询及质量显示；当前分时、历史分钟和日K的共享 renderer 首轮接线、MA/成交量/真实单位成本/Candidate overlay 编码。
-- 当前工作树有未提交修改：`GuanpanFApp/Sources/FUnifiedSecurityChart.swift` 新增；`HomeExperience.swift`、`FNASConnection.swift`、`Sources/FCore/ChartDataModel.swift` 修改；本交接文档修改。没有新增模拟数据或模拟交易代码。HEAD=`71f86a569304bfa02d1f686e86cc71cf1f7e6593`，仅作为追溯信息；本地 `main` 与 HEAD 一致。`F-CHECKPOINT` tag 当前指向 `f3a48ce2aa6bcf7dc914d42ddf0b8ba8ea4c7c02`，与 HEAD 不一致；它不是当前进度依据。
-- 正在开发但未完成：统一 renderer 已编码，仍需 Apple 编译检查与修复；横屏全屏、可靠均价/前收数据源和真实设备手势还未完成。
+- 当前真实开发状态：iOS 可运行版本收敛；实时分钟、NAS历史分钟和日K页面已收敛到共享 `FUnifiedSecurityChart` 源码，下一步读取 macOS Actions 失败日志并修复。
+- 最近完成模块：确认成交后 Ledger 原子更新并按原 Advisor scope 重新判断；Advisor 读取 Profile/Memory 并持久化 DecisionContext/Memory；NAS 历史分钟按交易日查询及质量显示；统一 renderer 首轮接线，编码 MA/成交量/真实单位成本/Candidate overlay。
+- 图表源码已提交并推送；当前唯一未提交变化是本交接文档对 CI 结果的更新，源码保持干净。当前 HEAD=`7954bf449f51949d4c5f674f4f66bc8786b8d0c0`，本地 `main` 与 `origin/main` 对齐（commit仅追溯）。`F-CHECKPOINT` tag 仍指向较早的 `f3a48ce2aa6bcf7dc914d42ddf0b8ba8ea4c7c02`，与 HEAD 不一致；不作为进度依据。没有新增模拟数据或模拟交易代码。
+- 正在开发但未完成：统一 renderer 已编码，GitHub macOS Actions #4 显示失败（约28秒）；目前未能提取具体失败步骤/日志，因此不按猜测修改。横屏全屏、可靠均价/前收数据源和真实设备手势仍未完成。
 - 文档同步问题：`F-STATUS.md`、审计文件部分主摘要仍保留“ZIP 导入、无 Git/Advisor 未接线”等旧内容，与当前 Git 工作树及后续审计附录/源码冲突。阅读时应以本文的现场检查和源码为准，并尽快清理过期摘要。
 
 ## 二、功能真实完成度
@@ -29,11 +29,11 @@
 - Swift 测试源码现有 FCore XCTest 116 个 `test…` 定义、App UI XCTest 2 个定义；当前均未执行。测试定义的静态计数来自本次读取各 Swift 测试文件。
 - 统一 renderer 已接入首页行情卡、详情当前分时、NAS历史分钟及日K；日K绘制实际成交量和 MA5/10/20/60/250；账本持仓按 bookCost/units 显示真实单位成本线；同证券 buy/sell Candidate 可绘制候选价线。价格范围将纳入可见蜡烛、均线及有效价格 overlay。
 - 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；尚未经过 Apple 编译、Simulator 和可视检查，不能标为可用完成。
-- 仓库已有 `.github/workflows/guanpan-advisor-ios.yml`：`workflow_dispatch` 运行在 `macos-15`，包含 Swift package tests、XcodeGen 工程生成、iOS device/Simulator build、UI tests及日志/IPA artifact。当前工作树修改尚未上传，该 workflow 不能验证本次改动；本地仍无 Apple 工具链。
+- 仓库已有 `.github/workflows/guanpan-advisor-ios.yml`：`workflow_dispatch` 运行在 `macos-15`，包含 Swift package tests、XcodeGen 工程生成、iOS device/Simulator build、UI tests及日志/IPA artifact。本轮提交已推送，Actions 列表显示 `Guanpan F native iOS #4`（commit `7954bf4`）失败，运行约28秒。打开运行详情时窗口恢复两次仍返回 `window id 68512 no longer belongs to MSEdge; current owner is MSEdge`，按 computer-use 恢复规则停止 UI 输入。具体失败步骤和 CI XCTest 执行数未知；本地仍无 Apple 工具链。
 
 ### 【正在开发】
 
-- iOS 可运行版本收敛仍未闭环。统一 renderer 首轮已编码；接下来优先取得 Apple 编译反馈。本地没有 Swift/Xcode/XcodeGen；仓库有 macOS 15 Actions workflow_dispatch，但需先让当前工作树修改进入 workflow checkout 才能验证本轮改动。未取得工具链前控制新增 Swift 规模。
+- iOS 可运行版本收敛仍未闭环。统一 renderer 首轮已推送；Actions 已触发但失败。先读取失败步骤/日志，再做最小修复。本地没有 Swift/Xcode/XcodeGen；未取得有效 Apple 编译反馈前控制新增 Swift 规模。
 
 ### 【尚未完成】
 
@@ -117,13 +117,14 @@
 
 - 旧状态摘要曾报告 FCore 39 defined；当前测试文件静态统计为 116 个 `func test…`，矩阵/状态文件尚未同步。116 是定义计数，不是通过数。
 - Python/NAS：当前文档最后记录的完整套件是 93/93；随后独立 NAS 部署包记录 7/7。该数字是历史执行记录，本次没有运行 Python/NAS，不能作为当前新代码的 fresh pass，也不可将两个不同阶段简单相加。
-- Swift 编译：否；当前环境未发现 Swift/Xcode/XcodeGen。仓库有 macOS Actions 构建流程，但当前未提交 renderer 不在远端运行范围内。
-- iOS App Build：否。Simulator：未运行。UI Test：未运行。真机：未验证。
+- Swift 编译：本地否；当前环境未发现 Swift/Xcode/XcodeGen。远端 Actions 已运行但失败，具体步骤和编译结果未知，不能记为通过。
+- 远端 iOS CI：Actions #4 显示失败；具体失败步骤与 XCTest 实际执行数未知，不能记为通过。
+- iOS App Build：未确认成功。Simulator：未确认运行。UI Test：未确认执行。真机：未验证。
 
 ## 七、当前最重要的 5 个缺口
 
 1. Apple 工具链缺失，所有 Swift 与 App 接线没有编译/运行保障。
-2. 统一图表目前停留在共享数据/overlay 模型；已有分钟图和日K图仍分立，交互与指标未完整接线。
+2. 统一图表 renderer 已接线但 Apple workflow 未通过；编译问题、交互和画面仍未验证。
 3. DeepSeek、NAS、行情虽有 App 代码，但没有 iPhone 上的真实服务端到端证据。
 4. 真实成交闭环代码涉及资产账本，尚未在 XCTest/Simulator/设备上验证边界和可用性。
 5. F-STATUS、Matrix、Audit 等进度文档与当前源代码/工作区状态不同步，且 XCTest 定义数过时，容易让主聊天误判。
@@ -151,9 +152,9 @@
 F_CURRENT_STATUS_BEGIN
 
 当前开发阶段：iOS可运行版本收敛
-当前正在开发：统一图表renderer首轮已编码并接入当前分时/历史分钟/日K；正在等待Apple编译验证条件
+当前正在开发：统一图表renderer首轮已推送；GitHub Actions #4失败，正在定位具体失败步骤/日志
 刚刚完成：共享图表renderer接线、MA/成交量/真实单位成本/Candidate overlay；Advisor成交后重新判断链路已有编码
-未提交工作：FUnifiedSecurityChart.swift新增；HomeExperience.swift、FNASConnection.swift、ChartDataModel.swift修改；F-REALTIME-HANDOFF.md更新
+未提交工作：仅 F-REALTIME-HANDOFF.md 的当前CI状态更新；源码无未提交修改
 iOS完成度：多个页面、真实Ledger和Advisor链路、统一图表renderer均有源码；未编译、未运行
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
 统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码；未编译/视觉验证，均价/前收/IOPV unavailable，横屏未完成
@@ -161,6 +162,19 @@ NAS历史数据完成度：NAS精确日期归档及iOS按日查询/研究接线�
 Apple编译验证：External Verification Pending；无Swift/Xcode/XcodeGen，未编译/未Build
 当前测试：FCore XCTest defined=116/executed=0/passed=0/failed=0；App UI defined=2/executed=0/passed=0/failed=0；Python本次未执行，最近文档记录完整套件93/93，后续部署包单独7/7
 最大缺口：Apple首次编译；统一图表编译/手势验证；真实服务端端到端；成交闭环设备验证；状态文档同步
-下一步：寻找macOS/Xcode构建条件；如可用立即生成工程、编译、执行116项XCTest、App Build/UI Test和Simulator
+下一步：读取 Actions #4 失败步骤/日志，修复后重跑 macOS 编译、116项XCTest、App Build/UI Test和Simulator
 
 F_CURRENT_STATUS_END
+
+---
+
+## 实时增量：真实 Ledger 生命周期与现金流水联动（当前工作树）
+
+- 当前模块：真实资产/账本收敛；图表与后续 Apple 首次构建路线仍按用户给定次序排在本阶段之后。
+- 已编码：Confirmed Fill 持久记录证券名称；清仓仍只从正持仓投影移除，成交历史保留；只读快照新增持仓周期、历史表现与现金流水；资产页新增“当前持仓/已清仓”视图及现金/成交明细；再次买入从零开始建立新周期和成本；AI请求接收历史周期摘要，区分当前成本与历史已实现收益。
+- 现金规则：每笔买入现金减少“成交额+手续费”，每笔卖出现金增加“成交额-手续费”；现金转入/转出按已确认 FCashMovement 投影；展示的期末现金来自当前真实 Ledger，并应与流水最后余额一致。App 成交手续费采用 FETFTradeFeePolicy 的每笔 0.10 元。AI Candidate 仍无 Ledger 写权限，只有用户确认实际成交后才写入。
+- 测试定义：新增两项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账）。FCore 静态定义总数 118；本地执行 0 / 通过 0 / 失败 0。当前机器没有 Swift、Xcode、XcodeGen，未编译；Apple External Verification Pending。
+- 当前工作树含未提交修改：Ledger schema/write/snapshot/history projection、DecisionContext/Advisor request、iOS资产页与成交记录、LedgerSchemaTests，以及本交接文件。此状态是实时开发状态，不由 commit 定义。
+- 尚未验证：旧账本 JSON 解码兼容、macOS/Xcode 编译、118项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
+- 方向检查：没有新增模拟账户/虚拟资产/自动交易；没有给缺失历史补造证券名（旧流水无名称时显示“名称未记录”）；当前没有发现 F watchlist 删除接口，未增加 watchlist 能力。
+- 下一阶段顺序：完成本阶段静态审查与CI反馈 → 继续统一图表 → 获取 Apple 环境后先编译、运行118项 XCTest、App Build、UI Test、Simulator → 再验证真实 NAS/DeepSeek/行情端到端。用户随后明确的路线优先于旧 handoff 中图表作为当前进行项的描述。

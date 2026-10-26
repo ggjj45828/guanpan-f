@@ -92,6 +92,11 @@ public enum FAccountingPolicy {
     }
 }
 
+/// F ETF trade records use one fixed fee per confirmed fill.
+public enum FETFTradeFeePolicy {
+    public static let perConfirmedFill = Decimal(string: "0.10")!
+}
+
 public enum FTradeSide: String, Codable, Equatable, Sendable { case buy, sell }
 
 /// Required confirmation metadata. The eventual ledger-writing use case must additionally be
@@ -115,6 +120,8 @@ public struct FConfirmedFill: Codable, Equatable, Sendable, Identifiable {
     public var sequence: UInt64
     public var tradedAt: Date
     public var instrumentCode: String
+    /// The security name at this event. Optional only for backward decoding of existing ledgers.
+    public var instrumentName: String?
     public var side: FTradeSide
     public var units: Int64
     public var price: Decimal
@@ -126,11 +133,13 @@ public struct FConfirmedFill: Codable, Equatable, Sendable, Identifiable {
 
     public init(id: UUID = UUID(), sequence: UInt64, tradedAt: Date, instrumentCode: String, side: FTradeSide,
                 units: Int64, price: Decimal, fee: Decimal,
-                costBasisRemoved: Decimal? = nil, userConfirmation: FUserLedgerConfirmation) {
+                costBasisRemoved: Decimal? = nil, userConfirmation: FUserLedgerConfirmation,
+                instrumentName: String? = nil) {
         self.id = id
         self.sequence = sequence
         self.tradedAt = tradedAt
         self.instrumentCode = instrumentCode
+        self.instrumentName = instrumentName
         self.side = side
         self.units = units
         self.price = price
@@ -242,6 +251,10 @@ public extension FAccountBook {
             guard fill.instrumentCode == fill.instrumentCode.trimmingCharacters(in: .whitespacesAndNewlines),
                   Self.validCode(fill.instrumentCode), fill.units > 0,
                   Self.isFinite(fill.price), fill.price > 0, Self.isFinite(fill.fee), fill.fee >= 0 else {
+                throw FLedgerValidationError.invalidFill(fill.id)
+            }
+            if let name = fill.instrumentName,
+               name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 throw FLedgerValidationError.invalidFill(fill.id)
             }
             if fill.side == .buy {

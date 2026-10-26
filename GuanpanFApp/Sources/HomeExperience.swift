@@ -457,6 +457,7 @@ private struct CrossMarketOverview: View {
 
 private struct RealAssetsOverview: View {
     @ObservedObject var model: FHomeModel
+    @State private var selectedView = 0
 
     var body: some View {
         List {
@@ -464,8 +465,13 @@ private struct RealAssetsOverview: View {
                 LabeledContent("账本状态", value: model.ledgerStatus)
                 LabeledContent("可用现金", value: model.cashText)
                 LabeledContent("真实持仓", value: "\(model.holdings.count) 项")
+                Picker("资产视图", selection: $selectedView) {
+                    Text("当前持仓").tag(0)
+                    Text("已清仓").tag(1)
+                }.pickerStyle(.segmented)
             }
-            Section("持仓明细") {
+            if selectedView == 0 {
+                Section("当前持仓") {
                 if model.holdings.isEmpty {
                     Text(model.ledgerState == .available ? "账本已读取，当前没有真实持仓" : "真实持仓尚不可用")
                         .foregroundStyle(.secondary)
@@ -479,14 +485,55 @@ private struct RealAssetsOverview: View {
                         }
                     }
                 }
+                }
+            } else {
+                Section("已清仓 / 历史持仓") {
+                    let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
+                    if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(.secondary) }
+                    ForEach(closed) { history in
+                        NavigationLink(value: FHomeRoute.instrument(history.instrumentCode)) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("\(history.instrumentName) · \(history.instrumentCode)").font(.headline)
+                                Text("\(history.episodes.count) 个持仓周期 · 历史已实现 \(history.lifetimeRealizedProfit.description)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                ForEach(history.episodes) { episode in
+                                    Text("第\(episode.episodeNumber)轮：\(episode.openedAt.formatted(date: .numeric, time: .omitted)) 建仓 → \(episode.closedAt?.formatted(date: .numeric, time: .omitted) ?? "持有中") · 已实现 \(episode.netRealizedProfit.description)")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Section("现金与成交流水") {
+                if model.cashFlow.isEmpty { Text("暂无可读取的现金流水").foregroundStyle(.secondary) }
+                ForEach(model.cashFlow.reversed()) { entry in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
+                        Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · 手续费 \(entry.fee.description)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
             Section("资产安全") {
                 Label("AI 建议和候选计划不写入真实账本", systemImage: "lock.shield")
-                Text("真实成交登记入口尚未接入；当前页面只读取账本快照。")
+                Text("只有用户确认实际成交后才写入账本；所有成交和现金变动保留在历史流水中。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("真实资产")
+    }
+}
+
+private extension FReadOnlyCashFlowKind {
+    var label: String {
+        switch self {
+        case .openingBalance: "期初现金"
+        case .buy: "买入"
+        case .sell: "卖出"
+        case .deposit: "现金转入"
+        case .withdrawal: "现金转出"
+        }
     }
 }
 

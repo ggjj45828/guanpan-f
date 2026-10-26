@@ -1,5 +1,7 @@
 import XCTest
-@testable import FCore
+@_spi(LedgerStorage) @testable import FCore
+@testable import FLedgerWrite
+import FAdvisor
 
 final class LedgerSchemaTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -218,6 +220,77 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(updated.audits.count, 1)
         XCTAssertNotNil(updated.audits[0].priorLedgerDigest)
         XCTAssertNotEqual(updated.audits[0].priorLedgerDigest, updated.audits[0].resultingLedgerDigest)
+    }
+
+    func testConfirmedCloseAndReopenRetainsHistoryAndStartsFreshEpisodeAndCashFlow() throws {
+        let code = "159352"
+        var book = FAccountBook(openingSnapshot: opening(cash: 10_000), cashBalance: 10_000,
+                                updatedAt: now.addingTimeInterval(-60))
+        let buy1 = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-30),
+                                  instrumentCode: code, side: .buy, units: 100, price: 10,
+                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(buy1, instrumentName: "A500", now: now)
+        let sell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-20),
+                                  instrumentCode: code, side: .sell, units: 100, price: 12,
+                                  fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 1_000.10,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+
+        XCTAssertTrue(book.positions.isEmpty, "清仓只移除当前持仓投影")
+        XCTAssertEqual(book.fills.count, 2, "清仓不能删除成交流水")
+        XCTAssertEqual(book.fills.map(\.instrumentName), ["A500", "A500"])
+        XCTAssertEqual(try FRealizedPerformanceSnapshot.derive(from: book, now: now).netRealizedProfit,
+                       Decimal(string: "199.80")!)
+
+        let buy2 = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-10),
+                                  instrumentCode: code, side: .buy, units: 50, price: 11,
+                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(buy2, instrumentName: "A500", now: now)
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+
+        XCTAssertEqual(snapshot.positions.first?.units, 50)
+        XCTAssertEqual(snapshot.positions.first?.bookCost, Decimal(string: "550.10"))
+        XCTAssertEqual(snapshot.instrumentHistories.first?.instrumentName, "A500")
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.count, 2)
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[0].closedAt, sell.tradedAt)
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[0].netRealizedProfit,
+                       Decimal(string: "199.80"))
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[1].currentBookCost,
+                       Decimal(string: "550.10"))
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[1].openingUnits, 50)
+        XCTAssertEqual(snapshot.instrumentHistories.first?.lifetimeRealizedProfit,
+                       Decimal(string: "199.80"))
+        XCTAssertEqual(snapshot.cashFlow.count, 4)
+        XCTAssertEqual(snapshot.cashFlow.last?.resultingCashBalance, book.cashBalance)
+        XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
+                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 3))
+        XCTAssertEqual(snapshot.cashFlow.map(\.cashDelta), [-1_000.10, 1_199.90, -550.10])
+        let context = FDecisionContext(snapshot: snapshot, observations: [])
+        let request = try FAdvisorQuestionRequest(question: "A500 历史上一共赚了多少？",
+                                                 scope: .instrument(code), decisionContext: context, now: now)
+        XCTAssertEqual(request.portfolioContext?.positionHistory.first?.episodeCount, 2)
+        XCTAssertEqual(request.portfolioContext?.recentPositionEpisodes.map(\.currentBookCost),
+                       [0, Decimal(string: "550.10")!])
+    }
+
+    func testConfirmedPartialSalePreservesActivePositionEpisodeAndCashLedgerLink() throws {
+        let openingPosition = FPosition(instrumentCode: "159352", name: "A500", units: 100,
+                                        bookCost: 1_000)
+        let sale = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "159352", side: .sell,
+                                  units: 40, price: 12, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  costBasisRemoved: 400, userConfirmation: confirmation(), instrumentName: "A500")
+        let book = FAccountBook(openingSnapshot: opening(cash: 5_000, positions: [openingPosition]),
+                                cashBalance: 5_479.90,
+                                positions: [.init(instrumentCode: "159352", name: "A500", units: 60,
+                                                  bookCost: 600)], fills: [sale], updatedAt: now)
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(snapshot.positions.first?.units, 60)
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.first?.currentUnits, 60)
+        XCTAssertNil(snapshot.instrumentHistories.first?.episodes.first?.closedAt)
+        XCTAssertEqual(snapshot.cashFlow.last?.cashDelta, Decimal(string: "479.90"))
+        XCTAssertEqual(snapshot.cashFlow.last?.resultingCashBalance, 5_479.90)
     }
 
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {

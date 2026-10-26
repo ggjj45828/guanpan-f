@@ -95,6 +95,54 @@ public extension FContextDataClass {
     }
 }
 
+/// Compact Ledger-derived history for the advisor. Episode cost and lifetime realized
+/// profit stay separate so a closed round cannot contaminate a later active round.
+public struct FDecisionPositionEpisode: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { "\(instrumentCode)#\(episodeNumber)" }
+    public let instrumentCode: String
+    public let instrumentName: String
+    public let episodeNumber: Int
+    public let openedAt: Date
+    public let closedAt: Date?
+    public let openingUnits: Int64
+    public let currentUnits: Int64
+    public let currentBookCost: Decimal
+    public let netRealizedProfit: Decimal
+    public let openingReason: String?
+
+    public init(_ episode: FPositionEpisode) {
+        instrumentCode = episode.instrumentCode
+        instrumentName = episode.instrumentName
+        episodeNumber = episode.episodeNumber
+        openedAt = episode.openedAt
+        closedAt = episode.closedAt
+        openingUnits = episode.openingUnits
+        currentUnits = episode.currentUnits
+        currentBookCost = episode.currentBookCost
+        netRealizedProfit = episode.netRealizedProfit
+        openingReason = episode.openingReason.map { String($0.prefix(256)) }
+    }
+}
+
+public struct FDecisionPositionHistory: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { instrumentCode }
+    public let instrumentCode: String
+    public let instrumentName: String
+    public let episodeCount: Int
+    public let lifetimeRealizedProfit: Decimal
+    public let firstHeldAt: Date
+    public let lastActivityAt: Date
+
+    public init(_ history: FInstrumentHistorySnapshot) {
+        instrumentCode = history.instrumentCode
+        instrumentName = history.instrumentName
+        episodeCount = history.episodes.count
+        lifetimeRealizedProfit = history.lifetimeRealizedProfit
+        firstHeldAt = history.firstHeldAt
+        lastActivityAt = history.lastActivityAt
+    }
+}
+
 /// Immutable decision-time view of account state and external facts.
 public struct FDecisionContext: Codable, Equatable, Sendable {
     public let id: UUID
@@ -106,6 +154,9 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     public let observations: [FContextObservation]
     /// Compact NAS statistics captured by reference; never a mutable store or raw minute series.
     public let researchEvidence: [FDecisionResearchEvidence]
+    public let positionHistory: [FDecisionPositionHistory]
+    public let recentPositionEpisodes: [FDecisionPositionEpisode]
+    public let positionEpisodeHistoryIsTruncated: Bool
 
     public init(id: UUID = UUID(), snapshot: FReadOnlyLedgerSnapshot,
                 observations: [FContextObservation],
@@ -121,10 +172,17 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         }
         self.observations = observations
         self.researchEvidence = Self.deduplicatedResearchEvidence(researchEvidence)
+        positionHistory = snapshot.instrumentHistories.map(FDecisionPositionHistory.init)
+            .sorted { $0.instrumentCode < $1.instrumentCode }
+        let allEpisodes = snapshot.instrumentHistories.flatMap(\.episodes)
+            .sorted { $0.openedAt < $1.openedAt }
+        positionEpisodeHistoryIsTruncated = allEpisodes.count > 64
+        recentPositionEpisodes = allEpisodes.suffix(64).map(FDecisionPositionEpisode.init)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, accountID, accountDigest, cashBalance, holdings, observations, researchEvidence
+        case positionHistory, recentPositionEpisodes, positionEpisodeHistoryIsTruncated
     }
 
     /// Old archived contexts remain readable; absent research references mean none were captured.
@@ -139,6 +197,9 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         observations = try values.decode([FContextObservation].self, forKey: .observations)
         researchEvidence = Self.deduplicatedResearchEvidence(
             try values.decodeIfPresent([FDecisionResearchEvidence].self, forKey: .researchEvidence) ?? [])
+        positionHistory = try values.decodeIfPresent([FDecisionPositionHistory].self, forKey: .positionHistory) ?? []
+        recentPositionEpisodes = try values.decodeIfPresent([FDecisionPositionEpisode].self, forKey: .recentPositionEpisodes) ?? []
+        positionEpisodeHistoryIsTruncated = try values.decodeIfPresent(Bool.self, forKey: .positionEpisodeHistoryIsTruncated) ?? false
     }
 
     public static func capture(from reader: any FLedgerSnapshotReading,
@@ -159,6 +220,14 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
               Set(holdings.map(\.instrumentCode)).count == holdings.count,
               holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 }),
               Set(observations.map(\.id)).count == observations.count,
+              Set(positionHistory.map(\.instrumentCode)).count == positionHistory.count,
+              Set(recentPositionEpisodes.map(\.id)).count == recentPositionEpisodes.count,
+              recentPositionEpisodes.count <= 64,
+              positionHistory.allSatisfy({ $0.episodeCount >= 0 && !$0.lifetimeRealizedProfit.isNaN }),
+              recentPositionEpisodes.allSatisfy({ $0.episodeNumber > 0 && $0.openingUnits >= 0 &&
+                  $0.currentUnits >= 0 && !$0.currentBookCost.isNaN && $0.currentBookCost >= 0 &&
+                  !$0.netRealizedProfit.isNaN && FDecisionContextValidation.nonBlank($0.instrumentCode) &&
+                  FDecisionContextValidation.nonBlank($0.instrumentName) }),
               Set(researchEvidence.map(\.id)).count == researchEvidence.count else {
             if let duplicate = Dictionary(grouping: researchEvidence, by: \.id)
                 .first(where: { $0.value.count > 1 })?.key {

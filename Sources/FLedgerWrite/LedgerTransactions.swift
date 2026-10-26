@@ -32,6 +32,9 @@ public extension FAccountBook {
         guard !instrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw FLedgerMutationError.invalidInstrumentName
         }
+        let retainedName = instrumentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var retainedFill = fill
+        retainedFill.instrumentName = retainedName
 
         let beforeDigest = try ledgerStateDigest()
         var result = self
@@ -50,8 +53,9 @@ public extension FAccountBook {
                 guard !overflow else { throw FLedgerValidationError.positionQuantityOverflow(fill.instrumentCode) }
                 result.positions[index].units = units
                 result.positions[index].bookCost += debit
+                result.positions[index].name = retainedName
             } else {
-                result.positions.append(FPosition(instrumentCode: fill.instrumentCode, name: instrumentName,
+                result.positions.append(FPosition(instrumentCode: fill.instrumentCode, name: retainedName,
                                                  units: fill.units, bookCost: debit))
             }
         case .sell:
@@ -77,6 +81,7 @@ public extension FAccountBook {
             result.cashBalance += credit
             result.positions[index].units -= fill.units
             result.positions[index].bookCost -= removedCost
+            result.positions[index].name = retainedName
             if result.positions[index].units == 0 {
                 guard result.positions[index].bookCost == 0 else {
                     throw FLedgerMutationError.invalidCostBasis(fill.instrumentCode)
@@ -85,7 +90,7 @@ public extension FAccountBook {
             }
         }
 
-        result.fills.append(fill)
+        result.fills.append(retainedFill)
         result.updatedAt = fill.userConfirmation.confirmedAt
         try result.validate(now: now)
         let afterDigest = try result.ledgerStateDigest()

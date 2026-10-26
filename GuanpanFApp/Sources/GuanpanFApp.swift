@@ -43,6 +43,8 @@ final class FHomeModel: ObservableObject {
 
     @Published private(set) var cashBalance: Decimal?
     @Published private(set) var holdings: [FHomeHolding] = []
+    @Published private(set) var instrumentHistories: [FInstrumentHistorySnapshot] = []
+    @Published private(set) var cashFlow: [FReadOnlyCashFlowEntry] = []
     @Published private(set) var ledgerStatus = "正在读取本机真实账本"
     @Published private(set) var ledgerState: FHomeLedgerState = .loading
     @Published var question = ""
@@ -104,6 +106,8 @@ final class FHomeModel: ObservableObject {
                 return
             }
             cashBalance = snapshot.cashBalance
+            instrumentHistories = snapshot.instrumentHistories
+            cashFlow = snapshot.cashFlow
             latestLedgerSnapshot = snapshot
             holdings = snapshot.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
@@ -159,9 +163,11 @@ final class FHomeModel: ObservableObject {
         pendingCandidateScope = result.scope
         actualFillUnitsText = String(units)
         actualFillPriceText = NSDecimalNumber(decimal: price).stringValue
-        actualFillInstrumentName = latestLedgerSnapshot?.positions.first(where: {
+        actualFillInstrumentName = latestLedgerSnapshot?.instrumentHistories.first(where: {
             $0.instrumentCode == code
-        })?.name ?? ""
+        })?.instrumentName ?? latestLedgerSnapshot?.positions.first(where: {
+            $0.instrumentCode == code
+        })?.name ?? code
         ledgerConfirmationNote = ""
         ledgerWriteStatus = "请核对并填写实际成交信息；此操作会更新真实账本。"
         showingLedgerConfirmation = true
@@ -220,8 +226,9 @@ final class FHomeModel: ObservableObject {
                                                         .trimmingCharacters(in: .whitespacesAndNewlines))
             let fill = FConfirmedFill(sequence: lastSequence + 1, tradedAt: now,
                                       instrumentCode: code, side: side, units: units, price: price,
-                                      fee: Decimal(string: "0.10")!, costBasisRemoved: removedCost,
-                                      userConfirmation: confirmation)
+                                      fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: removedCost,
+                                      userConfirmation: confirmation,
+                                      instrumentName: actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines))
             let writer = FConfirmedLedgerWriter(store: store)
             _ = try await writer.confirmFill(fill, instrumentName: actualFillInstrumentName,
                                              now: now)
@@ -329,6 +336,8 @@ final class FHomeModel: ObservableObject {
             }
             latestLedgerSnapshot = freshLedger
             cashBalance = freshLedger.cashBalance
+            instrumentHistories = freshLedger.instrumentHistories
+            cashFlow = freshLedger.cashFlow
             holdings = freshLedger.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
                              units: $0.units, bookCost: $0.bookCost)

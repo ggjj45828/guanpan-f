@@ -155,6 +155,28 @@ public struct FAdvisorPortfolioContextProjection: Codable, Equatable, Sendable {
     public let cashBalance: Decimal
     public let holdings: [FDecisionHoldingSnapshot]
     public let observations: [FContextObservation]
+    public let positionHistory: [FDecisionPositionHistory]
+    public let recentPositionEpisodes: [FDecisionPositionEpisode]
+    public let positionEpisodeHistoryIsTruncated: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case contextID, accountID, accountDigest, capturedAt, cashBalance, holdings, observations
+        case positionHistory, recentPositionEpisodes, positionEpisodeHistoryIsTruncated
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        contextID = try values.decode(UUID.self, forKey: .contextID)
+        accountID = try values.decode(UUID.self, forKey: .accountID)
+        accountDigest = try values.decode(String.self, forKey: .accountDigest)
+        capturedAt = try values.decode(Date.self, forKey: .capturedAt)
+        cashBalance = try values.decode(Decimal.self, forKey: .cashBalance)
+        holdings = try values.decode([FDecisionHoldingSnapshot].self, forKey: .holdings)
+        observations = try values.decode([FContextObservation].self, forKey: .observations)
+        positionHistory = try values.decodeIfPresent([FDecisionPositionHistory].self, forKey: .positionHistory) ?? []
+        recentPositionEpisodes = try values.decodeIfPresent([FDecisionPositionEpisode].self, forKey: .recentPositionEpisodes) ?? []
+        positionEpisodeHistoryIsTruncated = try values.decodeIfPresent(Bool.self, forKey: .positionEpisodeHistoryIsTruncated) ?? false
+    }
 
     fileprivate init(context: FDecisionContext) {
         contextID = context.id
@@ -164,13 +186,18 @@ public struct FAdvisorPortfolioContextProjection: Codable, Equatable, Sendable {
         cashBalance = context.cashBalance
         holdings = context.holdings
         observations = context.observations
+        positionHistory = context.positionHistory
+        recentPositionEpisodes = context.recentPositionEpisodes
+        positionEpisodeHistoryIsTruncated = context.positionEpisodeHistoryIsTruncated
     }
 
     public func matches(_ context: FDecisionContext) -> Bool {
         contextID == context.id && accountID == context.accountID &&
             accountDigest == context.accountDigest && capturedAt == context.createdAt &&
             cashBalance == context.cashBalance && holdings == context.holdings &&
-            observations == context.observations
+            observations == context.observations && positionHistory == context.positionHistory &&
+            recentPositionEpisodes == context.recentPositionEpisodes &&
+            positionEpisodeHistoryIsTruncated == context.positionEpisodeHistoryIsTruncated
     }
 }
 

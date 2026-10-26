@@ -28,6 +28,8 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
     public let ledgerDigest: String
     public let cashBalance: Decimal
     public let positions: [FReadOnlyPositionSnapshot]
+    public let instrumentHistories: [FInstrumentHistorySnapshot]
+    public let cashFlow: [FReadOnlyCashFlowEntry]
     public let confirmedFillIDs: Set<UUID>
     public let confirmedFillTimestamps: [UUID: Date]
 
@@ -40,6 +42,11 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
         cashBalance = book.cashBalance
         positions = book.positions.map(FReadOnlyPositionSnapshot.init)
             .sorted { $0.instrumentCode < $1.instrumentCode }
+        instrumentHistories = FLedgerHistoryProjection.instruments(from: book)
+        let names = Dictionary(uniqueKeysWithValues: instrumentHistories.map {
+            ($0.instrumentCode, $0.instrumentName)
+        })
+        cashFlow = FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
         confirmedFillIDs = Set(book.fills.map(\.id))
         confirmedFillTimestamps = Dictionary(uniqueKeysWithValues: book.fills.map { ($0.id, $0.tradedAt) })
     }
