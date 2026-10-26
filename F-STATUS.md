@@ -292,6 +292,12 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 写入前重读真实账本并核对 Candidate account digest；卖出时按当前真实持仓计算政策成本，手续费固定 CNY 0.10。调用唯一 `FConfirmedLedgerWriter.confirmFill` 后原子更新本地真实账本；账本变化、数据无效或计划已失效均拒绝写入。
 - 成功后清除旧 Candidate、重读只读快照，并按原 Portfolio 或 Security scope 重新构建 Advisor 问题。做T、网格与回本计划不自动转换成成交，必须逐笔由用户核对记录。Swift/Xcode不可用：已编码，未编译、未执行 XCTest、未在 Simulator/iPhone 验证。
 
+## iOS 可运行版本收敛：画像与决策记忆进入 Advisor
+
+- App 现在在 Application Support 的独立 `f-advisor` 目录初始化 Investor Profile、Decision Memory 和 DecisionContext 存储；它们不获得 Ledger writer 能力。
+- 每次 Advisor 问题使用 `FAdvisorRequestAssembler` 读取按时点受限的 Profile/Memory 投影，再与冻结的账本、行情和 NAS Evidence 共同构建请求。模型结果通过 Guard 后，Context 与 Decision Memory 分别以乐观摘要保护持久化；任一保存失败不展示为完成建议。
+- 当前没有画像编辑/撤销 UI，也不从问答自动推断或写入偏好。Swift/Xcode不可用：该链路已编码，未编译、未执行 XCTest、未在真实设备验证。
+
 ## 2026-10-26 Active Development 工作区约定
 
 - 用户指定本机唯一 Active Development 工作区为 `C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`。今后 F 的所有源码修改、提交、测试、状态矩阵和 checkpoint 均在此目录进行；A/B 保持只读。

@@ -263,3 +263,9 @@ F 默认 runtime 不再要求用户提供 Python 插件。新增腾讯当日分�
 - 原生 App 以前只展示 Candidate Plan，真实 Ledger writer 未被 UI 消费。现在只有通过 Guard 的 `.buy`/`.sell` 候选可打开确认表单；用户必须输入实际价格、份额、证券名称和确认说明，再按一次确认写入。表单是记录已经完成的真实成交，不向券商或外部交易端发送订单。
 - 写入路径重读账本并匹配 Candidate digest，卖出按当前仓位执行成本分摊，固定单笔 ETF 费用 CNY 0.10，随后经 `FConfirmedLedgerWriter` 原子持久化。成功后旧结果清除、账本重读，并按原作用域重新请求 Advisor；做T/网格/回本不自动生成或拆分 Ledger 成交。
 - 无 Swift/Xcode/Simulator，未编译或执行 UI/XCTest；这是一段已编码的安全闭环，不是已验证的真实资产写入功能。
+
+## iOS 可运行版本收敛：Advisor 画像与记忆投影 — 2026-10-26
+
+- App 原先直接创建问题请求，导致已有的 Investor Profile / Decision Memory 存储没有进入在线 Advisor。现改用 `FAdvisorRequestAssembler`，仅将冻结时点、当前 account/scope 的受限投影放入请求；该存储与 Ledger writer 分离。
+- Guard 完成后，冻结的 DecisionContext 与由结果生成的 Decision Memory 先后以 optimistic digest 保存；持久化错误会中止“已完成”结果，不把不可审计的建议呈现给用户。Profile 尚无编辑 UI，且不从模型回答自动学习。
+- 未执行 Swift 编译、XCTest、真实 Profile/Memory 恢复或在线模型联调；全部仍为 External Verification Pending。

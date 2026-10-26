@@ -73,6 +73,9 @@ final class FHomeModel: ObservableObject {
     private var pendingCandidate: FCandidateRecommendation?
     private var pendingCandidateScope: FAdvisorEntryScope?
     private var ledgerStore: FAccountBookStore?
+    private var decisionMemoryStore: FDecisionMemoryStore?
+    private var investorProfileStore: FInvestorProfileStore?
+    private var decisionContextStore: FDecisionContextStore?
     private var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
 
     init() {
@@ -84,6 +87,10 @@ final class FHomeModel: ObservableObject {
         }
         let store = FAccountBookStore(fileURL: support.appendingPathComponent("f-real-ledger.json"))
         ledgerStore = store
+        let advisorDirectory = support.appendingPathComponent("f-advisor", isDirectory: true)
+        decisionMemoryStore = FDecisionMemoryStore(directory: advisorDirectory)
+        investorProfileStore = FInvestorProfileStore(directory: advisorDirectory)
+        decisionContextStore = FDecisionContextStore(directory: advisorDirectory)
         aiKeyStatus = (try? FAdvisorAIKeychain.read()) == nil
             ? "未配置 DeepSeek API Key" : "DeepSeek Key 已保存在本机 Keychain"
         Task { await loadLedger(from: store) }
@@ -385,9 +392,12 @@ final class FHomeModel: ObservableObject {
             let context = FDecisionContext(snapshot: freshLedger, observations: observations,
                                            researchEvidence: evidence)
             try context.validate(now: contextCaptureTime)
-            let request = try FAdvisorQuestionRequest(question: text, scope: scope,
-                                                       decisionContext: context,
-                                                       now: contextCaptureTime)
+            guard let decisionMemoryStore, let investorProfileStore, let decisionContextStore else {
+                throw FAdvisorLiveError.noRealLedger
+            }
+            let request = try await FAdvisorRequestAssembler(
+                profileStore: investorProfileStore, memoryStore: decisionMemoryStore
+            ).assemble(question: text, scope: scope, decisionContext: context, now: contextCaptureTime)
             let provider = FDeepSeekCandidateProvider(apiKey: apiKey)
             let modelAssessment = try await FAdvisorDecisionPipeline(model: provider).assess(
                 request: request, context: context, now: contextCaptureTime)
@@ -421,6 +431,17 @@ final class FHomeModel: ObservableObject {
             guard let narrative = await provider.takeNarrative(for: assessment.candidate.id) else {
                 throw FAdvisorLiveError.invalidAIResponse
             }
+            let contextDigest = try await decisionContextStore.currentDigest(now: completedAt)
+            _ = try await decisionContextStore.append(context, expectedPriorDigest: contextDigest,
+                                                       now: completedAt)
+            let memory = try FDecisionMemory(context: context, candidate: assessment.candidate,
+                                              recommendation: narrative.conclusion,
+                                              rationale: narrative.basis,
+                                              conditions: narrative.invalidationConditions,
+                                              advisorRequest: request)
+            let memoryDigest = try await decisionMemoryStore.currentDigest(now: completedAt)
+            _ = try await decisionMemoryStore.append(memory, expectedPriorDigest: memoryDigest,
+                                                      now: completedAt)
             let holdingSummary = freshLedger.positions.filter { targetCodes.contains($0.instrumentCode) }
                 .map { "\($0.instrumentCode) \($0.name) · \($0.units) 份 · 账面成本总额 ¥\(NSDecimalNumber(decimal: $0.bookCost))" }
                 .joined(separator: "\n")
