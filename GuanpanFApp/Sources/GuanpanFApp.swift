@@ -63,6 +63,15 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var advisorStatus = "尚未开始分析"
     @Published private(set) var isAskingAdvisor = false
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
+    @Published var showingLedgerConfirmation = false
+    @Published var actualFillUnitsText = ""
+    @Published var actualFillPriceText = ""
+    @Published var actualFillInstrumentName = ""
+    @Published var ledgerConfirmationNote = ""
+    @Published private(set) var writingConfirmedFill = false
+    @Published private(set) var ledgerWriteStatus = ""
+    private var pendingCandidate: FCandidateRecommendation?
+    private var pendingCandidateScope: FAdvisorEntryScope?
     private var ledgerStore: FAccountBookStore?
     private var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
 
@@ -124,6 +133,104 @@ final class FHomeModel: ObservableObject {
     func askAdvisor(instrumentCode: String? = nil) {
         guard !isAskingAdvisor else { return }
         Task { await runAdvisorQuestion(instrumentCode: instrumentCode) }
+    }
+
+    /// Opens a draft only for a directly recordable buy or sell recommendation.
+    /// The user must still enter the actual fill, then press the separate confirm
+    /// action before the only ledger writer is invoked.
+    func beginLedgerConfirmation(for result: FAdvisorVerticalSliceResult) {
+        guard result.isReviewable,
+              result.candidate.action == .buy || result.candidate.action == .sell,
+              let code = result.candidate.instrumentCode,
+              let units = result.candidate.units,
+              let price = result.candidate.limitPrice,
+              result.candidate.accountDigest == latestLedgerSnapshot?.ledgerDigest else {
+            ledgerWriteStatus = "候选计划已失效或不是可登记的单笔买入/卖出；请重新分析。"
+            return
+        }
+        pendingCandidate = result.candidate
+        pendingCandidateScope = result.scope
+        actualFillUnitsText = String(units)
+        actualFillPriceText = NSDecimalNumber(decimal: price).stringValue
+        actualFillInstrumentName = latestLedgerSnapshot?.positions.first(where: {
+            $0.instrumentCode == code
+        })?.name ?? ""
+        ledgerConfirmationNote = ""
+        ledgerWriteStatus = "请核对并填写实际成交信息；此操作会更新真实账本。"
+        showingLedgerConfirmation = true
+    }
+
+    func confirmPendingFill() {
+        guard !writingConfirmedFill else { return }
+        Task { await writePendingConfirmedFill() }
+    }
+
+    private func writePendingConfirmedFill() async {
+        guard let candidate = pendingCandidate, let scope = pendingCandidateScope,
+              let store = ledgerStore,
+              let code = candidate.instrumentCode,
+              let units = Int64(actualFillUnitsText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              units > 0,
+              let price = Decimal(string: actualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                  locale: Locale(identifier: "en_US_POSIX")), price > 0,
+              !actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !ledgerConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请填写有效的实际成交份额、价格、证券名称和确认说明。"
+            return
+        }
+        let side: FTradeSide
+        switch candidate.action {
+        case .buy: side = .buy
+        case .sell: side = .sell
+        default:
+            ledgerWriteStatus = "做T、网格和回本计划必须逐笔记录真实成交，不能自动写入账本。"
+            return
+        }
+        writingConfirmedFill = true
+        defer { writingConfirmedFill = false }
+        do {
+            let now = Date()
+            guard let snapshot = try await store.readLedgerSnapshot(now: now),
+                  snapshot.ledgerDigest == candidate.accountDigest,
+                  let book = try await store.load(now: now) else {
+                throw FAdvisorLiveError.ledgerChangedDuringAnalysis
+            }
+            let lastSequence = (book.fills.map(\.sequence) + book.cashMovements.map(\.sequence)).max() ?? 0
+            guard lastSequence < UInt64.max else { throw FAdvisorLiveError.ledgerChangedDuringAnalysis }
+            let removedCost: Decimal?
+            if side == .sell {
+                guard let position = book.positions.first(where: { $0.instrumentCode == code }) else {
+                    throw FLedgerMutationError.missingPosition(code)
+                }
+                removedCost = try FAccountingPolicy.costBasisRemoved(unitsSold: units,
+                                                                      totalUnits: position.units,
+                                                                      totalBookCost: position.bookCost)
+            } else {
+                removedCost = nil
+            }
+            let confirmation = FUserLedgerConfirmation(confirmedAt: now,
+                                                       confirmationNote: ledgerConfirmationNote
+                                                        .trimmingCharacters(in: .whitespacesAndNewlines))
+            let fill = FConfirmedFill(sequence: lastSequence + 1, tradedAt: now,
+                                      instrumentCode: code, side: side, units: units, price: price,
+                                      fee: Decimal(string: "0.10")!, costBasisRemoved: removedCost,
+                                      userConfirmation: confirmation)
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmFill(fill, instrumentName: actualFillInstrumentName,
+                                             now: now)
+            await loadLedger(from: store)
+            pendingCandidate = nil
+            pendingCandidateScope = nil
+            advisorResult = nil
+            showingLedgerConfirmation = false
+            ledgerWriteStatus = "真实成交已由用户确认并写入账本；正在以更新后的账本重新判断。"
+            advisorStatus = ledgerWriteStatus
+            let target: String?
+            if case let .instrument(instrument) = scope { target = instrument } else { target = nil }
+            await runAdvisorQuestion(instrumentCode: target)
+        } catch {
+            ledgerWriteStatus = "真实账本未更新：\(error.localizedDescription)"
+        }
     }
 
     func saveDeepSeekKey(_ draft: String) {
@@ -513,6 +620,9 @@ struct FHomeRoot: View {
         )) {
             Button("知道了", role: .cancel) { model.alertMessage = nil }
         } message: { Text(model.alertMessage ?? "") }
+        .sheet(isPresented: $model.showingLedgerConfirmation) {
+            FLedgerConfirmationSheet(model: model)
+        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await model.autoRefreshMarketData()

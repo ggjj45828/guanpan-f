@@ -257,3 +257,9 @@ F 默认 runtime 不再要求用户提供 Python 插件。新增腾讯当日分�
 - 从 `606f470` CLEAN checkpoint 开始，未回退至任何旧基线。新增 `FChartOverlayModel`，将既有实时分钟、NAS历史分钟和日K的 `FChartDataModel` 作为唯一数据入口；成本、均价、前收、IOPV和Candidate仅以同证券且已标注来源/获取时间的 `FChartPriceOverlay` / `FIOPVObservation` 进入模型。
 - 该模型拒绝跨证券与重复同类overlay；视窗纵轴合并实际K线高低点或分钟价格与全部可用overlay，Unavailable项目不产出数字或曲线。它为“不可因其他曲线挤出真实线”提供共享核心，但尚未把现有各SwiftUI图表替换成一个渲染器。
 - 没有新增或运行XCTest；Swift/Xcode仍不可用，保持 FCore XCTest `39 defined / 0 executed / 0 passed / 0 failed`，App UI `2 / 0 / 0 / 0`。本机Python命令也不可用，架构脚本本阶段未执行；不能将文件级复核误报为编译或测试通过。
+
+## iOS 可运行版本收敛：确认成交到重新判断 — 2026-10-26
+
+- 原生 App 以前只展示 Candidate Plan，真实 Ledger writer 未被 UI 消费。现在只有通过 Guard 的 `.buy`/`.sell` 候选可打开确认表单；用户必须输入实际价格、份额、证券名称和确认说明，再按一次确认写入。表单是记录已经完成的真实成交，不向券商或外部交易端发送订单。
+- 写入路径重读账本并匹配 Candidate digest，卖出按当前仓位执行成本分摊，固定单笔 ETF 费用 CNY 0.10，随后经 `FConfirmedLedgerWriter` 原子持久化。成功后旧结果清除、账本重读，并按原作用域重新请求 Advisor；做T/网格/回本不自动生成或拆分 Ledger 成交。
+- 无 Swift/Xcode/Simulator，未编译或执行 UI/XCTest；这是一段已编码的安全闭环，不是已验证的真实资产写入功能。

@@ -8,7 +8,7 @@
 | F-02 | 账本 schema 版本、稳定 ID、输入校验和拒绝未知版本 | defined | 首版数据模型与 XCTest 已定义，未执行 |
 | F-03 | 现金以用户确认的流水为事实，逐事件无透支且可重放对账 | defined | 事件序号与逐步余额检查已定义，未执行 |
 | F-04 | 持仓份额、成本、买卖与费用守恒；部分卖出按加权平均分摊到 CNY 8 位小数，清仓时移除全部剩余成本 | defined | 规则与 XCTest 已定义，未执行 |
-| F-05 | 成交仅由明确用户确认写入；失败不得改变源状态 | defined | FLedgerWrite 独立模块提供用户确认写入口；Advisor 不依赖该模块；原子存储已编码，XCTest 未执行 |
+| F-05 | 成交仅由明确用户确认写入；失败不得改变源状态 | defined | FLedgerWrite 独立模块提供用户确认写入口；App 对 Guard 通过的单笔买入/卖出 Candidate 提供需填写实际成交与确认说明的显式入口，写前重新核对账本摘要并由原子 writer 持久化；Advisor 不依赖写模块。做T/网格/回本不自动写入；Swift/XCTest 未执行 |
 | F-06 | 成交幂等、重复 ID/序号拒绝、审计摘要可校验 | defined | 重复成交 ID/序号校验、事件重放和审计摘要已编码；XCTest 未执行 |
 | F-07 | 候选计划、AI 建议、报价和研究数据不能改账 | defined | FAdvisor 无 FLedgerWrite 依赖；快照读取接口只读；架构边界脚本通过；解码后的Research/Memory/Profile投影须匹配Context与范围并通过no-lookahead/结构校验；新增投影回归已定义、XCTest未执行 |
 | F-08 | 成本分摊、舍入、部分成交与已实现损益规则明确 | defined | 部分卖出成本分摊与只读已实现盈亏汇总已编码；部分成交生命周期和 XCTest 待 Swift 验证 |
@@ -43,7 +43,7 @@
 | F-37 | NAS按月核验官方交易日历，双源一致后原子发布 | defined | Worker/存储已编码；目标NAS运行和实网兼容待验证 |
 | F-38 | 原生主导航、只读真实资产、显著AI输入、设置和NAS安全配置 | defined | 五Tab/独立导航栈、AI上下文状态、只读账本页、主题设置、NAS URL与Keychain token、只读`/readyz`检查已编码；2项XCUITest定义未执行 |
 | F-39 | NAS部署包在大小写敏感的Compose项目名校验下可解析 | defined | Compose固定`name: guanpan-f`；部署包显式包含Python package markers；修复entrypoint CRLF shebang，并在Dockerfile构建时校验`#!/bin/sh`；部署包测试7/7与shell语法检查通过。NAS挂载卷属主初始化后降权至UID 10001；Docker/NAS目标环境仍External Verification Pending |
-| F-40 | 真实持仓 Advisor：组合级 + 证券级 Ledger→行情/研究→DecisionContext→Risk/AI Guard→Candidate Plan | defined | App源码现按入口/问题区分组合与证券范围；真实账本空仓时组合Advisor仍可分析现金；明确六位代码/证券入口可分析尚未持有的证券；组合问题纳入全部真实持仓/现金、逐证券报价和 NAS Evidence/缺失状态。Candidate仍不写Ledger；ETF单笔0.10元及做T双边0.20元估费由iOS校验。基础做T不强制盘口，但要求连续时段可信新鲜行情及同标的合格vwapBreak研究。证券详情页接入NAS按日历史分钟；分钟折线支持长按/按钮十字光标、拖动选点/平移、提示和缩放。Swift/Xcode及真实端到端未验证；日K/均线/IOPV/成本成交量线/横屏仍待实现 |
+| F-40 | 真实持仓 Advisor：组合级 + 证券级 Ledger→行情/研究→DecisionContext→Risk/AI Guard→Candidate Plan | defined | App源码现按入口/问题区分组合与证券范围；真实账本空仓时组合Advisor仍可分析现金；明确六位代码/证券入口可分析尚未持有的证券；组合问题纳入全部真实持仓/现金、逐证券报价和 NAS Evidence/缺失状态。单笔买入/卖出 Candidate 现可由用户填写实际成交并显式确认后调用唯一 Ledger writer，成功后失效旧 Candidate、重读账本并重跑相同作用域 Advisor；做T/网格/回本不自动写入。ETF单笔0.10元及做T双边0.20元估费由iOS校验。基础做T不强制盘口，但要求连续时段可信新鲜行情及同标的合格vwapBreak研究。证券详情页接入NAS按日历史分钟；分钟折线支持长按/按钮十字光标、拖动选点/平移、提示和缩放。Swift/Xcode及真实端到端未验证；日K/均线/IOPV/成本成交量线/横屏仍待实现 |
 | EXT-1 | GitHub DNS / 远端可达性和跨机同步验证 | external pending | 私有 `ggjj45828/guanpan-f` 已创建且用户授权上传；本地 GitHub HTTPS 认证缺失，推送在认证前失败，源码未上传，Actions及跨机恢复未验证 |
 | EXT-2 | NAS 端口 8788 与部署/恢复链验证 | external pending | 用户确认 `/livez` 返回 `status=alive`；`/readyz`、token、Provider/Calendar readiness、历史数据和备份恢复仍待验证 |
 | EXT-3 | macOS、Swift/Xcode 构建和模拟器测试 | external pending | 当前执行环境为Linux且无Swift/Xcode；F macOS CI工作流已配置但尚无远端执行证据 |

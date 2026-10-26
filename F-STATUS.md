@@ -286,6 +286,12 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 纵轴范围由可视窗口内的真实分钟价或日K高低点，加上可用成本/均价/前收/IOPV/Candidate叠加点共同计算并保留小幅边距。`Unavailable` IOPV/overlay 不贡献任何数值，禁止为完整图形伪造曲线。
 - 此阶段只完成核心数据模型，未增加未经Apple工具链验证的大型SwiftUI渲染代码；现有证券详情 NAS 按日历史分钟消费链保持不变。未运行Swift编译或XCTest：FCore XCTest `39 / 0 / 0 / 0`；App UI XCTest `2 / 0 / 0 / 0`。本机Python入口不可用，未将静态脚本记为已执行。
 
+## iOS 可运行版本收敛：用户确认成交闭环
+
+- App 现仅对通过 Guard 的单笔买入/卖出 Candidate Plan 提供“登记用户确认的真实成交”入口。它预填建议值，但要求用户重新填写实际份额、实际价格、证券名称和非空确认说明；该入口不会向券商下单。
+- 写入前重读真实账本并核对 Candidate account digest；卖出时按当前真实持仓计算政策成本，手续费固定 CNY 0.10。调用唯一 `FConfirmedLedgerWriter.confirmFill` 后原子更新本地真实账本；账本变化、数据无效或计划已失效均拒绝写入。
+- 成功后清除旧 Candidate、重读只读快照，并按原 Portfolio 或 Security scope 重新构建 Advisor 问题。做T、网格与回本计划不自动转换成成交，必须逐笔由用户核对记录。Swift/Xcode不可用：已编码，未编译、未执行 XCTest、未在 Simulator/iPhone 验证。
+
 ## 2026-10-26 Active Development 工作区约定
 
 - 用户指定本机唯一 Active Development 工作区为 `C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`。今后 F 的所有源码修改、提交、测试、状态矩阵和 checkpoint 均在此目录进行；A/B 保持只读。

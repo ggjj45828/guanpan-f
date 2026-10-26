@@ -176,7 +176,9 @@ private struct AdvisorComposer: View {
             Text("组合问题会纳入全部真实持仓；证券详情入口只分析目标证券。账本、行情和合格 NAS 证据只读传入，Candidate Plan 不会改写资产。")
                 .font(.caption2).foregroundStyle(.secondary)
             if let result = model.advisorResult {
-                FAdvisorResultCard(result: result, accent: theme.accent)
+                FAdvisorResultCard(result: result, accent: theme.accent) {
+                    model.beginLedgerConfirmation(for: result)
+                }
             }
         }
         .padding(16)
@@ -809,6 +811,7 @@ private extension Collection {
 private struct FAdvisorResultCard: View {
     let result: FAdvisorVerticalSliceResult
     let accent: Color
+    let confirmLedger: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -850,6 +853,15 @@ private struct FAdvisorResultCard: View {
                     }
                     Label("Guard 已通过人工审阅门槛；不下单、不写 Ledger", systemImage: "lock.shield")
                         .font(.caption).foregroundStyle(.secondary)
+                    if result.candidate.action == .buy || result.candidate.action == .sell {
+                        Button("登记用户确认的真实成交", action: confirmLedger)
+                            .buttonStyle(.borderedProminent)
+                            .tint(accent)
+                            .accessibilityIdentifier("advisor.confirm-real-fill")
+                    } else {
+                        Text("做T、网格和回本仅作分析；请逐笔核对真实成交后另行登记。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             } else {
                 Text("Guard 已阻止此候选计划").font(.subheadline.bold()).foregroundStyle(.red)
@@ -871,6 +883,48 @@ private struct FAdvisorResultCard: View {
         let price = candidate.limitPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "价格未给出"
         let fee = NSDecimalNumber(decimal: candidate.estimatedFee).stringValue
         return "\(candidate.action.displayName) · \(candidate.instrumentCode ?? result.securityCode) · \(units) · 限价 ¥\(price) · 估算费用 ¥\(fee)"
+    }
+}
+
+struct FLedgerConfirmationSheet: View {
+    @ObservedObject var model: FHomeModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("实际成交") {
+                    TextField("证券名称", text: $model.actualFillInstrumentName)
+                    TextField("实际成交份额", text: $model.actualFillUnitsText)
+                        .keyboardType(.numberPad)
+                    TextField("实际成交价格", text: $model.actualFillPriceText)
+                        .keyboardType(.decimalPad)
+                }
+                Section("不可逆确认") {
+                    TextField("确认说明（必填）", text: $model.ledgerConfirmationNote,
+                              axis: .vertical)
+                        .lineLimit(2...4)
+                    Text("此操作只会登记你已实际完成且确认无误的一笔成交；不会向券商下单。写入成功后，旧 Candidate Plan 将失效，并以更新后的真实账本重新判断。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if !model.ledgerWriteStatus.isEmpty {
+                    Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
+                }
+            }
+            .navigationTitle("确认真实成交")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }.disabled(model.writingConfirmedFill)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.writingConfirmedFill ? "写入中" : "确认写入") {
+                        model.confirmPendingFill()
+                    }
+                    .disabled(model.writingConfirmedFill ||
+                              model.ledgerConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
     }
 }
 
