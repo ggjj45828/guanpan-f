@@ -2,17 +2,21 @@
 
 本矩阵由 F 产品红线、A/B Frozen 源码裁决、F 自身实施范围及 B 版 Master Acceptance Matrix 的 145 项需求共同形成。B 145 项需求追踪见 [F-B-145-TRACEABILITY.md](F-B-145-TRACEABILITY.md)：保留原编号和需求来源，逐项标注 F 处理结论；不继承 B 实现状态或测试证据。A/B 的测试结果都不算 F 通过。每项先标为 `defined`；只有 F 自身执行并保留证据后才能更新为 `executed`、`passed` 或 `failed`。外部条件另标 `external pending`。
 
+## 当前 F 验证快照（2026-10-26）
+
+FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed，证据为 GitHub macOS Actions run `40291509215`。同一 run 的 XcodeGen 阶段因 App `info` plist 缺 `path` 失败，因此 App Build、UI Test、Simulator仍未执行。下表状态列是验收范围定义，不表示自动通过；源码实现与平台执行证据按本节和各行说明分别核对。
+
 | ID | F 验收范围 | 状态 | F 验证证据 |
 |---|---|---|---|
 | F-01 | 唯一真实账户；不含模拟账户、虚拟资金或自动真实交易 | defined | 尚未执行 |
 | F-02 | 账本 schema 版本、稳定 ID、输入校验和拒绝未知版本 | defined | 首版数据模型与 XCTest 已定义，未执行 |
-| F-03 | 现金以用户确认的流水为事实，逐事件无透支且可重放对账 | defined | 事件序号与逐步余额检查已定义，未执行 |
-| F-04 | 持仓份额、成本、买卖与费用守恒；部分卖出按加权平均分摊到 CNY 8 位小数，清仓时移除全部剩余成本 | defined | 规则与 XCTest 已定义，未执行 |
+| F-03 | 现金以用户确认的流水为事实，逐事件无透支且可重放对账 | defined | 已编码 opening balance 与确认资金流水的现金投影；本轮 119 项 FCore XCTest 实际执行通过，但完整产品迁移/设备流程仍待验收 |
+| F-04 | 持仓份额、成本、买卖与费用守恒；部分卖出按加权平均分摊；清仓关闭当前 Position Episode 并保留 Security/流水；重买新建 Episode，当前成本不混入旧周期 | defined | `FPositionEpisode`、历史表现投影与清仓/重建仓/现金流水模型已编码；相关 FCore 回归包含在 Actions 119/119 通过结果中；真实旧账本迁移和设备验收仍待验证 |
 | F-05 | 成交仅由明确用户确认写入；失败不得改变源状态 | defined | FLedgerWrite 独立模块提供用户确认写入口；App 对 Guard 通过的单笔买入/卖出 Candidate 提供需填写实际成交与确认说明的显式入口，写前重新核对账本摘要并由原子 writer 持久化；Advisor 不依赖写模块。做T/网格/回本不自动写入；Swift/XCTest 未执行 |
 | F-06 | 成交幂等、重复 ID/序号拒绝、审计摘要可校验 | defined | 重复成交 ID/序号校验、事件重放和审计摘要已编码；XCTest 未执行 |
 | F-07 | 候选计划、AI 建议、报价和研究数据不能改账 | defined | FAdvisor 无 FLedgerWrite 依赖；快照读取接口只读；架构边界脚本通过；解码后的Research/Memory/Profile投影须匹配Context与范围并通过no-lookahead/结构校验；新增投影回归已定义、XCTest未执行 |
-| F-08 | 成本分摊、舍入、部分成交与已实现损益规则明确 | defined | 部分卖出成本分摊与只读已实现盈亏汇总已编码；部分成交生命周期和 XCTest 待 Swift 验证 |
-| F-09 | 持久化原子性：成功落盘后才发布 UI 状态 | defined | 临时文件、文件/目录fsync、跨进程锁、原子替换、回读校验及失败回滚已编码；并发写测试已定义、未执行 |
+| F-08 | 成本分摊、舍入、部分成交与已实现损益规则明确 | defined | 当前 Episode 成本、已实现/未实现/累计表现只读投影已编码；Ledger Episode XCTest 包含于 Actions 119/119 通过；真实交易对账待外部验证 |
+| F-09 | 持久化原子性：成功落盘后才发布 UI 状态 | defined | 临时文件、fsync、锁、原子替换、回读校验及失败回滚已编码；并发 store 写回归包含于 Actions 119/119 通过；文件系统故障/设备重启仍未验证 |
 | F-10 | 迁移先备份、dry-run、校验、幂等、可回滚并出报告 | defined | A/B只读dry-run、来源摘要、幂等收据、显式确认导入和拒绝替换已有账本已编码；Python dry-run安全套件6/6通过；Swift XCTest未执行 |
 | F-11 | 恢复、备份和损坏检测不得静默覆盖较新账本 | defined | 校验备份/恢复、expected digest 并发保护、损坏检测和显式恢复已编码；XCTest 未执行 |
 | F-12 | Decision Memory 保存决策时证据与后来事实，解释变化 | defined | 版本化记录、受限投影、分段 generation、恢复和 no-lookahead 已编码；App 在完成 Guard 后持久化 Context/Decision Memory，并在下一次问答按作用域读取受限投影；在线链路及 XCTest 未验证 |

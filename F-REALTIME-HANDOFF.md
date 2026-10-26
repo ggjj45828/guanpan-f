@@ -2,16 +2,16 @@
 
 > 给主聊天读取的工作区现场快照。状态以本文生成时的 F 工作树和源码为准；commit 仅供追溯，不定义当前开发状态。每个明显开发阶段完成或用户要求汇报时更新本文，不为更新本文强制提交或停止开发。
 
-更新时间：2026-10-26（Asia/Shanghai）
+更新时间：2026-10-26 16:22（Asia/Shanghai）
 
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
-- 当前真实开发状态：iOS 可运行版本收敛；实时分钟、NAS历史分钟和日K页面已收敛到共享 `FUnifiedSecurityChart` 源码，下一步读取 macOS Actions 失败日志并修复。
-- 最近完成模块：确认成交后 Ledger 原子更新并按原 Advisor scope 重新判断；Advisor 读取 Profile/Memory 并持久化 DecisionContext/Memory；NAS 历史分钟按交易日查询及质量显示；统一 renderer 首轮接线，编码 MA/成交量/真实单位成本/Candidate overlay。
-- 图表源码已提交并推送；当前唯一未提交变化是本交接文档对 CI 结果的更新，源码保持干净。当前 HEAD=`7954bf449f51949d4c5f674f4f66bc8786b8d0c0`，本地 `main` 与 `origin/main` 对齐（commit仅追溯）。`F-CHECKPOINT` tag 仍指向较早的 `f3a48ce2aa6bcf7dc914d42ddf0b8ba8ea4c7c02`，与 HEAD 不一致；不作为进度依据。没有新增模拟数据或模拟交易代码。
-- 正在开发但未完成：统一 renderer 已编码，GitHub macOS Actions #4 显示失败（约28秒）；目前未能提取具体失败步骤/日志，因此不按猜测修改。横屏全屏、可靠均价/前收数据源和真实设备手势仍未完成。
-- 文档同步问题：`F-STATUS.md`、审计文件部分主摘要仍保留“ZIP 导入、无 Git/Advisor 未接线”等旧内容，与当前 Git 工作树及后续审计附录/源码冲突。阅读时应以本文的现场检查和源码为准，并尽快清理过期摘要。
+- 当前真实开发状态：功能收口与Apple验证。最新 CI 已在 macOS 编译 F Swift Package 并执行 FCore XCTest 119/119通过；随后 XcodeGen 因 `GuanpanFApp/project.yml` 的 `info` 缺少必需 `path` 而失败。正在补齐 plist 输出路径并继续 App Build。
+- 最近完成模块：FCore 119项测试在 GitHub Actions 实际执行并全数通过；修复 Ledger 同进程并发写锁与相关测试夹具；Risk Guard 对非有限/溢出金额进行显式检查。统一图表共享渲染首轮接线和成交后 Ledger→Advisor 重判断链仍属于源码已编码、未在 App 运行验证。
+- 当前工作树包含待验证的 XcodeGen plist 输出路径修复，以及 F-STATUS/Matrix/Audit/本交接文档的实时状态同步。最新已完成验证仍是 Actions run `40291509215`（代码在本次 plist 修正之前）：Package 编译成功、FCore 119/119通过，工程生成曾因缺少该路径失败。因 HTTPS Git push/fetch 间歇不可达，本轮通过认证 Git API 触发了 CI，本地 `origin/main` 跟踪引用尚未刷新；当前内容以 F 工作树为准。`F-CHECKPOINT` tag 仅作恢复指针。
+- 正在开发：验证 plist 路径修复；随后继续修第一个实际 App Build错误，再执行 UI Test。没有新增模拟数据或自动交易。
+- 仍未完成：App工程生成/App Build/UI Test/Simulator/真机；图表横屏全屏、均价/前收可靠数据源和真实手势验收；NAS历史分钟与真实服务联调、DeepSeek在线联调。
 
 ## 二、功能真实完成度
 
@@ -26,10 +26,10 @@
 - 原生 iOS 首页五布局、独立主导航入口、真实 Ledger 只读展示、Portfolio/Security scope、行情请求、NAS 历史分钟日期查询、日K与均线展示。
 - Advisor 请求流水线：Ledger 快照/现金持仓、行情和 NAS Evidence、DecisionContext、Risk/AI Guard、DeepSeek JSON 候选、Candidate Plan 展示、Profile/Memory 输入及决策持久化。
 - buy/sell Candidate 的用户确认表单、二次输入成交事实、摘要复核、`FConfirmedLedgerWriter` 写入及成交后重新判断。
-- Swift 测试源码现有 FCore XCTest 116 个 `test…` 定义、App UI XCTest 2 个定义；当前均未执行。测试定义的静态计数来自本次读取各 Swift 测试文件。
+- Swift 测试源码现有 FCore XCTest 119 个 `test…` 定义、App UI XCTest 2 个定义。最新 GitHub Actions 实际执行 FCore 119 / passed 119 / failed 0；App UI executed=0。测试定义的静态计数来自当前测试源码，执行结果来自 Actions run `40291509215`。
 - 统一 renderer 已接入首页行情卡、详情当前分时、NAS历史分钟及日K；日K绘制实际成交量和 MA5/10/20/60/250；账本持仓按 bookCost/units 显示真实单位成本线；同证券 buy/sell Candidate 可绘制候选价线。价格范围将纳入可见蜡烛、均线及有效价格 overlay。
 - 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；尚未经过 Apple 编译、Simulator 和可视检查，不能标为可用完成。
-- 仓库已有 `.github/workflows/guanpan-advisor-ios.yml`：`workflow_dispatch` 运行在 `macos-15`，包含 Swift package tests、XcodeGen 工程生成、iOS device/Simulator build、UI tests及日志/IPA artifact。本轮提交已推送，Actions 列表显示 `Guanpan F native iOS #4`（commit `7954bf4`）失败，运行约28秒。打开运行详情时窗口恢复两次仍返回 `window id 68512 no longer belongs to MSEdge; current owner is MSEdge`，按 computer-use 恢复规则停止 UI 输入。具体失败步骤和 CI XCTest 执行数未知；本地仍无 Apple 工具链。
+- 仓库工作流运行于 `macos-15`，包含 Swift package tests、XcodeGen、iOS device/Simulator build、UI tests和构建产物。最新 run `40291509215`：Swift Package Build完成，119项 XCTest 执行/通过、0失败；工程生成在 `info.path` 缺失处失败，故 App Build/UI Test未开始。当前 Windows工作区仍无 `swift`、`xcodebuild`、`xcodegen`；Apple编译和测试证据仅来自该远端macOS run。
 
 ### 【正在开发】
 
