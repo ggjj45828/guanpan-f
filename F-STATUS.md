@@ -1,10 +1,9 @@
 # F 云端开发状态
 
-## 当前工作树快照（2026-10-26 16:22 Asia/Shanghai）
+## 当前工作树快照（2026-10-26 16:44 Asia/Shanghai）
 
-- F 当前阶段：功能收口与 Apple 编译验证。当前工作树正修复 App target 首次编译发现的问题；Actions run `40292039312` 对相同基线完成 Package编译、FCore XCTest 119/119通过及XcodeGen生成，Device App Build失败。远端与本地 commit 只作追溯，状态以当前源码为准。
-- 验证：GitHub macOS Actions run `40292039312` 已完成 F Swift Package 编译和 XCTest，119 defined / 119 executed / 119 passed / 0 failed；XcodeGen成功生成工程；iOS Device App Build发现 App Swift 编译错误并失败，Simulator Build/UI XCTest尚未执行。本次正在逐项修复。
-- 当前工作树改动涉及 App Swift 编译修复与实时状态文档；不含模拟资产或自动交易。
+- F 当前阶段：Device/Simulator Build通过，收敛UI测试。Actions run `40292917389` 完成 Package编译、FCore XCTest 119/119、XcodeGen、iOS Device Build和Simulator Build；App UI XCTest 2项执行，1通过、1失败。当前工作树已修复Advisor Key状态行可访问性与对应断言，待复跑。
+- 当前工作树改动涉及 Advisor状态行可访问性、UI XCTest和实时状态文档；不含模拟资产或自动交易。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
 
 ## 当前基线

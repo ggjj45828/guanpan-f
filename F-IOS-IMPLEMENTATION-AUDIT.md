@@ -1,6 +1,6 @@
 # F iOS 全盘静态审计
 
-> 实时更新（2026-10-26）：最新 Apple CI 已完成 F Swift Package 编译、FCore XCTest 119/119通过及 XcodeGen 工程生成；首次 iOS Device App Build发现 App层编译错误，Simulator/UI Test/真机仍未验证。当前工作区正逐条修复。历史审计中“App仅有骨架”的结论已过期；此文余下旧记录只作追溯。
+> 实时更新（2026-10-26）：最新 Apple CI 已完成Swift Package、FCore XCTest 119/119、XcodeGen、iOS Device Build及Simulator Build；两项 App UI XCTest中1项通过、1项因状态文案查询失败。Advisor状态行可访问性修复已编码，待复跑；真机仍未验证。历史审计中“App仅有骨架”的结论已过期；余下旧记录只作追溯。
 
 ## 2026-10-26 行情刷新增量复核
 
