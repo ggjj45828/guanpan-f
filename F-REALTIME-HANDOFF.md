@@ -7,11 +7,11 @@
 ## 一、当前工作区状态
 
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
-- 当前真实开发状态：功能收口与Apple验证。最新 CI 已在 macOS 编译 F Swift Package 并执行 FCore XCTest 119/119通过；随后 XcodeGen 因 `GuanpanFApp/project.yml` 的 `info` 缺少必需 `path` 而失败。正在补齐 plist 输出路径并继续 App Build。
+- 当前真实开发状态：功能收口与Apple验证。最新 CI 已在 macOS 编译 F Swift Package、执行 FCore XCTest 119/119通过并成功生成 Xcode 工程；iOS Device App 首次编译发现 App 层 Swift 错误，当前正在逐项修复。
 - 最近完成模块：FCore 119项测试在 GitHub Actions 实际执行并全数通过；修复 Ledger 同进程并发写锁与相关测试夹具；Risk Guard 对非有限/溢出金额进行显式检查。统一图表共享渲染首轮接线和成交后 Ledger→Advisor 重判断链仍属于源码已编码、未在 App 运行验证。
-- 当前工作树包含待验证的 XcodeGen plist 输出路径修复，以及 F-STATUS/Matrix/Audit/本交接文档的实时状态同步。最新已完成验证仍是 Actions run `40291509215`（代码在本次 plist 修正之前）：Package 编译成功、FCore 119/119通过，工程生成曾因缺少该路径失败。因 HTTPS Git push/fetch 间歇不可达，本轮通过认证 Git API 触发了 CI，本地 `origin/main` 跟踪引用尚未刷新；当前内容以 F 工作树为准。`F-CHECKPOINT` tag 仅作恢复指针。
-- 正在开发：验证 plist 路径修复；随后继续修第一个实际 App Build错误，再执行 UI Test。没有新增模拟数据或自动交易。
-- 仍未完成：App工程生成/App Build/UI Test/Simulator/真机；图表横屏全屏、均价/前收可靠数据源和真实手势验收；NAS历史分钟与真实服务联调、DeepSeek在线联调。
+- 当前工作树包含 iOS App 首次编译错误的最小修复，以及实时状态文档同步。Actions run `40292039312` 已验证 plist 路径修复、Package编译、FCore XCTest 119/119通过及XcodeGen成功；Device App Build发现 Keychain 字典类型推断、GuardResult公共初始化权限、跨文件视图可见性和Ledger snapshot访问级别错误。当前修复已编码，待复编验证。
+- 正在开发：复编 iOS Device App，按实际编译反馈继续收敛；成功后再跑 Simulator Build 与 UI Test。没有新增模拟数据或自动交易。
+- 仍未完成：App Build/UI Test/Simulator/真机；图表横屏全屏、均价/前收可靠数据源和真实手势验收；NAS历史分钟与真实服务联调、DeepSeek在线联调。
 
 ## 二、功能真实完成度
 
@@ -26,10 +26,10 @@
 - 原生 iOS 首页五布局、独立主导航入口、真实 Ledger 只读展示、Portfolio/Security scope、行情请求、NAS 历史分钟日期查询、日K与均线展示。
 - Advisor 请求流水线：Ledger 快照/现金持仓、行情和 NAS Evidence、DecisionContext、Risk/AI Guard、DeepSeek JSON 候选、Candidate Plan 展示、Profile/Memory 输入及决策持久化。
 - buy/sell Candidate 的用户确认表单、二次输入成交事实、摘要复核、`FConfirmedLedgerWriter` 写入及成交后重新判断。
-- Swift 测试源码现有 FCore XCTest 119 个 `test…` 定义、App UI XCTest 2 个定义。最新 GitHub Actions 实际执行 FCore 119 / passed 119 / failed 0；App UI executed=0。测试定义的静态计数来自当前测试源码，执行结果来自 Actions run `40291509215`。
+- Swift 测试源码现有 FCore XCTest 119 个 `test…` 定义、App UI XCTest 2 个定义。最新 GitHub Actions 实际执行 FCore 119 / passed 119 / failed 0；App UI executed=0。测试定义的静态计数来自当前测试源码，执行结果来自 Actions run `40292039312`。
 - 统一 renderer 已接入首页行情卡、详情当前分时、NAS历史分钟及日K；日K绘制实际成交量和 MA5/10/20/60/250；账本持仓按 bookCost/units 显示真实单位成本线；同证券 buy/sell Candidate 可绘制候选价线。价格范围将纳入可见蜡烛、均线及有效价格 overlay。
 - 统一 renderer 编码了长按/十字、点选、拖动平移和缩放；尚未经过 Apple 编译、Simulator 和可视检查，不能标为可用完成。
-- 仓库工作流运行于 `macos-15`，包含 Swift package tests、XcodeGen、iOS device/Simulator build、UI tests和构建产物。最新 run `40291509215`：Swift Package Build完成，119项 XCTest 执行/通过、0失败；工程生成在 `info.path` 缺失处失败，故 App Build/UI Test未开始。当前 Windows工作区仍无 `swift`、`xcodebuild`、`xcodegen`；Apple编译和测试证据仅来自该远端macOS run。
+- 仓库工作流运行于 `macos-15`，包含 Swift package tests、XcodeGen、iOS device/Simulator build、UI tests和构建产物。最新 run `40292039312`：Swift Package Build、119项XCTest、XcodeGen成功；Device App Build失败，Simulator/UI Test未开始。当前 Windows工作区仍无 `swift`、`xcodebuild`、`xcodegen`；Apple编译和测试证据仅来自该远端macOS run。
 
 ### 【正在开发】
 
@@ -111,15 +111,15 @@
 
 | 测试范围 | defined | executed | passed | failed |
 |---|---:|---:|---:|---:|
-| FCore XCTest target（当前测试源码逐文件统计） | 116 | 0 | 0 | 0 |
+| FCore XCTest target（当前测试源码逐文件统计） | 119 | 119 | 119 | 0 |
 | App UI XCTest | 2 | 0 | 0 | 0 |
 | Python/NAS | 不在本次执行 | 0（本交接期间） | 0（本交接期间） | 0（本交接期间） |
 
-- 旧状态摘要曾报告 FCore 39 defined；当前测试文件静态统计为 116 个 `func test…`，矩阵/状态文件尚未同步。116 是定义计数，不是通过数。
+- 当前 FCore 定义数为 119；GitHub Actions run `40292039312` 的 Swift package build与XCTest实际结果为 119 executed / 119 passed / 0 failed。该结果仅验证 Package，不代表 App Build/UI Test通过。
 - Python/NAS：当前文档最后记录的完整套件是 93/93；随后独立 NAS 部署包记录 7/7。该数字是历史执行记录，本次没有运行 Python/NAS，不能作为当前新代码的 fresh pass，也不可将两个不同阶段简单相加。
-- Swift 编译：本地否；当前环境未发现 Swift/Xcode/XcodeGen。远端 Actions 已运行但失败，具体步骤和编译结果未知，不能记为通过。
-- 远端 iOS CI：Actions #4 显示失败；具体失败步骤与 XCTest 实际执行数未知，不能记为通过。
-- iOS App Build：未确认成功。Simulator：未确认运行。UI Test：未确认执行。真机：未验证。
+- Swift编译：远端 macOS 已实际编译 FCore/FAdvisor/FLedgerWrite；App target首次编译失败，当前正在修复错误。
+- 远端 iOS CI：run `40292039312` 中 XCTest通过119/119、XcodeGen通过；Device App Build失败。Simulator Build/UI Test被跳过。
+- iOS App Build：未成功。Simulator：未运行。UI Test：executed=0。真机：未验证。本机仍没有 Swift/Xcode/XcodeGen。
 
 ## 七、当前最重要的 5 个缺口
 
@@ -127,11 +127,11 @@
 2. 统一图表 renderer 已接线但 Apple workflow 未通过；编译问题、交互和画面仍未验证。
 3. DeepSeek、NAS、行情虽有 App 代码，但没有 iPhone 上的真实服务端到端证据。
 4. 真实成交闭环代码涉及资产账本，尚未在 XCTest/Simulator/设备上验证边界和可用性。
-5. F-STATUS、Matrix、Audit 等进度文档与当前源代码/工作区状态不同步，且 XCTest 定义数过时，容易让主聊天误判。
+5. NAS历史分钟、DeepSeek与真实行情的 iPhone 端到端服务验证仍缺失；UI Test、Simulator和真机也未运行。
 
 ## 八、下一阶段
 
-当前应优先：**检查当前 unified renderer 的 Swift 类型/交互边界 → 寻找 macOS/Xcode 构建验证条件 → 一旦可用暂停新增 Swift，先生成工程并编译 → 按要求执行116项 XCTest、App Build/UI Test、Simulator → 再处理真实服务端到端。**
+当前应优先：**修复当前 App target 的首批 Swift 编译错误 → 重编Device App → 编译通过后跑 Simulator Build/UI Test → Simulator启动和截图检查 → 横屏/不同尺寸/真机 → 再联调真实 NAS/DeepSeek/行情。Package已完成119项测试；下一步仍以App编译收敛为先。**
 
 统一 renderer 是当前最高产品优先级：此工作树已经将分钟/历史分钟/日K入口迁到一个视图，下一步主要是构建反馈和逐步补齐真实来源。Apple 首次编译是最高验证优先级，有环境后暂停新增 Swift 功能先清编译错误。
 
@@ -151,18 +151,18 @@
 
 F_CURRENT_STATUS_BEGIN
 
-当前开发阶段：iOS可运行版本收敛
-当前正在开发：统一图表renderer首轮已推送；GitHub Actions #4失败，正在定位具体失败步骤/日志
-刚刚完成：共享图表renderer接线、MA/成交量/真实单位成本/Candidate overlay；Advisor成交后重新判断链路已有编码
-未提交工作：macOS AdvisorPersistence 文件锁兼容修复正在修改；其他 Ledger 与 AI 历史周期改动已提交并推送
+当前开发阶段：功能收口、首次App编译修复与验证
+当前正在开发：修复Actions run 40292039312发现的App Swift编译错误；修复内容尚未复编
+刚刚完成：Apple macOS FCore XCTest 119/119通过；XcodeGen成功生成工程
+未提交工作：当前工作树含Keychain字典类型、GuardResult公开初始化器、跨文件路由视图可见性、Ledger快照访问级别修复及状态文档同步
 iOS完成度：真实资产双视图、现金/成交流水和Advisor生命周期上下文已编码；尚未通过全套Swift测试和App Build
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
 统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码；未编译/视觉验证，均价/前收/IOPV unavailable，横屏未完成
 NAS历史数据完成度：NAS精确日期归档及iOS按日查询/研究接线已编码；实机与生产端到端待验证，存在Missing/Partial/Stale
-Apple编译验证：External Verification Pending；无Swift/Xcode/XcodeGen，未编译/未Build
-当前测试：FCore XCTest defined=119/executed=0/passed=0/failed=0（远端 Swift test 曾启动但失败，尚无通过结果）；App UI defined=2/executed=0/passed=0/failed=0（未启动）；Python/NAS本次未执行
-最大缺口：清完 macOS Swift Package 编译错误并跑通119项 XCTest；再生成工程、App Build/UI Test/Simulator；统一图表真实交互与服务端端到端
-下一步：修复 Actions run 40287179530 暴露的 AdvisorPersistence Darwin 文件锁错误，重推并复核119项 XCTest；通过后回到统一图表，再依用户路线推进 App Build/UI Test/Simulator
+Apple编译验证：FCore/FAdvisor/FLedgerWrite已由macOS编译；XcodeGen已生成工程；iOS Device App Build External Verification Pending（当前失败错误已在工作树修复，待复编）
+当前测试：FCore XCTest defined=119/executed=119/passed=119/failed=0（Actions run 40292039312）；App UI defined=2/executed=0/passed=0/failed=0；Python/NAS本阶段未执行
+最大缺口：App target编译通过；随后Simulator Build/UI Test/启动与视觉交互验证；NAS/DeepSeek/行情真实端到端
+下一步：将当前App编译修复提交到CI并逐轮修正第一根因，成功后立即继续Simulator Build、UI Test和Simulator检查
 
 F_CURRENT_STATUS_END
 

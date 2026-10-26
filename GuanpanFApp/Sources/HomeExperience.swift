@@ -403,7 +403,7 @@ struct HomeDestination: View {
     }
 }
 
-private struct AdvisorOverview: View {
+struct AdvisorOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
@@ -455,7 +455,7 @@ private struct CrossMarketOverview: View {
     }
 }
 
-private struct RealAssetsOverview: View {
+struct RealAssetsOverview: View {
     @ObservedObject var model: FHomeModel
     @State private var selectedView = 0
 
@@ -537,7 +537,7 @@ private extension FReadOnlyCashFlowKind {
     }
 }
 
-private struct SettingsOverview: View {
+struct SettingsOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
@@ -619,7 +619,7 @@ private struct SettingsOverview: View {
     }
 }
 
-private struct MarketOverview: View {
+struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
 
     var body: some View {

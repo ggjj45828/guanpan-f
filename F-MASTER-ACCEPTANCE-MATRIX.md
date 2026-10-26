@@ -4,7 +4,7 @@
 
 ## 当前 F 验证快照（2026-10-26）
 
-FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed，证据为 GitHub macOS Actions run `40291509215`。同一 run 的 XcodeGen 阶段因 App `info` plist 缺 `path` 失败，因此 App Build、UI Test、Simulator仍未执行。下表状态列是验收范围定义，不表示自动通过；源码实现与平台执行证据按本节和各行说明分别核对。
+FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed，证据为 GitHub macOS Actions run `40292039312`。同一 run 的 XcodeGen成功；iOS Device App Build发现 Swift App层编译错误并失败，Simulator Build/UI Test未执行。下表状态列是验收范围定义，不表示自动通过；源码实现与平台执行证据按本节和各行说明分别核对。
 
 | ID | F 验收范围 | 状态 | F 验证证据 |
 |---|---|---|---|
