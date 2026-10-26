@@ -491,9 +491,9 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertEqual(projectionAfterRestore?.entries.map(\.id), [memory.id])
         XCTAssertEqual(ledgerDigestAfterRestore, ledgerDigestBeforeAdvisorWrites)
         XCTAssertEqual(restoredContextArchive?.contexts.first?.researchEvidence.map(\.id),
-                       [String(repeating: "a", count: 64), String(repeating: "b", count: 64)])
+                       context.researchEvidence.map(\.id))
         XCTAssertEqual(restoredContextArchive?.contexts.first?.researchEvidenceVersionConflicts(at: later)
-            .first?.selectedEvidenceID, String(repeating: "b", count: 64))
+            .first?.selectedEvidenceID, context.researchEvidence.last?.id)
         let restoredContextDigest = try await contextStore.currentDigest(now: later)
         let restoredMemoryDigest = try await memoryStore.currentDigest(now: later)
         do {
