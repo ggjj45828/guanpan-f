@@ -6,11 +6,17 @@
 
 ## 当前实时状态覆盖（2026-10-26，本轮源码只读检查）
 
-- 检查开始时工作树：`main` HEAD `64d48776074ad813d1956aee9658321c885a2eb1`，本地 `origin/main` 指针一致、工作树 CLEAN。此次只更新本交接文档，未改源码；目前仅 `F-REALTIME-HANDOFF.md` 有未提交修改。Commit仅用于审计；当前状态以此处实际源码为准。
+- 最初检查 `64d4877` 时工作树 CLEAN，main 与 origin/main 对齐。随后提交滚动锚点修复并推送；当前 HEAD `946ff3cbb08c48129890a5540de5c4a4c076b5a2` 与 origin/main 对齐。现在有一项未提交 UI XCTest helper 修改和本交接更新；Commit仅用于审计，当前状态以此处实际源码为准。
 - 最新远端 Apple CI run `40317398151`（job `121553331583`）对应 `64d4877`，FCore tests、XcodeGen、Device Build、Simulator Build已完成；App UI XCTest 3项执行，1通过、2失败。下载 job text log 后确认：`PrimaryNavigationUITests.swift:36` 的历史分钟查询按钮不是 hittable；`:73` 的“现金与成交流水”静态文本尚未进入 List 懒加载的可访问树。不是 Swift 编译失败。artifact（145 MB）虽无法通过浏览器下载，但相同断言已从只读 job log 确认。上一个全通过 run `40315965909`：FCore 121/121、Device/Simulator Build、UI 3/3、截图导出、未签名 IPA。
 - 本地 Swift/Xcode/XcodeGen 不可用，无法复跑编译或测试；Apple 验证须依赖远端 Actions。
 - `64d4877` 的具体 UI 失败现已定位。本地未提交修复：证券详情 ScrollView 和资产 List 加入稳定 accessibility identifier；UI XCTest 对应容器滚动，历史分钟查询和现金流水标题进入可见区后再断言。源码修复尚未编译/执行；本机仍无 Swift/Xcode/XcodeGen。
 - 下一步将这两个窄幅 UI 稳定性修复送 Apple CI，核验三个 App UI XCTest、FCore、Device/Simulator Build、截图与 IPA。若历史区按钮仍不可达，再根据新截图检查真实视口行为。
+
+## UI 滚动修复 CI 续记（2026-10-26）
+
+- 提交 `946ff3cbb08c48129890a5540de5c4a4c076b5a2` 的 run `40325385359`：FCore、XcodeGen、Device/Simulator Build 均完成；UI 3项执行，Advisor用例与真实资产页用例通过，证券详情导航用例失败两项。实际可访问树证实测试上滑过头：日K标题已经滚到视口上方；历史查询按钮的坐标落在导航栏遮挡区。因此之前“只对具名 ScrollView 上滑”还不够。
+- 当前未提交修改仅在 UI XCTest 滚动 helper：结合目标实际 frame 与容器可视边界，在目标位于导航栏/视口上方时缓慢下滑、目标在视口下方时缓慢上滑；找不到懒加载目标时继续小幅上滑。资产页 cash-flow 区的新断言在 run `40325385359` 已通过。
+- 当前修复未编译/未执行；本机没有 Swift/Xcode/XcodeGen。下一步把双向位置感知滚动修复送 Apple CI，并检查完整 XCTest/截图结果。
 
 ## 最新 CI 续记（2026-10-26 19:43 Asia/Shanghai）
 

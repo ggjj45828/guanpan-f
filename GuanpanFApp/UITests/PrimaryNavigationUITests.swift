@@ -99,8 +99,27 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement) {
-        for _ in 0..<12 where !element.isHittable {
-            scrollContainer.swipeUp(velocity: .fast)
+        for _ in 0..<20 {
+            if element.isHittable { return }
+            guard element.exists else {
+                scrollContainer.swipeUp(velocity: .slow)
+                continue
+            }
+
+            let viewport = scrollContainer.frame
+            let target = element.frame
+            let topSafeEdge = viewport.minY + 90
+            let bottomSafeEdge = viewport.maxY - 90
+
+            if target.maxY < topSafeEdge || target.minY < topSafeEdge {
+                scrollContainer.swipeDown(velocity: .slow)
+            } else if target.minY > bottomSafeEdge {
+                scrollContainer.swipeUp(velocity: .slow)
+            } else if target.midY < viewport.midY {
+                scrollContainer.swipeDown(velocity: .slow)
+            } else {
+                scrollContainer.swipeUp(velocity: .slow)
+            }
         }
     }
 }
