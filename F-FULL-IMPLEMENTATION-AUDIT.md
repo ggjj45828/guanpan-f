@@ -1,5 +1,7 @@
 # F 全盘未完成功能审计
 
+> 实时更新（2026-10-26）：本审计主体包含较早阶段记录。当前工作树已推进到 FCore Apple 编译与测试验证：GitHub Actions run `40291509215` 编译 Swift Package，FCore XCTest 119/119通过；随后 XcodeGen 因 App plist `info.path` 缺失失败，App Build/UI Test/Simulator未执行。当前源码以 F 工作树和 [F-REALTIME-HANDOFF.md](F-REALTIME-HANDOFF.md) 为准；下方旧阶段记录只用于追溯。
+
 审计起始checkpoint：提交 `622c9079307aef6f1af61d9b18e83528702c081f`；本报告后续追加至队列修补提交 `4175bdad598d050e548ce4e1a60b16f17fa4d5ff`。（审计前 `main` / `F-CHECKPOINT`）。本报告区分源码、静态检查、Python实跑、Swift测试定义和目标环境验证；任何一层都不替代另一层。
 
 ## 总体状态

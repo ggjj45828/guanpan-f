@@ -1,5 +1,7 @@
 # F iOS 全盘静态审计
 
+> 实时更新（2026-10-26）：最新 Apple CI 已完成 F Swift Package 编译并执行 FCore XCTest 119/119通过；XcodeGen 工程生成因 App plist 配置缺 `path` 失败。本机无 Swift/Xcode/XcodeGen；App target Build、UI Test、Simulator和真机仍未验证。历史审计中“App仅有骨架”的结论已过期，需结合当前 SwiftUI 与统一图表源码；此文余下旧记录只作阶段追溯。
+
 ## 2026-10-26 行情刷新增量复核
 
 在原审计所述骨架之后，F 当前工作区新增了直连 Tencent minute/query 的当前日分钟请求器、严格响应解析、每证券 Observable 快照、首页持仓曲线和详情曲线绑定、详情页立即刷新与常规交易时段10秒自动请求，以及按钮加载/成功/失败反馈。增加8项 MarketMinuteData XCTest定义。此增量尚无 Swift/Xcode 编译证据，未在Simulator或iPhone运行；图表可见性、刷新按钮响应、分钟源真实响应和跨年行为仍External Verification Pending。2027交易日历不会自动生效，未审核年份暂停自动刷新。
