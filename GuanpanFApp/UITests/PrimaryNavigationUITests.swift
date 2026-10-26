@@ -23,24 +23,30 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["market.refresh.159352"].exists)
         XCTAssertTrue(app.staticTexts["NAS 历史分时"].exists)
         attachScreenshot("03-security-detail-top", app: app)
-        app.scrollViews.firstMatch.swipeUp()
-        XCTAssertTrue(app.staticTexts["日 K 与均线"].exists)
-        attachScreenshot("04-security-chart-and-history", app: app)
+        let detailScroll = app.scrollViews.firstMatch
+        let dailyChartHeading = app.staticTexts["日 K 与均线"]
+        scrollUntilHittable(dailyChartHeading, in: detailScroll)
+        XCTAssertTrue(dailyChartHeading.isHittable)
+        attachScreenshot("04-security-daily-chart", app: app)
+        let historyHeading = app.staticTexts["NAS 历史分时"]
+        scrollUntilHittable(historyHeading, in: detailScroll)
+        XCTAssertTrue(historyHeading.isHittable)
+        attachScreenshot("05-security-history-chart", app: app)
 
         app.tabBars.buttons["AI顾问"].tap()
         XCTAssertTrue(app.navigationBars["AI 私人投资顾问"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["发送"].exists)
-        attachScreenshot("05-advisor", app: app)
+        attachScreenshot("06-advisor", app: app)
 
         app.tabBars.buttons["真实资产"].tap()
         XCTAssertTrue(app.navigationBars["真实资产"].waitForExistence(timeout: 3))
-        attachScreenshot("06-real-assets-current", app: app)
+        attachScreenshot("07-real-assets-current", app: app)
 
         app.tabBars.buttons["设置"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.buttons["settings.nas.test"].exists)
-        attachScreenshot("07-settings", app: app)
+        attachScreenshot("08-settings", app: app)
     }
 
     func testAdvisorExplainsUnavailableOnlineService() {
@@ -66,8 +72,12 @@ final class PrimaryNavigationUITests: XCTestCase {
         let closedView = app.buttons["已清仓"]
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
-        XCTAssertTrue(app.staticTexts["已清仓 / 历史持仓"].exists)
-        attachScreenshot("08-real-assets-closed", app: app)
+        let closedHeading = app.staticTexts["已清仓 / 历史持仓"]
+        XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
+        let assetsList = app.tables.firstMatch
+        scrollUntilHittable(closedHeading, in: assetsList)
+        XCTAssertTrue(closedHeading.isHittable)
+        attachScreenshot("09-real-assets-closed", app: app)
 
         app.buttons["当前持仓"].tap()
         XCTAssertTrue(app.staticTexts["当前持仓"].exists)
@@ -78,5 +88,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func scrollUntilHittable(_ element: XCUIElement, in scrollView: XCUIElement) {
+        for _ in 0..<8 where !element.isHittable {
+            scrollView.swipeUp(velocity: .slow)
+        }
     }
 }

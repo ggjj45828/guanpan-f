@@ -323,19 +323,25 @@ struct HomeDestination: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }
                 let snapshot = model.marketDataByCode[code]
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "暂无有效行情")
-                            .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .minimumScaleFactor(0.75)
+                            .lineLimit(1)
                         Spacer()
                         Button {
                             Task { await model.refreshMarketData(for: [code]) }
                         } label: {
                             if model.refreshingMarketCodes.contains(code) {
-                                HStack { ProgressView().controlSize(.small); Text("刷新中") }
+                                ProgressView().controlSize(.small)
                             } else {
-                                Label("刷新实时分时", systemImage: "arrow.clockwise")
+                                Label("刷新", systemImage: "arrow.clockwise")
+                                    .labelStyle(.titleAndIcon)
                             }
                         }
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .disabled(model.refreshingMarketCodes.contains(code))
                         .accessibilityIdentifier("market.refresh.\(code)")
                     }
