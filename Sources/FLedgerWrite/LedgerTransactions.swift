@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 @_spi(LedgerStorage) import FCore
 
 public enum FLedgerMutationError: Error, Equatable, Sendable {
@@ -147,45 +146,4 @@ public extension FAccountBook {
         return result
     }
 
-    /// SHA-256 over canonicalized economic state. Audit rows are omitted to avoid a recursive hash;
-    /// each audit row stores the before/after financial-state digests.
-    func ledgerStateDigest() throws -> String {
-        struct DigestState: Codable {
-            var accountID: UUID
-            var schemaVersion: Int
-            var currencyCode: String
-            var openingSnapshot: FAccountOpeningSnapshot
-            var cashBalance: Decimal
-            var positions: [FPosition]
-            var fills: [FConfirmedFill]
-            var cashMovements: [FCashMovement]
-            var updatedAt: Date
-        }
-
-        let state = DigestState(
-            accountID: accountID,
-            schemaVersion: schemaVersion,
-            currencyCode: currencyCode,
-            openingSnapshot: FAccountOpeningSnapshot(
-                capturedAt: openingSnapshot.capturedAt,
-                cashBalance: openingSnapshot.cashBalance,
-                positions: openingSnapshot.positions.sorted { $0.instrumentCode < $1.instrumentCode }
-            ),
-            cashBalance: cashBalance,
-            positions: positions.sorted { $0.instrumentCode < $1.instrumentCode },
-            fills: fills.sorted {
-                if $0.tradedAt != $1.tradedAt { return $0.tradedAt < $1.tradedAt }
-                return $0.id.uuidString < $1.id.uuidString
-            },
-            cashMovements: cashMovements.sorted {
-                if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
-                return $0.id.uuidString < $1.id.uuidString
-            },
-            updatedAt: updatedAt
-        )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let digest = SHA256.hash(data: try encoder.encode(state))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
 }
