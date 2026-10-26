@@ -81,14 +81,14 @@ struct FUnifiedSecurityChart: View {
                         crosshairEnabled = true
                     })
                     HStack {
-                        Text(timestamps[start].formatted(date: .abbreviated, time: .shortened))
+                        Text(timestampLabel(timestamps[start], window: model.chart.window))
                         Spacer()
                         if let selectedIndex {
                             Text(selectionText(series: series, index: selectedIndex))
                                 .fontWeight(.semibold)
                         }
                         Spacer()
-                        Text(timestamps[end - 1].formatted(date: .abbreviated, time: .shortened))
+                        Text(timestampLabel(timestamps[end - 1], window: model.chart.window))
                     }
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -247,6 +247,15 @@ struct FUnifiedSecurityChart: View {
         case let .daily(bars):
             let bar = bars[index]
             return "开 \(bar.open) 高 \(bar.high) 低 \(bar.low) 收 \(bar.close) 量 \(bar.volume)"
+        }
+    }
+
+    private func timestampLabel(_ timestamp: Date, window: FChartWindow) -> String {
+        switch window {
+        case .daily:
+            return timestamp.formatted(.dateTime.month(.abbreviated).day())
+        case .liveIntraday, .historicalIntraday(_):
+            return timestamp.formatted(date: .omitted, time: .shortened)
         }
     }
 

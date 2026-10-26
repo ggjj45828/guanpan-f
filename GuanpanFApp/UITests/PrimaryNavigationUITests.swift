@@ -28,8 +28,12 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
         attachScreenshot("04-security-daily-chart", app: app)
         let historyHeading = app.staticTexts["NAS 历史分时"]
-        scrollUntilHittable(historyHeading, in: app)
+        app.swipeUp(velocity: .fast)
+        app.swipeUp(velocity: .fast)
+        let historyQueryButton = app.buttons["查询所选交易日"]
+        scrollUntilHittable(historyQueryButton, in: app)
         XCTAssertTrue(historyHeading.isHittable, app.debugDescription)
+        XCTAssertTrue(historyQueryButton.isHittable, app.debugDescription)
         attachScreenshot("05-security-history-chart", app: app)
 
         app.tabBars.buttons["AI顾问"].tap()

@@ -500,9 +500,9 @@ struct RealAssetsOverview: View {
     var body: some View {
         List {
             Section("本机真实账本 · 只读") {
-                LabeledContent("账本状态", value: model.ledgerStatus)
-                LabeledContent("可用现金", value: model.cashText)
-                LabeledContent("真实持仓", value: "\(model.holdings.count) 项")
+                assetSummaryRow("账本状态", value: model.ledgerStatus)
+                assetSummaryRow("可用现金", value: model.cashText)
+                assetSummaryRow("真实持仓", value: "\(model.holdings.count) 项")
                 Picker("资产视图", selection: $selectedView) {
                     Text("当前持仓").tag(0)
                     Text("已清仓").tag(1)
@@ -560,6 +560,17 @@ struct RealAssetsOverview: View {
             }
         }
         .navigationTitle("真实资产")
+    }
+
+    private func assetSummaryRow(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)：\(value)")
     }
 }
 

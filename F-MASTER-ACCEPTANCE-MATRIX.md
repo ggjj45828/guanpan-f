@@ -1,5 +1,11 @@
 # F Master Acceptance Matrix
 
+## CI续记（2026-10-26 19:43 Asia/Shanghai；覆盖较早运行快照）
+
+- run `40315965909` / `016a1a3`：FCore 121/121、XcodeGen、Device/Simulator Build、App UI 3/3、截图导出和IPA均通过。
+- 截图人工确认日K图可见并含真实日K、MA与量柱；历史分钟截图与日K仍相同，故历史分钟可见性/日期切换没有通过人工验收。
+- 新本地未提交：强制历史区滚动、资产摘要防横向截断、简化日K时间轴标签。尚未验证，不改验收状态。
+
 ## CI续记（2026-10-26 19:32 Asia/Shanghai；覆盖下方旧快照）
 
 - 当前已推送提交 `c96a17e` 的 Actions run `40314328798`：FCore 121/121通过；XcodeGen及Device/Simulator Build成功；UI 3执行、2通过、1失败（详情日K标题经8次滚动仍不可见）；截图导出成功、IPA跳过。

@@ -1,5 +1,11 @@
 # F 云端开发状态
 
+## CI续记（2026-10-26 19:43 Asia/Shanghai；覆盖下方旧状态）
+
+- 最新已推送 `016a1a3`，run `40315965909` 全成功：FCore 121/121；XcodeGen、Device/Simulator Build、UI XCTest 3/3、截图导出和未签名IPA均成功。
+- 人工截图确认图表滚动已恢复，日K真实蜡烛、MA线、成交量可见；行情状态来自Tencent日K。但“历史分钟”截图仍与日K截图相同，不能据UI 3/3宣称历史NAS页面视觉验收通过。
+- 本地未提交修正：历史区截图前增加确定性滚动；资产状态/现金值改为垂直文字；日K轴标签缩短为日期。未编译/运行。Python/NAS本轮未执行。
+
 ## CI续记（2026-10-26 19:32 Asia/Shanghai；覆盖下方较早快照）
 
 - 当前已推送 HEAD `c96a17e77fd533c58e63123c69cd6e71b2fb406c`，与origin/main同步。工作树当前仅有 `FUnifiedSecurityChart.swift` 和4份状态文档未提交修改。
