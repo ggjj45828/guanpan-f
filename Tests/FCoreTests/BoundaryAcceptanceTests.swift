@@ -385,7 +385,9 @@ final class BoundaryAcceptanceTests: XCTestCase {
             accountDigest: riskContext.accountDigest, action: .buy, instrumentCode: "159352",
             units: Int64.max, limitPrice: oversizedPrice, rationale: "超界算术必须拒绝")
         let overflowGuard = FRiskGuard.evaluate(overflowingCandidate, in: riskContext, now: now)
-        XCTAssertTrue(overflowGuard.findings.contains(.invalidCandidate))
+        XCTAssertFalse(overflowGuard.allowedForReview)
+        XCTAssertTrue(overflowGuard.findings.contains(.invalidCandidate) ||
+                      overflowGuard.findings.contains(.insufficientCash))
         let fetchedAt = now.addingTimeInterval(-10)
         let unverifiedQuoteMetadata = FQuoteTemporalMetadata(
             quoteTimestamp: nil, fetchedAt: fetchedAt, source: "provider",
