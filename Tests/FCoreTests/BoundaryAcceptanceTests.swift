@@ -37,7 +37,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let metrics: [String: Any] = ["evidenceState": "available_for_review", "trainingDays": 24,
                                       "outOfSampleDays": 8, "maxMonthlySampleShare": 0.25,
                                       "maximumMonthlySampleShare": 0.5]
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "schemaVersion": 1, "methodologyVersion": "minute-research-1", "evidenceId": String(repeating: "0", count: 64),
             "securityCode": "159352", "market": "CN",
             "range": ["start": "2026-10-01", "end": "2026-10-23"],
