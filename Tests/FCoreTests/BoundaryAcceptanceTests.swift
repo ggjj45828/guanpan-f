@@ -359,6 +359,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
         var legacyRequestObject = try XCTUnwrap(JSONSerialization.jsonObject(
             with: JSONEncoder().encode(assembledRequest)) as? [String: Any])
         legacyRequestObject.removeValue(forKey: "decisionContextCreatedAt")
+        legacyRequestObject.removeValue(forKey: "portfolioContext")
         legacyRequestObject.removeValue(forKey: "decisionMemory")
         legacyRequestObject.removeValue(forKey: "investorProfile")
         let legacyRequestBytes = try JSONSerialization.data(withJSONObject: legacyRequestObject,
