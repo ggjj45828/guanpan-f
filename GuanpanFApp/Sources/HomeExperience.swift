@@ -409,6 +409,7 @@ struct HomeDestination: View {
             }
             .padding(18)
         }
+        .accessibilityIdentifier("market.security-detail.scroll")
         .navigationTitle(code)
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -559,6 +560,7 @@ struct RealAssetsOverview: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
+        .accessibilityIdentifier("assets.list")
         .navigationTitle("真实资产")
     }
 
