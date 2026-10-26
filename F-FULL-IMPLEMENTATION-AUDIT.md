@@ -275,6 +275,8 @@ F 默认 runtime 不再要求用户提供 Python 插件。新增腾讯当日分�
 
 ## 2026-10-26 NAS liveness 与 GitHub F 编译闸门状态
 
+> 后续覆盖：以下 unauthorized 描述属于旧运行容器。用户已授权移除NAS API token；当前源码不再校验 `X-Api-Key`，部署中的容器未更新。
+
 - 用户实测 NAS `:8788/livez` 返回 `{"status":"alive","service":"f-minute-archive"}`，可确认端口和服务进程可达。用户另给 `{"error":"unauthorized"}`，没有路径和请求头，无法据此区分根路径访问、遗漏token或token不匹配。匿名 `/livez` 成功；`/readyz` 和业务API必须带有效 `X-Api-Key`。未提供 readiness 响应或 token 验证结果；日历、归档、provider和生产数据准备状态仍未验证。
 - 已创建私有GitHub仓库 `ggjj45828/guanpan-f`。本地repo配置了该 `origin`。用户已明确授权上传，但本地 `git push` 在认证前因缺GitHub用户名凭据失败，没有上传对象；GitHub connector尚未连接。已有 `guanpan-pro-native` Actions成功记录只覆盖B的 `b-latest`，不可用于证明F构建。当前无Swift/Xcode/XcodeGen或GitHub CLI；FCore 39条与App UI 2条XCTest均保持未执行，首次F构建闸门未通过。
 

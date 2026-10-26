@@ -376,49 +376,37 @@ class MinuteServiceTests(unittest.TestCase):
                 "159352", "CN", session.trading_date, session.trading_date,
                 as_of=self.clock() + timedelta(seconds=1), minimum_independent_days=1)
 
-    def test_http_api_requires_auth_and_returns_date_specific_history_and_diagnostics(self):
+    def test_http_api_serves_date_specific_history_and_diagnostics_without_token(self):
         session = self.sessions[0]
         self.archive.ingest(make_bars(session, fetched_at=self.clock()), mode="backfill")
-        handler = make_handler(self.service, lambda request: request.headers.get("X-Api-Key") == "secret")
+        handler = make_handler(self.service)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
             connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20")
-            unauthorized = connection.getresponse()
-            self.assertEqual(unauthorized.status, 401)
-            unauthorized.read()
-            connection.close()
-
-            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20",
-                               headers={"X-Api-Key": "secret"})
             response = connection.getresponse()
             payload = json.loads(response.read())
             self.assertEqual(response.status, 200)
             self.assertEqual(payload["tradingDate"], "2026-10-20")
             self.assertEqual(len(payload["bars"]), 4)
             self.assertEqual(payload["bars"][0]["securityCode"], "159352")
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20&unexpected=1",
-                               headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20&unexpected=1")
             unknown_parameter = connection.getresponse()
             self.assertEqual(unknown_parameter.status, 400)
             unknown_parameter.read()
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-W43-2",
-                               headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-W43-2")
             invalid_date = connection.getresponse()
             self.assertEqual(invalid_date.status, 400)
             invalid_date.read()
-            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN",
-                               headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN")
             diagnostics = json.loads(connection.getresponse().read())
             self.assertEqual(diagnostics["firstMinuteDate"], "2026-10-20")
             self.assertEqual(diagnostics["days"][0]["tradingDate"], "2026-10-20")
             self.assertEqual(diagnostics["missingDaysScope"], "recordedCoverageOnly")
             self.assertTrue(diagnostics["missingDaysMayBeUnderstated"])
-            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN&startDate=2026-10-20&endDate=2026-10-22",
-                               headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN&startDate=2026-10-20&endDate=2026-10-22")
             ranged_diagnostics = json.loads(connection.getresponse().read())
             self.assertEqual(ranged_diagnostics["missingDaysScope"], "requestedCalendarRange")
             self.assertFalse(ranged_diagnostics["missingDaysMayBeUnderstated"])
@@ -426,7 +414,7 @@ class MinuteServiceTests(unittest.TestCase):
             research_url = ("/api/v1/minute-history/research?securityCode=159352&market=CN"
                             "&startDate=2026-10-20&endDate=2026-10-20"
                             "&asOf=2026-10-25T02:00:00Z&minimumIndependentDays=20")
-            connection.request("GET", research_url, headers={"X-Api-Key": "secret"})
+            connection.request("GET", research_url)
             research = json.loads(connection.getresponse().read())
             self.assertFalse(research["rawMinuteBarsIncluded"])
             self.assertIsNone(research["tradePlan"])
@@ -436,24 +424,14 @@ class MinuteServiceTests(unittest.TestCase):
             thread.join(timeout=2)
             server.server_close()
 
-    def test_http_authorizer_requires_literal_boolean_true(self):
-        truthy_authorizers = (lambda _request: "authorized", lambda _request: 1)
-        for authorize in truthy_authorizers:
-            handler = make_handler(self.service, authorize)
-            self.assertFalse(handler.__new__(handler)._authorized())
-        handler = make_handler(self.service, lambda _request: True)
-        self.assertTrue(handler.__new__(handler)._authorized())
-        handler = make_handler(self.service, lambda _request: (_ for _ in ()).throw(RuntimeError()))
-        self.assertFalse(handler.__new__(handler)._authorized())
-
     def test_readyz_fails_closed_when_calendar_does_not_review_current_year(self):
-        handler = make_handler(self.service, lambda request: request.headers.get("X-Api-Key") == "secret")
+        handler = make_handler(self.service)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
-            connection.request("GET", "/readyz", headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/readyz")
             unsupported = connection.getresponse()
             unsupported_payload = json.loads(unsupported.read())
             self.assertEqual(unsupported.status, 503)
@@ -462,7 +440,7 @@ class MinuteServiceTests(unittest.TestCase):
 
             current_year = datetime.now().year
             self.calendar.supported_years = (current_year,)
-            connection.request("GET", "/readyz", headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/readyz")
             supported = connection.getresponse()
             supported_payload = json.loads(supported.read())
             self.assertEqual(supported.status, 200)
@@ -476,7 +454,7 @@ class MinuteServiceTests(unittest.TestCase):
                     raise RuntimeError("corrupt calendar store")
 
             self.service.calendars["CN"] = CorruptCalendar()
-            connection.request("GET", "/readyz", headers={"X-Api-Key": "secret"})
+            connection.request("GET", "/readyz")
             corrupt = connection.getresponse()
             corrupt_payload = json.loads(corrupt.read())
             self.assertEqual(corrupt.status, 503)
@@ -488,7 +466,7 @@ class MinuteServiceTests(unittest.TestCase):
             server.server_close()
 
     def test_http_backfill_endpoint_validates_and_enqueues_explicit_priority(self):
-        handler = make_handler(self.service, lambda request: request.headers.get("X-Api-Key") == "secret")
+        handler = make_handler(self.service)
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -498,8 +476,7 @@ class MinuteServiceTests(unittest.TestCase):
                                "startDate": "2026-10-20", "endDate": "2026-10-20",
                                "priority": "holding"})
             connection.request("POST", "/api/v1/minute-history/backfill", body,
-                               {"Content-Type": "application/json", "Content-Length": str(len(body)),
-                                "X-Api-Key": "secret"})
+                               {"Content-Type": "application/json", "Content-Length": str(len(body))})
             response = connection.getresponse()
             payload = json.loads(response.read())
             self.assertEqual(response.status, 202)
@@ -510,7 +487,7 @@ class MinuteServiceTests(unittest.TestCase):
                                     "startDate": "2026-10-20", "endDate": "2026-10-20",
                                     "priority": "holding"})
             connection.request("POST", "/api/v1/minute-history/backfill", malformed,
-                               {"Content-Type": "application/json", "X-Api-Key": "secret"})
+                               {"Content-Type": "application/json"})
             invalid_type = connection.getresponse()
             self.assertEqual(invalid_type.status, 400)
             invalid_type.read()
@@ -518,7 +495,7 @@ class MinuteServiceTests(unittest.TestCase):
                              '"startDate":"2026-10-20","endDate":"2026-10-20",'
                              '"priority":"holding","priority":"benchmark"}')
             connection.request("POST", "/api/v1/minute-history/backfill", duplicate_key,
-                               {"Content-Type": "application/json", "X-Api-Key": "secret"})
+                               {"Content-Type": "application/json"})
             duplicate = connection.getresponse()
             self.assertEqual(duplicate.status, 400)
             duplicate.read()
@@ -526,7 +503,7 @@ class MinuteServiceTests(unittest.TestCase):
                           '"startDate":"2026-10-20","endDate":"2026-10-20",'
                           '"priority":"holding","extra":NaN}')
             connection.request("POST", "/api/v1/minute-history/backfill", non_finite,
-                               {"Content-Type": "application/json", "X-Api-Key": "secret"})
+                               {"Content-Type": "application/json"})
             invalid_constant = connection.getresponse()
             self.assertEqual(invalid_constant.status, 400)
             invalid_constant.read()

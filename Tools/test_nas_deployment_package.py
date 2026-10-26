@@ -54,14 +54,16 @@ class NASDeploymentPackageTests(unittest.TestCase):
         volume = compose["services"]["f-minute-archive"]["volumes"][0]
         self.assertEqual(volume, "${F_MINUTE_DATA_DIR:-./data}:/data")
 
-    def test_api_token_and_security_list_remain_explicit_requirements(self) -> None:
+    def test_compose_has_no_api_token_requirement_and_keeps_security_list(self) -> None:
         compose = self.archive.read("compose.yml").decode("utf-8")
-        self.assertIn("${F_MINUTE_API_TOKEN:?", compose)
+        self.assertNotIn("F_MINUTE_API_TOKEN", compose)
         self.assertIn("${F_MINUTE_SECURITIES:?", compose)
         example = self.archive.read(".env.example").decode("utf-8")
         self.assertIn("F_MINUTE_DATA_DIR=./data", example)
+        self.assertNotIn("F_MINUTE_API_TOKEN", example)
         deploy_doc = self.archive.read("DEPLOYMENT.md").decode("utf-8")
         self.assertIn("guanpan-f", deploy_doc)
+        self.assertNotIn("X-Api-Key", deploy_doc)
 
     def test_package_excludes_python_bytecode(self) -> None:
         self.assertFalse(any("__pycache__" in name or name.endswith(".pyc")

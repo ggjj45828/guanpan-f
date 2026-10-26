@@ -306,25 +306,20 @@ final class FHomeModel: ObservableObject {
                 marketDataByCode[code].map { (code, $0) }
             })
             let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            let token = try? FNASKeychain.readToken()
             var researchByCode: [String: FDecisionResearchEvidence] = [:]
             var researchFailureByCode: [String: String] = [:]
-            if let token {
-                await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
-                    for code in targetCodes {
-                        group.addTask {
-                            do { return (code, try await FNASResearchClient.fetchEvidence(
-                                baseAddress: baseAddress, token: token, securityCode: code), nil) }
-                            catch { return (code, nil, error.localizedDescription) }
-                        }
-                    }
-                    for await (code, evidence, failure) in group {
-                        if let evidence { researchByCode[code] = evidence }
-                        else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
+            await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
+                for code in targetCodes {
+                    group.addTask {
+                        do { return (code, try await FNASResearchClient.fetchEvidence(
+                            baseAddress: baseAddress, securityCode: code), nil) }
+                        catch { return (code, nil, error.localizedDescription) }
                     }
                 }
-            } else {
-                for code in targetCodes { researchFailureByCode[code] = "NAS API Token 尚未配置" }
+                for await (code, evidence, failure) in group {
+                    if let evidence { researchByCode[code] = evidence }
+                    else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
+                }
             }
             nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得 NAS 研究证据"
 
@@ -480,9 +475,8 @@ final class FHomeModel: ObservableObject {
         archiveRefreshStateByCode[code] = "正在查询 NAS 历史分时…"
         do {
             let base = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            let token = try FNASKeychain.readToken()
             let archive = try await FNASHistoricalMinuteClient.fetch(
-                baseAddress: base, token: token, securityCode: code, tradingDate: day)
+                baseAddress: base, securityCode: code, tradingDate: day)
             guard Calendar.current.isDate(selectedHistoryDate, inSameDayAs: day) else { return }
             archivedIntradayByCode[code] = archive
             archiveRefreshStateByCode[code] = archive.samples.isEmpty
@@ -509,29 +503,15 @@ final class FHomeModel: ObservableObject {
         }
     }
 
-    func configureAndTestNAS(baseAddress: String, tokenDraft: String) async {
+    func configureAndTestNAS(baseAddress: String) async {
         guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
             nasConnectionStatus = FNASConnectionError.invalidAddress.localizedDescription
             return
         }
-        let submittedToken = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !submittedToken.isEmpty {
-            do { try FNASKeychain.save(token: submittedToken) }
-            catch {
-                nasConnectionStatus = error.localizedDescription
-                return
-            }
-        }
-        let token: String
-        do { token = try FNASKeychain.readToken() }
-        catch {
-            nasConnectionStatus = error.localizedDescription
-            return
-        }
         checkingNASConnection = true
-        nasConnectionStatus = "正在安全请求 NAS 就绪状态…"
+        nasConnectionStatus = "正在检查 NAS 就绪状态…"
         defer { checkingNASConnection = false }
-        do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress, token: token) }
+        do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress) }
         catch { nasConnectionStatus = error.localizedDescription }
     }
 

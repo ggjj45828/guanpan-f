@@ -1,6 +1,6 @@
 # F Minute Archive NAS service
 
-The F NAS image now includes a default runtime. You do not need to supply a Python plugin or API key for these public quote endpoints. Configure a strong service token and the real security codes to archive. The Compose project name is fixed to the valid lowercase name `guanpan-f`; if the NAS UI asks for a project name, use that exact value.
+The F NAS image now includes a default runtime. You do not need to supply a Python plugin or provider API key for these public quote endpoints. This service has no API token/authentication: every client that can reach port 8788 can read its readiness, archived minute history, research/diagnostics and queue, and can enqueue backfill work. Restrict network reachability at the router/firewall or use a trusted private network; do not expose this port directly to the public internet. The Compose project name is fixed to the valid lowercase name `guanpan-f`; if the NAS UI asks for a project name, use that exact value.
 
 ## Connected sources
 
@@ -13,7 +13,7 @@ Both market endpoints are public web interfaces without a user API key, but they
 ## Deploy
 
 1. Copy `.env.example` to `.env`.
-2. Replace `F_MINUTE_API_TOKEN` with a unique random value of at least 32 UTF-8 bytes. Keep `F_MINUTE_DATA_DIR=./data` or set it to another persistent writable NAS directory. Set `F_MINUTE_SECURITIES` to the actual held and watched codes; the example list can be edited.
+2. Keep `F_MINUTE_DATA_DIR=./data` or set it to another persistent writable NAS directory. Set `F_MINUTE_SECURITIES` to the actual held and watched codes; the example list can be edited.
 3. From the project root, check and start the service:
 
    ```sh
@@ -21,7 +21,7 @@ Both market endpoints are public web interfaces without a user API key, but they
    docker compose --env-file nas/.env -f nas/compose.yml up -d --build
    ```
 
-4. Confirm `/livez`, then query `/readyz` and all protected `/api/v1/*` routes with `X-Api-Key`. A process health response does not prove upstream data is fresh. Check minute-history diagnostics for each configured code.
+4. Confirm `/livez` and `/readyz`, then query the `/api/v1/*` routes directly without a token. A process health response does not prove upstream data is fresh. Check minute-history diagnostics for each configured code.
 5. Back up `/data` through the archive backup API and restore it to a separate directory before relying on NAS storage.
 
 The process enqueues up to 120 supported recent sessions per configured security on startup, runs bounded backfill batches, and polls Tencent during the exchange's regular minute timestamps. The official calendar and its provenance are saved under `/data/official-calendar-v1.json`; backfill retry state and minute data are also on the persistent volume. `/readyz` reports calendar coverage, parse/update state, and the configured year range. Calendar HTTP failures cannot enable guessed trading sessions.

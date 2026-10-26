@@ -34,7 +34,6 @@ enum FAdvisorLiveError: Error, LocalizedError {
     case missingAIKey
     case missingNASSettings
     case invalidNASResponse
-    case nasUnauthorized
     case nasNotReady(Int)
     case aiHTTPStatus(Int)
     case emptyAIResponse
@@ -48,9 +47,8 @@ enum FAdvisorLiveError: Error, LocalizedError {
         case .invalidInstrument: return "证券代码必须是六位数字。"
         case .noQuestion: return "请输入问题后再发送。"
         case .missingAIKey: return "尚未保存 DeepSeek API Key。"
-        case .missingNASSettings: return "NAS 地址或 API Token 尚未配置。"
+        case .missingNASSettings: return "尚未配置 NAS 地址。"
         case .invalidNASResponse: return "NAS Research Evidence 响应无法校验。"
-        case .nasUnauthorized: return "NAS 拒绝访问；请核对 NAS API Token。"
         case let .nasNotReady(status): return "NAS 尚未就绪（HTTP \(status)）。"
         case let .aiHTTPStatus(status): return "在线 AI 请求失败（HTTP \(status)）。"
         case .emptyAIResponse: return "在线 AI 没有返回完整结果；未生成候选计划。"
@@ -106,9 +104,9 @@ enum FAdvisorAIKeychain {
 }
 
 enum FNASResearchClient {
-    static func fetchEvidence(baseAddress: String, token: String, securityCode: String,
+    static func fetchEvidence(baseAddress: String, securityCode: String,
                               now: Date = Date()) async throws -> FDecisionResearchEvidence {
-        guard let base = FNASReadinessClient.validateAddress(baseAddress), token.utf8.count >= 32 else {
+        guard let base = FNASReadinessClient.validateAddress(baseAddress) else {
             throw FAdvisorLiveError.missingNASSettings
         }
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
@@ -132,11 +130,9 @@ enum FNASResearchClient {
         guard let url = requestComponents.url else { throw FAdvisorLiveError.invalidNASResponse }
         var urlRequest = URLRequest(url: url, timeoutInterval: 15)
         urlRequest.httpMethod = "GET"
-        urlRequest.setValue(token, forHTTPHeaderField: "X-Api-Key")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: urlRequest)
         guard let http = response as? HTTPURLResponse else { throw FAdvisorLiveError.invalidNASResponse }
-        if http.statusCode == 401 { throw FAdvisorLiveError.nasUnauthorized }
         guard (200..<300).contains(http.statusCode) else { throw FAdvisorLiveError.nasNotReady(http.statusCode) }
         let envelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: data)
         let capturedAt = Date()

@@ -1,5 +1,4 @@
 import Foundation
-import Security
 import FCore
 
 struct FNASArchivedIntraday: Equatable, Sendable {
@@ -14,64 +13,15 @@ struct FNASArchivedIntraday: Equatable, Sendable {
 
 enum FNASConnectionError: Error, LocalizedError {
     case invalidAddress
-    case missingToken
-    case invalidToken
-    case unauthorized
     case notReady(String)
     case invalidResponse
 
     var errorDescription: String? {
         switch self {
         case .invalidAddress: return "NAS 地址无效；请填写 http(s)://主机:8788。"
-        case .missingToken: return "尚未保存 NAS API Token。"
-        case .invalidToken: return "NAS API Token 至少需要 32 个 UTF-8 字节。"
-        case .unauthorized: return "NAS 拒绝访问；请核对 API Token。"
         case let .notReady(status): return "NAS 已响应，但服务未就绪：\(status)"
         case .invalidResponse: return "NAS 返回了无法识别的就绪状态。"
         }
-    }
-}
-
-enum FNASKeychain {
-    private static let service = "com.guanpan.advisor.f.nas"
-    private static let account = "minute-archive-api-token"
-
-    static func save(token: String) throws {
-        let value = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.utf8.count >= 32 else { throw FNASConnectionError.invalidToken }
-        let key = [kSecClass as String: kSecClassGenericPassword,
-                   kSecAttrService as String: service,
-                   kSecAttrAccount as String: account] as [String: Any]
-        let attributes: [String: Any] = [kSecValueData as String: Data(value.utf8),
-                                         kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-
-        let status = SecItemCopyMatching(key as CFDictionary, nil)
-        if status == errSecSuccess {
-            let updateStatus = SecItemUpdate(key as CFDictionary, attributes as CFDictionary)
-            guard updateStatus == errSecSuccess else { throw FNASConnectionError.invalidResponse }
-        } else if status == errSecItemNotFound {
-            var item = key
-            attributes.forEach { item[$0.key] = $0.value }
-            let addStatus = SecItemAdd(item as CFDictionary, nil)
-            guard addStatus == errSecSuccess else { throw FNASConnectionError.invalidResponse }
-        } else {
-            throw FNASConnectionError.invalidResponse
-        }
-    }
-
-    static func readToken() throws -> String {
-        let query = [kSecClass as String: kSecClassGenericPassword,
-                     kSecAttrService as String: service,
-                     kSecAttrAccount as String: account,
-                     kSecReturnData as String: true,
-                     kSecMatchLimit as String: kSecMatchLimitOne] as [String: Any]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data,
-              let token = String(data: data, encoding: .utf8), token.utf8.count >= 32 else {
-            throw FNASConnectionError.missingToken
-        }
-        return token
     }
 }
 
@@ -93,17 +43,14 @@ enum FNASReadinessClient {
         return components.url
     }
 
-    static func check(baseAddress: String, token: String) async throws -> String {
+    static func check(baseAddress: String) async throws -> String {
         guard let url = validateAddress(baseAddress) else { throw FNASConnectionError.invalidAddress }
-        guard token.utf8.count >= 32 else { throw FNASConnectionError.invalidToken }
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.httpMethod = "GET"
-        request.setValue(token, forHTTPHeaderField: "X-Api-Key")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
-        if http.statusCode == 401 { throw FNASConnectionError.unauthorized }
         guard (200..<300).contains(http.statusCode),
               let body = try? JSONDecoder().decode(ReadyResponse.self, from: data) else {
             let status = (try? JSONDecoder().decode(ReadyResponse.self, from: data).status) ?? "HTTP \(http.statusCode)"
@@ -139,13 +86,12 @@ enum FNASHistoricalMinuteClient {
         let bars: [Bar]
     }
 
-    static func fetch(baseAddress: String, token: String, securityCode: String,
+    static func fetch(baseAddress: String, securityCode: String,
                       tradingDate: Date, timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current) async throws -> FNASArchivedIntraday {
         guard let readinessURL = FNASReadinessClient.validateAddress(baseAddress),
               var components = URLComponents(url: readinessURL, resolvingAgainstBaseURL: false) else {
             throw FNASConnectionError.invalidAddress
         }
-        guard token.utf8.count >= 32 else { throw FNASConnectionError.invalidToken }
         let dateText = dayString(tradingDate, timeZone: timeZone)
         components.path = "/api/v1/minute-history"
         components.queryItems = [
@@ -157,11 +103,9 @@ enum FNASHistoricalMinuteClient {
         guard let url = components.url else { throw FNASConnectionError.invalidAddress }
         var request = URLRequest(url: url, timeoutInterval: 20)
         request.httpMethod = "GET"
-        request.setValue(token, forHTTPHeaderField: "X-Api-Key")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
-        if http.statusCode == 401 { throw FNASConnectionError.unauthorized }
         guard (200..<300).contains(http.statusCode), let body = try? JSONDecoder().decode(Response.self, from: data),
               body.securityCode == securityCode, body.market == "CN", body.tradingDate == dateText else {
             throw FNASConnectionError.notReady("历史分时查询失败（HTTP \(http.statusCode)）")

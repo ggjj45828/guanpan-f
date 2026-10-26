@@ -1,18 +1,14 @@
-"""Small authenticated JSON HTTP adapter; the embedding NAS app owns server startup."""
+"""Small JSON HTTP adapter; network reachability is the deployment access boundary."""
 from __future__ import annotations
 
 from datetime import date, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
-from typing import Callable
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 import json
 
 from .service import BackfillPriority, MinuteArchiveService, ServiceError
-
-
-Authorizer = Callable[[BaseHTTPRequestHandler], bool]
 
 
 def _unique_object(pairs):
@@ -41,7 +37,7 @@ def _parse_date(value: str) -> date:
     return parsed
 
 
-def make_handler(service: MinuteArchiveService, authorize: Authorizer):
+def make_handler(service: MinuteArchiveService):
     class MinuteArchiveHandler(BaseHTTPRequestHandler):
         server_version = "FMinuteArchive/1"
 
@@ -58,14 +54,6 @@ def make_handler(service: MinuteArchiveService, authorize: Authorizer):
             self.end_headers()
             self.wfile.write(body)
 
-        def _authorized(self) -> bool:
-            try:
-                # Authorization is a security boundary: accidental truthy
-                # values (for example a token string or integer) must not grant access.
-                return authorize(self) is True
-            except Exception:
-                return False
-
         def _query(self) -> dict[str, str]:
             parsed = parse_qs(urlparse(self.path).query, keep_blank_values=True, strict_parsing=True)
             if any(len(values) != 1 for values in parsed.values()):
@@ -76,9 +64,6 @@ def make_handler(service: MinuteArchiveService, authorize: Authorizer):
             parsed = urlparse(self.path)
             if parsed.path == "/livez":
                 self._json(HTTPStatus.OK, {"status": "alive", "service": "f-minute-archive"})
-                return
-            if not self._authorized():
-                self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
                 return
             try:
                 if parsed.path == "/readyz":
@@ -161,9 +146,6 @@ def make_handler(service: MinuteArchiveService, authorize: Authorizer):
                 self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
 
         def do_POST(self) -> None:
-            if not self._authorized():
-                self._json(HTTPStatus.UNAUTHORIZED, {"error": "unauthorized"})
-                return
             if urlparse(self.path).path != "/api/v1/minute-history/backfill":
                 self._json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
                 return

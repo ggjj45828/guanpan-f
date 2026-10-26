@@ -2,15 +2,23 @@
 
 > 给主聊天读取的工作区现场快照。状态以本文生成时的 F 工作树和源码为准；commit 仅供追溯，不定义当前开发状态。每个明显开发阶段完成或用户要求汇报时更新本文，不为更新本文强制提交或停止开发。
 
-更新时间：2026-10-26 18:07（Asia/Shanghai）
+更新时间：2026-10-26（本轮 NAS token 移除后，Asia/Shanghai）
 
-## 当前实时状态覆盖（2026-10-26，本轮源码只读检查）
+## 当前实时状态覆盖（以本轮实际工作树和NAS现场为准）
 
-- 最初检查 `64d4877` 时工作树 CLEAN，main 与 origin/main 对齐。随后提交滚动锚点修复并推送；当前 HEAD `946ff3cbb08c48129890a5540de5c4a4c076b5a2` 与 origin/main 对齐。现在有一项未提交 UI XCTest helper 修改和本交接更新；Commit仅用于审计，当前状态以此处实际源码为准。
-- 最新远端 Apple CI run `40317398151`（job `121553331583`）对应 `64d4877`，FCore tests、XcodeGen、Device Build、Simulator Build已完成；App UI XCTest 3项执行，1通过、2失败。下载 job text log 后确认：`PrimaryNavigationUITests.swift:36` 的历史分钟查询按钮不是 hittable；`:73` 的“现金与成交流水”静态文本尚未进入 List 懒加载的可访问树。不是 Swift 编译失败。artifact（145 MB）虽无法通过浏览器下载，但相同断言已从只读 job log 确认。上一个全通过 run `40315965909`：FCore 121/121、Device/Simulator Build、UI 3/3、截图导出、未签名 IPA。
-- 本地 Swift/Xcode/XcodeGen 不可用，无法复跑编译或测试；Apple 验证须依赖远端 Actions。
-- `64d4877` 的具体 UI 失败现已定位。本地未提交修复：证券详情 ScrollView 和资产 List 加入稳定 accessibility identifier；UI XCTest 对应容器滚动，历史分钟查询和现金流水标题进入可见区后再断言。源码修复尚未编译/执行；本机仍无 Swift/Xcode/XcodeGen。
-- 下一步将这两个窄幅 UI 稳定性修复送 Apple CI，核验三个 App UI XCTest、FCore、Device/Simulator Build、截图与 IPA。若历史区按钮仍不可达，再根据新截图检查真实视口行为。
+- F工作区源码检查开始时 `main` HEAD 为 `f03059d79dc382a3ad55c1e4ee9aee69f1549f20`，与 `origin/main` 对齐且工作树 CLEAN；本轮只更新本文件，当前唯一未提交改动是本交接记录。提交仅供追溯，不定义实时功能状态。
+- 本轮未修改 Swift/NAS 源码。NAS现场只读检查发现既有 `guanpanf` 项目已运行约9小时，容器 `guanpan-f-minute-archive` 显示 `running (healthy)`，端口映射 `0.0.0.0:8788->8788/tcp`。其日志可见服务启动监听 `0.0.0.0:8788`。这证明容器进程和 `/livez` Docker healthcheck通过，不证明已通过鉴权的 `/readyz`、上游采集成功或归档中已有真实分钟数据。
+- 用户随后确认直接访问`/readyz`得到`{"error":"unauthorized"}`；这是旧运行容器鉴权行为。用户已明确确认移除 API token 并接受可达网络访问。当前工作树已取消源码鉴权；运行中的 NAS 容器仍需重建/重部署后才会生效，未在本轮操作远端容器。
+- readiness、Provider 状态、实际证券列表或数据库分钟行数仍未确认。health“失败”的具体失败项未复现；旧运行容器曾显示healthy，本轮没有重部署或扰动采集进程。
+- 已编码的NAS runtime使用真实Tencent当前分钟轮询、Eastmoney指定日期历史补采并写持久归档；部署配置和目标NAS上真实数据采集量仍External Verification Pending。未重启、重建、替换容器或触碰数据卷，以免影响当前运行实例。
+- 本机Swift/Xcode/XcodeGen仍未检查到可用证据；Apple CI和Simulator验收状态不因本轮NAS容器健康状态改变。需要继续读取对应Actions运行结果。
+- 下一步先拿到“今天NAS包health失败”的具体检查输出，再区分包构建/容器liveness/readiness/分钟数据采集；当前NAS实例保持运行。只有确认目标包及持久卷映射后才考虑替换部署。
+
+## NAS访问密码移除（用户确认）
+
+- 用户确认这里的 token 是 NAS API 自己的密码，不需要，并明确接受所有可达网络访问。已从当前工作树移除服务端 `X-Api-Key` 校验、`F_MINUTE_API_TOKEN` Compose/.env 要求、iOS token输入与NAS Keychain路径；DeepSeek API Key 的 Keychain保存保持不变。
+- `/readyz`、历史分钟、研究/诊断和补采队列现无需认证；8788 可达者也能 POST 补采任务。Compose仍绑定 `0.0.0.0:8788`，应由用户自己的家庭网络/路由器决定访问范围。未把此变化应用到运行中的NAS容器；旧容器仍可能返回 unauthorized，需重新部署新包才生效。
+- 更新了现有 Python/结构测试定义以匹配无token行为，但本轮没有运行测试、Xcode编译或构建部署包；这些仍未验证。当前 Swift/NAS代码改动尚未提交。
 
 ## UI 滚动修复 CI 续记（2026-10-26）
 

@@ -297,7 +297,13 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 
 ## 2026-10-26 NAS 8788 存活检查与 F GitHub CI 接入
 
-- 用户从 NAS 端口访问得到 `{"status":"alive","service":"f-minute-archive"}`，确认 8788 的 `/livez` 可达且服务进程存活。用户另一次提供 `{"error":"unauthorized"}`，未附路径或请求头；若访问根路径或未携带有效 `X-Api-Key` 请求 `/readyz`/业务API，这是认证边界的预期响应。生产 readiness、token 匹配、归档/日历/provider 状态仍待核验，不能据 `/livez` 宣称数据服务就绪。
+- 历史现场：用户从 NAS 端口访问得到 `{"status":"alive","service":"f-minute-archive"}`；旧部署 `/readyz` 返回 `unauthorized`。**后续更新：用户确认不需要这层NAS密码并接受可达网络访问；当前工作树已移除 API token 鉴权，旧现场描述不代表新源码/部署行为。** 生产 readiness、归档/日历/provider 状态仍待核验，且运行中容器尚未重部署。
+
+## 当前增量：移除 NAS API Token（2026-10-26）
+
+- 用户确认 NAS API Token 是额外密码且不需要，授权移除并接受可达网络访问。当前 Swift 客户端、NAS HTTP server、Compose、`.env.example`、部署说明与交付包生成说明已移除 token/X-Api-Key；DeepSeek API Key流程未变。
+- 所有可达8788端口的设备现在可读 readiness、分钟历史、研究证据、诊断、补采队列并提交补采。安全边界改由用户网络设置承担。目标 NAS 当前容器尚未重部署，所以仍可能返回旧版本的 `unauthorized`。
+- 更新了现有测试定义但本轮未执行；Swift/Xcode、NAS Python tests、部署包生成和容器部署均未验证。不能据源码改动宣称测试/编译/部署通过。
 - 已创建私有 GitHub 仓库 `ggjj45828/guanpan-f`，本地 `origin` 已配置。自动审查首次拦截源码上传后，用户已明确授权推送到该私有仓库；重试时 Git 返回 `could not read Username`，未完成认证，未上传任何对象。当前没有 `gh` CLI，GitHub connector 也未连接，远端仍为空、F Actions 尚未执行。用户提供的 `guanpan-pro-native/actions` 最近成功构建属于 `b-latest` 的 B 源码，不作为 F 编译证据。
 - FCore XCTest `defined=39 / executed=0 / passed=0 / failed=0`；App UI XCTest `defined=2 / executed=0 / passed=0 / failed=0`。当前仍无 Swift/Xcode/XcodeGen；EXT-3 保持 External Verification Pending。
 

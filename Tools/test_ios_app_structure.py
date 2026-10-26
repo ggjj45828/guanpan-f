@@ -49,12 +49,12 @@ class IOSAppStructureTests(unittest.TestCase):
         self.assertNotIn("confirmUserFill", app_sources)
         self.assertNotIn("applyConfirmedFill", app_sources)
 
-    def test_nas_token_is_keychain_only_and_readiness_client_is_read_only(self) -> None:
-        self.assertIn("import Security", self.nas_client)
-        self.assertIn("kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly", self.nas_client)
-        self.assertIn('forHTTPHeaderField: "X-Api-Key"', self.nas_client)
+    def test_nas_connection_has_no_token_setup_and_readiness_is_read_only(self) -> None:
+        self.assertNotIn("FNASKeychain", self.nas_client)
+        self.assertNotIn('forHTTPHeaderField: "X-Api-Key"', self.nas_client)
         self.assertIn('components.path = "/readyz"', self.nas_client)
         self.assertIn("try await FNASReadinessClient.check", self.app_source)
+        self.assertNotIn("settings.nas.token", self.views)
 
 
 if __name__ == "__main__":

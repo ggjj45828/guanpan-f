@@ -22,7 +22,7 @@ PACKAGE_FILES = (
 def build_package(destination: Path) -> Path:
     destination = destination.resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="guanpan-f-nas-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="guanpan-f-nas-", dir=destination.parent) as temporary:
         stage = Path(temporary)
         for source_relative, target_relative in PACKAGE_FILES:
             source = ROOT / source_relative
@@ -51,10 +51,10 @@ def build_package(destination: Path) -> Path:
 ## 部署
 
 1. 将 ZIP 解压到 NAS 上长期保留的项目目录，例如 `/volume1/docker/guanpan-f`。
-2. 复制 `.env.example` 为 `.env`。设置唯一随机 `F_MINUTE_API_TOKEN`（至少 32 个 UTF-8 字节），并将 `F_MINUTE_SECURITIES` 改成真实持仓/自选证券代码。
+2. 复制 `.env.example` 为 `.env`，将 `F_MINUTE_SECURITIES` 改成真实持仓/自选证券代码。服务不校验 API token；所有能访问 8788 的设备都能读取数据并提交补采请求，因此请将端口限制在可信家庭网络，不要直接暴露到公网。
 3. 默认数据目录为项目内 `./data`，会持久保存在解压目录。启动脚本会把挂载目录及属主不匹配的顶层数据文件调整为服务UID 10001，然后降权运行；该操作保留数据内容。若 NAS 使用不允许容器修改属主的 NFS/root-squash 或只读目录，服务会明确报权限错误，需要改用可写本地目录。
 4. 在 NAS 容器管理器创建 Compose 项目，项目来源选择这份解压目录，读取根目录 `compose.yml` 并构建。
-5. 启动后先检查 `/livez`，再用 `X-Api-Key` 请求 `/readyz` 和受保护 API。`/livez` 成功不代表上游历史数据已完整。
+5. 启动后检查 `/livez`、`/readyz` 和 `/api/v1/*`。`/livez` 成功不代表上游历史数据已完整。
 
 命令行部署时，在本目录执行：
 
@@ -63,7 +63,7 @@ docker compose --env-file .env -f compose.yml config
 docker compose --env-file .env -f compose.yml up -d --build
 ```
 
-服务运行需要由部署者配置的随机令牌。缺少令牌或真实证券代码时，Compose 会拒绝启动。API token 不写入镜像或包内默认值。
+缺少真实证券代码时，Compose 会拒绝启动。API 无鉴权；网络入口由部署者的路由器/防火墙限制。
 
 ## 数据与验证边界
 
@@ -77,7 +77,12 @@ SQLite、补采状态和官方日历保存在 `/data` 挂载目录。当前项�
             ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
             capture_output=True, text=True,
         ).stdout.strip()
-        (stage / "HEAD.txt").write_text(git_head + "\n", encoding="ascii")
+        (stage / "HEAD.txt").write_text(
+            f"Source Git HEAD: {git_head}\n"
+            "Package includes the source working-tree state at build time; "
+            "it may contain uncommitted changes.\n",
+            encoding="ascii",
+        )
 
         with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED,
                              compresslevel=9) as archive:

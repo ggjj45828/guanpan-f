@@ -11,7 +11,6 @@ services:
     environment:
       F_MINUTE_HOST: 0.0.0.0
       F_MINUTE_PORT: 8788
-      F_MINUTE_API_TOKEN: ${F_MINUTE_API_TOKEN:?set a random secret of at least 32 UTF-8 bytes}
       F_MINUTE_RUNTIME_FACTORY: ${F_MINUTE_RUNTIME_FACTORY:-nas.fminute.runtime:build_service}
       F_MINUTE_SECURITIES: ${F_MINUTE_SECURITIES:?set a comma-separated list of real six-digit holdings/watchlist codes}
     ports:

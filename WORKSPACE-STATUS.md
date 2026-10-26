@@ -18,7 +18,7 @@
 - 当前续接基线：`main`与`F-CHECKPOINT`同一提交；可用 `F-CHECKPOINT.bundle` 恢复本工作区提交历史。本工作区从 F-LATEST 源码包重新导入，历史包不含上游 `.git`，因此此处不声称恢复原远端提交链。
 - F Matrix 需求数40 defined，EXT-1…EXT-5仍 External Pending；B 145项继续作为需求输入，A/B状态和实现通过证据不继承。
 - FCore XCTest defined 39 / executed 0 / passed 0 / failed 0；App UI XCTest defined 2 / executed 0 / passed 0 / failed 0。
-- NAS新交付包已改为Compose与Dockerfile同根目录，`./data`为持久卷默认。部署仍要求强`F_MINUTE_API_TOKEN`；NAS实际构建/部署未经验证。
+- NAS新交付包已改为Compose与Dockerfile同根目录，`./data`为持久卷默认。用户授权移除API token认证；可达8788端口的客户端可访问所有API。当前源码/包配置已取消token，NAS实际重建部署未经验证。
 - 本轮 Python 总套件111/111通过；py_compile、架构边界和XcodeGen/CI YAML结构检查通过。没有Swift/Xcode/XcodeGen/Docker。
 - NAS Compose项目名固定为小写`guanpan-f`，避免NAS界面传入`guanpanF`触发项目名校验错误；修复后目标NAS验证仍待执行。
 - 新部署日志暴露 `gosu` 包在目标 Debian slim 软件源不可用；镜像改装 `util-linux` 并用 `setpriv` 降权，专项部署包测试7/7通过。Docker镜像构建和NAS重部署未运行。

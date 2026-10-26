@@ -1,5 +1,7 @@
 # F 原生 iOS App 集成阶段增补
 
+> 历史快照：之后用户确认不需要NAS API密码；当前工作树已移除NAS token输入、Keychain与请求头。DeepSeek API Key仍独立保存在Keychain。目标NAS尚未重部署。
+
 日期：2026-10-26
 
 ## 结构审阅与本阶段接线

@@ -592,7 +592,6 @@ struct SettingsOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
-    @State private var nasTokenDraft = ""
     @State private var deepSeekKeyDraft = ""
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
@@ -612,15 +611,9 @@ struct SettingsOverview: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                SecureField("NAS API Token（至少 32 字节）", text: $nasTokenDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("settings.nas.token")
                 Button {
                     Task {
-                        await model.configureAndTestNAS(baseAddress: nasBaseAddress,
-                                                        tokenDraft: nasTokenDraft)
-                        nasTokenDraft = ""
+                        await model.configureAndTestNAS(baseAddress: nasBaseAddress)
                     }
                 } label: {
                     if model.checkingNASConnection {
@@ -633,7 +626,7 @@ struct SettingsOverview: View {
                 .accessibilityIdentifier("settings.nas.test")
                 Text(model.nasConnectionStatus)
                     .font(.caption).foregroundStyle(.secondary)
-                Text("Token 保存在本机 Keychain；连接测试只读取 /readyz，不发送持仓。远程访问请使用 HTTPS，HTTP 仅用于可信家庭网络。")
+                Text("NAS API 不要求单独令牌。连接测试只读取 /readyz，不发送持仓。8788 端口对可达网络开放；远程访问请使用 HTTPS 并限制网络入口。")
                     .font(.footnote).foregroundStyle(.secondary)
                 SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
                     .textInputAutocapitalization(.never)
