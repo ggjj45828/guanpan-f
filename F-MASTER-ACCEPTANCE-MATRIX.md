@@ -4,7 +4,7 @@
 
 ## 当前 F 验证快照（2026-10-26）
 
-FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed，证据为 GitHub macOS Actions run `40292039312`。同一 run 的 XcodeGen成功；iOS Device App Build发现 Swift App层编译错误并失败，Simulator Build/UI Test未执行。下表状态列是验收范围定义，不表示自动通过；源码实现与平台执行证据按本节和各行说明分别核对。
+FCore XCTest：119 defined / 119 executed / 119 passed / 0 failed。App UI XCTest：2 defined / 2 executed / 1 passed / 1 failed，证据为 GitHub Actions run `40292917389`。XcodeGen、iOS Device Build、Simulator Build成功；UI失败的Advisor状态可访问性查询已在工作树修复，待复跑。下表状态列是验收范围定义，不表示自动通过。
 
 | ID | F 验收范围 | 状态 | F 验证证据 |
 |---|---|---|---|

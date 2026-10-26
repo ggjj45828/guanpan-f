@@ -424,7 +424,13 @@ struct AdvisorOverview: View {
                     LabeledContent("持仓行情", value: model.holdings.isEmpty ? "暂无证券行情请求" : "按持仓证券逐项获取")
                     LabeledContent("NAS 历史研究", value: model.nasResearchStatus)
                     LabeledContent("新闻", value: "新闻源尚未接入")
-                    LabeledContent("在线 AI", value: model.aiKeyStatus)
+                    HStack {
+                        Text("在线 AI")
+                        Spacer()
+                        Text(model.aiKeyStatus).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("advisor.ai-key-status")
                 }
                 .font(.subheadline)
                 .padding(16)

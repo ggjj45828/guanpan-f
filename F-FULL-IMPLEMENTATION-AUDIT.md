@@ -1,6 +1,6 @@
 # F 全盘未完成功能审计
 
-> 实时更新（2026-10-26）：GitHub Actions run `40292039312` 已编译 Swift Package、执行 FCore XCTest 119/119通过并成功生成 Xcode 工程；iOS Device App Build仍因 App层 Swift 编译错误失败，Simulator/UI Test未执行。当前工作区逐条修复中；下方旧记录只用于追溯。
+> 实时更新（2026-10-26）：GitHub Actions run `40292917389` 已通过 Swift Package、FCore XCTest 119/119、XcodeGen、iOS Device及Simulator Build；App UI XCTest执行2项，1通过/1失败。失败后的Advisor状态可访问性修复待复跑；下方旧记录只用于追溯。
 
 审计起始checkpoint：提交 `622c9079307aef6f1af61d9b18e83528702c081f`；本报告后续追加至队列修补提交 `4175bdad598d050e548ce4e1a60b16f17fa4d5ff`。（审计前 `main` / `F-CHECKPOINT`）。本报告区分源码、静态检查、Python实跑、Swift测试定义和目标环境验证；任何一层都不替代另一层。
 

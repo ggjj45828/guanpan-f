@@ -28,7 +28,9 @@ final class PrimaryNavigationUITests: XCTestCase {
         app.launch()
         app.tabBars.buttons["AI顾问"].tap()
 
-        XCTAssertTrue(app.staticTexts["未配置 DeepSeek API Key"].exists)
+        let aiStatus = app.descendants(matching: .any)["advisor.ai-key-status"]
+        XCTAssertTrue(aiStatus.waitForExistence(timeout: 5))
+        XCTAssertTrue(aiStatus.label.contains("DeepSeek API Key"))
         XCTAssertTrue(app.buttons["发送"].exists)
         XCTAssertTrue(app.textFields.firstMatch.exists || app.textViews.firstMatch.exists)
     }
