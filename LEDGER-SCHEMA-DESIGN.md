@@ -1,0 +1,17 @@
+# F Schema v1 decisions and limits
+
+Status: implementation started; no persistence adapter and no real-account import is connected.
+
+- `FAccountBook` is the only proposed account snapshot and carries an explicit schema version, account UUID, opening snapshot, CNY cash balance, positions, confirmed fills, cash movements, audit events, and update time.
+- Position, fill, cash movement, and audit event IDs are stable UUIDs. A security can occur only once in the current positions collection.
+- Money uses Foundation `Decimal`; quantities use signed 64-bit integers with positivity checks. Values are not converted through floating point.
+- A fill requires user-confirmation metadata. The pure `applyingUserConfirmedFill` operation produces a new value only after reconciliation and records before/after SHA-256 audit digests; the application layer still must call it only from an explicit user confirmation action. There is no plan execution or AI-to-ledger method in FCore.
+- Structural validation currently checks schema version, currency, nonnegative cash, IDs, instrument code/name, positive units/prices, nonnegative fees/cost, nonblank confirmation/audit text, and plausibly nonfuture timestamps.
+- Balance reconciliation replays confirmed fills and cash movements from an explicit opening snapshot, checking ending cash, units, and book cost. Fills and cash movements require a globally unique positive ledger sequence, so timestamp ties never decide accounting order; replay also rejects intermediate cash overdrafts. Sells carry an explicit cost-basis removal. It never derives a sell's cost basis from market prices.
+- Cost policy: additions accumulate exact Decimal consideration plus actual recorded fees. A partial sale removes weighted-average cost proportionally, rounded half away from zero to 8 decimal places in CNY; a full close removes the exact remaining book cost. The recorded sell cost must match this policy both when applying the event and when replaying the ledger. Trade amounts themselves are not rounded or reconstructed from quotes.
+- Cash movements require user-confirmation metadata and a unique next event sequence. The pure operation supports confirmed deposits, withdrawals, and income, refuses zero amounts or cash overdrafts, and emits a before/after audit digest. Confirmation metadata is evidence carried by the model; the app still must gate the call behind an explicit user action.
+- The pure transaction layer now implements weighted-average cost allocation for partial sells and user-confirmed cash-movement events. It does not yet post realized profit or provide durable atomic storage. Storage must succeed before app state is published; all accounting behavior requires executable tests before migration or ledger UI integration.
+- Schema v1 is a new F format, not a claim of compatibility with A/B. No A/B file has been loaded, decoded, modified, or migrated.
+- Migration remains a separate later module: immutable source snapshot + hash, backup, dry-run field mapping, cash/position/fill reconciliation report, explicit user approval, idempotency key, atomic commit, and tested rollback.
+
+Test sources: `Tests/FCoreTests/LedgerSchemaTests.swift` defines 30 XCTest cases. Status is `defined`; execution is pending because this Windows host has no Swift/Xcode toolchain. No test is marked passed. External gates and restrictions are listed in `F-MASTER-ACCEPTANCE-MATRIX.md`.

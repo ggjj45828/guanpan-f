@@ -1,0 +1,20 @@
+# Xcode / Swift
+.build/
+DerivedData/
+*.xcodeproj/
+build/
+*.xcresult
+*.ipa
+# Python
+__pycache__/
+*.pyc
+# Secrets / local env
+.secrets/
+.env
+# Recovery bundle and frozen source archive live in the Project checkpoint, not the F code remote
+F-LATEST*.zip
+F-CHECKPOINT-MANIFEST.json
+/candidates/
+/review-sources/
+/prototype-a-derived-not-selected/
+F-LATEST.zip.sha256

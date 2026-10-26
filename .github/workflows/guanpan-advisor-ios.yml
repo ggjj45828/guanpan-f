@@ -1,0 +1,124 @@
+name: Guanpan F native iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Package.swift'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'GuanpanFApp/**'
+      - '.github/workflows/guanpan-advisor-ios.yml'
+  pull_request:
+    paths:
+      - 'Package.swift'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'GuanpanFApp/**'
+      - '.github/workflows/guanpan-advisor-ios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test F core and build iOS targets
+    runs-on: macos-15
+    timeout-minutes: 50
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Apple toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run F Swift package tests
+        run: |
+          set -o pipefail
+          swift test --parallel 2>&1 | tee F-core-tests.log
+
+      - name: Generate F Xcode project
+        working-directory: GuanpanFApp
+        run: |
+          xcodegen generate --spec project.yml
+          xcodebuild -list -project GuanpanF.xcodeproj
+
+      - name: Build unsigned iOS device app
+        working-directory: GuanpanFApp
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project GuanpanF.xcodeproj \
+            -scheme GuanpanF \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/Device \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-device.log
+
+      - name: Build iOS Simulator app
+        working-directory: GuanpanFApp
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project GuanpanF.xcodeproj \
+            -scheme GuanpanF \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/Simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-simulator.log
+
+      - name: Run F app navigation UI tests
+        working-directory: GuanpanFApp
+        run: |
+          set -o pipefail
+          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next((device["udid"] for group in data["devices"].values() for device in group if device.get("isAvailable") and device.get("name", "").startswith("iPhone")), ""))')"
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No available iPhone Simulator on this runner" >&2
+            exit 1
+          fi
+          xcodebuild test \
+            -project GuanpanF.xcodeproj \
+            -scheme GuanpanF \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath build/UITests \
+            -resultBundlePath build/FApp-UI.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-ui-tests.log
+
+      - name: Package unsigned IPA
+        working-directory: GuanpanFApp
+        run: |
+          APP_PATH="$(find build/Device/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            echo "Device build succeeded but no .app was produced" >&2
+            exit 1
+          fi
+          mkdir -p build/Package/Payload
+          cp -R "$APP_PATH" build/Package/Payload/
+          cd build/Package
+          ditto -c -k --sequesterRsrc --keepParent Payload ../GuanpanF-unsigned.ipa
+          unzip -t ../GuanpanF-unsigned.ipa
+
+      - name: Upload iOS build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guanpan-f-ios-build-evidence
+          path: |
+            F-core-tests.log
+            GuanpanFApp/build-device.log
+            GuanpanFApp/build-simulator.log
+            GuanpanFApp/build-ui-tests.log
+            GuanpanFApp/build/FApp-UI.xcresult
+            GuanpanFApp/build/GuanpanF-unsigned.ipa
+          if-no-files-found: warn
+          retention-days: 14

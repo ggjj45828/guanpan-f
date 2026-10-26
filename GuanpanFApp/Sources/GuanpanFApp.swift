@@ -1,0 +1,576 @@
+import SwiftUI
+import Foundation
+import FCore
+import FAdvisor
+import FLedgerWrite
+
+@main
+struct GuanpanFApp: App {
+    @StateObject private var model = FHomeModel()
+    var body: some Scene { WindowGroup { FHomeRoot(model: model) } }
+}
+
+struct FHomeHolding: Identifiable {
+    var id: String { instrumentCode }
+    let instrumentCode: String
+    let name: String
+    let units: Int64
+    let bookCost: Decimal
+}
+
+typealias FHomeLedgerState = FHomeLedgerAvailability
+
+@MainActor
+final class FHomeModel: ObservableObject {
+    static let commonQuestions = [
+        "今天我的持仓需要操作吗？",
+        "159352 现在适合买入吗？",
+        "我的 A500 怎么降低成本？",
+        "今天适合做 T 吗？",
+        "为什么今天的建议和昨天不一样？"
+    ]
+
+    func commonQuestions(for instrumentCode: String?) -> [String] {
+        guard let instrumentCode else { return Self.commonQuestions }
+        return [
+            "\(instrumentCode) 今天需要操作吗？",
+            "\(instrumentCode) 现在适合买入吗？",
+            "我的 \(instrumentCode) 怎么降低成本？",
+            "\(instrumentCode) 今天适合做 T 吗？",
+            "为什么 \(instrumentCode) 今天的建议和昨天不一样？"
+        ]
+    }
+
+    @Published private(set) var cashBalance: Decimal?
+    @Published private(set) var holdings: [FHomeHolding] = []
+    @Published private(set) var ledgerStatus = "正在读取本机真实账本"
+    @Published private(set) var ledgerState: FHomeLedgerState = .loading
+    @Published var question = ""
+    @Published var alertMessage: String?
+    @Published private(set) var marketDataByCode: [String: FCurrentIntradaySnapshot] = [:]
+    @Published private(set) var marketRefreshStateByCode: [String: String] = [:]
+    @Published private(set) var archivedIntradayByCode: [String: FNASArchivedIntraday] = [:]
+    @Published private(set) var archiveRefreshStateByCode: [String: String] = [:]
+    @Published private(set) var dailyKlineByCode: [String: FDailyKlineSnapshot] = [:]
+    @Published private(set) var dailyKlineStateByCode: [String: String] = [:]
+    @Published var selectedHistoryDate = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: Date()) ?? Date()
+    @Published private(set) var refreshingMarketCodes: Set<String> = []
+    @Published private(set) var selectedInstrumentCode: String?
+    @Published private(set) var nasConnectionStatus = "未配置"
+    @Published private(set) var checkingNASConnection = false
+    @Published private(set) var nasResearchStatus = "尚未请求"
+    @Published private(set) var aiKeyStatus = "未配置 DeepSeek API Key"
+    @Published private(set) var advisorStatus = "尚未开始分析"
+    @Published private(set) var isAskingAdvisor = false
+    @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
+    private var ledgerStore: FAccountBookStore?
+    private var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
+
+    init() {
+        guard let support = FileManager.default.urls(for: .applicationSupportDirectory,
+                                                      in: .userDomainMask).first else {
+            ledgerState = .unavailable
+            ledgerStatus = "本机应用数据目录不可用 · 真实账本未读取"
+            return
+        }
+        let store = FAccountBookStore(fileURL: support.appendingPathComponent("f-real-ledger.json"))
+        ledgerStore = store
+        aiKeyStatus = (try? FAdvisorAIKeychain.read()) == nil
+            ? "未配置 DeepSeek API Key" : "DeepSeek Key 已保存在本机 Keychain"
+        Task { await loadLedger(from: store) }
+    }
+
+    private func loadLedger(from store: FAccountBookStore) async {
+        do {
+            guard let snapshot = try await store.readLedgerSnapshot(now: Date()) else {
+                ledgerState = .notEstablished
+                ledgerStatus = "尚未建立真实账本"
+                return
+            }
+            cashBalance = snapshot.cashBalance
+            latestLedgerSnapshot = snapshot
+            holdings = snapshot.positions.map {
+                FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
+                             units: $0.units, bookCost: $0.bookCost)
+            }
+            ledgerState = .available
+            ledgerStatus = "真实账本 · 只读快照 · \(holdings.count) 项持仓"
+        } catch {
+            ledgerState = .unavailable
+            ledgerStatus = "真实账本不可读取 · \(String(describing: error))"
+        }
+    }
+
+    var portfolioContextLabel: String {
+        switch ledgerState {
+        case .loading: return "组合上下文：读取中"
+        case .notEstablished: return "组合上下文：账本尚未建立"
+        case .unavailable: return "组合上下文：账本不可读取"
+        case .available:
+            return holdings.isEmpty ? "组合上下文：已读取 · 当前无持仓" : "组合上下文：已读取真实组合"
+        }
+    }
+
+    var marketCalendarStatusText: String {
+        switch FMainlandTradingCalendar.status(at: Date()) {
+        case .continuous: return "交易中 · 行情自动刷新"
+        case .lunchBreak: return "午间休市 · 自动刷新暂停"
+        case .preOpen: return "开盘前 · 自动刷新暂停"
+        case .closed: return "已收盘或休市 · 自动刷新暂停"
+        case .unknown: return "交易日历未覆盖当前年份 · 自动刷新暂停"
+        }
+    }
+
+    func askAdvisor(instrumentCode: String? = nil) {
+        guard !isAskingAdvisor else { return }
+        Task { await runAdvisorQuestion(instrumentCode: instrumentCode) }
+    }
+
+    func saveDeepSeekKey(_ draft: String) {
+        do {
+            try FAdvisorAIKeychain.save(draft)
+            aiKeyStatus = "DeepSeek Key 已安全保存在本机 Keychain"
+        } catch {
+            aiKeyStatus = error.localizedDescription
+        }
+    }
+
+    private func runAdvisorQuestion(instrumentCode requestedCode: String?) async {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { advisorStatus = FAdvisorLiveError.noQuestion.localizedDescription; return }
+        guard ledgerState == .available else { advisorStatus = FAdvisorLiveError.noRealLedger.localizedDescription; return }
+        guard let initial = latestLedgerSnapshot else {
+            advisorStatus = FAdvisorLiveError.noRealLedger.localizedDescription
+            return
+        }
+        let normalizedQuestion = text.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "").lowercased()
+        let portfolioPhrases = ["我的持仓", "全部持仓", "所有持仓", "整个组合", "我的组合", "组合今天", "组合需要", "组合怎么样", "现金", "资金", "总资产", "总仓位", "配置", "买什么", "怎么配"]
+        let portfolioIntent = normalizedQuestion.contains("组合") || normalizedQuestion.contains("持仓") ||
+            portfolioPhrases.contains(where: normalizedQuestion.contains)
+        let numericCodes = text.components(separatedBy: CharacterSet(charactersIn: "0123456789").inverted)
+            .filter { $0.count == 6 }
+        let mentionedByCode = initial.positions.first { text.contains($0.instrumentCode) }
+        let unheldNumericCode = numericCodes.first { number in
+            !initial.positions.contains(where: { $0.instrumentCode == number })
+        }
+        // A six-digit code selects a security advisor even when it is not held.
+        // Portfolio requests still capture every real holding and cash below.
+        let mentionedByName = initial.positions.first { position in
+            let name = position.name.replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "　", with: "").lowercased()
+            return !name.isEmpty && normalizedQuestion.contains(name)
+        }
+        let focusCode = requestedCode ?? (portfolioIntent ? nil :
+            (unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode))
+        if let focusCode,
+           (focusCode.count != 6 || !focusCode.allSatisfy(\.isNumber)) {
+            advisorStatus = FAdvisorLiveError.invalidInstrument.localizedDescription
+            return
+        }
+        let targetCodes = focusCode.map { [$0] } ?? initial.positions.map(\.instrumentCode)
+        let scope: FAdvisorEntryScope
+        if let focusCode { scope = .instrument(focusCode) } else { scope = .portfolio }
+        isAskingAdvisor = true
+        advisorResult = nil
+        advisorStatus = focusCode == nil
+            ? "正在读取全部真实持仓，刷新组合行情并请求逐证券 NAS 研究…"
+            : "正在读取真实持仓、刷新目标证券行情并请求 NAS 研究…"
+        defer { isAskingAdvisor = false }
+
+        do {
+            let apiKey = try FAdvisorAIKeychain.read()
+            await refreshMarketData(for: targetCodes)
+            let quotes = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
+                marketDataByCode[code].map { (code, $0) }
+            })
+            let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            let token = try? FNASKeychain.readToken()
+            var researchByCode: [String: FDecisionResearchEvidence] = [:]
+            var researchFailureByCode: [String: String] = [:]
+            if let token {
+                await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
+                    for code in targetCodes {
+                        group.addTask {
+                            do { return (code, try await FNASResearchClient.fetchEvidence(
+                                baseAddress: baseAddress, token: token, securityCode: code), nil) }
+                            catch { return (code, nil, error.localizedDescription) }
+                        }
+                    }
+                    for await (code, evidence, failure) in group {
+                        if let evidence { researchByCode[code] = evidence }
+                        else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
+                    }
+                }
+            } else {
+                for code in targetCodes { researchFailureByCode[code] = "NAS API Token 尚未配置" }
+            }
+            nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得 NAS 研究证据"
+
+            guard let ledgerStore else { throw FAdvisorLiveError.noRealLedger }
+            let contextCaptureTime = Date()
+            guard let freshLedger = try await ledgerStore.readLedgerSnapshot(now: contextCaptureTime),
+                  freshLedger.ledgerDigest == initial.ledgerDigest else {
+                throw FAdvisorLiveError.ledgerChangedDuringAnalysis
+            }
+            latestLedgerSnapshot = freshLedger
+            cashBalance = freshLedger.cashBalance
+            holdings = freshLedger.positions.map {
+                FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
+                             units: $0.units, bookCost: $0.bookCost)
+            }
+
+            let sessionStatus = FMainlandTradingCalendar.status(at: contextCaptureTime)
+            var observations: [FContextObservation] = []
+            var evidence: [FDecisionResearchEvidence] = []
+            var quoteStatuses: [String] = []
+            var researchStatuses: [String] = []
+            for code in targetCodes {
+                if let quote = quotes[code], let price = quote.latestPrice {
+                    observations.append(FContextObservation(
+                        dataClass: .quote, subject: code, source: quote.source,
+                        reference: quote.source, observedAt: quote.quoteTimestamp,
+                        capturedAt: min(contextCaptureTime, quote.fetchedAt), decimalValue: price,
+                        quoteTemporalMetadata: FQuoteTemporalMetadata(
+                            quoteTimestamp: quote.quoteTimestamp, fetchedAt: quote.fetchedAt,
+                            source: quote.source, timestampTrust: .verifiedExchangeTimestamp,
+                            marketSessionStatus: sessionStatus)))
+                    quoteStatuses.append("\(code) ¥\(price) · \(quote.source) · 行情时 \(quote.quoteTimestamp.formatted(date: .abbreviated, time: .standard)) · 获取于 \(quote.fetchedAt.formatted(date: .abbreviated, time: .standard)) · \(sessionStatus.displayName)")
+                } else {
+                    observations.append(FContextObservation(
+                        dataClass: .quote, subject: code, source: FTencentMinuteParser.source,
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: marketRefreshStateByCode[code] ?? "行情未返回有效分钟点",
+                        quoteTemporalMetadata: FQuoteTemporalMetadata(
+                            quoteTimestamp: nil, fetchedAt: nil, source: FTencentMinuteParser.source,
+                            timestampTrust: .unavailable, marketSessionStatus: sessionStatus)))
+                    quoteStatuses.append("\(code) 行情不可用 · \(marketRefreshStateByCode[code] ?? "未返回分钟点")")
+                }
+                observations.append(FContextObservation(
+                    dataClass: .news, subject: code, source: "F News Provider",
+                    observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                    unavailableReason: "新闻源尚未接入"))
+                if let research = researchByCode[code] {
+                    try research.validate(contextCreatedAt: contextCaptureTime)
+                    evidence.append(research)
+                    if research.isUsableForAI(contextCreatedAt: contextCaptureTime, now: contextCaptureTime) {
+                        observations.append(FContextObservation(
+                            dataClass: .nasResearch, subject: code, source: "F NAS Research Evidence API",
+                            reference: research.id, observedAt: research.envelope.observedAt,
+                            capturedAt: research.capturedAt,
+                            decimalValue: Decimal(research.envelope.qualifiedIndependentDays)))
+                    } else {
+                        observations.append(FContextObservation(
+                            dataClass: .nasResearch, subject: code, source: "F NAS Research Evidence API",
+                            reference: research.id, observedAt: nil, capturedAt: contextCaptureTime,
+                            decimalValue: nil, unavailableReason: "返回研究未达到 AI 质量或样本门槛"))
+                    }
+                    researchStatuses.append("\(code) · \(research.envelope.compactSummary)")
+                } else {
+                    let failure = researchFailureByCode[code] ?? "NAS Research Evidence 不可用"
+                    observations.append(FContextObservation(
+                        dataClass: .nasResearch, subject: code, source: "F NAS Research Evidence API",
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: failure))
+                    researchStatuses.append("\(code) · 研究不可用：\(failure)")
+                }
+            }
+            let context = FDecisionContext(snapshot: freshLedger, observations: observations,
+                                           researchEvidence: evidence)
+            try context.validate(now: contextCaptureTime)
+            let request = try FAdvisorQuestionRequest(question: text, scope: scope,
+                                                       decisionContext: context,
+                                                       now: contextCaptureTime)
+            let provider = FDeepSeekCandidateProvider(apiKey: apiKey)
+            let modelAssessment = try await FAdvisorDecisionPipeline(model: provider).assess(
+                request: request, context: context, now: contextCaptureTime)
+            var guardFindings = modelAssessment.guardResult.findings
+            let changesAssets = [.buy, .sell, .dayTrade, .grid].contains(modelAssessment.candidate.action)
+            let candidateCode = modelAssessment.candidate.instrumentCode
+            if changesAssets {
+                let expectedFee: Decimal = modelAssessment.candidate.action == .dayTrade ? 0.20 : 0.10
+                if modelAssessment.candidate.estimatedFee != expectedFee {
+                    guardFindings.append(.invalidCandidate)
+                }
+            }
+            let hasQualifiedInstrumentResearch = context.usableResearchEvidence(at: Date()).contains {
+                $0.envelope.securityCode == candidateCode && $0.envelope.market == "CN"
+            }
+            if changesAssets && !hasQualifiedInstrumentResearch {
+                guardFindings.append(.missingQualifiedResearch("NAS分钟研究:\(candidateCode ?? "未指定证券")"))
+            }
+            let uniqueGuardFindings = Array(Set(guardFindings)).sorted {
+                String(describing: $0) < String(describing: $1)
+            }
+            let assessment = FAdvisorDecisionAssessment(
+                candidate: modelAssessment.candidate,
+                guardResult: FDecisionGuardResult(allowedForReview: uniqueGuardFindings.isEmpty,
+                                                  findings: uniqueGuardFindings))
+            let completedAt = Date()
+            guard let ledgerAfterModel = try await ledgerStore.readLedgerSnapshot(now: completedAt),
+                  ledgerAfterModel.ledgerDigest == freshLedger.ledgerDigest else {
+                throw FAdvisorLiveError.ledgerChangedDuringAnalysis
+            }
+            guard let narrative = await provider.takeNarrative(for: assessment.candidate.id) else {
+                throw FAdvisorLiveError.invalidAIResponse
+            }
+            let holdingSummary = freshLedger.positions.filter { targetCodes.contains($0.instrumentCode) }
+                .map { "\($0.instrumentCode) \($0.name) · \($0.units) 份 · 账面成本总额 ¥\(NSDecimalNumber(decimal: $0.bookCost))" }
+                .joined(separator: "\n")
+            advisorResult = FAdvisorVerticalSliceResult(assessment: assessment, narrative: narrative,
+                                                        scope: scope,
+                                                        ledgerCapturedAt: freshLedger.capturedAt,
+                                                        holdingSummary: holdingSummary,
+                                                        cashBalance: freshLedger.cashBalance,
+                                                        quoteStatus: quoteStatuses.joined(separator: "\n"),
+                                                        researchStatus: researchStatuses.joined(separator: "\n"))
+            advisorStatus = "已完成 DecisionContext → Risk Guard / AI Guard · 候选计划仅供审阅"
+        } catch {
+            advisorStatus = error.localizedDescription
+        }
+    }
+
+    var defaultAdvisorInstrumentCode: String? {
+        latestLedgerSnapshot?.positions.first?.instrumentCode
+    }
+
+    func selectInstrument(_ code: String?) {
+        selectedInstrumentCode = code
+    }
+
+    func loadArchivedIntraday(for code: String) async {
+        let day = selectedHistoryDate
+        archiveRefreshStateByCode[code] = "正在查询 NAS 历史分时…"
+        do {
+            let base = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            let token = try FNASKeychain.readToken()
+            let archive = try await FNASHistoricalMinuteClient.fetch(
+                baseAddress: base, token: token, securityCode: code, tradingDate: day)
+            guard Calendar.current.isDate(selectedHistoryDate, inSameDayAs: day) else { return }
+            archivedIntradayByCode[code] = archive
+            archiveRefreshStateByCode[code] = archive.samples.isEmpty
+                ? "\(archive.tradingDate) · NAS 无归档分钟点（\(archive.coverageStatus)）"
+                : "\(archive.tradingDate) · \(archive.coverageSummary) · 来源 \(archive.sourceSummary)"
+        } catch {
+            archiveRefreshStateByCode[code] = "NAS 历史分时不可用 · \(error.localizedDescription)"
+            archivedIntradayByCode[code] = nil
+        }
+    }
+
+    func refreshDailyKline(for code: String) async {
+        dailyKlineStateByCode[code] = "正在请求腾讯未复权日 K…"
+        do {
+            let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code)
+            dailyKlineByCode[code] = snapshot
+            let count = snapshot.bars.count
+            let missing = [5, 10, 20, 60, 250].filter { count < $0 }
+            dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
+                (missing.isEmpty ? "" : " · MA\(missing.map { String($0) }.joined(separator: "/"))样本不足")
+        } catch {
+            dailyKlineStateByCode[code] = "日 K 不可用 · \(error.localizedDescription)"
+            dailyKlineByCode[code] = nil
+        }
+    }
+
+    func configureAndTestNAS(baseAddress: String, tokenDraft: String) async {
+        guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
+            nasConnectionStatus = FNASConnectionError.invalidAddress.localizedDescription
+            return
+        }
+        let submittedToken = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !submittedToken.isEmpty {
+            do { try FNASKeychain.save(token: submittedToken) }
+            catch {
+                nasConnectionStatus = error.localizedDescription
+                return
+            }
+        }
+        let token: String
+        do { token = try FNASKeychain.readToken() }
+        catch {
+            nasConnectionStatus = error.localizedDescription
+            return
+        }
+        checkingNASConnection = true
+        nasConnectionStatus = "正在安全请求 NAS 就绪状态…"
+        defer { checkingNASConnection = false }
+        do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress, token: token) }
+        catch { nasConnectionStatus = error.localizedDescription }
+    }
+
+    func refreshMarketData(for requestedCodes: [String]? = nil) async {
+        let codes = Set(requestedCodes ?? (holdings.map(\.instrumentCode) + [selectedInstrumentCode].compactMap { $0 }))
+            .filter { $0.count == 6 && $0.allSatisfy(\.isNumber) }
+            .sorted()
+        let pending = codes.filter { !refreshingMarketCodes.contains($0) }
+        guard !pending.isEmpty else { return }
+        for code in pending {
+            refreshingMarketCodes.insert(code)
+            marketRefreshStateByCode[code] = "正在请求实时分时…"
+        }
+        await withTaskGroup(of: (String, FCurrentIntradaySnapshot?, String?).self) { group in
+            for code in pending {
+                group.addTask {
+                    do { return (code, try await FQuoteHTTPClient.fetchCurrentMinutes(code: code), nil) }
+                    catch { return (code, nil, error.localizedDescription) }
+                }
+            }
+            for await (code, snapshot, error) in group {
+                refreshingMarketCodes.remove(code)
+                if let snapshot {
+                    if let old = marketDataByCode[code],
+                       old.quoteTimestamp > snapshot.quoteTimestamp {
+                        marketRefreshStateByCode[code] = "上游数据较旧 · 保留较新图表缓存"
+                    } else {
+                        marketDataByCode[code] = snapshot
+                        marketRefreshStateByCode[code] = "已更新 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
+                    }
+                } else {
+                    marketRefreshStateByCode[code] = "更新失败 · \(error ?? "来源没有返回数据")"
+                }
+            }
+        }
+    }
+
+    func autoRefreshMarketData() async {
+        let codes = holdings.map(\.instrumentCode) + [selectedInstrumentCode].compactMap { $0 }
+        guard !codes.isEmpty else { return }
+        await refreshMarketData(for: codes)
+    }
+
+    var cashText: String {
+        let formatted: String?
+        if let cashBalance {
+            formatted = Self.moneyFormatter.string(from: cashBalance as NSDecimalNumber)
+        } else {
+            formatted = nil
+        }
+        return FHomeCardPresentation.cashBalanceText(state: ledgerState,
+                                                     formattedBalance: formatted)
+    }
+    private static let moneyFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "CNY"
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter
+    }()
+}
+
+enum FHomeTheme: String, CaseIterable, Identifiable {
+    case editorial, modern, dashboard, magazine, bento
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .editorial: return "东方编辑室"
+        case .modern: return "现代卡片"
+        case .dashboard: return "交易仪表盘"
+        case .magazine: return "杂志卡片"
+        case .bento: return "创意拼图"
+        }
+    }
+}
+enum FHomeRoute: Hashable {
+    case market, crossMarket, advisor, portfolio
+    case instrument(String)
+}
+
+struct FHomeRoot: View {
+    @ObservedObject var model: FHomeModel
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @State private var selectedTab = FPrimaryTab.home
+    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            rootStack {
+                HomeLayout(model: model, theme: theme).navigationTitle("首页")
+            }
+            .tabItem { Label("首页", systemImage: "house") }
+            .tag(FPrimaryTab.home)
+
+            rootStack { MarketOverview(model: model) }
+                .tabItem { Label("行情", systemImage: "chart.xyaxis.line") }
+                .tag(FPrimaryTab.market)
+
+            rootStack { AdvisorOverview(model: model) }
+                .tabItem { Label("AI顾问", systemImage: "sparkles") }
+                .tag(FPrimaryTab.advisor)
+
+            rootStack { RealAssetsOverview(model: model) }
+                .tabItem { Label("真实资产", systemImage: "briefcase") }
+                .tag(FPrimaryTab.assets)
+
+            rootStack { SettingsOverview(model: model) }
+                .tabItem { Label("设置", systemImage: "slider.horizontal.3") }
+                .tag(FPrimaryTab.settings)
+        }
+        .tint(theme.accent)
+        .alert("观盘 F", isPresented: Binding(
+            get: { model.alertMessage != nil },
+            set: { if !$0 { model.alertMessage = nil } }
+        )) {
+            Button("知道了", role: .cancel) { model.alertMessage = nil }
+        } message: { Text(model.alertMessage ?? "") }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await model.autoRefreshMarketData()
+            while !Task.isCancelled {
+                if FMainlandTradingCalendar.status(at: Date()) == .continuous {
+                    await model.autoRefreshMarketData()
+                }
+                do { try await Task.sleep(nanoseconds: 10_000_000_000) }
+                catch { break }
+            }
+        }
+    }
+
+    private func rootStack<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        NavigationStack {
+            content()
+                .navigationDestination(for: FHomeRoute.self) { route in
+                    HomeDestination(route: route, model: model)
+                }
+        }
+    }
+}
+
+private enum FPrimaryTab: Hashable { case home, market, advisor, assets, settings }
+
+private enum FQuoteHTTPClient {
+    static func fetchCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        guard var components = URLComponents(string: "https://web.ifzq.gtimg.cn/appstock/app/minute/query") else {
+            throw FMarketDataError.invalidPayload
+        }
+        components.queryItems = [URLQueryItem(name: "code", value: symbol),
+                                 URLQueryItem(name: "_var", value: "min_data_" + symbol)]
+        guard let url = components.url else { throw FMarketDataError.invalidPayload }
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw FMarketDataError.invalidPayload
+        }
+        return try FTencentMinuteParser.parse(data, securityCode: code, fetchedAt: Date())
+    }
+
+    static func fetchDailyKline(code: String) async throws -> FDailyKlineSnapshot {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        guard var components = URLComponents(string: "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get") else {
+            throw FMarketDataError.invalidPayload
+        }
+        components.queryItems = [URLQueryItem(name: "param", value: "\(symbol),day,,,300,")]
+        guard let url = components.url else { throw FMarketDataError.invalidPayload }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw FMarketDataError.invalidPayload
+        }
+        return try FTencentDailyKlineParser.parse(data, securityCode: code, fetchedAt: Date())
+    }
+}

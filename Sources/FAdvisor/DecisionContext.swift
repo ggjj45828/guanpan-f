@@ -1,0 +1,537 @@
+import Foundation
+import FCore
+
+public enum FContextDataClass: String, Codable, Equatable, Sendable {
+    case quote, intraday, dailyHistory, news, nasResearch, crossMarket
+}
+
+/// A captured market/research observation. Unavailable data is represented explicitly;
+/// callers must not fabricate a numeric value to satisfy a decision workflow.
+public struct FContextObservation: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let dataClass: FContextDataClass
+    public let subject: String
+    public let source: String
+    public let reference: String?
+    public let observedAt: Date?
+    public let capturedAt: Date
+    public let decimalValue: Decimal?
+    public let unavailableReason: String?
+    /// Exchange time and local retrieval time remain distinct. Legacy quote
+    /// observations without this field can be displayed but are not actionable.
+    public let quoteTemporalMetadata: FQuoteTemporalMetadata?
+
+    public init(id: UUID = UUID(), dataClass: FContextDataClass, subject: String,
+                source: String, reference: String? = nil, observedAt: Date?,
+                capturedAt: Date, decimalValue: Decimal?, unavailableReason: String? = nil,
+                quoteTemporalMetadata: FQuoteTemporalMetadata? = nil) {
+        self.id = id
+        self.dataClass = dataClass
+        self.subject = subject
+        self.source = source
+        self.reference = reference
+        self.observedAt = observedAt
+        self.capturedAt = capturedAt
+        self.decimalValue = decimalValue
+        self.unavailableReason = unavailableReason
+        self.quoteTemporalMetadata = quoteTemporalMetadata
+    }
+
+    public func validate(now: Date = Date()) throws {
+        let explicitUnavailable = decimalValue == nil &&
+            FDecisionContextValidation.nonBlank(unavailableReason ?? "")
+        let availableValue = decimalValue.map { !$0.isNaN } ?? false
+        let validObservedValue = decimalValue.map {
+            (dataClass == .quote || dataClass == .intraday) ? $0 > 0 : true
+        } ?? true
+        let validObservationTime: Bool
+        if let observedAt {
+            validObservationTime = FDecisionContextValidation.plausible(observedAt, now: now) &&
+                observedAt <= capturedAt
+        } else {
+            validObservationTime = explicitUnavailable ||
+                (dataClass == .quote && quoteTemporalMetadata?.timestampTrust == .fetchedAtOnly)
+        }
+        let validQuoteMetadata = quoteTemporalMetadata.map {
+            dataClass == .quote && $0.isConsistent(source: source, observedAt: observedAt,
+                                                   capturedAt: capturedAt) &&
+                ($0.timestampTrust != .unavailable || decimalValue == nil)
+        } ?? true
+        guard FDecisionContextValidation.nonBlank(subject),
+              FDecisionContextValidation.nonBlank(source),
+              FDecisionContextValidation.plausible(capturedAt, now: now),
+              validObservationTime, validQuoteMetadata,
+              availableValue || explicitUnavailable, validObservedValue,
+              !(availableValue && unavailableReason != nil) else {
+            throw FDecisionContextError.invalidObservation(id)
+        }
+    }
+
+    public func isFresh(at now: Date) -> Bool {
+        if dataClass == .quote {
+            guard let quoteTemporalMetadata,
+                  quoteTemporalMetadata.timestampTrust == .verifiedExchangeTimestamp,
+                  quoteTemporalMetadata.isConsistent(source: source, observedAt: observedAt,
+                                                     capturedAt: capturedAt),
+                  quoteTemporalMetadata.freshness(at: now) == .fresh else { return false }
+            return true
+        }
+        guard let observedAt, decimalValue != nil, now >= observedAt,
+              now.timeIntervalSince(observedAt) <= dataClass.maximumAge else { return false }
+        return true
+    }
+}
+
+public extension FContextDataClass {
+    var maximumAge: TimeInterval {
+        switch self {
+        case .quote: return 120
+        case .intraday: return 90
+        case .dailyHistory: return 36 * 3600
+        case .news: return 24 * 3600
+        case .nasResearch: return 7 * 24 * 3600
+        case .crossMarket: return 24 * 3600
+        }
+    }
+}
+
+/// Immutable decision-time view of account state and external facts.
+public struct FDecisionContext: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let createdAt: Date
+    public let accountID: UUID
+    public let accountDigest: String
+    public let cashBalance: Decimal
+    public let holdings: [FDecisionHoldingSnapshot]
+    public let observations: [FContextObservation]
+    /// Compact NAS statistics captured by reference; never a mutable store or raw minute series.
+    public let researchEvidence: [FDecisionResearchEvidence]
+
+    public init(id: UUID = UUID(), snapshot: FReadOnlyLedgerSnapshot,
+                observations: [FContextObservation],
+                researchEvidence: [FDecisionResearchEvidence] = []) {
+        self.id = id
+        createdAt = snapshot.capturedAt
+        accountID = snapshot.accountID
+        accountDigest = snapshot.ledgerDigest
+        cashBalance = snapshot.cashBalance
+        holdings = snapshot.positions.map {
+            FDecisionHoldingSnapshot(instrumentCode: $0.instrumentCode, name: $0.name,
+                                     units: $0.units, bookCost: $0.bookCost)
+        }
+        self.observations = observations
+        self.researchEvidence = Self.deduplicatedResearchEvidence(researchEvidence)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, createdAt, accountID, accountDigest, cashBalance, holdings, observations, researchEvidence
+    }
+
+    /// Old archived contexts remain readable; absent research references mean none were captured.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        createdAt = try values.decode(Date.self, forKey: .createdAt)
+        accountID = try values.decode(UUID.self, forKey: .accountID)
+        accountDigest = try values.decode(String.self, forKey: .accountDigest)
+        cashBalance = try values.decode(Decimal.self, forKey: .cashBalance)
+        holdings = try values.decode([FDecisionHoldingSnapshot].self, forKey: .holdings)
+        observations = try values.decode([FContextObservation].self, forKey: .observations)
+        researchEvidence = Self.deduplicatedResearchEvidence(
+            try values.decodeIfPresent([FDecisionResearchEvidence].self, forKey: .researchEvidence) ?? [])
+    }
+
+    public static func capture(from reader: any FLedgerSnapshotReading,
+                               observations: [FContextObservation],
+                               researchEvidence: [FDecisionResearchEvidence] = [],
+                               now: Date = Date()) async throws -> FDecisionContext? {
+        guard let snapshot = try await reader.readLedgerSnapshot(now: now) else { return nil }
+        let context = FDecisionContext(snapshot: snapshot, observations: observations,
+                                       researchEvidence: researchEvidence)
+        try context.validate(now: now)
+        return context
+    }
+
+    public func validate(now: Date = Date()) throws {
+        guard FDecisionContextValidation.plausible(createdAt, now: now),
+              FDecisionContextValidation.digest(accountDigest),
+              !cashBalance.isNaN, cashBalance >= 0,
+              Set(holdings.map(\.instrumentCode)).count == holdings.count,
+              holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 }),
+              Set(observations.map(\.id)).count == observations.count,
+              Set(researchEvidence.map(\.id)).count == researchEvidence.count else {
+            if let duplicate = Dictionary(grouping: researchEvidence, by: \.id)
+                .first(where: { $0.value.count > 1 })?.key {
+                throw FDecisionContextError.invalidResearchEvidence(duplicate)
+            }
+            throw FDecisionContextError.invalidContext
+        }
+        for observation in observations {
+            try observation.validate(now: now)
+            guard observation.capturedAt <= createdAt else {
+                throw FDecisionContextError.invalidObservation(observation.id)
+            }
+        }
+        for reference in researchEvidence {
+            try reference.validate(contextCreatedAt: createdAt)
+        }
+        guard try JSONEncoder().encode(researchEvidence).count <= 262_144 else {
+            throw FDecisionContextError.researchEvidencePayloadTooLarge
+        }
+    }
+
+    public func usableResearchEvidence(at now: Date = Date()) -> [FDecisionResearchEvidence] {
+        let groups = Dictionary(grouping: researchEvidence, by: Self.researchScopeKey)
+        return groups.values.compactMap { versions in
+            versions.filter { $0.isUsableForAI(contextCreatedAt: createdAt, now: now) }
+                .max { lhs, rhs in
+                    if lhs.envelope.generatedAtDate != rhs.envelope.generatedAtDate {
+                        return lhs.envelope.generatedAtDate < rhs.envelope.generatedAtDate
+                    }
+                    return lhs.id < rhs.id
+                }
+        }.sorted { $0.id < $1.id }
+    }
+
+    public func researchEvidenceVersionConflicts(at now: Date = Date()) -> [FResearchEvidenceVersionConflict] {
+        let groups = Dictionary(grouping: researchEvidence, by: Self.researchScopeKey)
+        return groups.values.compactMap { versions in
+            let uniqueIDs = Set(versions.map(\.id))
+            guard uniqueIDs.count > 1, let first = versions.first else { return nil }
+            let selectedID = usableResearchEvidence(at: now).first {
+                Self.researchScopeKey($0) == Self.researchScopeKey(first)
+            }?.id
+            return FResearchEvidenceVersionConflict(
+                securityCode: first.envelope.securityCode, market: first.envelope.market,
+                range: first.envelope.range,
+                schemaVersions: Array(Set(versions.map { $0.envelope.schemaVersion })).sorted(),
+                methodologyVersions: Array(Set(versions.map { $0.envelope.methodologyVersion })).sorted(),
+                evidenceIDs: uniqueIDs.sorted(), selectedEvidenceID: selectedID)
+        }.sorted { $0.id < $1.id }
+    }
+
+    private static func deduplicatedResearchEvidence(_ references: [FDecisionResearchEvidence]) -> [FDecisionResearchEvidence] {
+        var firstByID: [String: FDecisionResearchEvidence] = [:]
+        var result: [FDecisionResearchEvidence] = []
+        for reference in references {
+            if let existing = firstByID[reference.id], existing == reference { continue }
+            firstByID[reference.id] = firstByID[reference.id] ?? reference
+            result.append(reference)
+        }
+        return result
+    }
+
+    private static func researchScopeKey(_ reference: FDecisionResearchEvidence) -> String {
+        let envelope = reference.envelope
+        return [envelope.market, envelope.securityCode, envelope.range.start, envelope.range.end]
+            .joined(separator: "\u{1f}")
+    }
+
+    public func freshQuote(for code: String, at now: Date) -> FContextObservation? {
+        observations.filter { $0.dataClass == .quote && $0.subject == code && $0.isFresh(at: now) }
+            .max { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }
+    }
+
+    public func holdingUnits(for code: String) -> Int64 {
+        holdings.first(where: { $0.instrumentCode == code })?.units ?? 0
+    }
+}
+
+public struct FCandidateRecommendation: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let accountDigest: String
+    public let action: FDecisionAction
+    public let instrumentCode: String?
+    public let units: Int64?
+    public let limitPrice: Decimal?
+    public let estimatedFee: Decimal
+    public let rationale: String
+    public let citedObservationIDs: [UUID]
+    public let citedResearchEvidenceIDs: [String]
+    public let citedDecisionMemoryIDs: [UUID]
+    public let citedInvestorProfileRevisionIDs: [UUID]
+
+    public init(id: UUID = UUID(), accountDigest: String, action: FDecisionAction,
+                instrumentCode: String? = nil, units: Int64? = nil,
+                limitPrice: Decimal? = nil, estimatedFee: Decimal = 0,
+                rationale: String, citedObservationIDs: [UUID] = [],
+                citedResearchEvidenceIDs: [String] = [],
+                citedDecisionMemoryIDs: [UUID] = [],
+                citedInvestorProfileRevisionIDs: [UUID] = []) {
+        self.id = id
+        self.accountDigest = accountDigest
+        self.action = action
+        self.instrumentCode = instrumentCode
+        self.units = units
+        self.limitPrice = limitPrice
+        self.estimatedFee = estimatedFee
+        self.rationale = rationale
+        self.citedObservationIDs = citedObservationIDs
+        self.citedResearchEvidenceIDs = citedResearchEvidenceIDs
+        self.citedDecisionMemoryIDs = citedDecisionMemoryIDs
+        self.citedInvestorProfileRevisionIDs = citedInvestorProfileRevisionIDs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, accountDigest, action, instrumentCode, units, limitPrice, estimatedFee, rationale
+        case citedObservationIDs, citedResearchEvidenceIDs
+        case citedDecisionMemoryIDs, citedInvestorProfileRevisionIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        accountDigest = try values.decode(String.self, forKey: .accountDigest)
+        action = try values.decode(FDecisionAction.self, forKey: .action)
+        instrumentCode = try values.decodeIfPresent(String.self, forKey: .instrumentCode)
+        units = try values.decodeIfPresent(Int64.self, forKey: .units)
+        limitPrice = try values.decodeIfPresent(Decimal.self, forKey: .limitPrice)
+        estimatedFee = try values.decode(Decimal.self, forKey: .estimatedFee)
+        rationale = try values.decode(String.self, forKey: .rationale)
+        citedObservationIDs = try values.decodeIfPresent([UUID].self, forKey: .citedObservationIDs) ?? []
+        citedResearchEvidenceIDs = try values.decodeIfPresent([String].self, forKey: .citedResearchEvidenceIDs) ?? []
+        citedDecisionMemoryIDs = try values.decodeIfPresent([UUID].self,
+                                                             forKey: .citedDecisionMemoryIDs) ?? []
+        citedInvestorProfileRevisionIDs = try values.decodeIfPresent(
+            [UUID].self, forKey: .citedInvestorProfileRevisionIDs) ?? []
+    }
+}
+
+public enum FDecisionGuardFinding: Codable, Equatable, Hashable, Sendable {
+    case invalidContext
+    case accountChanged
+    case invalidCandidate
+    case missingFreshQuote(String)
+    case staleCitedEvidence(UUID)
+    case missingCitedEvidence(UUID)
+    case staleResearchEvidence(String)
+    case missingResearchEvidence(String)
+    case insufficientCash
+    case insufficientUnits
+    case advisorRequestContextMismatch
+    case instrumentScopeMismatch(expected: String, actual: String)
+    case missingDecisionMemory(UUID)
+    case missingInvestorProfileRevision(UUID)
+    case missingQualifiedResearch(String)
+    case incompleteTradingEvidence(String)
+}
+
+public struct FDecisionGuardResult: Codable, Equatable, Sendable {
+    public let allowedForReview: Bool
+    public let findings: [FDecisionGuardFinding]
+}
+
+/// Two deterministic gates for a reviewable candidate. Passing means only that
+/// the candidate is internally consistent with the captured context; it is not
+/// approval to trade and has no ledger-writing capability.
+public enum FDecisionGuards {
+    public static func evaluate(_ candidate: FCandidateRecommendation,
+                                in context: FDecisionContext,
+                                now: Date = Date()) -> FDecisionGuardResult {
+        let risk = FRiskGuard.evaluate(candidate, in: context, now: now)
+        let ai = FAIGuard.evaluate(candidate, in: context, now: now)
+        let findings = Array(Set(risk.findings + ai.findings))
+            .sorted { String(describing: $0) < String(describing: $1) }
+        return FDecisionGuardResult(allowedForReview: findings.isEmpty, findings: findings)
+    }
+
+    public static func evaluate(_ candidate: FCandidateRecommendation,
+                                in context: FDecisionContext,
+                                using request: FAdvisorQuestionRequest,
+                                now: Date = Date()) -> FDecisionGuardResult {
+        let risk = FRiskGuard.evaluate(candidate, in: context, now: now)
+        let ai = FAIGuard.evaluate(candidate, in: context, using: request, now: now)
+        let findings = Array(Set(risk.findings + ai.findings))
+            .sorted { String(describing: $0) < String(describing: $1) }
+        return FDecisionGuardResult(allowedForReview: findings.isEmpty, findings: findings)
+    }
+}
+
+public enum FRiskGuard {
+    public static func evaluate(_ candidate: FCandidateRecommendation,
+                                in context: FDecisionContext,
+                                now: Date = Date()) -> FDecisionGuardResult {
+        var findings: [FDecisionGuardFinding] = []
+        do { try context.validate(now: now) }
+        catch { return FDecisionGuardResult(allowedForReview: false, findings: [.invalidContext]) }
+        if candidate.accountDigest != context.accountDigest { findings.append(.accountChanged) }
+        if !FDecisionContextValidation.nonBlank(candidate.rationale) || candidate.estimatedFee < 0 ||
+            candidate.estimatedFee.isNaN { findings.append(.invalidCandidate) }
+
+        let isAssetChanging = [.buy, .sell, .dayTrade, .grid].contains(candidate.action)
+        if isAssetChanging {
+            guard let code = candidate.instrumentCode,
+                  let units = candidate.units, units > 0,
+                  let price = candidate.limitPrice, price > 0, !price.isNaN else {
+                findings.append(.invalidCandidate)
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            guard let freshQuote = context.freshQuote(for: code, at: now) else {
+                findings.append(.missingFreshQuote(code))
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            if !candidate.citedObservationIDs.contains(freshQuote.id) {
+                findings.append(.missingCitedEvidence(freshQuote.id))
+            }
+            if candidate.action == .sell || candidate.action == .dayTrade {
+                if units > context.holdingUnits(for: code) { findings.append(.insufficientUnits) }
+            }
+            if candidate.action == .buy || candidate.action == .dayTrade || candidate.action == .grid {
+                let usage = price * Decimal(units) + candidate.estimatedFee
+                if usage.isNaN {
+                    findings.append(.invalidCandidate)
+                } else if usage > context.cashBalance {
+                    findings.append(.insufficientCash)
+                }
+            }
+        }
+
+        return FDecisionGuardResult(allowedForReview: findings.isEmpty, findings: findings)
+    }
+}
+
+public enum FAIGuard {
+    public static func evaluate(_ candidate: FCandidateRecommendation,
+                                in context: FDecisionContext,
+                                now: Date = Date()) -> FDecisionGuardResult {
+        evaluate(candidate, in: context, using: nil, now: now)
+    }
+
+    private static func evaluate(_ candidate: FCandidateRecommendation,
+                                 in context: FDecisionContext,
+                                 using request: FAdvisorQuestionRequest?,
+                                 now: Date) -> FDecisionGuardResult {
+        var findings: [FDecisionGuardFinding] = []
+        do { try context.validate(now: now) }
+        catch { return FDecisionGuardResult(allowedForReview: false, findings: [.invalidContext]) }
+        if !FDecisionContextValidation.nonBlank(candidate.rationale) || candidate.rationale.utf8.count > 8_192 {
+            findings.append(.invalidCandidate)
+        }
+        let nonTradingAction = candidate.action == .hold || candidate.action == .wait
+        if nonTradingAction && (candidate.instrumentCode != nil || candidate.units != nil ||
+                                candidate.limitPrice != nil || candidate.estimatedFee != 0) {
+            findings.append(.invalidCandidate)
+        }
+        if candidate.action == .recoveryPlan {
+            guard let code = candidate.instrumentCode,
+                  !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  context.holdingUnits(for: code) > 0,
+                  candidate.units == nil, candidate.limitPrice == nil,
+                  candidate.estimatedFee == 0 else {
+                findings.append(.invalidCandidate)
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+        }
+        if Set(candidate.citedObservationIDs).count != candidate.citedObservationIDs.count ||
+            Set(candidate.citedResearchEvidenceIDs).count != candidate.citedResearchEvidenceIDs.count ||
+            candidate.citedResearchEvidenceIDs.contains(where: { $0.trimmingCharacters(
+                in: .whitespacesAndNewlines).isEmpty }) {
+            findings.append(.invalidCandidate)
+        }
+        let observations = Dictionary(grouping: context.observations, by: \.id)
+        for id in candidate.citedObservationIDs {
+            guard let observation = observations[id]?.first else {
+                findings.append(.missingCitedEvidence(id)); continue
+            }
+            if !observation.isFresh(at: now) { findings.append(.staleCitedEvidence(id)) }
+        }
+        if Set(candidate.citedResearchEvidenceIDs).count != candidate.citedResearchEvidenceIDs.count {
+            findings.append(.invalidCandidate)
+        }
+        if candidate.action == .dayTrade {
+            guard let code = candidate.instrumentCode else {
+                findings.append(.invalidCandidate)
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            let quote = context.freshQuote(for: code, at: now)
+            if quote?.quoteTemporalMetadata?.marketSessionStatus != .continuous {
+                findings.append(.incompleteTradingEvidence("做T候选仅在连续交易时段接受新鲜、可信行情"))
+            }
+            let citedVWAPStudy = context.usableResearchEvidence(at: now).contains { reference in
+                candidate.citedResearchEvidenceIDs.contains(reference.id) &&
+                    reference.envelope.securityCode == code &&
+                    reference.envelope.market == "CN" &&
+                    reference.envelope.hasQualifiedEvidence("vwapBreak")
+            }
+            if !citedVWAPStudy {
+                findings.append(.missingQualifiedResearch("vwapBreak:\(code)"))
+            }
+        }
+        if candidate.action == .grid, let code = candidate.instrumentCode {
+            let citedGridStudy = context.usableResearchEvidence(at: now).contains { reference in
+                candidate.citedResearchEvidenceIDs.contains(reference.id) &&
+                    reference.envelope.securityCode == code &&
+                    reference.envelope.hasQualifiedEvidence("gridSpacingReplay")
+            }
+            if !citedGridStudy {
+                findings.append(.missingQualifiedResearch("gridSpacingReplay:\(code)"))
+            }
+        }
+        let availableResearchIDs = Set(context.researchEvidence.map(\.id))
+        let usableResearchIDs = Set(context.usableResearchEvidence(at: now).map(\.id))
+        for id in candidate.citedResearchEvidenceIDs {
+            guard availableResearchIDs.contains(id) else {
+                findings.append(.missingResearchEvidence(id)); continue
+            }
+            if !usableResearchIDs.contains(id) { findings.append(.staleResearchEvidence(id)) }
+        }
+        if Set(candidate.citedDecisionMemoryIDs).count != candidate.citedDecisionMemoryIDs.count ||
+            Set(candidate.citedInvestorProfileRevisionIDs).count !=
+                candidate.citedInvestorProfileRevisionIDs.count {
+            findings.append(.invalidCandidate)
+        }
+        if let request {
+            guard request.accountID == context.accountID,
+                  request.accountDigest == context.accountDigest,
+                  request.decisionContextID == context.id,
+                  request.decisionContextCreatedAt == context.createdAt,
+                  request.portfolioContext?.matches(context) == true else {
+                findings.append(.advisorRequestContextMismatch)
+                let failed = Array(Set(findings)).sorted {
+                    String(describing: $0) < String(describing: $1)
+                }
+                return FDecisionGuardResult(allowedForReview: false, findings: failed)
+            }
+            let memoryIDs = Set(request.decisionMemory?.entries.map(\.id) ?? [])
+            for id in candidate.citedDecisionMemoryIDs where !memoryIDs.contains(id) {
+                findings.append(.missingDecisionMemory(id))
+            }
+            let profileRevisionIDs = Set(request.investorProfile?.preferences.map(\.revisionID) ?? [])
+            for id in candidate.citedInvestorProfileRevisionIDs where !profileRevisionIDs.contains(id) {
+                findings.append(.missingInvestorProfileRevision(id))
+            }
+        } else {
+            findings += candidate.citedDecisionMemoryIDs.map(FDecisionGuardFinding.missingDecisionMemory)
+            findings += candidate.citedInvestorProfileRevisionIDs.map(
+                FDecisionGuardFinding.missingInvestorProfileRevision)
+        }
+        let uniqueFindings = Array(Set(findings)).sorted { String(describing: $0) < String(describing: $1) }
+        return FDecisionGuardResult(allowedForReview: uniqueFindings.isEmpty, findings: uniqueFindings)
+    }
+
+    public static func evaluate(_ candidate: FCandidateRecommendation,
+                                in context: FDecisionContext,
+                                using request: FAdvisorQuestionRequest,
+                                now: Date = Date()) -> FDecisionGuardResult {
+        evaluate(candidate, in: context, using: Optional(request), now: now)
+    }
+}
+
+public enum FDecisionContextError: Error, Equatable, Sendable {
+    case invalidContext
+    case invalidObservation(UUID)
+    case invalidResearchEvidence(String)
+    case researchEvidencePayloadTooLarge
+}
+
+private enum FDecisionContextValidation {
+    static func nonBlank(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    static func digest(_ value: String) -> Bool {
+        value.count == 64 && value.allSatisfy(\.isHexDigit)
+    }
+    static func plausible(_ date: Date, now: Date) -> Bool {
+        date.timeIntervalSince1970.isFinite && date <= now.addingTimeInterval(300)
+    }
+}

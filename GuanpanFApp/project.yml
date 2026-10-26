@@ -1,0 +1,56 @@
+name: GuanpanF
+options:
+  bundleIdPrefix: com.guanpan
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  GuanpanFCore:
+    path: ..
+targets:
+  GuanpanF:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: GuanpanFCore
+        product: FCore
+      - package: GuanpanFCore
+        product: FAdvisor
+      - package: GuanpanFCore
+        product: FLedgerWrite
+    info:
+      properties:
+        NSLocalNetworkUsageDescription: "观盘 F 用于连接您配置的 NAS 分钟历史与研究服务。"
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.guanpan.advisor.f
+        INFOPLIST_KEY_CFBundleDisplayName: 观盘 F
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+  GuanpanFAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: GuanpanF
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.guanpan.advisor.f.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: GuanpanF
+schemes:
+  GuanpanF:
+    build:
+      targets:
+        GuanpanF: all
+    test:
+      targets:
+        - GuanpanFAppUITests

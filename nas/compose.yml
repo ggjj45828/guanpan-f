@@ -1,0 +1,26 @@
+name: guanpan-f
+services:
+  f-minute-archive:
+    build:
+      context: ..
+      dockerfile: nas/Dockerfile
+    image: guanpan-f-minute-archive:local
+    container_name: guanpan-f-minute-archive
+    restart: unless-stopped
+    init: true
+    environment:
+      F_MINUTE_HOST: 0.0.0.0
+      F_MINUTE_PORT: 8788
+      F_MINUTE_API_TOKEN: ${F_MINUTE_API_TOKEN:?set a random secret of at least 32 UTF-8 bytes}
+      F_MINUTE_RUNTIME_FACTORY: ${F_MINUTE_RUNTIME_FACTORY:-nas.fminute.runtime:build_service}
+      F_MINUTE_SECURITIES: ${F_MINUTE_SECURITIES:?set a comma-separated list of real six-digit holdings/watchlist codes}
+    ports:
+      - "${F_MINUTE_BIND_ADDRESS:-0.0.0.0}:${F_MINUTE_HOST_PORT:-8788}:8788"
+    volumes:
+      - ${F_MINUTE_DATA_DIR:-./data}:/data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/livez', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
