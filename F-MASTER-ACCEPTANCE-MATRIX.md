@@ -1,5 +1,10 @@
 # F Master Acceptance Matrix
 
+## CI续记（2026-10-26 19:32 Asia/Shanghai；覆盖下方旧快照）
+
+- 当前已推送提交 `c96a17e` 的 Actions run `40314328798`：FCore 121/121通过；XcodeGen及Device/Simulator Build成功；UI 3执行、2通过、1失败（详情日K标题经8次滚动仍不可见）；截图导出成功、IPA跳过。
+- 当前本地改动：统一图表Canvas的拖动改用 simultaneousGesture，避免阻断外层详情滚动。尚未编译/测试，验收项不更改状态。Python/NAS未执行。
+
 ## CI续记（2026-10-26 19:20 Asia/Shanghai；覆盖下方旧快照）
 
 - HEAD `1c10912` 已推送；当前源码后续修改未提交，尚无其编译/测试证据。

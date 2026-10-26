@@ -4,6 +4,13 @@
 
 更新时间：2026-10-26 18:07（Asia/Shanghai）
 
+## 最新 CI 续记（2026-10-26 19:32 Asia/Shanghai）
+
+- 当前已推送 `c96a17e77fd533c58e63123c69cd6e71b2fb406c`，与 origin/main 同步；工作树有 `FUnifiedSecurityChart.swift` 的一个本地未提交改动，以及四份状态文档更新。commit仅用于追溯。
+- Actions run `40314328798`：FCore 121 defined / 121 executed / 121 passed / 0 failed；XcodeGen、Device Build、Simulator Build成功。App UI 3 defined / 3 executed / 2 passed / 1 failed；唯一失败的导航用例滚动8次后日K标题仍不可见。截图导出成功，IPA跳过。
+- 测试失败现已定位到图表Canvas的独占DragGesture可能拦截父详情页滚动。当前本地将其改为 simultaneousGesture，使父ScrollView能接收纵向滑动，图表仍能处理自身拖动/十字操作。改动尚未编译或执行。
+- 下一步：把此根因修正送入Apple CI；若滚动恢复，核对新截图和布局。之后再做真实曲线/手势、横屏、多尺寸、真机和NAS/DeepSeek/行情/真实成交闭环。
+
 ## 最新现场覆盖（2026-10-26 18:20 Asia/Shanghai）
 
 - 当前源码提交：`main` HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20`，相对本地 `origin/main` ahead 1；Swift源码相对HEAD干净，F-REALTIME-HANDOFF/F-STATUS/Matrix/Audit四份文档有本轮未提交状态更新。该提交是本地待推送的窄幅可用性修复，不把它当已编译版本。推送遇到 GitHub 443 网络连接失败，尚无此提交对应 CI。

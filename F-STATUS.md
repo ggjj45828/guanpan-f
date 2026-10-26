@@ -1,5 +1,11 @@
 # F 云端开发状态
 
+## CI续记（2026-10-26 19:32 Asia/Shanghai；覆盖下方较早快照）
+
+- 当前已推送 HEAD `c96a17e77fd533c58e63123c69cd6e71b2fb406c`，与origin/main同步。工作树当前仅有 `FUnifiedSecurityChart.swift` 和4份状态文档未提交修改。
+- Actions run `40314328798`：FCore XCTest 121/121通过；XcodeGen、Device Build、Simulator Build成功。UI 3项执行、2项通过、1项失败；失败是日K标题经8次整屏滑动仍不可见。截图导出成功；IPA因UI失败跳过。
+- 根因假设：图表Canvas上的DragGesture抢占详情外层ScrollView的纵向滑动。已在本地改为simultaneousGesture；未编译、未运行，待下一轮CI。Python/NAS本轮0执行/0通过/0失败。
+
 ## CI续记（2026-10-26 19:20 Asia/Shanghai；覆盖下方18:20记录）
 
 - HEAD `1c10912e8d1c2a0b6fdc3720b73f6fada28c5e20` 已推送并与 origin/main 对齐。随后源码两文件及四份状态文档有本地未提交修改。

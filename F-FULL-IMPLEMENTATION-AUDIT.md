@@ -1,5 +1,10 @@
 # F 全盘未完成功能审计
 
+## CI续记（2026-10-26 19:32 Asia/Shanghai；覆盖下方较旧状态）
+
+- 已推送 `c96a17e` 的 Actions run `40314328798`：FCore 121/121通过，XcodeGen、Device/Simulator Build成功；UI 3执行、2通过、1失败。唯一失败是详情滚动后日K标题不可见；截图导出成功，IPA跳过。
+- 初步根因是统一图表Canvas的独占DragGesture截走父ScrollView手势。当前工作树把它改为 simultaneousGesture；仅源码静态修改，尚未编译或执行。真实视觉通过仍未取得。
+
 ## CI续记（2026-10-26 19:20 Asia/Shanghai；覆盖下方旧现场记录）
 
 - `1c10912` 已推送；其 Actions run `40312257829` 的FCore 121/121通过，XcodeGen、iOS Device Build、Simulator Build成功。UI 3项执行，2项通过、1项失败；单一导航用例的日K/历史分钟两个可见性断言失败，IPA因此跳过，截图导出成功。
