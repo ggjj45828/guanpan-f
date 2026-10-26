@@ -6,6 +6,7 @@
 - Actions run `40298657796` 已执行FCore XCTest 119/119和App UI XCTest 3/3，Device/Simulator Build及IPA artifact均成功；清仓证券详情/持仓周期展示Swift修改包含在本次编译中。UI用例未注入真实清仓数据，因而没有对历史Episode画面做专项验收。Simulator人工视觉/手势、横屏/多尺寸及真机仍待验证。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
 - 统一图表专项回归新增两项：真实可用 overlay/IOPV 必须进入可见纵轴；单独显示末根日K时，MA250仍依据完整历史窗口参与纵轴。当前 FCore 定义121项，新增2项尚未编译/执行；最近真实结果仍为119/119。
+- 本地提交 `6d1973f` 已包含这两项回归及状态文档，工作树干净；推送 GitHub 两次均遇 HTTPS 连接重置，Actions 尚未因该提交启动，不能把新增测试写作通过。
 
 ## 当前基线
 

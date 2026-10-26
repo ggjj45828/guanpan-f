@@ -9,7 +9,7 @@
 - 唯一 Active Development：`C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`
 - 当前真实开发状态：清仓证券详情入口修复已通过Actions run `40298657796` 的Swift编译、FCore 119/119、Device/Simulator Build及App UI 3/3；未签名IPA已上传。当前在统一图表的价格范围/覆盖线回归上新增2项 XCTest 定义，仍待 Apple CI 执行；本工作树 FCore defined=121，最新已执行证据仍是119/119。
 - 最近完成模块：资产页视图切换/现金流水区可发现性测试实际通过；它不创建或注入持仓。上一轮UI测试也通过导航和Advisor状态入口检查。两轮测试均在GitHub macOS Simulator运行，不等同于人工视觉验收或真机验证。
-- 当前已验证代码提交 `83318fa` 发布为远端提交 `7244dd8`，提交树相同；当前未提交变更是图表模型的2项 XCTest 和本次实时状态文档。
+- 上次已验证代码提交 `83318fa` 发布为远端提交 `7244dd8`，提交树相同；当前本地提交 `6d1973f` 增加图表纵轴回归和实时状态更新，工作树干净，但尚未推送。HTTPS连接GitHub多次重置，故新两项测试未触发CI。
 - 正在开发：验证可见价格纵轴同时包含真实 overlay/IOPV，以及仅显示末根K线时也把历史数据决定的MA250纳入范围；下一步推送现有 Apple CI 执行新增覆盖。
 - 仍未完成：Simulator截图/人工视觉、交互、横屏/多尺寸验收与真机；图表均价/前收可靠来源和横屏全屏；NAS历史分钟、DeepSeek及行情真实服务端到端联调。
 
@@ -155,7 +155,7 @@ F_CURRENT_STATUS_BEGIN
 当前开发阶段：真实资产生命周期修复已编译通过，统一图表行为收口
 当前正在开发：验证统一图表的可见价格范围覆盖真实叠加值与MA250；新增2项FCore XCTest待CI执行
 刚刚完成：Actions run 40298657796验证FCore XCTest 119/119、App UI XCTest 3/3、Device/Simulator Build与IPA artifact全部成功
-未提交工作：图表价格范围2项测试及实时状态文档；当前FCore定义121，最近一次真实执行仍为119通过
+未提交工作：无；本地提交6d1973f尚未推送；当前FCore定义121，最近一次真实执行仍为119通过
 iOS完成度：当前FCore/App target已在macOS CI编译，FCore119/119与App UI3/3通过；已清仓详情编译通过但未做真实清仓数据的UI验收
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
 统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K且App target已编译；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码但未视觉/交互专项验证；均价/前收/IOPV unavailable，横屏未完成
