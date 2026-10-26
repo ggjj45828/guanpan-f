@@ -2,9 +2,9 @@
 
 ## 当前工作树快照（2026-10-26 16:22 Asia/Shanghai）
 
-- F 当前阶段：功能收口与 Apple 编译验证。当前本地 `main` HEAD=`2f44d0494b284e639437260bdce2f825ac2d8d58`；最新 GitHub Actions 源码树与本地 HEAD 相同，远端显示提交 `05b819a31a2e949d498777643fd0a598505b8dcd`。本机 Git remote-tracking 引用因 HTTPS fetch 暂不可达而落后；未将其误作远端 HEAD。
-- 验证：GitHub macOS Actions run `40291509215` 已完成 F Swift Package 编译和 XCTest，119 defined / 119 executed / 119 passed / 0 failed。XcodeGen 随后因 `GuanpanFApp/project.yml` 的 App `info` 缺少 plist `path` 而失败，iOS App Build、UI XCTest、Simulator尚未执行。本次正在修正工程规格。
-- 当前工作树改动涉及 XcodeGen plist 输出路径、F 实时交接、Matrix和审计快照；不含模拟资产或自动交易。
+- F 当前阶段：功能收口与 Apple 编译验证。当前工作树正修复 App target 首次编译发现的问题；Actions run `40292039312` 对相同基线完成 Package编译、FCore XCTest 119/119通过及XcodeGen生成，Device App Build失败。远端与本地 commit 只作追溯，状态以当前源码为准。
+- 验证：GitHub macOS Actions run `40292039312` 已完成 F Swift Package 编译和 XCTest，119 defined / 119 executed / 119 passed / 0 failed；XcodeGen成功生成工程；iOS Device App Build发现 App Swift 编译错误并失败，Simulator Build/UI XCTest尚未执行。本次正在逐项修复。
+- 当前工作树改动涉及 App Swift 编译修复与实时状态文档；不含模拟资产或自动交易。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
 
 ## 当前基线

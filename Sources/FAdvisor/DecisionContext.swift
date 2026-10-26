@@ -388,6 +388,11 @@ public enum FDecisionGuardFinding: Codable, Equatable, Hashable, Sendable {
 public struct FDecisionGuardResult: Codable, Equatable, Sendable {
     public let allowedForReview: Bool
     public let findings: [FDecisionGuardFinding]
+
+    public init(allowedForReview: Bool, findings: [FDecisionGuardFinding]) {
+        self.allowedForReview = allowedForReview
+        self.findings = findings
+    }
 }
 
 /// Two deterministic gates for a reviewable candidate. Passing means only that

@@ -1,6 +1,6 @@
 # F iOS 全盘静态审计
 
-> 实时更新（2026-10-26）：最新 Apple CI 已完成 F Swift Package 编译并执行 FCore XCTest 119/119通过；XcodeGen 工程生成因 App plist 配置缺 `path` 失败。本机无 Swift/Xcode/XcodeGen；App target Build、UI Test、Simulator和真机仍未验证。历史审计中“App仅有骨架”的结论已过期，需结合当前 SwiftUI 与统一图表源码；此文余下旧记录只作阶段追溯。
+> 实时更新（2026-10-26）：最新 Apple CI 已完成 F Swift Package 编译、FCore XCTest 119/119通过及 XcodeGen 工程生成；首次 iOS Device App Build发现 App层编译错误，Simulator/UI Test/真机仍未验证。当前工作区正逐条修复。历史审计中“App仅有骨架”的结论已过期；此文余下旧记录只作追溯。
 
 ## 2026-10-26 行情刷新增量复核
 

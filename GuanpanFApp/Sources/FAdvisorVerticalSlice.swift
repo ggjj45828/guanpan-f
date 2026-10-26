@@ -71,8 +71,8 @@ enum FAdvisorAIKeychain {
         let identity = [kSecClass as String: kSecClassGenericPassword,
                         kSecAttrService as String: service,
                         kSecAttrAccount as String: account] as [String: Any]
-        let attributes = [kSecValueData as String: Data(value.utf8),
-                          kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+        let attributes: [String: Any] = [kSecValueData as String: Data(value.utf8),
+                                         kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         let status = SecItemCopyMatching(identity as CFDictionary, nil)
         if status == errSecSuccess {
             guard SecItemUpdate(identity as CFDictionary, attributes as CFDictionary) == errSecSuccess else {

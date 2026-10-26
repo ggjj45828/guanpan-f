@@ -78,7 +78,7 @@ final class FHomeModel: ObservableObject {
     private var decisionMemoryStore: FDecisionMemoryStore?
     private var investorProfileStore: FInvestorProfileStore?
     private var decisionContextStore: FDecisionContextStore?
-    private var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
+    var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
 
     init() {
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory,
