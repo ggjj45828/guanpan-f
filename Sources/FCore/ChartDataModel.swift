@@ -265,10 +265,18 @@ public struct FChartOverlayModel: Equatable, Sendable {
         case let .minute(samples):
             return indices.compactMap { samples[safe: $0]?.price }
         case let .daily(bars):
-            return indices.flatMap { index -> [Decimal] in
+            let candleValues = indices.flatMap { index -> [Decimal] in
                 guard let bar = bars[safe: index] else { return [] }
                 return [bar.low, bar.high]
             }
+            let movingAverages = [5, 10, 20, 60, 250].flatMap { period in
+                indices.compactMap { index -> Decimal? in
+                    guard index + 1 >= period else { return nil }
+                    let window = bars[(index + 1 - period)...index]
+                    return window.reduce(Decimal.zero) { $0 + $1.close } / Decimal(period)
+                }
+            }
+            return candleValues + movingAverages
         }
     }
 }

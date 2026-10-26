@@ -8,6 +8,7 @@ struct FNASArchivedIntraday: Equatable, Sendable {
     let coverageStatus: String
     let coverageSummary: String
     let sourceSummary: String
+    let fetchedAt: Date
     let samples: [FMinuteSample]
 }
 
@@ -201,6 +202,7 @@ enum FNASHistoricalMinuteClient {
         return FNASArchivedIntraday(securityCode: securityCode, tradingDate: dateText,
                                     coverageStatus: body.status, coverageSummary: coverageSummary,
                                     sourceSummary: sources.isEmpty ? "无有效来源" : sources,
+                                    fetchedAt: Date(),
                                     samples: ordered)
     }
 

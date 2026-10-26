@@ -306,7 +306,11 @@ struct HomeDestination: View {
                         .disabled(model.refreshingMarketCodes.contains(code))
                         .accessibilityIdentifier("market.refresh.\(code)")
                     }
-                    FMinuteLineChart(snapshot: snapshot)
+                    FUnifiedSecurityChart(
+                        model: FChartPresentationBuilder.live(snapshot, holding: holding,
+                                                              candidate: model.advisorResult?.candidate,
+                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                        height: 190)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("日 K 与均线").font(.headline)
@@ -317,7 +321,11 @@ struct HomeDestination: View {
                                 .buttonStyle(.bordered).controlSize(.small)
                         }
                         if let daily = model.dailyKlineByCode[code] {
-                            FDailyKlineChart(snapshot: daily).frame(height: 230)
+                            FUnifiedSecurityChart(
+                                model: FChartPresentationBuilder.daily(daily, holding: holding,
+                                                                       candidate: model.advisorResult?.candidate,
+                                                                       ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                                height: 250)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -351,7 +359,10 @@ struct HomeDestination: View {
                         Text(model.archiveRefreshStateByCode[code] ?? "选择日期后，从 NAS 分钟归档读取；缺失或部分覆盖会如实标注。")
                             .font(.caption).foregroundStyle(.secondary)
                         if let archived = model.archivedIntradayByCode[code], !archived.samples.isEmpty {
-                            FMinuteLineChart(samples: archived.samples)
+                            FUnifiedSecurityChart(
+                                model: FChartPresentationBuilder.historical(archived, holding: holding,
+                                                                             ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                                height: 200)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
@@ -605,7 +616,11 @@ private struct MarketOverview: View {
                             Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
                                 .font(.title3.weight(.semibold)).monospacedDigit()
                         }
-                        FMinuteLineChart(snapshot: snapshot).frame(height: 92)
+                        FUnifiedSecurityChart(
+                            model: FChartPresentationBuilder.live(snapshot, holding: holding,
+                                                                  candidate: model.advisorResult?.candidate,
+                                                                  ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                            height: 115)
                         Text(snapshot.map {
                             "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
                         } ?? "行情时间/来源待获取")
@@ -620,191 +635,6 @@ private struct MarketOverview: View {
         }
         .navigationTitle("今日市场观察")
         .refreshable { await model.autoRefreshMarketData() }
-    }
-}
-
-private struct FDailyKlineChart: View {
-    let snapshot: FDailyKlineSnapshot
-    private let periods = [5, 10, 20, 60, 250]
-    private let colors: [Color] = [.orange, .blue, .purple, .teal, .pink]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                ForEach(Array(periods.enumerated()), id: \.element) { index, period in
-                    let available = snapshot.bars.count >= period
-                    HStack(spacing: 3) {
-                        Circle().fill(colors[index]).frame(width: 5, height: 5)
-                        Text("MA\(period)").foregroundStyle(available ? .primary : .tertiary)
-                    }
-                }
-            }
-            .font(.caption2.monospaced())
-            GeometryReader { proxy in
-                let bars = snapshot.bars
-                let averages = periods.map { snapshot.movingAverage(period: $0) }
-                let allValues = bars.flatMap { [$0.low, $0.high] } + averages.flatMap { $0.compactMap { $0 } }
-                let numbers = allValues.map { NSDecimalNumber(decimal: $0).doubleValue }
-                let low = numbers.min() ?? 0
-                let high = numbers.max() ?? 1
-                let span = max(high - low, 0.000001)
-                Canvas { context, size in
-                    guard bars.count > 1 else { return }
-                    let step = size.width / CGFloat(bars.count)
-                    func y(_ value: Decimal) -> CGFloat {
-                        size.height * (1 - CGFloat((NSDecimalNumber(decimal: value).doubleValue - low) / span))
-                    }
-                    for (index, bar) in bars.enumerated() {
-                        let x = step * (CGFloat(index) + 0.5)
-                        var wick = Path()
-                        wick.move(to: CGPoint(x: x, y: y(bar.high)))
-                        wick.addLine(to: CGPoint(x: x, y: y(bar.low)))
-                        let rising = bar.close >= bar.open
-                        let color: Color = rising ? .red : .green
-                        context.stroke(wick, with: .color(color), lineWidth: 1)
-                        let top = min(y(bar.open), y(bar.close))
-                        let height = max(abs(y(bar.open) - y(bar.close)), 1)
-                        let body = CGRect(x: x - max(step * 0.28, 0.7), y: top,
-                                          width: max(step * 0.56, 1), height: height)
-                        context.fill(Path(body), with: .color(color.opacity(0.82)))
-                    }
-                    for (seriesIndex, series) in averages.enumerated() {
-                        var path = Path()
-                        var started = false
-                        for (index, value) in series.enumerated() {
-                            guard let value else { started = false; continue }
-                            let point = CGPoint(x: step * (CGFloat(index) + 0.5), y: y(value))
-                            if started { path.addLine(to: point) }
-                            else { path.move(to: point); started = true }
-                        }
-                        context.stroke(path, with: .color(colors[seriesIndex]), lineWidth: 1.2)
-                    }
-                }
-                .accessibilityLabel("騰訊真實未復權日K與五組均線")
-            }
-        }
-        .padding(10)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-private struct FMinuteLineChart: View {
-    let samples: [FMinuteSample]?
-    @State private var selectedTimestamp: Date?
-    @State private var zoomScale: CGFloat = 1
-    @State private var windowEndOffset = 0
-    @State private var dragOriginOffset: Int?
-    @State private var crosshairMode = false
-
-    init(snapshot: FCurrentIntradaySnapshot?) { samples = snapshot?.samples }
-    init(samples: [FMinuteSample]?) { self.samples = samples }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let allSamples = samples ?? []
-            let requestedVisibleCount = samples.map { max(2, Int(CGFloat($0.count) / zoomScale)) } ?? 0
-            let visibleCount = min(requestedVisibleCount, allSamples.count)
-            let maximumOffset = max(allSamples.count - visibleCount, 0)
-            let effectiveOffset = min(windowEndOffset, maximumOffset)
-            let endIndex = allSamples.count - effectiveOffset
-            let startIndex = max(endIndex - visibleCount, 0)
-            let visible = Array(allSamples[startIndex..<endIndex])
-            let values = visible.map { NSDecimalNumber(decimal: $0.price).doubleValue }
-            let selectedIndex = selectedTimestamp.flatMap { timestamp in
-                visible.firstIndex(where: { $0.timestamp == timestamp })
-            }
-            if values.count > 1, let minimum = values.min(), let maximum = values.max() {
-                let span = max(maximum - minimum, 0.000001)
-                ZStack(alignment: .topLeading) {
-                    Path { path in
-                        for (index, value) in values.enumerated() {
-                            let x = proxy.size.width * CGFloat(index) / CGFloat(values.count - 1)
-                            let y = proxy.size.height * (1 - CGFloat((value - minimum) / span))
-                            if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                            else { path.addLine(to: CGPoint(x: x, y: y)) }
-                        }
-                    }
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                    if let selectedIndex {
-                        let x = proxy.size.width * CGFloat(selectedIndex) / CGFloat(values.count - 1)
-                        Path { path in
-                            path.move(to: CGPoint(x: x, y: 0))
-                            path.addLine(to: CGPoint(x: x, y: proxy.size.height))
-                        }
-                        .stroke(Color.secondary.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        if let sample = visible[safe: selectedIndex] {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(sample.timestamp.formatted(date: .omitted, time: .shortened))
-                                Text("¥\(NSDecimalNumber(decimal: sample.price).stringValue)").monospacedDigit()
-                            }
-                            .font(.caption2.weight(.semibold))
-                            .padding(6)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                            .offset(x: min(max(x + 6, 0), max(proxy.size.width - 110, 0)), y: 4)
-                        }
-                    }
-                    HStack {
-                        Text(visible.first?.timestamp.formatted(date: .omitted, time: .shortened) ?? "")
-                        Spacer()
-                        Text(visible.last?.timestamp.formatted(date: .omitted, time: .shortened) ?? "")
-                    }
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    HStack {
-                        Spacer()
-                        Button(crosshairMode ? "完成" : "十字") { crosshairMode.toggle() }
-                            .font(.caption2.weight(.semibold))
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 8).onChanged { value in
-                    if crosshairMode {
-                        let centers = visible.indices.map {
-                            proxy.size.width * CGFloat($0) / CGFloat(max(visible.count - 1, 1))
-                        }
-                        if let coordinates = FChartRenderedXCoordinates(centers: centers.map({ Double($0) })),
-                           let index = FChartHitTesting.nearestPointIndex(tapX: Double(value.location.x),
-                                                                          coordinates: coordinates,
-                                                                          hitRadius: 42) {
-                            selectedTimestamp = visible[index].timestamp
-                        }
-                    } else if zoomScale > 1.01 {
-                        if dragOriginOffset == nil { dragOriginOffset = windowEndOffset }
-                        let shift = Int((value.translation.width / max(proxy.size.width, 1)) * CGFloat(max(visible.count, 1)))
-                        windowEndOffset = min(max((dragOriginOffset ?? windowEndOffset) + shift, 0), maximumOffset)
-                    }
-                }.onEnded { _ in dragOriginOffset = nil })
-                .simultaneousGesture(MagnificationGesture().onEnded { value in
-                    let newScale = min(max(zoomScale * value, 1), 8)
-                    zoomScale = newScale
-                    let countAfterZoom = min(max(2, Int(CGFloat(allSamples.count) / newScale)), allSamples.count)
-                    let maxOffsetAfterZoom = max(allSamples.count - countAfterZoom, 0)
-                    windowEndOffset = newScale <= 1.01 ? 0 : min(windowEndOffset, maxOffsetAfterZoom)
-                })
-                .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-                    crosshairMode = true
-                })
-            } else {
-                Text(samples == nil ? "等待真实分时数据" : "暂无足够的归档分钟点")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .frame(height: 180)
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityLabel(samples == nil ? "无分钟分时数据" : "真实分钟价格曲线")
-        .accessibilityHint("双指缩放；放大后拖动平移时间窗口；长按进入十字光标模式后拖动查看分钟时间和价格。")
-    }
-}
-
-private extension Collection {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
 
