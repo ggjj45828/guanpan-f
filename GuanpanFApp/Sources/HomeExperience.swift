@@ -278,18 +278,51 @@ struct HomeDestination: View {
 
     private func instrumentDestination(_ code: String) -> some View {
         let holding = model.holdings.first { $0.instrumentCode == code }
+        let history = model.instrumentHistories.first { $0.instrumentCode == code }
+        let instrumentName = holding?.name ?? history?.instrumentName ?? code
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                Text(instrumentName).font(.largeTitle.bold())
+                Text(code).font(.headline.monospaced())
                 if let holding {
-                    Text(holding.name).font(.largeTitle.bold())
-                    Text(holding.instrumentCode).font(.headline.monospaced())
                     Group {
                         LabeledContent("真实持仓", value: "\(holding.units) 份")
                         LabeledContent("账面成本", value: holding.bookCost.description)
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    let snapshot = model.marketDataByCode[code]
+                } else if let history {
+                    Group {
+                        LabeledContent("持仓状态", value: "已清仓")
+                        LabeledContent("持仓周期", value: "\(history.episodes.count) 轮")
+                        LabeledContent("历史累计已实现盈亏", value: history.lifetimeRealizedProfit.description)
+                    }
+                    .padding(14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                } else {
+                    Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                if let history {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("持仓周期历史").font(.headline)
+                        ForEach(history.episodes) { episode in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("第\(episode.episodeNumber)轮 · 建仓 \(episode.openedAt.formatted(date: .numeric, time: .omitted))")
+                                    .font(.subheadline.weight(.medium))
+                                Text(episode.closedAt.map { "清仓 \($0.formatted(date: .numeric, time: .omitted))" } ?? "当前持仓周期")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text("本轮已实现盈亏 \(episode.netRealizedProfit.description)")
+                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 5)
+                        }
+                    }
+                    .padding(14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+                let snapshot = model.marketDataByCode[code]
                     HStack(alignment: .firstTextBaseline) {
                         Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "暂无有效行情")
                             .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
@@ -369,10 +402,6 @@ struct HomeDestination: View {
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                } else {
-                    Text("该证券不在当前可读取的真实持仓中。")
-                        .font(.headline)
-                }
                 AdvisorComposer(model: model, theme: .editorial, instrumentCode: code)
             }
             .padding(18)

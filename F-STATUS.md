@@ -1,9 +1,9 @@
 # F 云端开发状态
 
-## 当前工作树快照（2026-10-26 17:01 Asia/Shanghai）
+## 当前工作树快照（2026-10-26 17:16 Asia/Shanghai）
 
 - F 当前阶段：编译与基础自动化验证已通过，转入真实产品行为收口。Actions run `40294624613` 完成 FCore XCTest 119/119、XcodeGen、iOS Device Release Build、Simulator Build、App UI XCTest 2/2；未签名IPA已打包并上传。
-- Advisor可访问性修复已提交并发布；当前新增一项真实资产页“当前持仓/已清仓”与现金流水区UI测试，定义3/已执行2/通过2/失败0，新增测试待CI验证。测试不注入模拟资产或交易。Simulator人工截图/交互、横屏/多尺寸与真机仍待验证。
+- Actions run `40296924473` 已执行FCore XCTest 119/119和App UI XCTest 3/3，Device/Simulator Build及IPA artifact均成功。其后发现已清仓证券历史入口未显示详情，当前工作树正在修复持仓周期、已实现盈亏与该证券行情/AI入口；这批Swift源码尚未编译。Simulator人工视觉/手势、横屏/多尺寸及真机仍待验证。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
 
 ## 当前基线
