@@ -1,10 +1,12 @@
 # F 云端开发状态
 
-## 当前工作树快照（2026-10-26 17:27 Asia/Shanghai）
+## 当前工作树快照（2026-10-26 17:31 Asia/Shanghai）
 
 - F 当前阶段：已清仓证券详情修复编译验证通过，转入统一图表产品行为收口。Actions run `40298657796` 完成 FCore XCTest 119/119、XcodeGen、iOS Device Release Build、Simulator Build、App UI XCTest 3/3；未签名IPA已打包并上传。
 - Actions run `40298657796` 已执行FCore XCTest 119/119和App UI XCTest 3/3，Device/Simulator Build及IPA artifact均成功；清仓证券详情/持仓周期展示Swift修改包含在本次编译中。UI用例未注入真实清仓数据，因而没有对历史Episode画面做专项验收。Simulator人工视觉/手势、横屏/多尺寸及真机仍待验证。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
+- 统一图表专项回归新增两项：真实可用 overlay/IOPV 必须进入可见纵轴；单独显示末根日K时，MA250仍依据完整历史窗口参与纵轴。当前 FCore 定义121项，新增2项尚未编译/执行；最近真实结果仍为119/119。
+- 本地提交 `6d1973f` 包含两项回归，随后 `3426e5c` 记录CI阻塞；本地工作树干净。最近 push 被远端拒绝为非快进（远端 main 有新提交），fetch 因HTTPS连接重置失败；未强推/回退，新增测试未触发CI。
 
 ## 当前基线
 
