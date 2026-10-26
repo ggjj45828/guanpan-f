@@ -280,6 +280,12 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 诊断读取期间若SQLite并发checkpoint移除了WAL/共享内存文件，单文件大小按0记录，避免文件存在性检查与读取间的竞争导致整份诊断失败。
 - 本地环境当前从用户提供的F-LATEST源码包续接，不含Git历史；GitHub远端连通核验因当前网络解析失败未完成。此次改动只做代码和文档更新；未运行测试、构建或NAS验证。FCore XCTest `39 / 0 / 0 / 0`；App UI XCTest `2 / 0 / 0 / 0`不变。
 
+## iOS 可运行版本收敛：统一图表叠加层基线
+
+- 在 `606f470` CLEAN checkpoint 上新增 FCore `FChartOverlayModel`：它以现有 `FChartDataModel` 为唯一序列入口，接收同证券、带来源/获取时间的价格叠加层与可用 IOPV；同类叠加重复、跨证券输入一律拒绝。
+- 纵轴范围由可视窗口内的真实分钟价或日K高低点，加上可用成本/均价/前收/IOPV/Candidate叠加点共同计算并保留小幅边距。`Unavailable` IOPV/overlay 不贡献任何数值，禁止为完整图形伪造曲线。
+- 此阶段只完成核心数据模型，未增加未经Apple工具链验证的大型SwiftUI渲染代码；现有证券详情 NAS 按日历史分钟消费链保持不变。未运行Swift编译或XCTest：FCore XCTest `39 / 0 / 0 / 0`；App UI XCTest `2 / 0 / 0 / 0`。本机Python入口不可用，未将静态脚本记为已执行。
+
 ## 2026-10-26 Active Development 工作区约定
 
 - 用户指定本机唯一 Active Development 工作区为 `C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`。今后 F 的所有源码修改、提交、测试、状态矩阵和 checkpoint 均在此目录进行；A/B 保持只读。

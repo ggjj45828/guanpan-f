@@ -206,6 +206,87 @@ public struct FChartPriceOverlay: Equatable, Sendable {
     }
 }
 
+/// The single overlay container shared by live-minute, archived-minute and
+/// daily charts.  It deliberately accepts only source-labelled observations;
+/// callers cannot manufacture an IOPV or price line just to make a chart look
+/// complete.
+public struct FChartOverlayModel: Equatable, Sendable {
+    public let chart: FChartDataModel
+    public let priceOverlays: [FChartPriceOverlay]
+    public let iopv: FIOPVObservation?
+
+    public init(chart: FChartDataModel, priceOverlays: [FChartPriceOverlay] = [],
+                iopv: FIOPVObservation? = nil) throws {
+        guard priceOverlays.allSatisfy({ $0.securityCode == chart.securityCode }),
+              iopv?.securityCode == nil || iopv?.securityCode == chart.securityCode else {
+            throw FMarketDataError.invalidPayload
+        }
+        let duplicateKinds = Dictionary(grouping: priceOverlays, by: \.kind)
+            .values.contains { $0.count > 1 }
+        guard !duplicateKinds else { throw FMarketDataError.invalidPayload }
+        self.chart = chart
+        self.priceOverlays = priceOverlays
+        self.iopv = iopv
+    }
+
+    /// Returns the price range for the current viewport.  Candle high/low,
+    /// minute price, and every available overlay participate together, so a
+    /// real cost, average-price, previous-close or IOPV line cannot be pushed
+    /// outside the visible vertical range.  Unavailable data contributes no
+    /// synthetic value.
+    public func priceRange(interaction: FChartInteractionModel? = nil) -> ClosedRange<Decimal>? {
+        let timestamps = chart.series?.timestamps ?? []
+        let visibleIndices: Range<Int>
+        if let range = interaction?.visibleRange, range.upperBound <= timestamps.count {
+            visibleIndices = range
+        } else {
+            visibleIndices = 0..<timestamps.count
+        }
+        let visibleTimes = Set(visibleIndices.compactMap { timestamps[safe: $0] })
+        var values = basePrices(indices: visibleIndices)
+        for overlay in priceOverlays {
+            guard !overlay.isUnavailable else { continue }
+            values += overlay.points
+                .filter { visibleTimes.isEmpty || visibleTimes.contains($0.timestamp) }
+                .map(\.value)
+        }
+        if let iopv, iopv.isAvailable, let value = iopv.value {
+            values.append(value)
+        }
+        guard let low = values.min(), let high = values.max() else { return nil }
+        let span = high - low
+        let padding = max(span / 20, max(abs(low), abs(high)) / 10_000)
+        return (low - padding)...(high + padding)
+    }
+
+    private func basePrices(indices: Range<Int>) -> [Decimal] {
+        guard let series = chart.series else { return [] }
+        switch series {
+        case let .minute(samples):
+            return indices.compactMap { samples[safe: $0]?.price }
+        case let .daily(bars):
+            return indices.flatMap { index -> [Decimal] in
+                guard let bar = bars[safe: index] else { return [] }
+                return [bar.low, bar.high]
+            }
+        }
+    }
+}
+
+private extension FChartPriceOverlay {
+    var isUnavailable: Bool {
+        if case .unavailable = quality { return true }
+        return false
+    }
+}
+
+private extension FIOPVObservation {
+    var isAvailable: Bool {
+        if case .unavailable = quality { return false }
+        return value != nil
+    }
+}
+
 public enum FChartPresentation: String, Equatable, Sendable {
     case inline
     case landscapeFullscreen
@@ -243,5 +324,11 @@ private extension FChartDataQuality {
     static func nonBlank(_ value: String?) -> Bool {
         guard let value else { return false }
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
