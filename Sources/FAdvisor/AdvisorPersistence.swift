@@ -90,7 +90,7 @@ public actor FDecisionMemoryStore {
     public func load(now: Date = Date()) async throws -> FDecisionMemoryArchive? {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
-        try await storage.load(now: now)?.payload
+        return try await storage.load(now: now)?.payload
     }
 
     /// Returns only a bounded, point-in-time projection. A validated segmented
@@ -122,7 +122,7 @@ public actor FDecisionMemoryStore {
     public func currentDigest(now: Date = Date()) async throws -> String? {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
-        try await storage.load(now: now)?.digest
+        return try await storage.load(now: now)?.digest
     }
 
     /// Validates the v1 archive and returns a deterministic migration report.
@@ -169,7 +169,7 @@ public actor FDecisionMemoryStore {
         -> FDecisionMemoryBackupReceipt {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
-        try await segmentedStorage.createBackup(at: destination)
+        return try await segmentedStorage.createBackup(at: destination)
     }
 
     @discardableResult
@@ -214,13 +214,13 @@ public actor FDecisionMemoryStore {
     public func createBackup(at destination: URL, now: Date = Date()) async throws -> String {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
-        try await storage.createBackup(at: destination, now: now)
+        return try await storage.createBackup(at: destination, now: now)
     }
 
     public func recoveryCandidate(now: Date = Date()) async throws -> FDecisionMemoryArchive? {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
-        try await storage.recoveryCandidate(now: now)
+        return try await storage.recoveryCandidate(now: now)
     }
 
     @discardableResult
@@ -229,7 +229,7 @@ public actor FDecisionMemoryStore {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
         try await segmentedStorage.invalidateCurrent()
-        try await storage.restoreBackup(from: source, expectedPriorDigest: expectedPriorDigest, now: now)
+        return try await storage.restoreBackup(from: source, expectedPriorDigest: expectedPriorDigest, now: now)
     }
 
     @discardableResult
@@ -239,8 +239,8 @@ public actor FDecisionMemoryStore {
         try await acquireExclusiveOperation()
         defer { releaseExclusiveOperation() }
         try await segmentedStorage.invalidateCurrent()
-        try await storage.restoreRecoveryCandidate(expectedPriorDigest: expectedPriorDigest,
-                                                   replaceCorruptPrimary: replaceCorruptPrimary, now: now)
+        return try await storage.restoreRecoveryCandidate(expectedPriorDigest: expectedPriorDigest,
+                                                          replaceCorruptPrimary: replaceCorruptPrimary, now: now)
     }
 
     private func acquireExclusiveOperation() async throws {

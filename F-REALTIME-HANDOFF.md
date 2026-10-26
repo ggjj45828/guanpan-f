@@ -176,6 +176,6 @@ F_CURRENT_STATUS_END
 - 测试定义：新增三项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账；连续三轮清仓重建及每笔0.10手续费）。FCore 静态定义总数 119；本地执行 0 / 通过 0 / 失败 0。远端 Swift test 已执行但失败，尚未得到通过结果。
 - 当前工作树含未提交修改：`Sources/FAdvisor/AdvisorPersistence.swift` 的 Darwin 文件锁兼容修复，以及本交接文件；其余 Ledger/Context/UI/测试已推送至 `main`。
 - 尚未验证：旧账本 JSON 解码兼容、修复后的 macOS/Xcode 编译、119项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
-- 远端验证：run 40286512110 和 40287179530 均在 `swift test` 步骤失败，工程生成、iOS Build、UI Test均被跳过。第一轮错误中的 LedgerWrite/FCore imports、DecisionMemoryProjection import、FLedgerWrite Darwin flock 已修；第二轮剩余 `FAdvisor/AdvisorPersistence.swift` Darwin flock 与类型重载错误，当前正修复。未声称Apple构建或测试通过。
+- 远端验证：run 40286512110、40287179530、40288061070 均在 `swift test` 步骤失败，工程生成、iOS Build、UI Test均被跳过。第一轮错误中的 LedgerWrite/FCore imports、DecisionMemoryProjection import、macOS flock 名称冲突已修；第三轮暴露 `FAdvisor/AdvisorPersistence.swift` 七处因新增 `defer` 后缺显式 `return` 的真实编译错误，现已修复，尚待下一次远端执行。未声称Apple构建或测试通过。
 - 方向检查：没有新增模拟账户/虚拟资产/自动交易；没有给缺失历史补造证券名（旧流水无名称时显示“名称未记录”）；当前没有发现 F watchlist 删除接口，未增加 watchlist 能力。
 - 下一阶段顺序：修完并通过 Swift 包编译与119项 XCTest → 统一图表 → 再执行 Apple 工程生成、App Build、UI Test、Simulator → 真实 NAS/DeepSeek/行情端到端。遵循用户刚重申的顺序，不把失败的 Swift test 误报成 App 已编译。
