@@ -154,15 +154,15 @@ F_CURRENT_STATUS_BEGIN
 当前开发阶段：iOS可运行版本收敛
 当前正在开发：统一图表renderer首轮已推送；GitHub Actions #4失败，正在定位具体失败步骤/日志
 刚刚完成：共享图表renderer接线、MA/成交量/真实单位成本/Candidate overlay；Advisor成交后重新判断链路已有编码
-未提交工作：仅 F-REALTIME-HANDOFF.md 的当前CI状态更新；源码无未提交修改
-iOS完成度：多个页面、真实Ledger和Advisor链路、统一图表renderer均有源码；未编译、未运行
+未提交工作：macOS AdvisorPersistence 文件锁兼容修复正在修改；其他 Ledger 与 AI 历史周期改动已提交并推送
+iOS完成度：真实资产双视图、现金/成交流水和Advisor生命周期上下文已编码；尚未通过全套Swift测试和App Build
 AI顾问完成度：组合/证券路由、真实账本/行情/NAS证据/Context/Guard/DeepSeek/Candidate及成交后复判均已编码，未端到端验证
 统一图表完成度：单一renderer已消费当前分钟/NAS历史分钟/日K；MA5/10/20/60/250、成交量、真实单位成本、Candidate和手势已编码；未编译/视觉验证，均价/前收/IOPV unavailable，横屏未完成
 NAS历史数据完成度：NAS精确日期归档及iOS按日查询/研究接线已编码；实机与生产端到端待验证，存在Missing/Partial/Stale
 Apple编译验证：External Verification Pending；无Swift/Xcode/XcodeGen，未编译/未Build
-当前测试：FCore XCTest defined=116/executed=0/passed=0/failed=0；App UI defined=2/executed=0/passed=0/failed=0；Python本次未执行，最近文档记录完整套件93/93，后续部署包单独7/7
-最大缺口：Apple首次编译；统一图表编译/手势验证；真实服务端端到端；成交闭环设备验证；状态文档同步
-下一步：读取 Actions #4 失败步骤/日志，修复后重跑 macOS 编译、116项XCTest、App Build/UI Test和Simulator
+当前测试：FCore XCTest defined=119/executed=0/passed=0/failed=0（远端 Swift test 曾启动但失败，尚无通过结果）；App UI defined=2/executed=0/passed=0/failed=0（未启动）；Python/NAS本次未执行
+最大缺口：清完 macOS Swift Package 编译错误并跑通119项 XCTest；再生成工程、App Build/UI Test/Simulator；统一图表真实交互与服务端端到端
+下一步：修复 Actions run 40287179530 暴露的 AdvisorPersistence Darwin 文件锁错误，重推并复核119项 XCTest；通过后回到统一图表，再依用户路线推进 App Build/UI Test/Simulator
 
 F_CURRENT_STATUS_END
 
@@ -170,12 +170,12 @@ F_CURRENT_STATUS_END
 
 ## 实时增量：真实 Ledger 生命周期与现金流水联动（当前工作树）
 
-- 当前模块：真实资产/账本收敛；图表与后续 Apple 首次构建路线仍按用户给定次序排在本阶段之后。
+- 当前模块：修复首次 Apple/Swift 编译暴露的问题；真实 Ledger 生命周期与现金流水修复已编码，统一图表仍是下一产品模块。
 - 已编码：Confirmed Fill 持久记录证券名称；清仓仍只从正持仓投影移除，成交历史保留；只读快照新增持仓周期、历史表现与现金流水；资产页新增“当前持仓/已清仓”视图及现金/成交明细；再次买入从零开始建立新周期和成本；AI请求接收历史周期摘要，区分当前成本与历史已实现收益。
 - 现金规则：每笔买入现金减少“成交额+手续费”，每笔卖出现金增加“成交额-手续费”；现金转入/转出按已确认 FCashMovement 投影；展示的期末现金来自当前真实 Ledger，并应与流水最后余额一致。App 成交手续费采用 FETFTradeFeePolicy 的每笔 0.10 元。AI Candidate 仍无 Ledger 写权限，只有用户确认实际成交后才写入。
-- 测试定义：新增三项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账；连续三轮清仓重建及每笔0.10手续费）。FCore 静态定义总数 119；本地执行 0 / 通过 0 / 失败 0。当前机器没有 Swift、Xcode、XcodeGen，未编译；Apple External Verification Pending。
-- 当前工作树含未提交修改：Ledger schema/write/snapshot/history projection、DecisionContext/Advisor request、iOS资产页与成交记录、LedgerSchemaTests，以及本交接文件。此状态是实时开发状态，不由 commit 定义。
-- 尚未验证：旧账本 JSON 解码兼容、macOS/Xcode 编译、119项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
-- 远端验证：已推送触发现有 macOS workflow；本次 GitHub Actions 页面读取连续超时，未认证 REST 查询受到 GitHub API rate limit，当前不能确认该提交的 workflow 状态/结果。
+- 测试定义：新增三项 XCTest（清仓→重新建仓→episode/现金/AI上下文；部分卖出仍为Active且现金对账；连续三轮清仓重建及每笔0.10手续费）。FCore 静态定义总数 119；本地执行 0 / 通过 0 / 失败 0。远端 Swift test 已执行但失败，尚未得到通过结果。
+- 当前工作树含未提交修改：`Sources/FAdvisor/AdvisorPersistence.swift` 的 Darwin 文件锁兼容修复，以及本交接文件；其余 Ledger/Context/UI/测试已推送至 `main`。
+- 尚未验证：旧账本 JSON 解码兼容、修复后的 macOS/Xcode 编译、119项 XCTest、App Build、UI Test、Simulator和真实设备；NAS历史研究数据与 Ledger 的保留仍是不同存储域，本次未变更 NAS。
+- 远端验证：run 40286512110 和 40287179530 均在 `swift test` 步骤失败，工程生成、iOS Build、UI Test均被跳过。第一轮错误中的 LedgerWrite/FCore imports、DecisionMemoryProjection import、FLedgerWrite Darwin flock 已修；第二轮剩余 `FAdvisor/AdvisorPersistence.swift` Darwin flock 与类型重载错误，当前正修复。未声称Apple构建或测试通过。
 - 方向检查：没有新增模拟账户/虚拟资产/自动交易；没有给缺失历史补造证券名（旧流水无名称时显示“名称未记录”）；当前没有发现 F watchlist 删除接口，未增加 watchlist 能力。
-- 下一阶段顺序：完成本阶段静态审查与CI反馈 → 继续统一图表 → 获取 Apple 环境后先编译、运行118项 XCTest、App Build、UI Test、Simulator → 再验证真实 NAS/DeepSeek/行情端到端。用户随后明确的路线优先于旧 handoff 中图表作为当前进行项的描述。
+- 下一阶段顺序：修完并通过 Swift 包编译与119项 XCTest → 统一图表 → 再执行 Apple 工程生成、App Build、UI Test、Simulator → 真实 NAS/DeepSeek/行情端到端。遵循用户刚重申的顺序，不把失败的 Swift test 误报成 App 已编译。
