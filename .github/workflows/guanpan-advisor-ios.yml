@@ -94,6 +94,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee build-ui-tests.log
 
+      - name: Export Simulator screenshots
+        if: always()
+        working-directory: GuanpanFApp
+        run: |
+          if [ -d build/FApp-UI.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path build/FApp-UI.xcresult \
+              --output-path build/UI-Screenshots
+          else
+            echo "No UI result bundle was produced; there are no Simulator screenshots to export."
+          fi
+
       - name: Package unsigned IPA
         working-directory: GuanpanFApp
         run: |
@@ -119,6 +131,7 @@ jobs:
             GuanpanFApp/build-simulator.log
             GuanpanFApp/build-ui-tests.log
             GuanpanFApp/build/FApp-UI.xcresult
+            GuanpanFApp/build/UI-Screenshots/**
             GuanpanFApp/build/GuanpanF-unsigned.ipa
           if-no-files-found: warn
           retention-days: 14

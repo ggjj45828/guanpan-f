@@ -1,12 +1,12 @@
 # F 云端开发状态
 
-## 当前工作树快照（2026-10-26 17:31 Asia/Shanghai）
+## 当前工作树快照（2026-10-26 18:07 Asia/Shanghai）
 
-- F 当前阶段：已清仓证券详情修复编译验证通过，转入统一图表产品行为收口。Actions run `40298657796` 完成 FCore XCTest 119/119、XcodeGen、iOS Device Release Build、Simulator Build、App UI XCTest 3/3；未签名IPA已打包并上传。
-- Actions run `40298657796` 已执行FCore XCTest 119/119和App UI XCTest 3/3，Device/Simulator Build及IPA artifact均成功；清仓证券详情/持仓周期展示Swift修改包含在本次编译中。UI用例未注入真实清仓数据，因而没有对历史Episode画面做专项验收。Simulator人工视觉/手势、横屏/多尺寸及真机仍待验证。
+- F 当前阶段：可用性验收 + 真实链路联调 + 缺口收口。Actions run `40303339340` 实际执行FCore XCTest 121/121、旧版App UI XCTest 3/3，XcodeGen、Device Release Build、Simulator Build、未签名IPA均成功。
+- 本次CI工件日志确认FCore 121 executed / 121 passed / 0 failed；UI 3 executed / 3 passed / 0 failed。模拟器实际启动并走过旧版主导航与空资产/已清仓tab，但未导出成功页截图，也没有真实持仓数据的清仓详情画面。
 - 本机没有 Swift/Xcode/XcodeGen；后续 Apple 验证继续通过已有 GitHub macOS workflow进行。历史开发记录保留作追溯，不能覆盖本节实时状态。
-- 统一图表专项回归新增两项：真实可用 overlay/IOPV 必须进入可见纵轴；单独显示末根日K时，MA250仍依据完整历史窗口参与纵轴。当前 FCore 定义121项，新增2项尚未编译/执行；最近真实结果仍为119/119。
-- 本地提交 `6d1973f` 包含两项回归，随后 `3426e5c` 记录CI阻塞；本地工作树干净。最近 push 被远端拒绝为非快进（远端 main 有新提交），fetch 因HTTPS连接重置失败；未强推/回退，新增测试未触发CI。
+- FCore 价格范围回归（有效overlay/IOPV与历史MA250）已随本次CI实际通过。当前未提交Swift/YAML变更：行情页增加六位证券代码查找并导航到真实证券详情；原3项UI测试中增加导航、页面截图附件；workflow导出PNG。新改动尚未编译执行。
+- 本地 `main` 已与 `origin/main` 同步；两侧相同tree的分叉历史通过保留双方父提交的merge commit `35047cf` 收敛，工作树目前有上述3个文件修改。
 
 ## 当前基线
 

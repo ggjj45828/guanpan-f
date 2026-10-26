@@ -656,6 +656,12 @@ struct SettingsOverview: View {
 
 struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
+    @State private var securityLookupCode = ""
+
+    private var isValidSecurityCode: Bool {
+        let bytes = securityLookupCode.utf8
+        return bytes.count == 6 && bytes.allSatisfy { (48...57).contains($0) }
+    }
 
     var body: some View {
         List {
@@ -681,8 +687,26 @@ struct MarketOverview: View {
                     .accessibilityIdentifier("market.refresh.all")
                 }
             }
+            Section("证券查询") {
+                TextField("输入6位证券代码", text: $securityLookupCode)
+                    .keyboardType(.numberPad)
+                    .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("market.security-code")
+                    .onChange(of: securityLookupCode) { value in
+                        let digits = String(value.unicodeScalars
+                            .filter { (48...57).contains($0.value) }.prefix(6))
+                        if digits != value { securityLookupCode = digits }
+                    }
+                NavigationLink(value: FHomeRoute.instrument(securityLookupCode)) {
+                    Label("打开证券详情", systemImage: "arrow.up.forward")
+                }
+                .disabled(!isValidSecurityCode)
+                .accessibilityIdentifier("market.open-security")
+                Text("可以查看未持仓证券；真实资产仍只来自本机账本。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if model.holdings.isEmpty {
-                Text("真实账本当前没有持仓标的。选择一个已录入证券后，行情和图表会绑定该标的。")
+                Text("真实账本当前没有持仓标的。行情和图表只会显示所选证券的真实上游数据。")
                     .foregroundStyle(.secondary)
             }
             ForEach(model.holdings) { holding in

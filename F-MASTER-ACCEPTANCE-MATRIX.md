@@ -4,7 +4,7 @@
 
 ## 当前 F 验证快照（2026-10-26）
 
-FCore XCTest：121 defined；最新 Actions run `40298657796` 执行119、通过119、失败0。本轮新增2项统一图表价格范围测试尚待CI执行。App UI XCTest：3 defined / 3 executed / 3 passed / 0 failed，run `40298657796`成功，且包含已清仓证券详情Swift修改。UI用例不注入清仓Ledger数据；历史Episode画面表现未专项验收。Device/Simulator Build成功，未签名IPA已上传；人工视觉、真机与NAS/DeepSeek联调仍待验证。
+FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表价格范围回归已在Actions run `40303339340`通过。App UI XCTest：3 defined / 3 executed / 3 passed / 0 failed，但该结果对应本轮新UI代码改动之前的版本。XcodeGen、Device/Simulator Build和未签名IPA成功。Simulator截图附件及证券代码查询导航刚加入，待下一轮CI验证；空账本未注入虚构持仓，真实Episode详情仍未做数据级验收。
 
 | ID | F 验收范围 | 状态 | F 验证证据 |
 |---|---|---|---|

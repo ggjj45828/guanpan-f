@@ -6,21 +6,41 @@ final class PrimaryNavigationUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 5))
+        attachScreenshot("01-home", app: app)
 
         app.tabBars.buttons["行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 3))
+        attachScreenshot("02-market-empty-ledger", app: app)
+
+        let lookup = app.textFields["market.security-code"]
+        XCTAssertTrue(lookup.waitForExistence(timeout: 3))
+        lookup.tap()
+        lookup.typeText("159352")
+        let openSecurity = app.buttons["market.open-security"]
+        XCTAssertTrue(openSecurity.isEnabled)
+        openSecurity.tap()
+        XCTAssertTrue(app.navigationBars["159352"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["market.refresh.159352"].exists)
+        XCTAssertTrue(app.staticTexts["NAS 历史分时"].exists)
+        attachScreenshot("03-security-detail-top", app: app)
+        app.scrollViews.firstMatch.swipeUp()
+        XCTAssertTrue(app.staticTexts["日 K 与均线"].exists)
+        attachScreenshot("04-security-chart-and-history", app: app)
 
         app.tabBars.buttons["AI顾问"].tap()
         XCTAssertTrue(app.navigationBars["AI 私人投资顾问"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["发送"].exists)
+        attachScreenshot("05-advisor", app: app)
 
         app.tabBars.buttons["真实资产"].tap()
         XCTAssertTrue(app.navigationBars["真实资产"].waitForExistence(timeout: 3))
+        attachScreenshot("06-real-assets-current", app: app)
 
         app.tabBars.buttons["设置"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.buttons["settings.nas.test"].exists)
+        attachScreenshot("07-settings", app: app)
     }
 
     func testAdvisorExplainsUnavailableOnlineService() {
@@ -47,8 +67,16 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
         XCTAssertTrue(app.staticTexts["已清仓 / 历史持仓"].exists)
+        attachScreenshot("08-real-assets-closed", app: app)
 
         app.buttons["当前持仓"].tap()
         XCTAssertTrue(app.staticTexts["当前持仓"].exists)
+    }
+
+    private func attachScreenshot(_ name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
