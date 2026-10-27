@@ -52,9 +52,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertFalse(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.secureTextFields["settings.ai.deepseekKey"].exists)
         let nasTestButton = app.buttons["settings.nas.test"]
-        let settingsForm = app.descendants(matching: .any)["settings.form"]
+        // On iOS 18, SwiftUI Form is exposed as its native CollectionView;
+        // the Form's accessibility identifier is not surfaced in XCTest.
+        let settingsForm = app.collectionViews.firstMatch
         guard settingsForm.waitForExistence(timeout: 3) else {
-            XCTFail("Settings Form must be exposed as the identified scroll container.\n\(app.debugDescription)")
+            XCTFail("Settings Form must expose its native scroll container.\n\(app.debugDescription)")
             return
         }
         // SwiftUI Form does not expose off-screen rows until scrolling brings

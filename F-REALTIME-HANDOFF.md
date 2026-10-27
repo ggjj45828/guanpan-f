@@ -1,5 +1,13 @@
 # F 实时进度交接
 
+## 2026-10-27 16:42 Asia/Shanghai 增补（Apple CI run #34）
+
+- 本地修正已推送，GitHub Actions run #34：`40473756900`，提交 `5f70db569b1f70e06867e1cef3ffb66d9f9e62e2`。截至16:30页面仍显示运行中；之后应用内浏览器访问GitHub返回连接关闭，桌面Edge窗口也无法由当前UI桥读取，因此本轮最终成功/失败与具体步骤**尚无法核实**，不能写成通过。
+- 本地工作树代码修正没有再变更；这次仅更新本交接记录，属于未提交文档改动。
+- 可核验的最近代码CI证据仍为run #33：Swift package tests步骤成功、XcodeGen和Device/Simulator Build成功，UI XCTest第一个失败在设置页NAS测试按钮尚未滚入Form视口时等待其存在。当前已推送的#34修正改为先调用`scrollUntilHittable`，随后仍严格断言按钮存在且可点击；需要等#34真实结果确认。
+- 下一步：GitHub页面/连接恢复后直接检查run #34 job日志和XCTest结果；若UI仍失败，读取新的首个断言与视图层级后按根因修复，再走fetch→普通push→完整CI。不根据网页失联推断CI结果。
+- 2026-10-27 16:44复核：本地HEAD与`origin/main`跟踪引用都为`5f70db5`，但fetch返回`Recv failure: Connection was reset`；应用内浏览器无现存标签，重开run #34详情超时。run #34最终状态因此仍为未知；未新增代码修改，本条为未提交交接更新。
+
 ## 2026-10-27 16:16 Asia/Shanghai 实时更新（GitHub Actions run #33）
 
 - 当前本地 HEAD 为这次 UI 滚动修正提交（具体哈希以当前工作树 git rev-parse 为准）；此前成功fetch时远端`main`与本地`60ca553`一致。测试修复已提交，本地普通push多次均遇GitHub 443连接超时，因此本提交尚未送达CI；远端跟踪引用在最后成功fetch时为60ca553。不强推、不覆盖远端。
@@ -183,3 +191,14 @@ Apple编译验证：run #33 F Swift package test步骤成功（精确计数未�
 下一步：GitHub连接恢复后先fetch，再普通推送e46814d并重跑全流程；CI通过后马上核对最新Simulator截图和交互
 
 F_CURRENT_STATUS_END
+
+## 2026-10-27 运行证据更正：run #34 构建产物复核
+
+- 从本机 Downloads 中已存在的 `guanpan-f-ios-build-evidence.zip` 读取了真实 CI 日志和 UI 截图附件。它对应此前记录的 run #34 / commit `5f70db5`（本机 HEAD）。
+- FCore：**121 executed / 121 passed / 0 failed**，以 `F-core-tests.log` 汇总行为准。
+- App UI XCTest：**3 executed / 2 passed / 1 failed**。失败为 `PrimaryNavigationUITests.testFivePrimaryDestinationsAreDistinctAndDiscoverable()`；日志报告源码位置 `PrimaryNavigationUITests.swift:59`、`XCTAssertTrue failed`。运行截图的 accessibility hierarchy 显示设置页主体为 `CollectionView`，未见 `settings.form` 标识；设置项滚动后仍未发现 NAS 测试按钮。根因指向 SwiftUI Form 可访问容器/滚动定位，但该解释仍需下一次 Apple CI 验证。
+- 因此先前“run #34 UI步骤成功/整体CI成功”的记录与构建产物日志矛盾，**以实际测试日志为准：UI suite失败；run整体状态需在Actions页面重新核对**。本次没有把成功摘要当作UI通过。
+- 已检查 run #34 导出的首页、行情、证券详情、日K、AI顾问和设置截图（iPhone 16 Pro Simulator 附件）。发现多处长标题/说明文字及卡片尾部内容在右侧被裁切，尤其首页横幅、顾问说明、行情卡片和图表控件；这是截图证据显示的可用性缺陷。尚未完成模拟器手势/导航人工验收，也未检查全部截图。
+- 当前本地未验证修改：UI XCTest改为使用iOS 18实际暴露的`CollectionView`作为Form滚动容器；原有NAS按钮`exists`与`isHittable`断言保留。该修正尚未Apple编译/执行。
+- 浏览器/远端日志读取仍不稳定；本机没有 `gh` CLI。CI后续必须用新的真实job日志确认测试计数和整体结论。Simulator截图来自CI自动化附件，人工看图不等于本机手动交互/真机验收。
+- 下一步：先核对Form容器改动与UI定位实际关系，再将当前改动送Apple CI；若仍失败，以新失败的首个断言和AX树修复。其后优先处理截图中确认的横向裁切，再进行Simulator逐页和交互验收；NAS/DeepSeek实网E2E仍未通过。
