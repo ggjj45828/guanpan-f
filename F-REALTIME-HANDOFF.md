@@ -1,13 +1,14 @@
 # F 实时进度交接
 
-## 最新实时检查（2026-10-27 15:19 Asia/Shanghai）
+## 最新实时检查（2026-10-27 16:06 Asia/Shanghai，本轮 CI #32 日志已读取）
 
-- 当前工作树：`main`，当前已知 `origin/main` 与 HEAD `5169df6c8e389d8f80a20ae9c6b1e2ab76a041ae` 对齐；本轮有未提交的设置表单可访问标识、对应 UI Test 滚动修正、跨市场验收口径。Git提交仅用于追溯。
-- 最新完整 Apple CI run `40463891229`（commit `5169df6`）已结束：FCore **121/121 executed / passed / 0 failed**；XcodeGen、iOS Device Build、iOS Simulator Build均成功；App UI XCTest失败，job总耗时8m02，其中UI Test步骤4m59，Actions只显示退出码65和失败用例名。当前可读页面未提供失败XCTest断言/行号，不能声称已拿到根因。
-- 基于run30原始日志可确认先前失败为设置页未滚动时查询NAS按钮；run31改为全屏滑动后仍失败且测试耗时显著增长，说明该滚动修正没有通过。当前进一步为SwiftUI `Form` 增加 `settings.form` 可访问标识，UI Test直接定位该表单并滚动；表单定位失败时明确 `XCTFail` 后退出，避免对不存在的容器重复滑动。产品布局/控件行为未改。该轮Swift/UI测试修改均未编译或执行。
-- Run31的build-evidence artifact已生成（153MB），但当前未取得其xcresult原始失败详情/截图图像；因此不记人工截图验收或交互验收完成。运行Simulator执行了UI自动化，但该run失败。
-- 新增跨市场验收口径已写入B-116…B-126追踪段：中/日/韩/美时区、交易日/午休/半日市/DST与no-lookahead；分清相关、领先、共同风险；逐证券动态画像和滚动失效；底层资产与场内ETF溢价判断分层；wait/no-trade正式结果；完整Evidence封套进入DecisionContext。只写设计验收要求，未声称已编码或有数据验证。
-- 下一步：提交本轮受控修改并触发新CI，核对 `settings.form` 元素是否存在、滚动后NAS按钮是否 hittable；按新run首个XCTest断言修复。若全绿，再进入截图人工验收，不扩展Swift功能。
+- 当前实际状态：本机 `main` HEAD 为 `d49748b`（UI Test滚动修复与本交接），工作树更新后待重新核对。修复前最后成功核对的 `origin/main` 为 `de97603b3d090f983076f97823305b6fdfc07164`。本轮普通fetch报 `getaddrinfo() thread failed to start`，提升网络权限fetch报 `Recv failure: Connection was reset`，HTTP/1.1 fetch仍报 `getaddrinfo() thread failed to start`；此前多次push同样失败。GitHub Actions页面仍显示最新为run #32，因此修复尚未送达，未触发新CI；未强推或改写远端。commit仅作追溯。
+- Run #32 实际结论为 **Failure**，总用时 7m25。FCore 测试步骤（49秒）、XcodeGen、iOS Device Build、iOS Simulator Build均先于 UI Test 完成；失败集中在 `Run F app navigation UI tests`（4m02）。上一轮明确计数仍为 FCore **121 executed / 121 passed / 0 failed**；run #32 FCore步骤完成，但当前日志提取尚未核对其末尾计数。Swift Package测试成功不代表App UI验收通过。
+- 已从 run #32 测试日志取得首个真实断言及源码位置：`PrimaryNavigationUITests.swift:63` 的 `XCTAssertTrue(nasTestButton.isHittable, app.debugDescription)` 失败。失败时页面可访问树显示“数据诊断”与“真实账本”已在视口内，而NAS按钮位于更靠上的表单区段；测试以 `.fast` 连续上滑6次越过了目标。因此这是测试导航滚动越界，不是NAS服务或产品控件错误。当前修正保留“NAS按钮必须可点击”的断言，先验证按钮存在，再根据按钮相对表单视口的位置向上/向下慢滚，最多8次后仍断言 hittable。
+- 当前源代码改动：`GuanpanFApp/UITests/PrimaryNavigationUITests.swift` 仅修正滚动方向/速度与可见性前置检查；SwiftUI产品布局未改。跨市场原则已经写入 `F-B-145-TRACEABILITY.md` 与 Matrix/Status：中日韩美本地时区、交易日历/午休/半日市/DST、as-of无未来泄漏；相关/领先/共同风险明确区分；证券级动态影响画像与20/60/120滚动失效；底层资产判断和场内ETF溢价/报价/流动性分离；wait/no-trade正式决策；证据必须含样本、区间、质量、方向、统计、置信度、新鲜度和失效状态。以上为研究设计/验收要求，未声称已编码或有实证。
+- 最新CI已真正运行Simulator UI Test，但失败；CI产出了截图/测试附件，尚未由我人工逐张检查，也没有Simulator手势或真机验收。未声称截图验收通过。
+- 本机Windows无 Swift/Xcode/XcodeGen，因此本轮新增测试代码不能本地编译；必须由下一次Apple CI实际编译执行。NAS历史分钟→iOS→Research Evidence和DeepSeek真实E2E仍未完成；NAS v6只验证当前交易日真实分钟归档，不验证历史补采。
+- 下一步：网络恢复后先 `git fetch` 再推送本地UI修复提交（若远端前进先安全reconcile），触发Apple CI；读取新run FCore计数、生成工程、Device/Simulator Build与UI Test结果。仅当CI全绿，继续CI截图人工审阅和Simulator交互验收。
 
 ## 最新实时检查（2026-10-27 14:38 Asia/Shanghai）
 

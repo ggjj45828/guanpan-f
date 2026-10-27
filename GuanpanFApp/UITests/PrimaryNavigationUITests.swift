@@ -57,8 +57,15 @@ final class PrimaryNavigationUITests: XCTestCase {
             XCTFail("Settings Form must be exposed as the identified scroll container.\n\(app.debugDescription)")
             return
         }
-        for _ in 0..<6 where !nasTestButton.isHittable {
-            settingsForm.swipeUp(velocity: .fast)
+        XCTAssertTrue(nasTestButton.waitForExistence(timeout: 3), app.debugDescription)
+        for _ in 0..<8 where !nasTestButton.isHittable {
+            let formFrame = settingsForm.frame
+            let buttonFrame = nasTestButton.frame
+            if buttonFrame.maxY < formFrame.minY {
+                settingsForm.swipeDown(velocity: .slow)
+            } else {
+                settingsForm.swipeUp(velocity: .slow)
+            }
         }
         XCTAssertTrue(nasTestButton.isHittable, app.debugDescription)
         attachScreenshot("08-settings", app: app)
