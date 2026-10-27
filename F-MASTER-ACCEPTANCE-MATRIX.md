@@ -1,5 +1,12 @@
 # F Master Acceptance Matrix
 
+## 最新实时CI与工作树状态（2026-10-27 15:19 Asia/Shanghai）
+
+- Run `40463891229` / `5169df6`：FCore 121/121 passed；XcodeGen、Device Build、Simulator Build成功；App UI XCTest失败（Actions UI Test步骤耗时4m59，详情页面仅显示exit code 65，首个断言尚未取得）。
+- 当前待CI设置表单修正：Form增加 `settings.form`，测试针对该容器滚动并验证NAS按钮可点击；测试失败路径明确输出容器accessibility树后退出。不降低断言标准。
+- F-145跨市场验收设计已补充时区/日历/DST、no-lookahead、相关/领先/共同风险区分、证券级滚动画像、底层资产与场内ETF溢价条件分离、wait/no-trade和完整Evidence元数据。本项仍未编码/实证。
+- 本轮修改未编译；本机无Apple工具链。当前阶段优先触发CI并拿到失败断言，不将自动Simulator启动记作人工验收。
+
 ## 最新实时CI与工作树状态（2026-10-27 14:38 Asia/Shanghai）
 
 - Actions run `40460442070` / commit `773608d`: FCore **121 executed / 121 passed / 0 failed**；XcodeGen、Device Build、Simulator Build成功；App UI XCTest **3 executed / 2 passed / 1 failed**。

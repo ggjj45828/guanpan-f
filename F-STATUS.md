@@ -1,5 +1,12 @@
 # F 云端开发状态
 
+## 最新实时状态（2026-10-27 15:19 Asia/Shanghai）
+
+- HEAD `5169df6` 与当时核对的 `origin/main` 对齐；工作树有设置页表单滚动测试及跨市场验收文档修改。
+- Apple CI run `40463891229`：FCore 121/121通过，XcodeGen、Device Build、Simulator Build通过；UI XCTest失败，执行摘要未给出断言行号。UI Test步骤耗时4m59。当前日志检查尚未获取xcresult原始失败细节。
+- 最新待送CI修正：`SettingsOverview` Form 标记 `settings.form`；测试定位该真实容器，滚动到NAS测试按钮并验证可点击；无法定位容器时清晰失败并返回。尚未编译/执行。
+- 最新跨市场原则已补入F-145追踪：严格跨市场时区/日历/DST与no-lookahead，相关/领先/共同因素分层，逐证券动态画像及20/60/120滚动失效，底层资产判断与ETF场内溢价判断分离，等待作为正式决策，Evidence必填统计与质量元数据。尚属设计/验收要求。
+
 ## 最新实时状态（2026-10-27 14:38 Asia/Shanghai）
 
 - 当前分支 `main`，最近提交 `773608d`；工作树现在有一项未提交 UI XCTest 修改。Git提交只作追溯。

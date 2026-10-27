@@ -52,9 +52,13 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertFalse(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.secureTextFields["settings.ai.deepseekKey"].exists)
         let nasTestButton = app.buttons["settings.nas.test"]
-        for _ in 0..<8 {
-            if nasTestButton.isHittable { break }
-            app.swipeUp()
+        let settingsForm = app.descendants(matching: .any)["settings.form"]
+        guard settingsForm.waitForExistence(timeout: 3) else {
+            XCTFail("Settings Form must be exposed as the identified scroll container.\n\(app.debugDescription)")
+            return
+        }
+        for _ in 0..<6 where !nasTestButton.isHittable {
+            settingsForm.swipeUp(velocity: .fast)
         }
         XCTAssertTrue(nasTestButton.isHittable, app.debugDescription)
         attachScreenshot("08-settings", app: app)

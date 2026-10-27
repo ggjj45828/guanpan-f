@@ -660,6 +660,7 @@ struct SettingsOverview: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
+        .accessibilityIdentifier("settings.form")
         .navigationTitle("设置")
         .tint(theme.accent)
     }

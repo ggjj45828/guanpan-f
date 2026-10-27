@@ -1,5 +1,14 @@
 # F 实时进度交接
 
+## 最新实时检查（2026-10-27 15:19 Asia/Shanghai）
+
+- 当前工作树：`main`，当前已知 `origin/main` 与 HEAD `5169df6c8e389d8f80a20ae9c6b1e2ab76a041ae` 对齐；本轮有未提交的设置表单可访问标识、对应 UI Test 滚动修正、跨市场验收口径。Git提交仅用于追溯。
+- 最新完整 Apple CI run `40463891229`（commit `5169df6`）已结束：FCore **121/121 executed / passed / 0 failed**；XcodeGen、iOS Device Build、iOS Simulator Build均成功；App UI XCTest失败，job总耗时8m02，其中UI Test步骤4m59，Actions只显示退出码65和失败用例名。当前可读页面未提供失败XCTest断言/行号，不能声称已拿到根因。
+- 基于run30原始日志可确认先前失败为设置页未滚动时查询NAS按钮；run31改为全屏滑动后仍失败且测试耗时显著增长，说明该滚动修正没有通过。当前进一步为SwiftUI `Form` 增加 `settings.form` 可访问标识，UI Test直接定位该表单并滚动；表单定位失败时明确 `XCTFail` 后退出，避免对不存在的容器重复滑动。产品布局/控件行为未改。该轮Swift/UI测试修改均未编译或执行。
+- Run31的build-evidence artifact已生成（153MB），但当前未取得其xcresult原始失败详情/截图图像；因此不记人工截图验收或交互验收完成。运行Simulator执行了UI自动化，但该run失败。
+- 新增跨市场验收口径已写入B-116…B-126追踪段：中/日/韩/美时区、交易日/午休/半日市/DST与no-lookahead；分清相关、领先、共同风险；逐证券动态画像和滚动失效；底层资产与场内ETF溢价判断分层；wait/no-trade正式结果；完整Evidence封套进入DecisionContext。只写设计验收要求，未声称已编码或有数据验证。
+- 下一步：提交本轮受控修改并触发新CI，核对 `settings.form` 元素是否存在、滚动后NAS按钮是否 hittable；按新run首个XCTest断言修复。若全绿，再进入截图人工验收，不扩展Swift功能。
+
 ## 最新实时检查（2026-10-27 14:38 Asia/Shanghai）
 
 - 当前开发阶段：UI XCTest 失败修复与可用性验收。当前提交 `773608dc93d32ce4041ec5a1a73a1fa2f56c2f2b` 已在本机 `main` 与当时核对的 `origin/main` 对齐；当前工作树因下述 UI 测试修正而 dirty。提交仅用于追溯。
