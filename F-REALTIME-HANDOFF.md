@@ -1,5 +1,14 @@
 # F 实时进度交接
 
+## 2026-10-27 16:16 Asia/Shanghai 实时更新（GitHub Actions run #33）
+
+- 当前本地 HEAD 为这次 UI 滚动修正提交（具体哈希以当前工作树 git rev-parse 为准）；此前成功fetch时远端`main`与本地`60ca553`一致。测试修复已提交，本地普通push多次均遇GitHub 443连接超时，因此本提交尚未送达CI；远端跟踪引用在最后成功fetch时为60ca553。不强推、不覆盖远端。
+- GitHub Actions run #33：`40471342734`，commit `60ca553`，已结束 **Failure**，总耗时8m41s。真实顺序证据：F Swift package tests（48s）、XcodeGen（14s）、Device Build（1m19s）、Simulator Build（42s）均成功，之后 UI XCTest失败。UI测试的第一个真实断言为 `PrimaryNavigationUITests.swift:60`：`nasTestButton.waitForExistence(timeout: 3)`；可访问树确认设置页 `settings.form` 已出现，但 NAS 按钮还没有进入树中。根因是 SwiftUI `Form` 不会在滚动前暴露屏幕外的行，而用例先等待按钮存在才开始滚动；因此上一轮修改仍未解决目标控件发现问题。
+- 已按真实失败原因修改 UI 测试：先调用现有 `scrollUntilHittable(nasTestButton, in: settingsForm)` 逐屏滚动以物化屏幕外行，再分别断言按钮存在和可点击。没有删除/降低任何验收断言。此次改动仍未编译或执行。
+- 本轮FCore测试步骤成功；源树当前定义数仍为121。run #33的Swift测试日志末尾计数尚未提取，所以本handoff不将它写成121 passed；最近有明确数字的证据仍是既有CI 121/121。App UI本轮确实执行并失败；准确通过/失败测试总数未从run summary提取，已确定主导航用例首个失败点如上。
+- Apple CI通道可用且完成了实际编译；当前阻塞在UI自动化断言，不是Apple工具链缺失。本机为Windows，仍不能本地运行Swift/Xcode。
+- 下一步：等待GitHub连接恢复后先fetch核对远端；再普通推送当前本地修正提交触发同一完整workflow；检查FCore、XcodeGen、Device/Simulator Build与全部UI XCTest实际结果。只有CI通过后才以最新附件继续人工截图/交互验收。
+
 ## 最新实时检查（2026-10-27 16:06 Asia/Shanghai，本轮 CI #32 日志已读取）
 
 - 当前实际状态：本机 `main` HEAD 为 `d49748b`（UI Test滚动修复与本交接），工作树更新后待重新核对。修复前最后成功核对的 `origin/main` 为 `de97603b3d090f983076f97823305b6fdfc07164`。本轮普通fetch报 `getaddrinfo() thread failed to start`，提升网络权限fetch报 `Recv failure: Connection was reset`，HTTP/1.1 fetch仍报 `getaddrinfo() thread failed to start`；此前多次push同样失败。GitHub Actions页面仍显示最新为run #32，因此修复尚未送达，未触发新CI；未强推或改写远端。commit仅作追溯。
@@ -160,17 +169,17 @@ App UI XCTest：定义3项，日志确认 **3 executed / 2 passed / 1 failed**�
 
 F_CURRENT_STATUS_BEGIN
 
-当前开发阶段：可用性验收 + 真实链路联调 + 缺口收口
-当前正在开发：Advisor scope误路由修正；读取NAS v5后查实时采集ServiceError具体原因；Apple验证网络恢复等待
-刚刚完成：定位状态页无限读取的JavaScript语法错误并修复；定位实时worker只返回错误类型的问题并增加短错误原因；NAS v5包已含runtime和HTML
-未提交工作：5个路径（`GuanpanFApp/Sources/GuanpanFApp.swift`、`nas/fminute/dashboard.html`、`nas/fminute/runtime.py`、本交接、`F-STATUS.md`）；本地HEAD `820fffb`另有1个尚未推送提交
-iOS完成度：dirty Advisor Swift未编译/未测；最近远端run对旧HEAD完成FCore/工程生成/Device/Simulator Build，UI Test 2/3通过；人工视觉未完成
-AI顾问完成度：Portfolio/Security链路已编码；已修正scope优先级但未编译/测试；真实DeepSeek端到端未验证
-统一图表完成度：当前/历史分钟和日K共用renderer，价格范围回归在121项FCore中通过；交互、真实数据、横屏/多尺寸未完成验收
-NAS历史数据完成度：159866当天上午有120/240条真实腾讯分钟、状态Partial；另有历史补采队列846、最新报告3重排/0完成并有RemoteDisconnected；无 iOS→Evidence E2E证据
-Apple编译验证：本机无Apple工具链；本轮fetch 5次、push 3次均为 `getaddrinfo() thread failed to start`，无新CI；用户观察远端仍为4d258f1，本地820fffb未推送
-当前测试：FCore定义121/执行121/通过121/失败0（最近远端旧提交run）；App UI定义3/执行3/通过2/失败1；本轮dirty Swift无编译/执行结果。Python/NAS `test_minute_runtime`最新2/2通过、`py_compile`通过；历史分钟针对性4/4通过；archive+runtime之前Windows全量46执行、36通过、0失败、10错误，备份硬链接与测试文件锁待Linux复验。
-最大缺口：NAS六证券实时采集ServiceError仍缺具体原因（待v5部署读错误）；历史分钟补采上游断连且现有日数据Partial；dirty Swift未送Apple CI
-下一步：部署NAS v5读取并修复实时错误原因；网络通道恢复后fetch比对远端并普通推送验证Swift；继续NAS历史分钟Linux复验和iOS真实消费链验证
+当前开发阶段：可用性验收 → 修UI XCTest → 全流程Apple CI
+当前正在开发：设置页NAS测试按钮滚动导航修复已提交，等待推送
+刚刚完成：run #33真实执行Swift测试步骤、XcodeGen、Device Build、Simulator Build；首个UI失败根因是屏幕外Form行未进可访问树时就先等待存在；修复改为先滚动再检查
+未提交工作：仅F-REALTIME-HANDOFF.md更新；修正代码在本地提交e46814d
+iOS完成度：run #33 Device与Simulator均构建成功；UI自动化失败；无本轮人工视觉验收
+AI顾问完成度：已有代码；Portfolio/Security真实NAS/DeepSeek端到端未验证
+统一图表完成度：统一renderer通过既有编译；真实行情、完整交互/横屏人工验收未完成
+NAS历史数据完成度：服务Ready与实时分钟归档曾有证据；历史补采有断连/空响应，iOS指定日→Research Evidence未E2E
+Apple编译验证：run #33 F Swift package test步骤成功（精确计数未提取），XcodeGen/Device Build/Simulator Build成功；UI主导航检查失败。Windows本机无Xcode
+当前测试：FCore定义121；run #33测试步骤成功但执行汇总数字未提取；最近精确数字仍为121/121。UI Test本轮失败，完整suite计数未提取。Python/NAS维持最近已记录结果
+最大缺口：UI XCTest仍未通过；最新Simulator截图无人工检查；NAS历史分钟iOS消费和DeepSeek成交闭环未端到端
+下一步：GitHub连接恢复后先fetch，再普通推送e46814d并重跑全流程；CI通过后马上核对最新Simulator截图和交互
 
 F_CURRENT_STATUS_END

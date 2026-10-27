@@ -57,16 +57,10 @@ final class PrimaryNavigationUITests: XCTestCase {
             XCTFail("Settings Form must be exposed as the identified scroll container.\n\(app.debugDescription)")
             return
         }
-        XCTAssertTrue(nasTestButton.waitForExistence(timeout: 3), app.debugDescription)
-        for _ in 0..<8 where !nasTestButton.isHittable {
-            let formFrame = settingsForm.frame
-            let buttonFrame = nasTestButton.frame
-            if buttonFrame.maxY < formFrame.minY {
-                settingsForm.swipeDown(velocity: .slow)
-            } else {
-                settingsForm.swipeUp(velocity: .slow)
-            }
-        }
+        // SwiftUI Form does not expose off-screen rows until scrolling brings
+        // them into the accessibility tree. Use the shared scroll helper first.
+        scrollUntilHittable(nasTestButton, in: settingsForm)
+        XCTAssertTrue(nasTestButton.exists, app.debugDescription)
         XCTAssertTrue(nasTestButton.isHittable, app.debugDescription)
         attachScreenshot("08-settings", app: app)
     }
