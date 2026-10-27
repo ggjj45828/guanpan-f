@@ -51,7 +51,12 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.secureTextFields["settings.ai.deepseekKey"].exists)
-        XCTAssertTrue(app.buttons["settings.nas.test"].exists)
+        let nasTestButton = app.buttons["settings.nas.test"]
+        for _ in 0..<8 {
+            if nasTestButton.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(nasTestButton.isHittable, app.debugDescription)
         attachScreenshot("08-settings", app: app)
     }
 

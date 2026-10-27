@@ -1,5 +1,12 @@
 # F 云端开发状态
 
+## 最新实时状态（2026-10-27 14:38 Asia/Shanghai）
+
+- 当前分支 `main`，最近提交 `773608d`；工作树现在有一项未提交 UI XCTest 修改。Git提交只作追溯。
+- 最新 Apple CI run `40460442070`：FCore **121/121 executed / passed / 0 failed**；XcodeGen、Device Build、Simulator Build成功；UI XCTest **3 executed / 2 passed / 1 failed**。
+- 失败断言在设置页进入后立即查找滚动表单下方的NAS测试按钮。DeepSeek输入框已可发现；已将UI检查改为先滚动到NAS按钮，再验证按钮可点击。新修改仍未编译/执行，等待Apple CI。当前不是CI整体不可用。
+- 本机无Swift/Xcode/XcodeGen。Simulator自动测试已运行，但本轮截图图像未人工审阅；不能将自动启动或截图导出写成人工视觉通过。真实NAS仅有已证实的当日分钟归档；历史分钟、DeepSeek及AI确认成交闭环尚未端到端通过。
+
 ## 实时工作树状态（2026-10-27；覆盖下方历史快照）
 
 ### 本轮后续实况

@@ -1,5 +1,15 @@
 # F 实时进度交接
 
+## 最新实时检查（2026-10-27 14:38 Asia/Shanghai）
+
+- 当前开发阶段：UI XCTest 失败修复与可用性验收。当前提交 `773608dc93d32ce4041ec5a1a73a1fa2f56c2f2b` 已在本机 `main` 与当时核对的 `origin/main` 对齐；当前工作树因下述 UI 测试修正而 dirty。提交仅用于追溯。
+- GitHub Actions run `40460442070`（commit `773608d`）已真实完成：FCore **121/121 executed, 121 passed, 0 failed**；XcodeGen成功；iOS Device Build成功；iOS Simulator Build成功；App UI XCTest **3 executed, 2 passed, 1 failed**。
+- 唯一失败是 `PrimaryNavigationUITests.swift:54`：设置页进入后，测试立即查询 `settings.nas.test` 是否存在。日志证明 DeepSeek Key 字段查询成功，NAS按钮查询失败；源码将NAS连接放在同一滚动式 `Form` 的后续区段。原断言在没有滚到该区段前查询，不能证明按钮缺失或页面功能失效。现调整测试为滚动到NAS按钮并断言其可点击；没有删除断言或降低标准。此修改尚未Apple编译/执行，需新CI确认表单滚动与控件命中。
+- 当前新增未验证修改：仅 `GuanpanFApp/UITests/PrimaryNavigationUITests.swift` 的真实滚动/可点击性检查；产品Swift源码没有新增修改。Windows仍无 Swift/Xcode/XcodeGen，不能本地编译。
+- CI确实启动Simulator并运行了UI测试、导出31个附件；当前没有读到截图图像本体，也没有新的人工截图/手势验收。UI Test通过前不宣称Simulator人工验收完成。
+- 当前最重要的缺口：①新UI测试尚未送入Apple CI；②Simulator截图仍未人工检查；③历史分钟指定日期仍有empty source response/队列积压，NAS→iOS→Research Evidence尚未端到端验证；④DeepSeek真实服务与Candidate→用户确认成交→Ledger→重新判断尚未E2E；⑤横屏及图表拖动/缩放/状态恢复尚未Simulator实测。
+- 下一步：提交并推送这项UI测试修正触发全量CI；若通过，立即审阅CI截图并做Simulator可用性验收；然后继续NAS历史分钟到iOS/Advisor链路。若失败，按首个真实断言修产品或测试交互根因。
+
 更新时间：2026-10-27（Asia/Shanghai，本轮补记）
 
 > 本交接以当前 F 工作树和本轮实际可见的 Actions 证据为准。Git commit 仅供追溯，不定义 F 当前状态。以下旧交接全文已由本快照替换，避免旧状态继续覆盖实时结果。
