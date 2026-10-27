@@ -1,5 +1,24 @@
 # F 云端开发状态
 
+## 实时工作树状态（2026-10-27；覆盖下方历史快照）
+
+### 本轮后续实况
+
+- 增加 NAS 同源只读网页 `http://NAS地址:8788/`：显示真实 readyz/worker/日历与指定证券交易日的分钟覆盖、来源、诊断和价格图。用户已在NAS实开并确认 Ready/HTTP200、archive OK、backfill Degraded(3项重排/队列846/RemoteDisconnected)、日历等待官方公告；修正实时worker缺字段被页面默认成0的问题。v2部署包已构建且确认HTML入包，但v2尚未部署。
+- 用户提交的 `159866/CN/2026-10-27` NAS 指定日响应含120条真实腾讯分钟记录（北京时间09:31–11:30），状态Partial，240个预期点中缺120；这证明单证券上午数据已归档/可查询，不代表全日、其他证券或iOS/Advisor链路完成。
+- 修正 `nas/fminute/archive.py` 的 SQLite 连接生命周期：`_connect()` 事务完成后显式关闭；备份/恢复临时文件用读写句柄执行 `fsync`。NAS定向测试最新4/4通过，Python `py_compile` 与 `git diff --check`通过。
+- 更广的分钟归档/runtime测试曾在受限Windows执行为46 executed / 36 passed / 0 failed / 10 errors；主要受备份原子硬链接权限及测试直接打开SQLite连接未关闭造成的Windows锁影响。完整NAS套件尚待Linux CI复跑，不计全套通过。
+- 本地没有Swift/Xcode/XcodeGen，当前dirty Swift未编译；未取得新的Apple CI结果或远端同步确认。
+
+> run `40343237878` / job `121643239252` 已执行至 `Run F app navigation UI tests`：按workflow顺序，之前FCore XCTest、XcodeGen、iOS Device Build和Simulator Build步骤成功；当前121项FCore测试121/121通过。App UI定义3项；已确认 `testFivePrimaryDestinationsAreDistinctAndDiscoverable` 执行并失败，Annotations只有exit code 65，精确断言未取得。本机无Swift/Xcode/XcodeGen；dirty Swift未被该run编译。详见F-REALTIME-HANDOFF.md。
+
+- 当前源码状态在工作树 `main` / HEAD `4d258f199c7575f84251154b8929c30fba271508`；本地有未提交修改，详见 `F-REALTIME-HANDOFF.md`。不要将下方较早的CLEAN/CI状态视为当前状态。
+- 最新远端CI是 run `40343237878`：FCore 121/121、XcodeGen、Device Build、Simulator Build成功；UI导航测试失败，首个断言未取得。该run针对已提交HEAD，不覆盖dirty Swift改动。本机无 Swift、Xcode、XcodeGen。
+- 最新 Swift 源码修正：明确组合/多持仓问题优先 Portfolio scope；详情证券码仅作默认值；单证券“持仓成本”等问题不会仅因出现“持仓”字样而误分类。尚未编译或测试。FCore最近可复核历史为121/121，UI为3/3，但这些数字不能覆盖本次改动。
+- 当前任务队列：取得UI失败行并定点修复；将dirty Advisor scope Swift改动送CI；继续静态查Ledger/现金/Episode、统一图表与NAS质量边界。
+- iOS Actions workflow 已静态确认：push到`main`且触及`GuanpanFApp/**`时会跑Swift package tests、XcodeGen、Device/Simulator Build和UI Test；本轮fetch失败，因此未push且没有新的编译run/失败日志。
+- 当前本地没有重放Python全套或Apple验证。此前局部NAS runtime测试2/2通过；当前远端run完成Simulator Build并运行UI XCTest，未有人手工操作Simulator或确认本次截图。
+
 ## CI续记（2026-10-26 19:43 Asia/Shanghai；覆盖下方旧状态）
 
 - 最新已推送 `016a1a3`，run `40315965909` 全成功：FCore 121/121；XcodeGen、Device/Simulator Build、UI XCTest 3/3、截图导出和未签名IPA均成功。

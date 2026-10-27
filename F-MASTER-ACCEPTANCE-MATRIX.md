@@ -1,5 +1,15 @@
 # F Master Acceptance Matrix
 
+## 实时状态覆盖（2026-10-26；以下旧快照保留作历史）
+
+> 2026-10-27 Actions run `40343237878` 对已提交HEAD完成FCore 121/121、工程生成、Device/Simulator Build；UI主导航用例失败，具体断言日志未取得。本机仍无Xcode且fetch/push受网络限制；当前dirty Swift修改未编译。远端CI曾成功执行，不能称CI整体不可用。
+
+- 当前 F 工作树：`main` / `4d258f199c7575f84251154b8929c30fba271508`，不以该 commit 代替实时源码状态。当前工作树有未提交改动；明细以 `F-REALTIME-HANDOFF.md` 为准。
+- Apple CI：最新可见run `40343237878` 对已提交源码执行FCore 121/121、XcodeGen、Device/Simulator Build；App UI测试失败。Annotation仅给出exit code 65，精确断言待原始日志。当前工作树dirty Swift代码不在该run中。
+- 本地无 Swift/Xcode/XcodeGen。当前工作树最新 Swift 改动是 Advisor 组合意图优先修正，尚未编译/执行；不得记为通过。当前 NAS/Python改动也没有本轮新测试结果。
+- A/B/F追踪表现已补充逐项核验字段。145条的源码/测试位置是按F验收映射给出的候选锚点，仍需逐条确认；A源码当前不可读，B状态不继承，所有F条目仍不得据此宣称通过。
+- 本轮静态复核：真实Ledger流水重放/episode保留、候选与真实写账边界、统一图表renderer接线未发现已确认的架构性违规；图表交互/旋转、实时数据质量、AI/NAS/DeepSeek端到端仍未通过运行验收。
+
 ## CI续记（2026-10-26 19:43 Asia/Shanghai；覆盖较早运行快照）
 
 - run `40315965909` / `016a1a3`：FCore 121/121、XcodeGen、Device/Simulator Build、App UI 3/3、截图导出和IPA均通过。

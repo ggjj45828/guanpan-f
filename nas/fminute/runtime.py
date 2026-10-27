@@ -24,6 +24,29 @@ def calendar_sync_due(now: datetime, last_month: tuple[int, int] | None,
             (retry_at is not None and now >= retry_at))
 
 
+def summarize_backfill_cycle(results: list[dict], queue_depth: int) -> dict:
+    """Report task outcomes, not just whether the worker loop raised an exception."""
+    completed = [row for row in results if row.get("queueStatus") == "complete"]
+    requeued = [row for row in results if row.get("queueStatus") != "complete"]
+    failures = []
+    for row in requeued:
+        report = row.get("report") or {}
+        failures.append({
+            "securityCode": row.get("securityCode"),
+            "tradingDate": row.get("tradingDate"),
+            "attempts": row.get("attempts"),
+            "reason": report.get("reason") or report.get("result") or "incomplete",
+        })
+    return {
+        "status": "idle" if not results else ("degraded" if requeued else "ok"),
+        "processed": len(results),
+        "completed": len(completed),
+        "requeued": len(requeued),
+        "queueDepth": queue_depth,
+        "lastFailures": failures[-3:],
+    }
+
+
 def _configured_securities() -> tuple[str, ...]:
     raw = os.environ.get("F_MINUTE_SECURITIES", "")
     values = tuple(item.strip() for item in raw.split(",") if item.strip())
@@ -87,9 +110,10 @@ class MinuteRuntimeWorker:
             started = datetime.now(timezone.utc)
             try:
                 results = self.service.run_backfill_batch(limit=3)
-                self.last_backfill_cycle = {"status": "ok", "at": started.isoformat(),
-                                            "processed": len(results),
-                                            "queueDepth": self.service.queue_count()}
+                self.last_backfill_cycle = {
+                    **summarize_backfill_cycle(results, self.service.queue_count()),
+                    "at": started.isoformat(),
+                }
             except Exception as exc:
                 self.last_backfill_cycle = {"status": "degraded", "at": started.isoformat(),
                                             "error": type(exc).__name__}

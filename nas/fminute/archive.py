@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Iterable, Protocol, Sequence
+from typing import Iterable, Iterator, Protocol, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import json
 import math
@@ -13,6 +13,7 @@ import os
 import shutil
 import sqlite3
 import tempfile
+from contextlib import contextmanager
 
 SCHEMA_VERSION = 1
 
@@ -193,10 +194,21 @@ class MinuteArchive:
         if version < SCHEMA_VERSION or str(version) != raw_version:
             raise ArchiveError("archive migration required; refusing implicit downgrade")
 
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=30, isolation_level="IMMEDIATE")
+    @staticmethod
+    def _open_connection(path: Path) -> sqlite3.Connection:
+        db = sqlite3.connect(path, timeout=30, isolation_level="IMMEDIATE")
         db.row_factory = sqlite3.Row
         return db
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Open a transaction-scoped connection and always release its file handle."""
+        db = self._open_connection(self.path)
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _iso(value: datetime) -> str:
@@ -381,6 +393,13 @@ class MinuteArchive:
             used_sources = []
             final_coverage = None
             for provider in providers:
+                # Do not invoke a current-session-only endpoint for finalized
+                # sessions. Besides wasting retries, its expected rejection can
+                # overwrite the useful failure from the historical provider.
+                if (getattr(provider, "current_session_only", False) and
+                        session.trading_date != fetched_at.astimezone(
+                            ZoneInfo(session.timezone_name)).date()):
+                    continue
                 try:
                     rows = provider.fetch(security_code, market, session.trading_date)
                     if not rows:
@@ -403,7 +422,7 @@ class MinuteArchive:
                     last_error = type(exc).__name__ + ": " + str(exc)
             if final_coverage is None:
                 reports.append({"tradingDate": session.trading_date.isoformat(), "result": "unavailable",
-                                "source": None, "reason": last_error or "no providers configured"})
+                                "source": None, "reason": last_error or "no historical-capable providers configured"})
             else:
                 inserted = self.query_day(security_code, market, session.trading_date)
                 reports.append({"tradingDate": session.trading_date.isoformat(),
@@ -532,7 +551,7 @@ class MinuteArchive:
                                                dir=destination.parent)
         os.close(fd)
         temporary = Path(temporary_name)
-        source = self._connect()
+        source = self._open_connection(self.path)
         target = sqlite3.connect(temporary)
         try:
             source.backup(target)
@@ -540,7 +559,7 @@ class MinuteArchive:
             target.commit()
             target.close()
             target = None
-            with temporary.open("rb") as stream:
+            with temporary.open("r+b") as stream:
                 os.fsync(stream.fileno())
             # Publish without replacing a prior backup. The temporary is in
             # the same directory, so the hard link is an atomic no-clobber move.
@@ -581,7 +600,7 @@ class MinuteArchive:
             target.commit()
             target.close()
             target = None
-            with temporary.open("rb") as stream:
+            with temporary.open("r+b") as stream:
                 os.fsync(stream.fileno())
             # Hard-link publication is atomic and fails if the destination already exists.
             os.link(temporary, destination)

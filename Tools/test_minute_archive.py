@@ -263,6 +263,17 @@ class MinuteArchiveTests(unittest.TestCase):
         self.assertEqual(bad.calls, 1)
         self.assertEqual(good.calls, 1)
 
+    def test_backfill_skips_current_only_provider_for_historical_session(self):
+        history = Provider("history", error=OSError("history source unavailable"))
+        current_only = Provider("current", error=ValueError("current session only"))
+        current_only.current_session_only = True
+        result = self.archive.backfill("159352", "CN", [self.session],
+                                       [history, current_only], fetched_at=self.now)
+        self.assertEqual(result[0]["result"], "unavailable")
+        self.assertEqual(result[0]["reason"], "OSError: history source unavailable")
+        self.assertEqual(history.calls, 1)
+        self.assertEqual(current_only.calls, 0)
+
     def test_backfill_rejects_out_of_session_rows_before_writing_and_falls_back(self):
         invalid_rows = bars(self.session, source="invalid-provider")
         invalid_rows.append(replace(

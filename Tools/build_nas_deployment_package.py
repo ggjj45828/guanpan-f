@@ -30,7 +30,9 @@ def build_package(destination: Path) -> Path:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
 
-        for source in (ROOT / "nas" / "fminute").glob("*.py"):
+        package_sources = [*(ROOT / "nas" / "fminute").glob("*.py"),
+                           *(ROOT / "nas" / "fminute").glob("*.html")]
+        for source in package_sources:
             target = stage / "nas" / "fminute" / source.name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
@@ -54,7 +56,7 @@ def build_package(destination: Path) -> Path:
 2. 复制 `.env.example` 为 `.env`，将 `F_MINUTE_SECURITIES` 改成真实持仓/自选证券代码。服务不校验 API token；所有能访问 8788 的设备都能读取数据并提交补采请求，因此请将端口限制在可信家庭网络，不要直接暴露到公网。
 3. 默认数据目录为项目内 `./data`，会持久保存在解压目录。启动脚本会把挂载目录及属主不匹配的顶层数据文件调整为服务UID 10001，然后降权运行；该操作保留数据内容。若 NAS 使用不允许容器修改属主的 NFS/root-squash 或只读目录，服务会明确报权限错误，需要改用可写本地目录。
 4. 在 NAS 容器管理器创建 Compose 项目，项目来源选择这份解压目录，读取根目录 `compose.yml` 并构建。
-5. 启动后检查 `/livez`、`/readyz` 和 `/api/v1/*`。`/livez` 成功不代表上游历史数据已完整。
+5. 启动后可在浏览器打开 `http://NAS地址:8788/` 查看只读状态页；也可检查 `/livez`、`/readyz` 和 `/api/v1/*`。`/livez` 或 Ready 成功不代表上游历史数据已完整。
 
 命令行部署时，在本目录执行：
 

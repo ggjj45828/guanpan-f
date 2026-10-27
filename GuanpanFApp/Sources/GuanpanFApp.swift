@@ -266,8 +266,11 @@ final class FHomeModel: ObservableObject {
         }
         let normalizedQuestion = text.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "").lowercased()
-        let portfolioPhrases = ["我的持仓", "全部持仓", "所有持仓", "整个组合", "我的组合", "组合今天", "组合需要", "组合怎么样", "现金", "资金", "总资产", "总仓位", "配置", "买什么", "怎么配"]
-        let portfolioIntent = normalizedQuestion.contains("组合") || normalizedQuestion.contains("持仓") ||
+        let portfolioPhrases = ["我的持仓", "全部持仓", "所有持仓", "当前持仓", "整体持仓",
+                                "持仓需要", "持仓怎么样", "持仓要不要", "持仓是否", "持仓情况", "持仓调整", "持仓操作",
+                                "整个组合", "我的组合", "组合今天", "组合需要", "组合怎么样",
+                                "现金", "资金", "总资产", "总仓位", "配置", "买什么", "怎么配"]
+        let portfolioIntent = normalizedQuestion.contains("组合") ||
             portfolioPhrases.contains(where: normalizedQuestion.contains)
         let numericCodes = text.components(separatedBy: CharacterSet(charactersIn: "0123456789").inverted)
             .filter { $0.count == 6 }
@@ -282,8 +285,11 @@ final class FHomeModel: ObservableObject {
                 .replacingOccurrences(of: "　", with: "").lowercased()
             return !name.isEmpty && normalizedQuestion.contains(name)
         }
-        let focusCode = requestedCode ?? (portfolioIntent ? nil :
-            (unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode))
+        // The wording of the question owns the advisor scope. A detail-screen
+        // caller may supply its current instrument as a default, but that must
+        // not silently turn an explicit portfolio question into a single-name one.
+        let focusCode = portfolioIntent ? nil :
+            (requestedCode ?? unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode)
         if let focusCode,
            (focusCode.count != 6 || !focusCode.allSatisfy(\.isNumber)) {
             advisorStatus = FAdvisorLiveError.invalidInstrument.localizedDescription

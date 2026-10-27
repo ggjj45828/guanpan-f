@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>观盘 F · NAS 分时档案</title>
+  <style>
+    :root { color-scheme: light dark; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { margin: 0 auto; padding: 24px 16px 48px; max-width: 1040px; background: Canvas; color: CanvasText; }
+    header, .row, .toolbar, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    h1 { margin: 0; font-size: 1.45rem; } h2 { margin: 0; font-size: 1.05rem; }
+    .subtle, small { color: GrayText; }
+    .warning { margin: 18px 0; padding: 12px 14px; border: 1px solid #d9a441; border-radius: 10px; background: color-mix(in srgb, #d9a441 12%, Canvas); }
+    section { margin: 16px 0; padding: 16px; border: 1px solid color-mix(in srgb, CanvasText 16%, Canvas); border-radius: 14px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+    .card { padding: 12px; border-radius: 10px; background: color-mix(in srgb, CanvasText 5%, Canvas); overflow-wrap: anywhere; }
+    .label { color: GrayText; font-size: .83rem; } .value { margin-top: 4px; font-weight: 650; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, GrayText 20%, Canvas); font-size: .83rem; }
+    .complete, .ready { color: #16833d; } .partial, .degraded, .not_ready { color: #b87900; }
+    .missing, .stale, .error { color: #c43b3b; }
+    .toolbar { justify-content: flex-start; flex-wrap: wrap; margin-top: 12px; }
+    label { display: grid; gap: 4px; color: GrayText; font-size: .82rem; }
+    input, select, button { min-height: 40px; padding: 7px 10px; border: 1px solid color-mix(in srgb, CanvasText 22%, Canvas); border-radius: 8px; font: inherit; color: CanvasText; background: Canvas; }
+    button { cursor: pointer; font-weight: 650; background: color-mix(in srgb, #2878d0 14%, Canvas); }
+    button:disabled { opacity: .55; cursor: wait; }
+    pre { max-height: 240px; overflow: auto; padding: 12px; border-radius: 8px; background: color-mix(in srgb, CanvasText 6%, Canvas); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .chart { width: 100%; height: 220px; margin-top: 14px; border-radius: 8px; background: color-mix(in srgb, CanvasText 4%, Canvas); }
+    .chart polyline { fill: none; stroke: #2878d0; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+    .chart line { stroke: color-mix(in srgb, CanvasText 18%, Canvas); stroke-dasharray: 4 5; }
+    .table-wrap { max-height: 320px; overflow: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: 7px 9px; border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, Canvas); text-align: left; }
+    th { position: sticky; top: 0; background: Canvas; color: GrayText; }
+    .empty { padding: 20px 0; color: GrayText; }
+    @media (max-width: 560px) { body { padding: 16px 10px 32px; } section { padding: 12px; } header { align-items: flex-start; } .chart { height: 180px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>观盘 F · NAS 分时档案</h1><div class="subtle">只读查看归档、覆盖状态和真实来源</div></div>
+    <button id="refreshHealth" type="button">刷新服务状态</button>
+  </header>
+  <div class="warning"><strong>网络访问提示：</strong>此 NAS API 当前没有登录认证。请只在可信家庭网络/VPN中使用，不要把 8788 端口直接暴露到公网。Ready 只代表服务可响应，不代表分钟数据完整。</div>
+
+  <section aria-labelledby="healthTitle">
+    <div class="section-title"><h2 id="healthTitle">服务与采集状态</h2><span id="healthUpdated" class="subtle">尚未读取</span></div>
+    <div id="healthCards" class="cards"><div class="empty">正在读取 /readyz…</div></div>
+    <details><summary>查看原始状态与错误信息</summary><pre id="healthRaw">等待读取</pre></details>
+  </section>
+
+  <section aria-labelledby="historyTitle">
+    <h2 id="historyTitle">证券分钟数据</h2>
+    <div class="toolbar">
+      <label>证券代码<input id="securityCode" inputmode="numeric" maxlength="6" placeholder="例如 159866"></label>
+      <label>市场<select id="market"><option value="CN">CN</option></select></label>
+      <label>交易日<input id="tradingDate" type="date"></label>
+      <button id="queryDay" type="button">查询指定日</button>
+    </div>
+    <div id="queryStatus" class="empty">输入证券代码和交易日后查询。不会生成或填补缺失分钟。</div>
+    <div id="historySummary"></div>
+    <svg id="priceChart" class="chart" viewBox="0 0 1000 220" role="img" aria-label="所选交易日实际归档的分钟价格"></svg>
+    <div id="minuteTable" class="table-wrap"></div>
+    <details><summary>查看该证券的归档诊断</summary><pre id="diagnosticsRaw">尚未查询</pre></details>
+  </section>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+    const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+    const statusLabel = value => ({complete:"Complete · 完整",partial:"Partial · 部分",missing:"Missing · 缺失",stale:"Stale · 过期",ready:"Ready · 服务可用",not_ready:"Not ready · 服务未就绪",degraded:"Degraded · 有失败",idle:"Idle · 当前空闲",ok:"OK",alive:"Alive · 进程存活",waiting_for_official_notice:"等待官方日历公告"}[value] || value || "Unavailable · 不可用");
+    const statusClass = value => ["complete","partial","missing","stale","ready","not_ready","degraded","idle","error"].includes(value) ? value : "";
+    async function getJSON(url) {
+      const response = await fetch(url, {cache:"no-store"});
+      const payload = await response.json();
+      if (!response.ok && !payload) throw new Error(`HTTP ${response.status}`);
+      return {response, payload};
+    }
+    function card(label, value, cls="") {
+      return `<div class="card"><div class="label">${escapeHTML(label)}</div><div class="value ${statusClass(cls)}">${escapeHTML(value)}</div></div>`;
+    }
+    function workerCard(title, worker={}) {
+      const status = worker.status || "not_configured";
+      const details = [];
+      if (Number.isInteger(worker.processed)) details.push(`处理 ${worker.processed}`);
+      if (Number.isInteger(worker.completed)) details.push(`完成 ${worker.completed}`);
+      if (Number.isInteger(worker.requeued)) details.push(`重排 ${worker.requeued}`);
+      if (Number.isInteger(worker.queueDepth)) details.push(`队列 ${worker.queueDepth}`);
+      if (worker.at) details.push(`周期 ${worker.at}`);
+      const results = Array.isArray(worker.realtimeResults) ? worker.realtimeResults.map(row => {
+        const outcome = row.error || row.result || row.status || (row.inserted != null ? `写入${row.inserted}条` : "有结果");
+        return `${row.securityCode || row.market || "采集"}：${outcome}`;
+      }).join("；") : "";
+      const errors = Array.isArray(worker.errors) ? worker.errors.join("；") : (worker.error || "");
+      const failures = (worker.lastFailures || []).map(item => `${item.securityCode || ""} ${item.tradingDate || ""}: ${item.reason || "失败"}`).join("；");
+      const notes = [details.join(" · "), results ? `本轮结果：${results}` : (Array.isArray(worker.realtimeResults) ? "本轮无采集结果" : ""),
+        errors ? `错误：${errors}` : "", failures ? `最近失败：${failures}` : ""].filter(Boolean).join(" · ");
+      return card(title, `${statusLabel(status)}${notes ? " · " + notes : ""}`, status);
+    }
+    async function refreshHealth() {
+      $("healthCards").innerHTML = '<div class="empty">正在读取 /readyz…</div>';
+      try {
+        const {response, payload} = await getJSON("/readyz");
+        const markets = Array.isArray(payload.configuredMarkets) ? payload.configuredMarkets : [];
+        if (markets.length) $("market").innerHTML = markets.map(m => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join("");
+        const calendarText = markets.map(m => `${m}: ${payload.calendar?.[m]?.supportedYears?.join(", ") || "无可用年份"}`).join("；") || "未配置市场";
+        const providers = markets.flatMap(m => payload.providerNames?.[m] || []).join("；") || "无已配置来源";
+        $("healthCards").innerHTML = [
+          card("服务状态", `${statusLabel(payload.status)} · HTTP ${response.status}`, payload.status),
+          card("归档数据库", statusLabel(payload.archive), payload.archive),
+          card("市场日历", calendarText, payload.calendarErrors && Object.keys(payload.calendarErrors).length ? "degraded" : ""),
+          card("分钟来源", providers),
+          workerCard("实时采集 worker", payload.realtimeWorker),
+          workerCard("历史补采 worker", payload.backfillWorker),
+          card("日历同步", `${statusLabel(payload.calendarSync?.status)}${payload.calendarSync?.error ? " · " + payload.calendarSync.error : ""}`, payload.calendarSync?.status)
+        ].join("");
+        $("healthRaw").textContent = JSON.stringify(payload, null, 2);
+        $("healthUpdated").textContent = `更新于 ${new Date().toLocaleString()}`;
+      } catch (error) {
+        $("healthCards").innerHTML = `<div class="empty error">读取 /readyz 失败：${escapeHTML(error.message)}。请确认本机能访问 NAS 地址。</div>`;
+        $("healthRaw").textContent = String(error);
+      }
+    }
+    function drawPrices(bars) {
+      const svg = $("priceChart");
+      svg.replaceChildren();
+      if (!bars.length) { svg.setAttribute("aria-label", "没有实际分钟点，未绘制曲线"); return; }
+      const values = bars.map(row => Number(row.price)).filter(Number.isFinite);
+      if (!values.length) return;
+      let low = Math.min(...values), high = Math.max(...values);
+      if (low === high) { low -= Math.max(Math.abs(low) * 0.002, 0.001); high += Math.max(Math.abs(high) * 0.002, 0.001); }
+      const points = bars.map((row, index) => `${(index / Math.max(1,bars.length-1))*980+10},${205-((Number(row.price)-low)/(high-low))*190}`).join(" ");
+      const axis = document.createElementNS("http://www.w3.org/2000/svg", "line"); axis.setAttribute("x1","10"); axis.setAttribute("x2","990"); axis.setAttribute("y1","205"); axis.setAttribute("y2","205"); svg.append(axis);
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); line.setAttribute("points", points); svg.append(line);
+      svg.setAttribute("aria-label", `实际归档分钟价格，${bars.length}个点，最低${low}，最高${high}`);
+    }
+    async function queryDay() {
+      const code = $("securityCode").value.trim(), market = $("market").value, day = $("tradingDate").value;
+      if (!/^\d{6}$/.test(code) || !day) { $("queryStatus").textContent = "请输入6位证券代码并选择交易日。"; return; }
+      const button = $("queryDay"); button.disabled = true;
+      $("queryStatus").textContent = "正在查询 NAS…"; $("historySummary").replaceChildren(); $("minuteTable").replaceChildren(); drawPrices([]);
+      const base = `/api/v1/minute-history?securityCode=${encodeURIComponent(code)}&market=${encodeURIComponent(market)}&tradingDate=${encodeURIComponent(day)}`;
+      const diag = `/api/v1/minute-history/diagnostics?securityCode=${encodeURIComponent(code)}&market=${encodeURIComponent(market)}&startDate=${encodeURIComponent(day)}&endDate=${encodeURIComponent(day)}`;
+      try {
+        const [historyResult, diagResult] = await Promise.all([getJSON(base), getJSON(diag)]);
+        const data = historyResult.payload, bars = Array.isArray(data.bars) ? data.bars : [], coverage = data.coverage || {};
+        $("queryStatus").innerHTML = `<span class="badge ${statusClass(data.status)}">${escapeHTML(statusLabel(data.status))}</span>　${bars.length} 条实际分钟记录`;
+        $("historySummary").innerHTML = `<div class="cards">${card("证券 / 日期", `${data.securityCode || code} · ${data.tradingDate || day}`)}${card("覆盖", `${coverage.observedCount ?? bars.length} / ${coverage.expectedCount ?? "未知"} 分钟`, data.status)}${card("首末时间", bars.length ? `${bars[0].timestamp} → ${bars[bars.length-1].timestamp}` : "无分钟点")}${card("来源", [...new Set(bars.map(row => row.source).filter(Boolean))].join("；") || "无来源记录")}${card("最近采集", bars.at(-1)?.fetchedAt || "无采集记录")}${card("质量门", coverage.qualityPassed === true ? "已有点通过质量检查" : coverage.qualityPassed === false ? "质量门未通过" : "未提供")}</div>`;
+        drawPrices(bars);
+        const shown = bars.slice(-12).reverse();
+        $("minuteTable").innerHTML = shown.length ? `<table><thead><tr><th>时间</th><th>价格</th><th>分钟量</th><th>累计量</th><th>来源</th></tr></thead><tbody>${shown.map(row => `<tr><td>${escapeHTML(row.timestamp)}</td><td>${escapeHTML(row.price)}</td><td>${escapeHTML(row.minuteVolume ?? "—")}</td><td>${escapeHTML(row.cumulativeVolume ?? "—")}</td><td>${escapeHTML(row.source)}</td></tr>`).join("")}</tbody></table><small>显示最近 ${shown.length} 条；图线按接口返回的全部 ${bars.length} 个真实点绘制。</small>` : '<div class="empty">没有真实分钟点，因此没有绘制曲线。</div>';
+        $("diagnosticsRaw").textContent = JSON.stringify(diagResult.payload, null, 2);
+      } catch (error) {
+        $("queryStatus").innerHTML = `<span class="error">查询失败：${escapeHTML(error.message)}</span>`;
+      } finally { button.disabled = false; }
+    }
+    $("tradingDate").value = localDate();
+    $("refreshHealth").addEventListener("click", refreshHealth);
+    $("queryDay").addEventListener("click", queryDay);
+    refreshHealth();
+  </script>
+</body>
+</html>

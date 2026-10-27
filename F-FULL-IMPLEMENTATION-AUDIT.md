@@ -1,5 +1,16 @@
 # F 全盘未完成功能审计
 
+## 当前审计现场（2026-10-26；历史记录见下方）
+
+> 2026-10-27复查：Actions run `40343237878` 对已提交HEAD执行FCore 121/121、XcodeGen、iOS Device/Simulator Build成功；导航UI测试失败，具体断言日志未取得。当前dirty Swift路由改动无编译/测试证据；本机无Xcode。详见实时交接。
+
+- F 的当前状态由工作树定义：本地 `main` / HEAD `4d258f199c7575f84251154b8929c30fba271508`，且当前存在未提交NAS/Python、Advisor Swift及文档修改。HEAD只用于追溯。
+- 最新Apple CI run `40343237878`：FCore 121/121，XcodeGen、Device Build、Simulator Build通过；App UI导航测试失败，首个断言日志暂不可读。该run不包含当前dirty Swift路由修改；本机没有Swift/Xcode/XcodeGen。
+- B-145逐项表已增加A/B状态、已知问题、F源码/测试锚点、F逐项状态和人工验收字段；锚点是待核候选映射，并非逐项已验证。A源码当前不可读；B工作副本可读但145项尚未逐条和F源码核对，不能继承其状态。
+- 本轮静态核查：清仓移除0份额当前投影但保留fills；历史Episode和累计已实现盈亏从期初快照/成交流水投影；现金重放与余额校验存在。Advisor的组合问题误用详情默认证券码问题已作一处低风险修正，等待编译/测试。
+- 图表静态检查：当前/历史分钟与日K共用 `FUnifiedSecurityChart`；可见纵轴联合主序列、均线、有效overlay及可用IOPV。真实NAS分钟、AI/DeepSeek及交互/横屏仍无当前实网或Simulator验收证据。
+- NAS runtime局部测试2/2曾实际通过；本轮没有执行完整Python/NAS套件。Apple验证证据见上文；dirty Swift改动仍未验证。
+
 ## CI续记（2026-10-26 19:43 Asia/Shanghai；覆盖较早现场）
 
 - run `40315965909` / `016a1a3` 全成功：FCore 121/121、Device/Simulator Build、UI 3/3、截图导出与未签名IPA。

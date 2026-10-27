@@ -606,7 +606,19 @@ struct SettingsOverview: View {
                 Text("主题统一控制页面布局、文字和卡片外观；这里不提供自由文字色盘。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Section("连接状态") {
+            Section("在线 AI") {
+                SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("settings.ai.deepseekKey")
+                Button("安全保存 DeepSeek Key") {
+                    model.saveDeepSeekKey(deepSeekKeyDraft)
+                    deepSeekKeyDraft = ""
+                }
+                .accessibilityIdentifier("settings.ai.saveKey")
+                LabeledContent("状态", value: model.aiKeyStatus)
+            }
+            Section("NAS 连接") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -628,16 +640,6 @@ struct SettingsOverview: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Text("NAS API 不要求单独令牌。连接测试只读取 /readyz，不发送持仓。8788 端口对可达网络开放；远程访问请使用 HTTPS 并限制网络入口。")
                     .font(.footnote).foregroundStyle(.secondary)
-                SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("settings.ai.deepseekKey")
-                Button("安全保存 DeepSeek Key") {
-                    model.saveDeepSeekKey(deepSeekKeyDraft)
-                    deepSeekKeyDraft = ""
-                }
-                .accessibilityIdentifier("settings.ai.saveKey")
-                LabeledContent("在线 AI", value: model.aiKeyStatus)
                 LabeledContent("同步", value: "未连接")
                 LabeledContent("新闻", value: "未接入")
             }

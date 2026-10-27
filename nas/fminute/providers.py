@@ -54,6 +54,7 @@ class TencentCurrentMinuteProvider:
     """Tencent current-session trace; it deliberately refuses historical dates."""
 
     name = "Tencent Finance minute/query (public web endpoint)"
+    current_session_only = True
 
     def __init__(self, *, timeout: float = 12.0, opener=urlopen,
                  clock=lambda: datetime.now(timezone.utc)):

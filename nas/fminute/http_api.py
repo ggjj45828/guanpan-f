@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 import json
@@ -54,6 +55,16 @@ def make_handler(service: MinuteArchiveService):
             self.end_headers()
             self.wfile.write(body)
 
+        def _dashboard(self) -> None:
+            page = Path(__file__).with_name("dashboard.html").read_bytes()
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(page)
+
         def _query(self) -> dict[str, str]:
             parsed = parse_qs(urlparse(self.path).query, keep_blank_values=True, strict_parsing=True)
             if any(len(values) != 1 for values in parsed.values()):
@@ -62,6 +73,9 @@ def make_handler(service: MinuteArchiveService):
 
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
+            if parsed.path in {"/", "/dashboard"}:
+                self._dashboard()
+                return
             if parsed.path == "/livez":
                 self._json(HTTPStatus.OK, {"status": "alive", "service": "f-minute-archive"})
                 return
