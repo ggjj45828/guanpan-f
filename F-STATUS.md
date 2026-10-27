@@ -4,7 +4,12 @@
 
 ### 本轮后续实况
 
-- 增加 NAS 同源只读网页 `http://NAS地址:8788/`：显示真实 readyz/worker/日历与指定证券交易日的分钟覆盖、来源、诊断和价格图。用户已在NAS实开并确认 Ready/HTTP200、archive OK、backfill Degraded(3项重排/队列846/RemoteDisconnected)、日历等待官方公告；修正实时worker缺字段被页面默认成0的问题。v2部署包已构建且确认HTML入包，但v2尚未部署。
+- 用户已部署v6。14:11:49 NAS实时worker OK；六只证券各归档191条并过滤真实供应商返回的13:00午休边界行。该真实NAS结果验证了实时分钟→session过滤→归档→状态页；截至14:11，尚非全天完整或iOS/Advisor E2E。同期历史补采处理3/完成0/重排3/队列846，159352指定历史日失败原因为 `empty source response`；Tencent仅支持当前日，Eastmoney对这些过往日期当前未返回分钟数据。当前配置无法补齐这些日期，不能等同网络故障或断言其他历史源不存在。runtime 4/4、py_compile、diff检查通过。
+- 新增用户跨市场研究假设，追踪在B-116…B-126，尚未编码/验证且不改变当前验收优先级：用条件概率而非只看相关系数，分别评估日经/TOPIX、韩国市场上涨/下跌及共同方向，对A股总体及每只真实持仓证券的非对称后续影响；按跌幅/急跌分桶，考察同期与后续5/15/30/60分钟、上午/下午、市场状态，并提供N、概率、收益分布、置信度、新鲜度、是否有效及20/60/120交易日滚动稳定性。研究设计须预先设定样本/质量门槛、as-of配对并防未来数据泄漏；门槛未达标不得进入DecisionContext，证券敏感度不得从A股整体结果推断。映射权重由历史研究估计。跨市场脉搏展示市场证据，AI今日指导解释其对真实持仓的含义，保持独立职责。
+- 用户v4截图确认页面加载修复后服务Ready/archive OK，但14:04六只证券实时采集均报ServiceError，backfill 3项均重排（队列846，RemoteDisconnected）。修复运行时健康输出以保留具体实时/日历异常原因；runtime测试2/2通过、py_compile通过；v5部署包已打出但未部署，需读原因后继续根因修复。
+- 静态审计修复Advisor标的选择：问题明确证券优先于详情页默认代码；强组合措辞保持Portfolio，宽泛“现金/配置/买什么”只有未指明证券时才路由Portfolio。Swift修改未编译、未执行测试。当前本地提交 `820fffb`，用户看到远端仍为 `4d258f1`；push连续3次DNS线程错误失败；新增Swift修改使工作树dirty，等待连接恢复后并入Apple CI。
+- 用户报告状态页持续加载；Node脚本语法解析定位内嵌JS模板语法错误，已修复并通过语法解析，fetch增加10秒超时。NAS v4部署包已生成；需重新部署后才能验证真实WebView恢复。Advisor另修复按已清仓证券名称无法选中Security scope的问题；该Swift未编译/测试。
+- 增加 NAS 同源只读网页 `http://NAS地址:8788/`：显示真实 readyz/worker/日历与指定证券交易日的分钟覆盖、来源、诊断和价格图。用户已在NAS实开并确认 Ready/HTTP200、archive OK、backfill Degraded(3项重排/队列846/RemoteDisconnected)、日历等待官方公告；修正实时worker缺字段被页面默认成0、分钟UTC时间显示的问题。v3部署包已构建且确认HTML入包，但v3尚未部署。
 - 用户提交的 `159866/CN/2026-10-27` NAS 指定日响应含120条真实腾讯分钟记录（北京时间09:31–11:30），状态Partial，240个预期点中缺120；这证明单证券上午数据已归档/可查询，不代表全日、其他证券或iOS/Advisor链路完成。
 - 修正 `nas/fminute/archive.py` 的 SQLite 连接生命周期：`_connect()` 事务完成后显式关闭；备份/恢复临时文件用读写句柄执行 `fsync`。NAS定向测试最新4/4通过，Python `py_compile` 与 `git diff --check`通过。
 - 更广的分钟归档/runtime测试曾在受限Windows执行为46 executed / 36 passed / 0 failed / 10 errors；主要受备份原子硬链接权限及测试直接打开SQLite连接未关闭造成的Windows锁影响。完整NAS套件尚待Linux CI复跑，不计全套通过。
@@ -63,7 +68,7 @@
 ## 当前实现（代码存在不等于验收通过）
 
 - Ledger 写权限隔离、用户成交确认、原子持久化、备份/恢复、只读决策上下文、Memory/Profile 持久化和三通道同步规则已编码；Swift/XCTest 尚未运行。只读已实现盈亏按确认卖出流水派生，不修改真实账本。
-- NAS 分钟链路具备补采、实时归档、完整度评估、精确日期查询、备份恢复、质量门控和 no-lookahead 研究证据。新增红利多因子证据整理器，并接入版本化 NAS Research Evidence/DecisionContext；红利证据按来源、观测时间、抓取时间和质量过滤，不沿用分钟研究25日门槛；4%仅作参考，无交易结论。生产指标源、交易日历准确性及 NAS 部署仍待外部验证。
+- NAS 分钟链路具备补采、实时归档、完整度评估、精确日期查询、备份恢复、质量门控和 no-lookahead 研究证据。v6于2026-10-27 14:11:49在用户NAS实机完成当前日六证券归档烟测；过往日期补采存在empty source response，长期完整性、其他数据源与iOS/Advisor端到端仍待验证。新增红利多因子证据整理器，并接入版本化 NAS Research Evidence/DecisionContext；红利证据按来源、观测时间、抓取时间和质量过滤，不沿用分钟研究25日门槛；4%仅作参考，无交易结论。跨市场非对称研究假设已记入B-116…B-126追踪设计，未编码、未产出合格结果。
 - 图表命中测试、行情时间语义、Advisor 上下文和 Research Evidence 契约已编码；原生iOS SwiftUI首页骨架与XcodeGen项目规格已写（未构建）；在线模型接入、NAS Research Tool 调用边界与响应身份/质量编排已编码，XCTest未执行；真实新闻/行情服务、跨设备同步 UI 仍未完成。
 - 全盘复核发现研究入口接受 truthy 的 `complete` 值、空来源/任意 volume_method，并在定制 tzinfo 返回无 offset 时可能按本地时区解释；现已 fail-closed 并新增回归覆盖。发现 Advisor 请求此前未序列化持仓/现金/观察值，现加入只读组合投影，并要求 Guard 校验它与 DecisionContext 完全一致。AI Guard 额外拒绝 hold/wait 携带价格/数量等订单字段、超长理由和重复/空证据引用。
 - 恢复 F-01…F-34 主矩阵为统一四列格式，并核对 B-001…B-145 连续映射。

@@ -266,12 +266,6 @@ final class FHomeModel: ObservableObject {
         }
         let normalizedQuestion = text.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "").lowercased()
-        let portfolioPhrases = ["我的持仓", "全部持仓", "所有持仓", "当前持仓", "整体持仓",
-                                "持仓需要", "持仓怎么样", "持仓要不要", "持仓是否", "持仓情况", "持仓调整", "持仓操作",
-                                "整个组合", "我的组合", "组合今天", "组合需要", "组合怎么样",
-                                "现金", "资金", "总资产", "总仓位", "配置", "买什么", "怎么配"]
-        let portfolioIntent = normalizedQuestion.contains("组合") ||
-            portfolioPhrases.contains(where: normalizedQuestion.contains)
         let numericCodes = text.components(separatedBy: CharacterSet(charactersIn: "0123456789").inverted)
             .filter { $0.count == 6 }
         let mentionedByCode = initial.positions.first { text.contains($0.instrumentCode) }
@@ -280,16 +274,26 @@ final class FHomeModel: ObservableObject {
         }
         // A six-digit code selects a security advisor even when it is not held.
         // Portfolio requests still capture every real holding and cash below.
-        let mentionedByName = initial.positions.first { position in
-            let name = position.name.replacingOccurrences(of: " ", with: "")
+        let mentionedByName = initial.instrumentHistories.first { history in
+            let name = history.instrumentName.replacingOccurrences(of: " ", with: "")
                 .replacingOccurrences(of: "　", with: "").lowercased()
             return !name.isEmpty && normalizedQuestion.contains(name)
         }
+        let explicitPortfolioPhrases = ["我的持仓", "全部持仓", "所有持仓", "当前持仓", "整体持仓",
+                                        "整个组合", "我的组合", "组合今天", "组合需要", "组合怎么样"]
+        let broadPortfolioPhrases = ["组合", "持仓", "现金", "资金", "总资产", "总仓位", "配置", "买什么", "怎么配"]
+        let explicitPortfolioIntent = explicitPortfolioPhrases.contains(where: normalizedQuestion.contains)
+        let hasExplicitSecurityMention = unheldNumericCode != nil || mentionedByCode != nil || mentionedByName != nil
+        let portfolioIntent = explicitPortfolioIntent ||
+            (!hasExplicitSecurityMention && broadPortfolioPhrases.contains(where: normalizedQuestion.contains))
         // The wording of the question owns the advisor scope. A detail-screen
         // caller may supply its current instrument as a default, but that must
         // not silently turn an explicit portfolio question into a single-name one.
-        let focusCode = portfolioIntent ? nil :
-            (requestedCode ?? unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode)
+        // A code/name explicitly typed by the user wins over the detail page's
+        // ambient instrument. The caller's code is only a fallback when the
+        // question itself does not identify a security.
+        let explicitQuestionCode = unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode
+        let focusCode = portfolioIntent ? nil : (explicitQuestionCode ?? requestedCode)
         if let focusCode,
            (focusCode.count != 6 || !focusCode.allSatisfy(\.isNumber)) {
             advisorStatus = FAdvisorLiveError.invalidInstrument.localizedDescription

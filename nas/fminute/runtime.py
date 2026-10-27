@@ -11,9 +11,30 @@ from .archive import MinuteArchive
 from .calendar import Mainland2026Calendar
 from .calendar_sync import CalendarStore, OfficialCalendarSync
 from .providers import EastmoneyMinuteHistoryProvider, TencentCurrentMinuteProvider
-from .service import BackfillPriority, MinuteArchiveService
+from .service import BackfillPriority, MinuteArchiveService, ServiceError
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+def _error_summary(exc: Exception) -> str:
+    message = " ".join(str(exc).split())[:240]
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+
+
+def select_realtime_rows_for_session(bars, session, security_code: str):
+    """Keep only official session timestamps; reject identity mismatches."""
+    allowed = set(session.expected_timestamps)
+    selected = []
+    filtered_timestamps = []
+    for bar in bars:
+        if (bar.security_code != security_code or bar.market != session.market or
+                bar.trading_date != session.trading_date):
+            raise ServiceError("realtime provider returned a mismatched security, market, or date")
+        if bar.timestamp in allowed:
+            selected.append(bar)
+        else:
+            filtered_timestamps.append(bar.timestamp.isoformat())
+    return tuple(selected), tuple(filtered_timestamps)
 
 
 def calendar_sync_due(now: datetime, last_month: tuple[int, int] | None,
@@ -160,19 +181,33 @@ class MinuteRuntimeWorker:
                 sessions = self.service._calendar_sessions("CN", local_now.date(), local_now.date())
                 current_minute = local_now.replace(second=0, microsecond=0)
                 if sessions and current_minute in sessions[0].expected_timestamps:
+                    session = sessions[0]
                     provider = TencentCurrentMinuteProvider(clock=lambda: datetime.now(timezone.utc))
                     for code in self.securities:
                         try:
                             bars = provider.fetch(code, "CN", local_now.date())
-                            current_results.extend(self.service.ingest_realtime(bars))
+                            scheduled, filtered = select_realtime_rows_for_session(bars, session, code)
+                            if not scheduled:
+                                raise ServiceError(
+                                    f"provider returned no scheduled observations; filtered {len(filtered)} out-of-session rows")
+                            results = self.service.ingest_realtime(scheduled)
+                            for result in results:
+                                result["filteredOutOfSessionCount"] = len(filtered)
+                                result["sampleFilteredTimestamps"] = list(filtered[:3])
+                            current_results.extend(results)
                         except Exception as exc:
-                            cycle_errors.append("realtime:" + type(exc).__name__)
-                            current_results.append({"securityCode": code, "error": type(exc).__name__})
+                            detail = _error_summary(exc)
+                            cycle_errors.append(f"realtime:{code}:{detail}")
+                            current_results.append({"securityCode": code,
+                                                    "errorType": type(exc).__name__,
+                                                    "error": detail})
             except Exception as exc:
                 # An unsupported calendar year is a recorded unavailable state,
                 # not a weekday guess or synthetic session.
-                cycle_errors.append("calendar:" + type(exc).__name__)
-                current_results.append({"market": "CN", "error": type(exc).__name__})
+                detail = _error_summary(exc)
+                cycle_errors.append("calendar:" + detail)
+                current_results.append({"market": "CN", "errorType": type(exc).__name__,
+                                        "error": detail})
             self.last_cycle = {"status": "degraded" if cycle_errors else "ok", "at": started.isoformat(),
                                "realtimeResults": current_results, "errors": cycle_errors}
             self._stop.wait(self.interval_seconds)

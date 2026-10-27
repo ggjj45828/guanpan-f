@@ -6,6 +6,23 @@
 
 ## 2026-10-27 后续进展补记
 
+- 用户确认已部署v6。14:11:49 NAS实时worker **OK**；159352、159941、159545、560780、159866、515180各归档191条，均过滤盘外午休边界点 `2026-10-27T13:00:00+08:00`。这验证了当前交易日真实分钟采集、官方交易时段筛选、NAS归档与网页计数；证据截至14:11，不代表全日收盘覆盖，也不代表iOS/Advisor端到端完成。
+- 同轮历史补采仍Degraded：处理3、完成0、重排3、队列846；159352的2026-04-29、04-30、05-06最近原因均为 `empty source response`。这是历史provider对指定日期返回空分钟行，与实时采集成功无矛盾；Tencent仅支持当前交易日，Eastmoney目前对此类历史日期返回空结果。只能得出当前配置未能补齐这些日期，不能外推所有供应商都没有历史分钟。定向runtime测试通过 **4/4**，本轮用项目捆绑Python复跑；py_compile和diff检查通过。
+- 新增跨市场研究需求进入B-116…B-126追踪范围：验证日经、TOPIX、韩国市场对A股及各真实持仓证券的非对称条件概率，不以相关系数单独定论；重点比较 `P(A股下跌|海外下跌)` 与 `P(A股上涨|海外上涨)`，按海外涨跌幅/急跌程度分桶，并报告N、命中率、后续收益分布、置信度、新鲜度及20/60/120交易日滚动稳定性。纳入日股/韩股分别与同时涨跌、A股同期和后续5/15/30/60分钟、上午/下午和市场状态分层。要求严格as-of配对、禁止未来数据泄漏；最低样本量/质量门槛需在看结果前预先定义，未达门槛不进入DecisionContext。证券级影响需逐证券估计，不能把A股整体结果套给159866；权重由验证数据估计，不人工指定。仅记录为需求/研究设计，尚未编码或有真实研究结果；不改变当前UI Test、NAS历史分钟和DeepSeek联调优先级。跨市场脉搏展示市场间证据，AI指导结合真实持仓解释影响，两页职责保持区分。
+- v5部署截图给出真实根因：六证券失败均为 `ServiceError: realtime row falls outside the market session schedule`。`service.ingest_realtime` 对整批有任一盘外时间戳就拒收；Tencent parser虽过滤09:30开盘集合竞价和未来点，但还会带回非官方分钟表内的点（具体时间尚未由旧接口记录）。现改为运行时按官方session时间戳筛选盘外点、记录过滤数量和最多3个样本时间；证券/市场/日期错配仍失败关闭，若整批无有效点则报错。状态页显示归档数与盘外过滤数。
+- NAS `Tools.test_minute_runtime` 最新 **4/4通过**（含盘外行过滤及身份错配仍拒绝）；`py_compile`通过；内嵌JavaScript Node语法解析通过。已生成并部署 `F-NAS-DEPLOYMENT-dashboard-v6.zip`；14:11:49真实运行结果已确认该修复工作，详见上方实机记录。
+
+- 用户提供的 NAS v4 页面截图显示网页已正常加载（Ready/HTTP200、archive OK、CN 2026日历），但北京时间14:04实时采集六只证券均为 `ServiceError`，backfill本轮3项0完成/3重排，846排队且历史源 `RemoteDisconnected`。当前 screenshot 只暴露 realtime error type；源码确认worker捕获了异常原因但只写入异常类名，阻碍定位。
+- 已改 `nas/fminute/runtime.py`：readyz 的实时错误现在包含证券代码、异常类型与最多240字的压缩原因；日历worker错误也保留原因。状态页现有 renderer 会展示每证券 `realtimeResults.error` 和worker `errors`。`Tools.test_minute_runtime` 实跑 **2/2通过**，`py_compile`通过；生成 `F-NAS-DEPLOYMENT-dashboard-v5.zip` 并确认 HTML/runtime 均入包。v5未部署；部署后需看具体 `ServiceError` 原因才能修源头。
+
+- 用户报告 NAS 页面“服务与采集状态”一直停在读取。用 Node 对内嵌脚本做语法解析，定位 `historySummary` 模板字符串内引号嵌套错误；该解析错误会阻止整段脚本执行，因此初始占位一直不变。已修正并复核脚本语法通过，同时 `/readyz` 和历史查询都加10秒超时并给出可见错误。重新生成 `F-NAS-DEPLOYMENT-dashboard-v4.zip`，确认含dashboard；需要重新部署v4，NAS当前容器未由本轮修改。
+- 再查 Advisor scope：闭市历史证券仅存在 `instrumentHistories` 时，按名称提问仍只查当前`positions`，无法识别已清仓证券名；已改为从持仓历史投影识别名称。另外移除无条件匹配“组合”造成的证券问题误分类，改用“具体组合措辞优先；宽泛组合词仅在未指定证券时生效”。该Swift仍未编译或测试。
+
+- 静态审查发现并修正 Advisor 标的优先级 bug：证券详情页发起提问时，环境默认证券码会盖过问题中明确输入的另一只证券代码/名称。现在非Portfolio问题按“问题明确标的 → 页面默认证券”选取；Portfolio意图仍先清空focusCode。此Swift修正尚未编译/执行XCTest，必须并入下一次Apple CI。
+- 继续审查发现组合scope关键词过宽：“159352现金分红”会因“现金”被误路由Portfolio；已将强组合措辞与宽泛词拆分，宽泛词仅在问题未指明具体证券时用于组合判断。此Swift修正尚未编译或测试。
+- 状态页分钟和worker时间此前直接显示UTC字符串，可能被误读为早8小时；现按API返回的市场时区格式化分钟时间，并保留UTC原文供查看。NAS新版包 `F-NAS-DEPLOYMENT-dashboard-v3.zip` 已构建并确认包含HTML；页面交互尚未重新部署/验证。
+- 本地提交 `820fffb` 已整理此前NAS/dashboard与状态修正；用户报告远端仍为 `4d258f1`。本机当前相对本地 `origin/main` ahead 1、工作树因新Advisor修正而dirty。普通push在12:51连续3次（间隔10秒）均报 `getaddrinfo() thread failed to start`，未强推；本机无Apple工具链，未触发新CI。
+
 - 用户要求继续编译并延迟重试 GitHub。本机已连续5次 `git fetch --prune origin main`（前4次每次间隔8秒，第5次在等待15秒后），均在 `getaddrinfo() thread failed to start` 失败；此前远端 Actions读取未能取得新结果。已将 GitHub Actions URL 请求在 Codex 右侧打开（工具返回queued，尚未读取页面的新run结果）。本机无 `swift`、`xcodebuild`、`xcodegen`，因此本轮没有新编译/测试，dirty Swift不能触发CI；没有提交或推送，远端HEAD仍未知。
 
 - 新增 NAS 同源只读状态页：`http://NAS地址:8788/`（与 API 共用8788端口）。首页读取真实 `/readyz` 展示 archive、交易日历、实时/补采 worker 与失败原因；证券/日期查询读取真实指定日分钟及 diagnostics，图线只使用返回的真实价格点；Partial/Missing/Stale 明确标记，无数据时不画线。页面提示当前 API 无认证及不要公网暴露。
@@ -119,21 +136,21 @@ App UI XCTest：定义3项，日志确认 **3 executed / 2 passed / 1 failed**�
 
 ## 下一步
 
-当前最直接的工作是将设置页可发现性修正和 dirty Advisor scope 修正送入 Apple CI 并复验 UI XCTest。日志 ZIP 已给出首条失败断言；本轮将 DeepSeek Key 输入区前移，但尚未编译。本机无 Apple 工具链，且 `git fetch` DNS 失败，不能启动当前工作树编译或确认远端状态。恢复后执行 FCore → XcodeGen → Device/Simulator Build → UI Test；随后人工复核截图，再推进 NAS 历史分钟和 DeepSeek 成交闭环。
+当前先通过 NAS v5 取得实时 `ServiceError` 的具体原因并修复真实源头；Apple验证通道恢复后，先fetch核对远端，再推送当前本地提交与Swift scope修正，执行 FCore → XcodeGen → Device/Simulator Build → UI Test。v4修复“无限读取”脚本错误，v5补充runtime错误原因；随后人工复核截图，再推进 NAS 历史分钟和 DeepSeek成交闭环。
 
 F_CURRENT_STATUS_BEGIN
 
 当前开发阶段：可用性验收 + 真实链路联调 + 缺口收口
-当前正在开发：设置页 DeepSeek Key 可发现性修正；收口 Portfolio scope 和 NAS 历史补采状态修正
-刚刚完成：从用户日志 ZIP 定位主导航 UI 失败到 `PrimaryNavigationUITests.swift:53`；设置页 Key 已移到靠前独立区；旧 CI 实测 FCore 121/121、App UI 3执行/2通过/1失败
-未提交工作：Advisor scope Swift；设置页 Key 布局修改；NAS archive/provider/runtime与2组测试；状态/审计文档
-iOS完成度：旧 CI 版本可编译并启动 Simulator UI 测试；dirty Swift 未编译；人工视觉验收未完成
-AI顾问完成度：Portfolio/Security链路已编码；Portfolio scope优先修正未编译；真实DeepSeek端到端未验证
+当前正在开发：Advisor scope误路由修正；读取NAS v5后查实时采集ServiceError具体原因；Apple验证网络恢复等待
+刚刚完成：定位状态页无限读取的JavaScript语法错误并修复；定位实时worker只返回错误类型的问题并增加短错误原因；NAS v5包已含runtime和HTML
+未提交工作：5个路径（`GuanpanFApp/Sources/GuanpanFApp.swift`、`nas/fminute/dashboard.html`、`nas/fminute/runtime.py`、本交接、`F-STATUS.md`）；本地HEAD `820fffb`另有1个尚未推送提交
+iOS完成度：dirty Advisor Swift未编译/未测；最近远端run对旧HEAD完成FCore/工程生成/Device/Simulator Build，UI Test 2/3通过；人工视觉未完成
+AI顾问完成度：Portfolio/Security链路已编码；已修正scope优先级但未编译/测试；真实DeepSeek端到端未验证
 统一图表完成度：当前/历史分钟和日K共用renderer，价格范围回归在121项FCore中通过；交互、真实数据、横屏/多尺寸未完成验收
-NAS历史数据完成度：服务端归档/查询代码已接线；队列840/840均在退避重试，752次远端断连、88次空响应；readyz时processed=0因当时全部重试时间在未来；无complete归档证据，iOS端到端未通过
-Apple编译验证：CI对已提交版本曾成功FCore/XcodeGen/Device/Simulator Build；本轮4次fetch均因 `getaddrinfo() thread failed to start` 失败，Actions未取得新结果；本机无Apple工具链；设置页和 Advisor scope dirty Swift 未验证
-当前测试：FCore定义121/执行121/通过121/失败0（最近远端已提交版本）；App UI定义3/执行3/通过2/失败1（设置页DeepSeek SecureField可发现性）；dirty Swift尚未纳入CI。Python/NAS最新定向4/4通过；archive+runtime一次Windows全量执行46/36通过/0失败/10错误，后续修复后针对性回归4/4通过；完整套件和备份硬链接须Linux CI复验。
-最大缺口：dirty Swift需送CI复验UI；NAS历史分钟仍有Partial/Missing和上游断连/空响应；真实DeepSeek闭环未验收
-下一步：GitHub连接恢复后先fetch核对远端，再把dirty Swift送Apple CI；同时NAS Linux CI复跑归档/备份套件，并继续按真实指定交易日验证完整分钟数据及iOS消费链
+NAS历史数据完成度：159866当天上午有120/240条真实腾讯分钟、状态Partial；另有历史补采队列846、最新报告3重排/0完成并有RemoteDisconnected；无 iOS→Evidence E2E证据
+Apple编译验证：本机无Apple工具链；本轮fetch 5次、push 3次均为 `getaddrinfo() thread failed to start`，无新CI；用户观察远端仍为4d258f1，本地820fffb未推送
+当前测试：FCore定义121/执行121/通过121/失败0（最近远端旧提交run）；App UI定义3/执行3/通过2/失败1；本轮dirty Swift无编译/执行结果。Python/NAS `test_minute_runtime`最新2/2通过、`py_compile`通过；历史分钟针对性4/4通过；archive+runtime之前Windows全量46执行、36通过、0失败、10错误，备份硬链接与测试文件锁待Linux复验。
+最大缺口：NAS六证券实时采集ServiceError仍缺具体原因（待v5部署读错误）；历史分钟补采上游断连且现有日数据Partial；dirty Swift未送Apple CI
+下一步：部署NAS v5读取并修复实时错误原因；网络通道恢复后fetch比对远端并普通推送验证Swift；继续NAS历史分钟Linux复验和iOS真实消费链验证
 
 F_CURRENT_STATUS_END

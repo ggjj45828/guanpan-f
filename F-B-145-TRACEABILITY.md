@@ -157,6 +157,19 @@
 | B-144 | 信号结果复盘 | 保留原需求 | Fusion | F-19, F-25, F-33 | 本轮无A源码可读；不可判定 | B源码可读；本项未独立核验，不继承B状态 | 待并列核验；见既有裁决与原验收输入 | Sources/FAdvisor/DecisionContext.swift; Sources/FAdvisor/AdvisorEntry.swift; Sources/FAdvisor/AdvisorDecisionPipeline.swift; GuanpanFApp/Sources/GuanpanFApp.swift; GuanpanFApp/Sources/FAdvisorVerticalSlice.swift<br>nas/fminute/archive.py; nas/fminute/runtime.py; nas/fminute/providers.py; Sources/FAdvisor/ResearchEvidence.swift; GuanpanFApp/Sources/FNASConnection.swift | Tests/FCoreTests/MarketChartAcceptanceTests.swift; Tests/FCoreTests/BoundaryAcceptanceTests.swift<br>Tools/test_minute_archive.py; Tools/test_minute_runtime.py; Tools/test_dividend_research.py | 待逐项核验；未标F通过 | 待按需求判定；可能需Simulator/真机/实网 | 真实100–200交易日与预先冻结假设的后续复现尚未归档 |
 | B-145 | 研究证据到唯一指导完整链 | 保留原需求 | Fusion | F-19, F-25, F-33 | 本轮无A源码可读；不可判定 | B源码可读；本项未独立核验，不继承B状态 | 待并列核验；见既有裁决与原验收输入 | Sources/FAdvisor/DecisionContext.swift; Sources/FAdvisor/AdvisorEntry.swift; Sources/FAdvisor/AdvisorDecisionPipeline.swift; GuanpanFApp/Sources/GuanpanFApp.swift; GuanpanFApp/Sources/FAdvisorVerticalSlice.swift<br>nas/fminute/archive.py; nas/fminute/runtime.py; nas/fminute/providers.py; Sources/FAdvisor/ResearchEvidence.swift; GuanpanFApp/Sources/FNASConnection.swift | Tests/FCoreTests/MarketChartAcceptanceTests.swift; Tests/FCoreTests/BoundaryAcceptanceTests.swift<br>Tools/test_minute_archive.py; Tools/test_minute_runtime.py; Tools/test_dividend_research.py | 待逐项核验；未标F通过 | 待按需求判定；可能需Simulator/真机/实网 | 完成最新Xcode完整UI/账本链，后续再验证真实NAS/iPhone、长期档案与真实成交反馈 |
 
+## 跨市场非对称联动与证券级映射（B-116…B-126 的 F 研究口径）
+
+状态：需求已登记；研究代码、合格历史样本、外部联调和 DecisionContext 接入均未据此新增或验证。此补充不改变当前 UI XCTest、NAS 历史分钟/真实链路和 DeepSeek 联调的优先级。
+
+- 假设而非规则：检验“日股/韩股上涨时A股未必跟涨、下跌时A股更容易跟跌”是否成立、何时失效；禁止将方向写死为交易规则。来源市场分开统计（日经225、TOPIX、韩国指数/市场），另检验日股与韩股同时上涨/下跌。
+- 主要统计量是条件分布与条件概率，不以相关系数单独结论：对预先定义的上涨/下跌阈值，比较 `P(A股下跌 | 日经下跌)` 与 `P(A股上涨 | 日经上涨)`，并为韩股、双市场同向情形分别报告；再按外盘变动幅度/急跌程度分桶，报告条件概率是否随跌幅提高。同步报告同期及A股后续5/15/30/60分钟表现、平均后续收益和收益分布。
+- 分层项：上午/下午、不同市场状态；对20/60/120交易日滚动窗口报告样本数、命中率/条件概率、均值与分布、置信区间/置信度、新鲜度、窗口稳定性、失效及缺样原因。固定最低样本量与质量门槛必须在观察结果前预先登记；未达门槛的关系仅标记探索性/Unavailable，不得进入DecisionContext。
+- 防未来数据泄漏：每条联动观察严格按市场本地时间和数据 `asOf` 对齐，只使用决策时已可获得的数据；未来A股分钟只可用于离线标签/回测结果，不能作为同一时点的输入。滚动窗口按时间前推，参数/阈值和来源质量门槛需先冻结，报告样本外/前向检验，不以随机打散时间序列代替。
+- 证券级映射独立估计：以真实持仓/自选证券为对象（如159866），分别研究其对日经、TOPIX、韩国市场及有证据的汇率/其他领先变量的方向、时段和窗口敏感度；不得把A股指数层面的条件概率直接赋给单只ETF。影响权重由合格历史数据估计；样本不足则不生成权重/Advisor证据。
+- Evidence字段目标：来源市场/证券、条件和阈值版本、窗口与样本 `N`、条件概率、命中率、收益分布、置信区间、数据质量/缺口、新鲜度、有效期、滚动窗口、失效状态、`asOf`及研究版本。只有样本/质量均达预设门槛且无时序泄漏的证据可进入 DecisionContext。
+- 页面职责：跨市场脉搏只说明市场之间实际发生的变化和研究证据；AI今日指导再结合全部真实Ledger持仓逐只解释相关外部市场影响。二者分别路由，不复制同一内容。
+- 追踪映射：B-116/117/121覆盖领先关系与条件概率；B-118覆盖逐真实持仓的外部变量篮子；B-119/120覆盖午休和午后响应；B-122覆盖跨市场背离/非对称；B-123/126覆盖隔夜/开盘消化；B-125覆盖汇率等经验证变量。相关B行仍保持未核验状态，不能因本设计文字变成通过。
+
 ## 被 F 新架构取代的内容边界
 
 B 中涉及“删除旧模拟方向”的条目保留其清理目标；任何把虚拟账户、虚拟资金、模拟成交、数字孪生实验室作为产品核心或把模拟结果写入真实资产的解释，一律标为“被 F 新架构取代/不采用”。对应需求仍使用原 B 编号追踪，避免编号丢失。做 T、网格、回本和机会分析保留为只读研究工具/AI 候选建议，不形成自动交易。

@@ -68,13 +68,27 @@
     const $ = id => document.getElementById(id);
     const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
     const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+    const formatTime = (value, timeZone) => {
+      const parsed = new Date(value);
+      if (!value || Number.isNaN(parsed.getTime())) return value || "—";
+      return new Intl.DateTimeFormat("zh-CN", {timeZone:timeZone || undefined, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false}).format(parsed);
+    };
     const statusLabel = value => ({complete:"Complete · 完整",partial:"Partial · 部分",missing:"Missing · 缺失",stale:"Stale · 过期",ready:"Ready · 服务可用",not_ready:"Not ready · 服务未就绪",degraded:"Degraded · 有失败",idle:"Idle · 当前空闲",ok:"OK",alive:"Alive · 进程存活",waiting_for_official_notice:"等待官方日历公告"}[value] || value || "Unavailable · 不可用");
     const statusClass = value => ["complete","partial","missing","stale","ready","not_ready","degraded","idle","error"].includes(value) ? value : "";
     async function getJSON(url) {
-      const response = await fetch(url, {cache:"no-store"});
-      const payload = await response.json();
-      if (!response.ok && !payload) throw new Error(`HTTP ${response.status}`);
-      return {response, payload};
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(url, {cache:"no-store", signal:controller.signal});
+        const payload = await response.json();
+        if (!response.ok && !payload) throw new Error(`HTTP ${response.status}`);
+        return {response, payload};
+      } catch (error) {
+        if (error.name === "AbortError") throw new Error("请求超时（10秒）；NAS没有及时返回响应");
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
     }
     function card(label, value, cls="") {
       return `<div class="card"><div class="label">${escapeHTML(label)}</div><div class="value ${statusClass(cls)}">${escapeHTML(value)}</div></div>`;
@@ -86,10 +100,13 @@
       if (Number.isInteger(worker.completed)) details.push(`完成 ${worker.completed}`);
       if (Number.isInteger(worker.requeued)) details.push(`重排 ${worker.requeued}`);
       if (Number.isInteger(worker.queueDepth)) details.push(`队列 ${worker.queueDepth}`);
-      if (worker.at) details.push(`周期 ${worker.at}`);
+      if (worker.at) details.push(`周期 ${formatTime(worker.at)}`);
       const results = Array.isArray(worker.realtimeResults) ? worker.realtimeResults.map(row => {
-        const outcome = row.error || row.result || row.status || (row.inserted != null ? `写入${row.inserted}条` : "有结果");
-        return `${row.securityCode || row.market || "采集"}：${outcome}`;
+        const outcome = row.error || row.result || row.status ||
+          (row.storedObservations != null ? `已归档${row.storedObservations}条` : row.inserted != null ? `写入${row.inserted}条` : "有结果");
+        const filtered = Number.isInteger(row.filteredOutOfSessionCount) && row.filteredOutOfSessionCount > 0
+          ? ` · 过滤盘外${row.filteredOutOfSessionCount}条${row.sampleFilteredTimestamps?.length ? `（${row.sampleFilteredTimestamps.join(", ")}）` : ""}` : "";
+        return `${row.securityCode || row.market || "采集"}：${outcome}${filtered}`;
       }).join("；") : "";
       const errors = Array.isArray(worker.errors) ? worker.errors.join("；") : (worker.error || "");
       const failures = (worker.lastFailures || []).map(item => `${item.securityCode || ""} ${item.tradingDate || ""}: ${item.reason || "失败"}`).join("；");
@@ -145,10 +162,10 @@
         const [historyResult, diagResult] = await Promise.all([getJSON(base), getJSON(diag)]);
         const data = historyResult.payload, bars = Array.isArray(data.bars) ? data.bars : [], coverage = data.coverage || {};
         $("queryStatus").innerHTML = `<span class="badge ${statusClass(data.status)}">${escapeHTML(statusLabel(data.status))}</span>　${bars.length} 条实际分钟记录`;
-        $("historySummary").innerHTML = `<div class="cards">${card("证券 / 日期", `${data.securityCode || code} · ${data.tradingDate || day}`)}${card("覆盖", `${coverage.observedCount ?? bars.length} / ${coverage.expectedCount ?? "未知"} 分钟`, data.status)}${card("首末时间", bars.length ? `${bars[0].timestamp} → ${bars[bars.length-1].timestamp}` : "无分钟点")}${card("来源", [...new Set(bars.map(row => row.source).filter(Boolean))].join("；") || "无来源记录")}${card("最近采集", bars.at(-1)?.fetchedAt || "无采集记录")}${card("质量门", coverage.qualityPassed === true ? "已有点通过质量检查" : coverage.qualityPassed === false ? "质量门未通过" : "未提供")}</div>`;
+        $("historySummary").innerHTML = `<div class="cards">${card("证券 / 日期", `${data.securityCode || code} · ${data.tradingDate || day}`)}${card("覆盖", `${coverage.observedCount ?? bars.length} / ${coverage.expectedCount ?? "未知"} 分钟`, data.status)}${card("首末时间（" + (data.timezone || "本地时区") + "）", bars.length ? `${formatTime(bars[0].timestamp,data.timezone)} → ${formatTime(bars[bars.length-1].timestamp,data.timezone)}` : "无分钟点")}${card("来源", [...new Set(bars.map(row => row.source).filter(Boolean))].join("；") || "无来源记录")}${card("最近采集", bars.at(-1)?.fetchedAt ? formatTime(bars.at(-1).fetchedAt) : "无采集记录")}${card("质量门", coverage.qualityPassed === true ? "已有点通过质量检查" : coverage.qualityPassed === false ? "质量门未通过" : "未提供")}</div>`;
         drawPrices(bars);
         const shown = bars.slice(-12).reverse();
-        $("minuteTable").innerHTML = shown.length ? `<table><thead><tr><th>时间</th><th>价格</th><th>分钟量</th><th>累计量</th><th>来源</th></tr></thead><tbody>${shown.map(row => `<tr><td>${escapeHTML(row.timestamp)}</td><td>${escapeHTML(row.price)}</td><td>${escapeHTML(row.minuteVolume ?? "—")}</td><td>${escapeHTML(row.cumulativeVolume ?? "—")}</td><td>${escapeHTML(row.source)}</td></tr>`).join("")}</tbody></table><small>显示最近 ${shown.length} 条；图线按接口返回的全部 ${bars.length} 个真实点绘制。</small>` : '<div class="empty">没有真实分钟点，因此没有绘制曲线。</div>';
+        $("minuteTable").innerHTML = shown.length ? `<table><thead><tr><th>时间（${escapeHTML(data.timezone || "本地时区")}）</th><th>价格</th><th>分钟量</th><th>累计量</th><th>来源</th></tr></thead><tbody>${shown.map(row => `<tr><td title="UTC原始值：${escapeHTML(row.timestamp)}">${escapeHTML(formatTime(row.timestamp,data.timezone))}</td><td>${escapeHTML(row.price)}</td><td>${escapeHTML(row.minuteVolume ?? "—")}</td><td>${escapeHTML(row.cumulativeVolume ?? "—")}</td><td>${escapeHTML(row.source)}</td></tr>`).join("")}</tbody></table><small>显示最近 ${shown.length} 条；图线按接口返回的全部 ${bars.length} 个真实点绘制。悬停时间可查看原始 UTC 值。</small>` : '<div class="empty">没有真实分钟点，因此没有绘制曲线。</div>';
         $("diagnosticsRaw").textContent = JSON.stringify(diagResult.payload, null, 2);
       } catch (error) {
         $("queryStatus").innerHTML = `<span class="error">查询失败：${escapeHTML(error.message)}</span>`;
