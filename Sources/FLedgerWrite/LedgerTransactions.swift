@@ -14,6 +14,26 @@ public enum FLedgerMutationError: Error, Equatable, Sendable {
     case invalidBrokerDisplayCostConfirmation
 }
 
+private extension FAccountBook {
+    mutating func retainBrokerDisplayCost(from position: FPosition) {
+        guard let cost = position.brokerDisplayCostPerUnit,
+              let updatedAt = position.brokerDisplayCostUpdatedAt else { return }
+        var records = brokerDisplayCosts ?? []
+        let record = FBrokerDisplayCostRecord(instrumentCode: position.instrumentCode,
+                                              costPerUnit: cost, updatedAt: updatedAt)
+        if let index = records.firstIndex(where: { $0.instrumentCode == position.instrumentCode }) {
+            records[index] = record
+        } else {
+            records.append(record)
+        }
+        brokerDisplayCosts = records
+    }
+
+    func retainedBrokerDisplayCost(for code: String) -> FBrokerDisplayCostRecord? {
+        brokerDisplayCosts?.first { $0.instrumentCode == code }
+    }
+}
+
 public extension FAccountBook {
     /// Persists the broker's displayed per-unit cost as a user-confirmed annotation.
     /// It never changes economic book cost, units, cash, or fills.
@@ -37,6 +57,8 @@ public extension FAccountBook {
         let priorDigest = try ledgerStateDigest()
         updated.positions[index].brokerDisplayCostPerUnit = costPerUnit
         updated.positions[index].brokerDisplayCostUpdatedAt = confirmation.confirmedAt
+        let correctedPosition = updated.positions[index]
+        updated.retainBrokerDisplayCost(from: correctedPosition)
         updated.updatedAt = confirmation.confirmedAt
         try updated.validate(now: now)
         let resultingDigest = try updated.ledgerStateDigest()
@@ -87,19 +109,26 @@ public extension FAccountBook {
             }
             result.cashBalance -= debit
             if let index = result.positions.firstIndex(where: { $0.instrumentCode == fill.instrumentCode }) {
+                let previousPosition = result.positions[index]
+                result.retainBrokerDisplayCost(from: previousPosition)
                 let (units, overflow) = result.positions[index].units.addingReportingOverflow(fill.units)
                 guard !overflow else { throw FLedgerValidationError.positionQuantityOverflow(fill.instrumentCode) }
                 result.positions[index].units = units
                 result.positions[index].bookCost += debit
                 result.positions[index].name = retainedName
             } else {
+                let brokerCost = result.retainedBrokerDisplayCost(for: fill.instrumentCode)
                 result.positions.append(FPosition(instrumentCode: fill.instrumentCode, name: retainedName,
-                                                 units: fill.units, bookCost: debit))
+                                                 units: fill.units, bookCost: debit,
+                                                 brokerDisplayCostPerUnit: brokerCost?.costPerUnit,
+                                                 brokerDisplayCostUpdatedAt: brokerCost?.updatedAt))
             }
         case .sell:
             guard let index = result.positions.firstIndex(where: { $0.instrumentCode == fill.instrumentCode }) else {
                 throw FLedgerMutationError.missingPosition(fill.instrumentCode)
             }
+            let previousPosition = result.positions[index]
+            result.retainBrokerDisplayCost(from: previousPosition)
             guard fill.units <= result.positions[index].units else {
                 throw FLedgerMutationError.insufficientUnits(fill.instrumentCode)
             }

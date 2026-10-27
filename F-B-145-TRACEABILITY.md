@@ -190,3 +190,17 @@ B 中涉及“删除旧模拟方向”的条目保留其清理目标；任何把
 本补充不重排或新增 B-001…B-145 编号，作为B-018（收益与成本口径）、B-027（确认真实成交）、B-029（决策记忆）及B-130（唯一DecisionContext）的交叉验收条件。用户确认：界面可以记录并展示券商/同花顺显示成本，但它必须与账本依据真实成交流水计算的Position Episode成本分开保存；清仓关闭本轮Episode，再买入启动新Episode；旧Episode已实现收益不进入新Episode成本。AI按问题选择口径：“现在成本”默认当前Episode真实成本；“券商显示成本”使用用户确认的外部显示值并标明来源/更新时间；“历史赚亏”汇总所有Episode已实现损益及当前未实现损益，禁止混用成本造成重复计收益。
 
 静态源码核查：`FPosition.bookCost`只表达当前账面持仓成本总额，`FPositionEpisode.currentBookCost`表达Episode当前成本，Episode投影保留历史已实现收益；本次未找到独立券商/同花顺显示成本字段、来源/时点元数据、用户录入纠错入口或AI口径选择逻辑。因此，**Episode真实成本及历史表现投影已有代码；双成本显示/持久化/纠错/Advisor语义仍未完成，未编译/未在App验收**。最终验收必须覆盖买入、部分卖出、清仓、重新建仓、两个成本口径并存、AI提问按口径回答、历史总盈亏不双算；不得为了匹配外部券商成本而改写确认成交流水或Episode真实成本。
+
+## Ledger/Advisor交叉验收补充：双成本、全天证券盈亏、Episode与T贡献
+
+本补充不改变 B-001…B-145 编号，交叉验收 B-018（成本/盈亏）、B-027（用户确认成交）、B-029（决策记忆）、B-130（DecisionContext）及 B-145（唯一指导链）。本节是F当前裁决，覆盖前述旧快照中关于双成本尚未发现的历史描述；历史描述保留审计时间语境，不代表当前源码状态。
+
+**成本优先级**：`Episode Economic Cost`为当前Active Episode主成本，只由本轮confirmed buy fills及相应实际费用形成；清仓关闭Episode，之后买入新建Episode。`Broker Display Cost`是用户录入/修正的券商辅助口径，保存其更新时间，不得替代本轮真实成本。统一图表的主线标为“本轮成本”，券商展示线另标“券商成本”，不可复用同一名称。
+
+**盈亏字段必须分开**：Security Daily P&L（前收至当前时点的全天证券账户贡献）；Current Episode P&L（当前Episode已实现+未实现）；Daily Realized Trading P&L（当天真实卖出实现值）；Episode realized/unrealized；Closed Episodes realized；Security Lifetime Total P&L（全部Episode已实现+当前Episode未实现）；T Contribution（仅能由明确确认、可配对的T成交标签计算）。所有费用按实际fill记账一次，不重复扣除。T卖出缺配对或任何相关旧fill未分类时，T贡献不得报成0或“已赚”，而应Unavailable/无法精确归类。
+
+**Security Daily P&L计算边界**：需同时有交易日开始持仓数量、可靠前收、当日全部confirmed fills/费用及当前可靠行情；通过“期末市值+卖出毛额-买入毛额-当日费用-期初市值”确定性计算。同日清仓再买回只改变Episode边界，不重置整日指标。任何必需输入缺失均为Unavailable；今日已实现不等于今日证券总盈亏。
+
+**当前源码状态（编码不等于通过）**：新增`FSecurityPnLCalculator`的确定性公式；日成交摘要以兼容字段`realizedPnL`提供`dailyRealizedTradingPnL`名称，并预留可选`tContribution`，当前没有T标签/配对时为nil。`FDecisionContext.instrumentPnLFacts`向Advisor提供分证券当日已实现交易、当前Episode realized/unrealized/total、Closed Episodes已实现、Security Lifetime realized/unrealized/total、每日/累计T（无可靠标签时nil）、券商单位成本和Episode单位成本。因DecisionContext目前没有可靠前收及期初持仓快照，`securityDailyPnL`明确为nil。App证券详情增加区分盈亏口径的展示；当天证券总盈亏显示Unavailable，避免伪装成已算出。图表的主成本Overlay命名为“本轮成本”，券商展示成本作为独立次级Overlay。以上新增/修改Swift均待Apple编译、FCore/UI XCTest和Simulator验收。
+
+**测试定义与剩余验收**：已定义同日旧持仓全卖→新Episode低价买回场景，验证Security Daily P&L不因Episode更换清零、当前新仓可反向浮亏、Episode/Lifetime/费用/现金以及T不可误标；另有全天亏但新仓赚的反向场景。新增的显式T意图/配对编号及确定性T spread减费用计算已编码，并定义了“T贡献正但Lifetime亏损”及“T贡献负但Lifetime盈利”回归。券商成本已增加独立持久记录并设计清仓后重建仓恢复测试。以上仍未Apple编译/执行。可靠前收与交易日开始持仓数量尚未接线，Security Daily P&L仍Unavailable；隔日/复杂成交序列、完整Broker成本对账、AI逐问句/真实行情和Simulator验收仍待执行。不得把源码/测试定义写成通过。

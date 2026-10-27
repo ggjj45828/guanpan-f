@@ -65,7 +65,7 @@ public struct FAdvisorQuestionRequest: Codable, Equatable, Sendable {
         decisionContextCreatedAt = decisionContext.createdAt
         accountID = decisionContext.accountID
         accountDigest = decisionContext.accountDigest
-        portfolioContext = FAdvisorPortfolioContextProjection(context: decisionContext)
+        portfolioContext = FAdvisorPortfolioContextProjection(context: decisionContext, scope: scope)
         researchEvidence = decisionContext.usableResearchEvidence(at: now)
         researchEvidenceVersionConflicts = decisionContext.researchEvidenceVersionConflicts(at: now)
         investorProfile = try profile.map {
@@ -155,12 +155,19 @@ public struct FAdvisorPortfolioContextProjection: Codable, Equatable, Sendable {
     public let cashBalance: Decimal
     public let holdings: [FDecisionHoldingSnapshot]
     public let observations: [FContextObservation]
+    /// Daily confirmed-fill summaries; this projection remains read-only.
+    public let dailyTradeSummaryDate: String?
+    public let dailyTradeSummaries: [FDailyTradeSummary]
+    /// Deterministic total across the included per-security daily summaries.
+    public let dailyPortfolioRealizedPnL: Decimal?
+    public let instrumentPnLFacts: [FDecisionInstrumentPnL]
     public let positionHistory: [FDecisionPositionHistory]
     public let recentPositionEpisodes: [FDecisionPositionEpisode]
     public let positionEpisodeHistoryIsTruncated: Bool
 
     private enum CodingKeys: String, CodingKey {
         case contextID, accountID, accountDigest, capturedAt, cashBalance, holdings, observations
+        case dailyTradeSummaryDate, dailyTradeSummaries, dailyPortfolioRealizedPnL, instrumentPnLFacts
         case positionHistory, recentPositionEpisodes, positionEpisodeHistoryIsTruncated
     }
 
@@ -173,12 +180,19 @@ public struct FAdvisorPortfolioContextProjection: Codable, Equatable, Sendable {
         cashBalance = try values.decode(Decimal.self, forKey: .cashBalance)
         holdings = try values.decode([FDecisionHoldingSnapshot].self, forKey: .holdings)
         observations = try values.decode([FContextObservation].self, forKey: .observations)
+        dailyTradeSummaryDate = try values.decodeIfPresent(String.self, forKey: .dailyTradeSummaryDate)
+        dailyTradeSummaries = try values.decodeIfPresent([FDailyTradeSummary].self,
+                                                         forKey: .dailyTradeSummaries) ?? []
+        dailyPortfolioRealizedPnL = try values.decodeIfPresent(Decimal.self,
+                                                               forKey: .dailyPortfolioRealizedPnL)
+        instrumentPnLFacts = try values.decodeIfPresent([FDecisionInstrumentPnL].self,
+                                                        forKey: .instrumentPnLFacts) ?? []
         positionHistory = try values.decodeIfPresent([FDecisionPositionHistory].self, forKey: .positionHistory) ?? []
         recentPositionEpisodes = try values.decodeIfPresent([FDecisionPositionEpisode].self, forKey: .recentPositionEpisodes) ?? []
         positionEpisodeHistoryIsTruncated = try values.decodeIfPresent(Bool.self, forKey: .positionEpisodeHistoryIsTruncated) ?? false
     }
 
-    fileprivate init(context: FDecisionContext) {
+    fileprivate init(context: FDecisionContext, scope: FAdvisorEntryScope) {
         contextID = context.id
         accountID = context.accountID
         accountDigest = context.accountDigest
@@ -186,18 +200,54 @@ public struct FAdvisorPortfolioContextProjection: Codable, Equatable, Sendable {
         cashBalance = context.cashBalance
         holdings = context.holdings
         observations = context.observations
+        dailyTradeSummaryDate = context.dailyTradeSummaryDate
+        switch scope {
+        case .portfolio:
+            dailyTradeSummaries = context.dailyTradeSummaries
+        case .instrument(let code):
+            dailyTradeSummaries = context.dailyTradeSummaries.filter { $0.securityCode == code }
+        }
+        dailyPortfolioRealizedPnL = dailyTradeSummaries.isEmpty ? nil :
+            dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }
+        switch scope {
+        case .portfolio:
+            instrumentPnLFacts = context.instrumentPnLFacts
+        case .instrument(let code):
+            instrumentPnLFacts = context.instrumentPnLFacts.filter { $0.instrumentCode == code }
+        }
         positionHistory = context.positionHistory
         recentPositionEpisodes = context.recentPositionEpisodes
         positionEpisodeHistoryIsTruncated = context.positionEpisodeHistoryIsTruncated
     }
 
-    public func matches(_ context: FDecisionContext) -> Bool {
-        contextID == context.id && accountID == context.accountID &&
+    public func matches(_ context: FDecisionContext, scope: FAdvisorEntryScope) -> Bool {
+        let expectedDailySummaries: [FDailyTradeSummary]
+        switch scope {
+        case .portfolio:
+            expectedDailySummaries = context.dailyTradeSummaries
+        case .instrument(let code):
+            expectedDailySummaries = context.dailyTradeSummaries.filter { $0.securityCode == code }
+        }
+        let expectedDailyPortfolioRealizedPnL = expectedDailySummaries.isEmpty ? nil :
+            expectedDailySummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }
+        return contextID == context.id && accountID == context.accountID &&
             accountDigest == context.accountDigest && capturedAt == context.createdAt &&
             cashBalance == context.cashBalance && holdings == context.holdings &&
-            observations == context.observations && positionHistory == context.positionHistory &&
+            observations == context.observations && dailyTradeSummaryDate == context.dailyTradeSummaryDate &&
+            dailyTradeSummaries == expectedDailySummaries &&
+            dailyPortfolioRealizedPnL == expectedDailyPortfolioRealizedPnL &&
+            instrumentPnLFacts == expectedInstrumentPnLFacts(context, scope: scope) &&
+            positionHistory == context.positionHistory &&
             recentPositionEpisodes == context.recentPositionEpisodes &&
             positionEpisodeHistoryIsTruncated == context.positionEpisodeHistoryIsTruncated
+    }
+
+    private func expectedInstrumentPnLFacts(_ context: FDecisionContext,
+                                           scope: FAdvisorEntryScope) -> [FDecisionInstrumentPnL] {
+        switch scope {
+        case .portfolio: return context.instrumentPnLFacts
+        case .instrument(let code): return context.instrumentPnLFacts.filter { $0.instrumentCode == code }
+        }
     }
 }
 

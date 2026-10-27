@@ -34,10 +34,14 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
     public let positions: [FReadOnlyPositionSnapshot]
     public let instrumentHistories: [FInstrumentHistorySnapshot]
     public let cashFlow: [FReadOnlyCashFlowEntry]
+    /// Confirmed fills summarized for the CN trading date containing `capturedAt`.
+    /// Raw fill records and write capabilities are not exposed to Advisor.
+    public let dailyTradeSummaryDate: String
+    public let dailyTradeSummaries: [FDailyTradeSummary]
     public let confirmedFillIDs: Set<UUID>
     public let confirmedFillTimestamps: [UUID: Date]
 
-    fileprivate init(book: FAccountBook, capturedAt: Date, digest: String) {
+    fileprivate init(book: FAccountBook, capturedAt: Date, digest: String) throws {
         accountID = book.accountID
         schemaVersion = book.schemaVersion
         currencyCode = book.currencyCode
@@ -51,6 +55,8 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
             ($0.instrumentCode, $0.instrumentName)
         })
         cashFlow = FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
+        dailyTradeSummaryDate = try FDailyTradeSummary.tradingDate(for: capturedAt)
+        dailyTradeSummaries = try FDailyTradeSummary.derive(from: book.fills, asOf: capturedAt)
         confirmedFillIDs = Set(book.fills.map(\.id))
         confirmedFillTimestamps = Dictionary(uniqueKeysWithValues: book.fills.map { ($0.id, $0.tradedAt) })
     }
@@ -66,8 +72,8 @@ public extension FAccountBook {
     @_spi(LedgerStorage)
     public func readOnlySnapshot(capturedAt: Date = Date()) throws -> FReadOnlyLedgerSnapshot {
         try validate(now: capturedAt)
-        return FReadOnlyLedgerSnapshot(book: self, capturedAt: capturedAt,
-                                       digest: try ledgerStateDigest())
+        return try FReadOnlyLedgerSnapshot(book: self, capturedAt: capturedAt,
+                                           digest: try ledgerStateDigest())
     }
 
     /// Canonical economic-state hash. Audit rows are excluded to avoid recursive hashes;
@@ -80,6 +86,7 @@ public extension FAccountBook {
             var openingSnapshot: FAccountOpeningSnapshot
             var cashBalance: Decimal
             var positions: [FPosition]
+            var brokerDisplayCosts: [FBrokerDisplayCostRecord]?
             var fills: [FConfirmedFill]
             var cashMovements: [FCashMovement]
             var updatedAt: Date
@@ -92,6 +99,7 @@ public extension FAccountBook {
                 positions: openingSnapshot.positions.sorted { $0.instrumentCode < $1.instrumentCode }),
             cashBalance: cashBalance,
             positions: positions.sorted { $0.instrumentCode < $1.instrumentCode },
+            brokerDisplayCosts: brokerDisplayCosts?.sorted { $0.instrumentCode < $1.instrumentCode },
             fills: fills.sorted {
                 if $0.tradedAt != $1.tradedAt { return $0.tradedAt < $1.tradedAt }
                 return $0.id.uuidString < $1.id.uuidString

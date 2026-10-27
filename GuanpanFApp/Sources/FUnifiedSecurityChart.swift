@@ -269,7 +269,8 @@ struct FUnifiedSecurityChart: View {
     }
     private func overlayTitle(_ kind: FChartOverlayKind) -> String {
         switch kind {
-        case .cost: return "真实成本"
+        case .cost: return "本轮成本"
+        case .brokerCost: return "券商成本"
         case .intradayAverage: return "均价"
         case .previousClose: return "前收"
         case .iopv: return "IOPV"
@@ -280,6 +281,7 @@ struct FUnifiedSecurityChart: View {
     private func overlayColor(_ kind: FChartOverlayKind) -> Color {
         switch kind {
         case .cost: return .orange
+        case .brokerCost: return .gray
         case .intradayAverage: return .purple
         case .previousClose: return .gray
         case .iopv: return .cyan
@@ -345,6 +347,15 @@ enum FChartPresentationBuilder {
                                                   points: points, quality: .complete,
                                                   source: "F Real Ledger confirmed cost", fetchedAt: capturedAt) {
                 overlays.append(cost)
+            }
+            if let brokerCost = holding.brokerDisplayCostPerUnit,
+               let updatedAt = holding.brokerDisplayCostUpdatedAt {
+                let points = timestamps.map { FChartOverlayPoint(timestamp: $0, value: brokerCost) }
+                if let broker = try? FChartPriceOverlay(
+                    securityCode: chart.securityCode, kind: .brokerCost, points: points,
+                    quality: .complete, source: "用户录入的券商展示成本", fetchedAt: updatedAt) {
+                    overlays.append(broker)
+                }
             }
         }
         if let candidate, candidate.instrumentCode == chart.securityCode,

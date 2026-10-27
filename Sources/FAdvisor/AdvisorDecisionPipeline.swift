@@ -42,7 +42,7 @@ public struct FAdvisorDecisionPipeline: Sendable {
               request.accountDigest == context.accountDigest,
               request.decisionContextID == context.id,
               request.decisionContextCreatedAt == context.createdAt,
-              request.portfolioContext?.matches(context) == true,
+              request.portfolioContext?.matches(context, scope: request.scope) == true,
               request.researchEvidenceMatches(context, at: now),
               request.advisorProjectionsAreValid(for: context) else {
             throw FAdvisorDecisionPipelineError.requestContextMismatch

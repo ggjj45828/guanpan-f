@@ -2,6 +2,12 @@
 
 ## 最新实时CI与工作树状态（2026-10-27 15:19 Asia/Shanghai）
 
+## Ledger盈亏口径增补（2026-10-27）
+
+| 交叉追踪 | F源码/测试 | 当前状态 | 仍需验证 |
+|---|---|---|---|
+| B-018 / B-027 / B-029 / B-130 / B-145：本轮主成本与券商成本分离；Security Daily P&L、Episode P&L、日已实现、Lifetime P&L、T Contribution分离；同日清仓后买回不重置全天盈亏 | `Sources/FCore/SecurityPnLFacts.swift`; `Sources/FCore/DailyTradeSummary.swift`; `Sources/FCore/LedgerSchema.swift`; `Sources/FLedgerWrite/LedgerTransactions.swift`; `Sources/FAdvisor/DecisionContext.swift`; `GuanpanFApp/Sources/HomeExperience.swift`; `GuanpanFApp/Sources/FUnifiedSecurityChart.swift`; `Tests/FCoreTests/LedgerSchemaTests.swift` | 已编码，未Apple编译/未执行新增测试。当前FCore 129项defined，最近真实执行仍为旧CI 121/121 | 可靠前收/期初数量供给、隔日场景、Broker成本多轮修正/对账、Advisor逐问句字段选择、Simulator UI与真实行情验收；不得把Unavailable改成推算值 |
+
 - Run `40463891229` / `5169df6`：FCore 121/121 passed；XcodeGen、Device Build、Simulator Build成功；App UI XCTest失败（Actions UI Test步骤耗时4m59，详情页面仅显示exit code 65，首个断言尚未取得）。
 - 当前待CI设置表单修正：Form增加 `settings.form`，测试针对该容器滚动并验证NAS按钮可点击；测试失败路径明确输出容器accessibility树后退出。不降低断言标准。
 - F-145跨市场验收设计已补充时区/日历/DST、no-lookahead、相关/领先/共同风险区分、证券级滚动画像、底层资产与场内ETF溢价条件分离、wait/no-trade和完整Evidence元数据。本项仍未编码/实证。

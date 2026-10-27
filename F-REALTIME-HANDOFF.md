@@ -262,6 +262,61 @@ Apple编译验证：run 40489587708针对commit 8c69211全部成功；本轮FCor
 
 F_CURRENT_STATUS_END
 
+## 2026-10-27 21:08 补齐T成交标记与券商成本跨清仓保留
+
+- 继续同一F工作树和HEAD `4972f843f208dd1a622ec42205f80b5a059718cb`，没有切换/回退/提交/推送；当前源码变更仍dirty。GitHub最新可见页面记录仍是先前浏览器看到的`8c692112`，本轮没有新fetch证据。
+- `FConfirmedFill`增加可选`tradeIntent`与`tCycleID`字段；新确认成交默认标记普通交易，旧Ledger缺字段时仍解码为未分类。真实成交确认Sheet加入轻量成交用途Picker和T配对编号；tSell只允许卖出，tBuyback只允许买入，必须提供相同配对编号。校验拒绝错边、缺编号和普通交易携带T编号。
+- `FTradeContributionCalculator`只在统计区间内全部成交均已分类、且每个证券/交易日/配对编号的T卖出量与买回量完全相等时输出T贡献；计算按卖出额−买回额−两边实际费用。任一历史fill未分类或配对不平衡时返回nil；所有成交明确为普通交易时才返回0。T不是卖出realizedPnL；DecisionContext独立提供daily/cumulative T字段。
+- 修复券商展示成本的生命周期缺口：当前FPosition中的成本在清仓移除position时原本会丢失。新增账户级可选`brokerDisplayCosts`记录，校验与账本状态摘要覆盖该数据；用户修正成本时同步更新；卖出时从活动position存档；清仓后重买时重新挂到Active Position。增加清仓/重开后成本恢复回归测试定义。旧账户可选字段缺失时继续解码。
+- App详情已有“本轮真实成本/份”“券商展示成本/份”与更新时间；图表Overlay将主线标为“本轮成本”，次级线标为“券商成本”。T Contribution UI区分已知0、无交易0和旧成交不可分类。
+- 新增FCore XCTest定义：前述同日全清仓重建仓；两种T与Lifetime P&L相反方向组合；券商展示成本清仓后重开仍保留；未分类旧成交/不平衡T周期必须Unavailable。FCore定义数现为**129**；最近真实Apple执行仍为旧结果121/121 passed、0 failed。当前Swift及UI变更未编译、未执行；本机无Swift/Xcode/XcodeGen/Simulator。
+- `Security Daily P&L`公式已经覆盖行情标记计算，但DecisionContext目前缺可靠前收和当日开盘数量，因此当前输出仍为nil/Unavailable；今日realized和当前Episode浮盈不得代替它。
+- 当前完整缺口仍包括：苹果CI/编译与129项测试、UI Test、Simulator人工查看、真实前收与开盘数量数据接线、真实行情与NAS历史分钟、DeepSeek E2E、用户多笔T配对实操与隔日归档。未运行NAS/Python、Simulator、NAS/行情/DeepSeek服务E2E。Candidate仍无账本写权，唯一记账入口仍是用户确认实际成交。
+- 矩阵与F-B-145追溯补充已更新。`git diff --check`通过（行尾警告）；测试定义计数通过源码静态计数，不能计为测试执行。后续仍按远端fetch→reconcile→普通push→完整Apple CI执行，禁止强推。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger/Advisor收益语义与可用性收口；Apple验证等待恢复
+当前正在开发：真实确认成交标记/配对、T收益与日/本轮/生命周期盈亏严格分离
+刚刚完成：T用途确认入口和配对计算编码；券商成本账户级保留并在重开仓恢复；同日两种相反P&L场景测试定义
+未提交工作：此前每日交易摘要与Advisor scope改动；本轮Ledger schema/写入边界/DecisionContext/提示词/资产UI/图表overlay/追溯与测试；另有未跟踪锁定Python临时目录
+iOS完成度：Ledger/Advisor/UI相关修改已编码；本轮未Apple编译；本轮未Simulator运行/视觉验收
+AI顾问完成度：DecisionContext预计算字段与严格提示语已编码；真实DeepSeek未验证；T旧流水未分类安全Unavailable
+统一图表完成度：本轮成本主线/券商次级线已编码；交互/横屏未验收
+NAS历史数据完成度：本轮未修改/未真实E2E
+Apple编译验证：本机无Apple工具链；External Verification Pending
+当前测试：FCore 129 defined / 最新真实执行仍121 executed、121 passed、0 failed；App UI 3 defined / 最新真实执行3 passed；Python/NAS本轮0执行
+最大缺口：Security Daily P&L缺可信前收与日初数量；本轮Swift均未编译；真实数据服务E2E；Simulator/真机未验；旧fills无法标记T
+下一步：完成当前工作树静态边界/兼容性检查，随后等待GitHub可取回时fetch/reconcile→普通push→全套Apple CI；CI通过后立即Simulator人工验收
+F_CURRENT_STATUS_END
+
+## 2026-10-27 20:58 Ledger盈亏口径与同日清仓重建仓
+
+- 当前F仍在既有工作树，HEAD为`4972f843f208dd1a622ec42205f80b5a059718cb`；未checkout、未回退、未提交或推送。工作树包含此前每日confirmed-fill摘要修改及本轮Ledger/Advisor/UI变更；另有未跟踪、受文件锁影响的Python临时目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`，未触碰。
+- 收益语义已在F追溯矩阵补为B-018/B-027/B-029/B-130/B-145交叉验收：Episode Economic Cost为当前仓位主成本；Broker Display Cost只作用户录入的券商对账口径；Security Daily P&L、Daily Realized Trading P&L、Current Episode realized/unrealized/total、Closed Episodes realized、Security Lifetime realized/unrealized/total、T Contribution均独立命名。
+- 新增`FSecurityPnLCalculator`：全天证券贡献公式需要交易日开始数量、可靠前收、当天全部confirmed fill摘要与费用、期末数量和当前可靠价，并检查数量守恒/证券代码。它不会将episode分界当作日期边界。若当前上下文缺少期初数量/前收，`FDecisionInstrumentPnL.securityDailyPnL`明确为nil；现阶段这些必要行情/日初持仓事实仍未接线。
+- `FDailyTradeSummary.realizedPnL`保留旧JSON字段兼容，新增语义别名`dailyRealizedTradingPnL`及可选`tContribution`。当前没有用户确认T标签/成对成交识别逻辑，故T字段保持nil；普通清仓卖出不会被当做T收益。Advisor Prompt要求直接使用DecisionContext预计算字段，禁止DeepSeek推算/换用其他口径。
+- `FDecisionContext.instrumentPnLFacts`及按Portfolio/Security scope隔离的只读Advisor投影已编码：含每日已实现交易值、当日/累计T值（未知时nil）、Episode已实现/未实现/总盈亏、Closed Episode已实现、Security Lifetime已实现/未实现/总盈亏、券商成本和本轮成本。无有效新鲜行情时浮盈亏/total按nil处理；清仓品种未实现为0。旧上下文缺字段时兼容解码为空，不会伪造结果。
+- 证券详情增加“盈亏口径”区块，分别展示今日证券总盈亏（当前必需源缺失时显示Unavailable）、今日已实现、T日/历史累计T unavailable、Episode realized/unrealized/total、Closed Episodes realized、Lifetime total。当前未持有仍保留历史实现值。统一图表成本Overlay主线命名为“本轮成本”，用户录入券商成本单独以“券商成本”次级线显示；UI区分券商更新时间。
+- 新增2个FCore XCTest定义：昨日持仓→今日高价全卖→同日低价买回→新Episode，验证Security Daily P&L保留全天旧仓贡献而新Episode浮盈只针对再买仓位；以及全天证券亏损但重新买回的新Episode盈利的反向场景。并检查旧Episode/Lifetime、成交费用、保留fills、Ledger现金流水、T字段不误分类及Advisor事实投影。
+- FCore test函数定义数现在为**126**（本地静态计数）；最近真正执行仍是旧Apple CI证据121/121 passed。新增Swift代码尚未编译或执行。本机仍无swift/swiftc/Xcode/XcodeGen/Simulator，因此本轮所有Swift改动为External Verification Pending；`git diff --check`通过，仅报告行尾转换警告。
+- 确认的缺口：可靠T标签/循环ID及买卖配对尚未进入Confirmed Fill确认UI/Writer；今日Security Daily P&L缺prev-close与日初units供给；还未在DecisionContext里展示T累计历史的确定值；图表双线、盈亏卡片尚未Simulator验收；同日场景正/负符号、隔日重建、T盈亏与Lifetime相反符号、真实Broker成本录入和AI问句语义仍需继续补充/执行。
+- 本轮没有运行NAS/Python、Simulator、DeepSeek、NAS或行情E2E；未向远端操作。远端仍需右侧GitHub/fetch核对；后续仍按fetch→reconcile→普通push→完整Apple CI，不强推。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：真实Ledger/Advisor成本与盈亏口径收口，当前工作树未编译
+当前正在开发：确定性分离T Contribution、每日交易已实现、证券全天P&L、Episode与Lifetime P&L
+刚刚完成：DecisionContext分证券P&L事实、全天P&L纯计算器、证券详情口径标签、本轮成本/券商成本两条图表线编码；traceability与Master Matrix已记录
+未提交工作：此前DailyTradeSummary和Advisor scope改动，加本轮Sources/FCore/SecurityPnLFacts.swift、DecisionContext/AdvisorEntry、App图表/资产UI、测试和交接文档；另有锁定Python临时目录
+iOS完成度：相关UI/模型已编码，未Apple编译/未Simulator验收
+AI顾问完成度：按字段的提示约束和只读PnL投影已编码；真实DeepSeek未联调；T tags缺失时安全返回Unavailable
+统一图表完成度：本轮成本与券商成本Overlay拆分已编码；手势/横屏未验收
+NAS历史数据完成度：本轮未改动；历史minutes provider与iOS E2E仍待实测
+Apple编译验证：本机无Swift/Xcode/XcodeGen；External Verification Pending
+当前测试：FCore 126 defined / 最近真实执行121 passed、0 failed；新增2项未执行；App UI 3 defined / 最近真实执行3 passed；Python/NAS本轮未执行
+最大缺口：T标记/配对无写入入口；Security Daily P&L依赖的可靠前收/日初units缺数据源接线；本轮未编译；Simulator未验；真实DeepSeek/Ledger闭环未E2E
+下一步：先做静态边界/兼容性复核并完善必要回归定义；GitHub可用后fetch/reconcile→普通push→Apple完整CI，按首个真实错误修复后进入Simulator验收
+F_CURRENT_STATUS_END
+
 ## 2026-10-27 19:19 实时进度：NAS队列收敛、研究质量与双成本收口
 
 本节覆盖此前交接中“当前工作树补记”的旧状态；以此处记录为准。
@@ -367,4 +422,132 @@ Apple编译验证：本轮未触发；本机缺Xcode/XcodeGen；最近基线FCor
 当前测试：FCore 122 defined / 本轮新增测试未执行；App UI 3 defined / 最近3 passed；NAS主组34/34、焦点8/8；扩展组94项为87 passed、2 failed、5 Windows环境错误
 最大缺口：GitHub DNS无法连通；历史provider日期覆盖；逐笔成交未进入DecisionContext；本轮Swift未Apple验证；Simulator和真实服务闭环未验收
 下一步：网络恢复后fetch并reconcile，再普通推送当前本地HEAD并执行完整Apple CI
+F_CURRENT_STATUS_END
+
+## 2026-10-27 20:12 实时续查
+
+- 按用户要求使用右侧 GitHub 浏览器读取 `main` 提交列表：最新可见远端提交仍为 `8c6921123c7e888ad8601186bae459ac090b7b1c`（Fix unified chart legend scrolling）；未看到本地提交`4972f843f208dd1a622ec42205f80b5a059718cb`。
+- 本轮再次`git fetch origin main`失败：`getaddrinfo() thread failed to start`。没有执行推送；远端未改变证据仅来自右侧页面读取，Git fetch仍不可用，因此仍不应推送覆盖或声称CI已触发。
+- 使用工作区捆绑Python执行7个NAS定向用例：设置TEMP/TMP到允许写入的临时目录后，2个runtime用例及1个service用例通过；4个service用例在Windows SQLite文件句柄锁定时清理fixture失败，报告为errors，不能记为通过。此前未重定向TEMP时，创建SQLite数据库也受限。未修改产品代码来绕过环境错误。
+- 当前产品代码HEAD仍为`4972f843f208dd1a622ec42205f80b5a059718cb`，相对缓存`origin/main`领先1个提交；工作树除锁定的临时测试日志目录外没有源码未提交修改。本机仍无Xcode，Swift改动未编译；Simulator及NAS/行情/DeepSeek实网E2E均未验证。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：NAS补采收敛与Ledger双成本修改等待Apple CI
+当前正在开发：保持已提交本地修改；等待GitHub可fetch后先核对再普通push
+刚刚完成：右侧浏览器确认远端main仍为8c69211；7项本地定向NAS测试本轮3 passed、4 errors（Windows SQLite清理锁）
+未提交工作：无源码修改；存在未跟踪且文件锁定的测试临时日志目录
+iOS完成度：双成本及相关测试定义已编码；本轮未编译
+AI顾问完成度：双成本语义已编码；真实DeepSeek和成交后复判未E2E
+统一图表完成度：沿用既有共享renderer；未做本轮Simulator交互验收
+NAS历史数据完成度：有限重试/覆盖和质量状态已编码；provider真实历史覆盖、NAS→iOS消费未实测
+Apple编译验证：本机无Xcode/XcodeGen；当前Swift External Verification Pending
+当前测试：FCore 122 defined / 最近Apple执行121 passed；App UI 3 defined / 最近Apple执行3 passed；本轮NAS定向7项=3 passed、4 errors（Windows SQLite文件锁清理问题）
+最大缺口：GitHub网络阻断；本轮Swift未Apple编译；NAS历史provider覆盖未知；Simulator交互和DeepSeek/真实成交E2E未验证
+下一步：网络恢复后fetch/reconcile→普通push→完整Apple CI；网络恢复前只做低风险静态检查，不扩写大量Swift
+F_CURRENT_STATUS_END
+
+## 2026-10-27 20:32 Advisor真实成交事实接线
+
+- 保持原本`4972f843f208dd1a622ec42205f80b5a059718cb`为当前HEAD基线，未回滚、未重写提交。新增Swift工作目前在工作树中，尚未提交/编译；`F-REALTIME-HANDOFF.md`也有本轮更新。未跟踪的锁定Python临时日志目录仍未纳入源码修改。
+- 新增`FCore.FDailyTradeSummary`只读模型，由`FAccountBook.fills`中的真实confirmed fills确定性生成；日期按明确的`Asia/Shanghai`交易日计算，且只纳入`capturedAt`及之前发生的成交。包含证券代码、交易日期、买卖数量与毛成交额、买卖费用/总费用、逐笔卖出成本基准产生的realizedPnL、成交数、首末成交时间。手续费读取真实fill记录，不由Advisor推算。
+- `FReadOnlyLedgerSnapshot`只暴露按证券汇总的摘要，不暴露原始fills或写入能力。`FDecisionContext`增加当日各证券摘要及确定性`dailyPortfolioRealizedPnL`；旧归档对新字段缺失时仍按空摘要读取。上下文校验摘要日期、时间、金额/费用及组合汇总一致性。
+- `FAdvisorPortfolioContextProjection`现在按scope裁剪成交事实：Portfolio收到全部证券摘要及组合已实现盈亏合计；Security仅收到目标证券摘要/合计。Pipeline和Risk Guard都按scope重新校验投影，避免请求载荷伪造或跨证券成交事实泄漏。
+- DeepSeek系统提示已明确：“今天单证券做T”读对应摘要；“今天全部操作盈亏”读`dailyPortfolioRealizedPnL`；缺少当日/目标摘要时明确Unavailable；历史累计盈亏仍读全部Episodes；Broker Display Cost和Episode Economic Cost语义继续分离。Candidate/Advisor没有Ledger写权限，唯一确认成交入口未改变。
+- 新增2项FCore XCTest定义并扩展既有同日复杂交易测试：覆盖卖→买→卖→清仓→重建仓、买→卖→买、多个证券组合汇总、按证券scope隔离、摘要JSON往返、前一交易日买入不混入今天、ETF每fill ¥0.10、当日/累计实现盈亏、现金及Episode成本核对。FCore定义总数由122增至124；新增用例尚未编译或执行。
+- 静态`git diff --check`未报告空白错误。当前环境未发现`swift`、`swiftc`、`xcodebuild`或`xcodegen`，所以不能声明Swift编译。Apple最近真实证据仍为FCore 121/121、App UI 3/3（旧基线）；新增双成本及每日成交事实修改均External Verification Pending。
+- 本轮仍未获得本机Apple工具链、Simulator、真机或真实NAS/DeepSeek E2E。Windows Python最近7项定向复跑为3通过/4错误，错误落在SQLite fixture清理句柄锁定；这些结果不替代本次Swift XCTest。
+- 网络恢复后的操作顺序不变：先fetch/reconcile，再普通push当前变更，随后完整Apple CI（XcodeGen、FCore 124项、Device/Simulator Build、App UI Test）；不得强推。当前fetch仍受`getaddrinfo() thread failed to start`阻断，尚无新CI。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Advisor真实成交事实输入收口，等待Apple验证
+当前正在开发：将confirmed fills摘要安全地送进DecisionContext及按scope裁剪的Advisor只读投影
+刚刚完成：新增FDailyTradeSummary及组合当日已实现盈亏确定性汇总；DeepSeek提示改用成交事实而禁止反推
+未提交工作：DailyTradeSummary.swift、LedgerSnapshot、DecisionContext、AdvisorEntry/Pipeline、DeepSeek提示、LedgerSchemaTests及本交接文档；另有未跟踪锁定临时日志目录
+iOS完成度：每日成交摘要已编码；FCore 124项defined，当前改动未编译、未执行
+AI顾问完成度：Portfolio有全组合日摘要/总实现盈亏；Security只收到目标证券日摘要；真实DeepSeek和成交后复判仍未E2E
+统一图表完成度：无本轮改动；Simulator手势/横屏人工验收仍External Pending
+NAS历史数据完成度：本轮无provider或NAS修改；历史provider真实覆盖、NAS→iOS E2E仍待验证
+Apple编译验证：当前环境无Swift/Xcode/XcodeGen；External Verification Pending
+当前测试：FCore 124 defined / 最近Apple真实执行121 passed、0 failed；App UI 3 defined / 最近执行3 passed；Python NAS本轮定向7项=3 passed、4 errors（Windows SQLite文件锁清理）
+最大缺口：本轮Swift无编译/测试证据；GitHub fetch/push受DNS阻断；历史分钟provider实测覆盖；Simulator人工验收；DeepSeek/真实成交E2E
+下一步：GitHub恢复后fetch/reconcile→普通push→完整Apple CI；依据首个真实编译/测试错误修复，再进入Simulator与真实链路联调
+F_CURRENT_STATUS_END
+
+## 2026-10-27 20:35 摘要完整性标记补充
+
+- 增加`dailyTradeSummaryDate`覆盖标记。当前快照的日期标记存在且证券摘要为空，表示账本确认当天没有对应证券的成交；旧归档中日期标记缺失，才表示旧上下文没有采集日摘要、事实不可用。这样Advisor不把“没有成交”误说成“Ledger缺数据”。
+- Portfolio请求携带全组合的当日摘要及确定性组合realized P/L；Security请求仅带目标证券当日摘要及其realized P/L。Pipeline与Decision Guard的投影一致性检查均按scope校验。旧DecisionContext和Advisor投影仍可解码，缺少新日期/摘要字段时保持安全降级。
+- `git diff --check`通过；FCore XCTest定义数为124。未找到Swift/Xcode/XcodeGen，所有新增Swift测试仍为defined、未执行；Apple最近实际证据仍为旧基线121/121和UI 3/3。再次`git fetch origin main`仍失败（GitHub地址解析线程错误），本轮不提交、不push、不触发CI。
+
+## 2026-10-27 21:10 最新实时状态覆盖
+
+本节覆盖之前交接快照中仍写“124 defined”及“还没有T标签/配对入口”的描述。当前HEAD仍为`4972f843f208dd1a622ec42205f80b5a059718cb`，工作树dirty；没有提交或推送。刚刚再次`git fetch origin main`失败：`getaddrinfo() thread failed to start`，未触及远端。远端最新可见浏览器证据仍是之前记录的`8c692112`，本轮未重新读取。
+
+当前FCore XCTest定义为**129**；最近真实Apple执行仍为旧基线**121 executed / 121 passed / 0 failed**。App UI XCTest最近真实执行仍为3/3 passed；本轮没有运行Swift测试、Python/NAS、Simulator、真机或实网E2E。本机无Swift/Xcode/XcodeGen/Simulator。
+
+本轮在原有PnL上下文编码上又补入：Confirmed Fill的普通/T卖出/T买回意图与配对ID、数量平衡且全fill分类后才生成T贡献、券商展示成本跨清仓存档并在重买恢复、T与Lifetime符号相反回归、未分类/不平衡周期Unavailable回归。F-145追溯与Master Matrix均已记录。新增Swift/UI/测试仍未Apple编译；Simulator未人工验收。
+
+仍明确Unavailable：Security Daily P&L（缺可靠前收及日初数量）；历史T贡献（旧fills未标记）；Current/Lifetime未实现盈亏（无新鲜行情）。并且全部候选真实成交仍必须用户确认后进入唯一Ledger Writer。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：真实Ledger/Advisor收益口径收口；Apple CI等待网络
+当前正在开发：T配对统计、全天证券PnL必要行情事实接线和验证
+刚刚完成：T标记/配对入口；同日/生命周期PnL分离；券商成本跨清仓保留编码
+未提交工作：本轮所有Ledger/FCore/Advisor/App UI/图表/测试/追溯更新；另有锁定Python临时目录
+iOS完成度：相关修改已编码，未编译、未Simulator验收
+AI顾问完成度：预计算P&L事实及提示约束已编码；DeepSeek未真实联调
+统一图表完成度：本轮成本线主次已编码；交互/横屏未验收
+NAS历史数据完成度：本轮未变更/未E2E
+Apple编译验证：External Verification Pending；本机无工具链
+当前测试：FCore 129 defined / 最近121 executed、121 passed、0 failed；UI 3 defined / 最近3 passed；Python/NAS本轮0执行
+最大缺口：可信前收/日初数量；本轮Swift未编译；真实行情/NAS/DeepSeek闭环；Simulator与真机
+下一步：网络恢复后fetch/reconcile→普通push→完整Apple CI；在此之前做静态兼容性复核，不虚报验证
+F_CURRENT_STATUS_END
+## 2026-10-27 实时成本/盈亏语义与旧上下文兼容收口
+
+- 继续在原 F 工作树 `4972f843f208dd1a622ec42205f80b5a059718cb` 上工作，没有回退或切换副本。当前仍有此前 Ledger、Advisor、图表与 NAS 修改；未跟踪锁定临时目录 `.task-python-temp-b252c94955274b7c90bce865b594fca4/` 保留原样。
+- 静态复核发现初始导入持仓没有其导入前逐笔 fills，不能把该证券账本内的累计已实现值冒充完整 Lifetime P&L。当前投影明确标记：导入快照启动的 Episode history incomplete；清仓后基于真实 confirmed buy 建立的新 Episode complete；证券 Lifetime complete 仍为 false。Lifetime realized/total、closed episode 汇总以及历史 T 贡献在完整性不足时Unavailable；本轮重新建仓Episode的成本/未实现盈亏仍可单独呈现。
+- 修正 Advisor JSON 中历史完整性标记为可选字段，以兼容旧版序列化的 DecisionContext/Advisor projection；缺少标志表示unknown/incomplete，不再默认为完整。P&L摘要里closedEpisodesRealizedPnL也允许Unavailable。DeepSeek提示明确要求 false/null 均不得宣称全生命周期完整，并说明 positionHistory 的账本部分值不等于完整累计。
+- 扩展同日清仓后重新买入回归：验证旧Episode不完整、新Episode完整；今日盈亏计算仍保留全天卖出收益与新仓浮动；Security Lifetime总数因导入前交易缺失而不可用；并校验移除新标志后的旧DecisionContext仍可解码且unknown不升级成complete。测试仍是定义状态，没有本地Apple工具链可执行。
+- 当前FCore XCTest定义数静态计数为129；最近真实Apple执行证据仍是旧基线121/121 passed、0 failed，UI 3/3 passed。上述及其他dirty Swift未编译、未运行。Simulator/手势、真机、NAS/行情/DeepSeek E2E本轮未验证。
+- `git diff --check`通过（仅Git对部分LF文件提示未来CRLF转换）。本机无swift/swiftc/xcodebuild/xcodegen。
+- 当前Git `main` HEAD仍是上述本地基线，相对缓存`origin/main` ahead 1；工作树dirty。最新`git fetch origin main`仍曾被 `getaddrinfo() thread failed to start`阻断；没有commit/push，未触发CI，也未强推。右侧Edge窗口在UI控制工具中返回“window id no longer belongs to MSEdge”，所以本轮尚未取得新的浏览器远端/Actions证据。
+- 下一步：继续通过右侧浏览器重新观察GitHub远端和Actions；远端确认后先fetch/reconcile，再普通提交/推送当前修改并触发Apple完整CI。CI实际结果优先；编译失败时按第一个根因修复。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger/Advisor双成本、T贡献、全天盈亏和历史完整性收口，准备Apple CI验证
+当前正在开发：安全呈现导入前流水不完整的Episode/Lifetime盈亏；之后核对远端并送Apple CI
+刚刚完成：同日高价清仓低价重买与旧上下文兼容检查；129项FCore XCTest定义
+未提交工作：Ledger/Advisor/App/UI/图表/测试及追溯文档等dirty修改；锁定Python临时目录保持未跟踪
+iOS完成度：相关逻辑已编码；当前全部Swift改动未编译
+AI顾问完成度：字段化成本/P&L事实、scope投影与提示约束已编码；DeepSeek真实调用及成交后复判未E2E
+统一图表完成度：共享renderer成本线标签/层级有编码改动；无Simulator交互证据
+NAS历史数据完成度：历史provider能力和真实iOS消费未联调；当前没有新数据验证
+Apple编译验证：本机无Swift/Xcode/XcodeGen；External Verification Pending
+当前测试：FCore 129 defined / 最近真实执行121 passed、0 failed；App UI 3 defined / 最近真实执行3 passed；Python/NAS本轮0执行
+最大缺口：dirty Swift尚未Apple编译；GitHub远端同步/CI未恢复验证；Simulator人工手势；历史分钟进入iOS；真实DeepSeek/成交闭环
+下一步：右侧浏览器核对远端/Actions → fetch/reconcile → 普通push → Apple完整CI；不得强推
+F_CURRENT_STATUS_END
+
+## 2026-10-27 21:27 Asia/Shanghai 远端核对与CI准备
+
+- 右侧页面显示最新工作流run #36在提交`8c6921123c7e888ad8601186bae459ac090b7b1c`上成功；GitHub Actions网页可以读取。浏览器自动化绑定当前Windows窗口失败，因此以可读的GitHub Actions页面为远端证据，本轮没有在页面上做修改。
+- 本轮第三次普通fetch仍在沙箱网络中遇到DNS线程错误；随后仅为只读同步重试请求联网权限并成功fetch。核对结果：远端`origin/main=8c6921123c7e888ad8601186bae459ac090b7b1c`，本地HEAD=`4972f843f208dd1a622ec42205f80b5a059718cb`，本地仅领先1个提交；没有远端领先、分叉或需要merge/rebase的提交。未回滚、未切换工作区。
+- 当前工作树保留之前的dirty修改和本轮修正；`.task-python-temp-b252c94955274b7c90bce865b594fca4/`仍未跟踪且不纳入提交。FCore测试静态定义计数129；最近真实Apple证据仍为121/121 passed及UI 3/3，不能代替本轮执行。本机无Swift/Xcode/XcodeGen。
+- 静态复核已修复：Advisor完整性字段改为向后兼容的可选值、未知按不完整处理；导入前流水缺失时Lifetime总数不可用；新增清仓再建仓测试断言旧Episode/Lifetime标志及旧JSON缺字段兼容。`git diff --check`通过。代码仍未编译。
+- 下一步：提交当前有意源码/测试/追溯文件并普通push；观察GitHub Apple workflow实际执行。若首个编译/测试步骤失败，读取具体首个根因后修复再推送。不得强推。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger/Advisor真实收益口径收口，已完成远端安全核对，准备Apple CI
+当前正在开发：将历史完整性和多口径盈亏修改送入Apple验证
+刚刚完成：发现并修正导入基准持仓历史不完整的表达与旧DecisionContext解码兼容
+未提交工作：当前全部有意Ledger/Advisor/App/图表/测试/追溯修改；锁定临时目录排除
+iOS完成度：代码已编码；当前dirty Swift尚未编译
+AI顾问完成度：只读字段语义和提示已编码；DeepSeek实网、真实成交后再判断未E2E
+统一图表完成度：共享renderer和成本叠加有代码；无本轮Simulator交互验收
+NAS历史数据完成度：历史分钟provider及iOS端到端仍未实测
+Apple编译验证：本机无Xcode；待本轮Apple CI执行
+当前测试：FCore 129 defined / 最近真实执行121 passed、0 failed；App UI 3 defined / 最近真实执行3 passed；Python/NAS本轮0 executed
+最大缺口：本轮Swift未编译；Simulator人工交互；NAS历史分钟真实进入iOS；DeepSeek/真实成交闭环
+下一步：普通commit/push→Apple完整CI→按首个实际错误修复
 F_CURRENT_STATUS_END

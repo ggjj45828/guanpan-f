@@ -157,7 +157,7 @@ public struct FIOPVObservation: Equatable, Sendable {
 }
 
 public enum FChartOverlayKind: String, Equatable, Sendable {
-    case cost, intradayAverage, previousClose, iopv, candidateBuy, candidateSell
+    case cost, brokerCost, intradayAverage, previousClose, iopv, candidateBuy, candidateSell
 }
 
 public struct FChartOverlayPoint: Equatable, Sendable {

@@ -319,6 +319,48 @@ struct HomeDestination: View {
         let holding = model.holdings.first { $0.instrumentCode == code }
         let history = model.instrumentHistories.first { $0.instrumentCode == code }
         let instrumentName = holding?.name ?? history?.instrumentName ?? code
+        let quoteSnapshot = model.marketDataByCode[code]
+        let quoteNow = Date()
+        let freshPrice: Decimal? = {
+            guard let quoteSnapshot, quoteSnapshot.quoteTimestamp <= quoteNow,
+                  quoteNow.timeIntervalSince(quoteSnapshot.quoteTimestamp) <= 120 else { return nil }
+            return quoteSnapshot.latestPrice
+        }()
+        let dailySummary = model.latestLedgerSnapshot?.dailyTradeSummaries.first { $0.securityCode == code }
+        let dailyTradingPnL: String = {
+            guard model.latestLedgerSnapshot?.dailyTradeSummaryDate != nil else {
+                return "不可用 · 历史账本无当日摘要"
+            }
+            return dailySummary?.dailyRealizedTradingPnL.description ?? "0 · 今日无确认成交"
+        }()
+        let dailyTDisplay: String = {
+            guard model.latestLedgerSnapshot?.dailyTradeSummaryDate != nil else {
+                return "不可用 · 历史账本无当日摘要"
+            }
+            guard let dailySummary else { return "0 · 今日无确认成交" }
+            return dailySummary.tContribution?.description ?? "不可精确归类 · 存在未标记/未配对成交"
+        }()
+        let lifetimeTDisplay = history?.cumulativeTContribution?.description ??
+            "不可精确归类 · 存在历史未标记/未配对成交"
+        let activeEpisode = history?.episodes.last(where: \.isActive)
+        let recordedClosedEpisodesRealized = history?.episodes
+            .filter { $0.closedAt != nil }
+            .reduce(Decimal.zero) { $0 + $1.netRealizedProfit } ?? .zero
+        let closedEpisodesRealized: String = history?.lifetimeHistoryIsComplete == true
+            ? recordedClosedEpisodesRealized.description
+            : "不可完整统计 · 导入前流水缺失"
+        let episodeUnrealized = if let holding, let freshPrice {
+            Decimal(holding.units) * freshPrice - holding.bookCost
+        } else { nil }
+        let episodePnL = if let activeEpisode, let episodeUnrealized {
+            activeEpisode.netRealizedProfit + episodeUnrealized
+        } else { nil }
+        let lifetimePnL = if let history, history.lifetimeHistoryIsComplete,
+                              history.activeUnits == 0 {
+            history.lifetimeRealizedProfit
+        } else if let history, history.lifetimeHistoryIsComplete, let episodeUnrealized {
+            history.lifetimeRealizedProfit + episodeUnrealized
+        } else { nil }
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text(instrumentName).font(.largeTitle.bold())
@@ -326,8 +368,11 @@ struct HomeDestination: View {
                 if let holding {
                     Group {
                         LabeledContent("真实持仓", value: "\(holding.units) 份")
-                        LabeledContent("本轮经济成本/份", value: (holding.bookCost / Decimal(holding.units)).description)
+                        LabeledContent("本轮真实成本/份", value: (holding.bookCost / Decimal(holding.units)).description)
                         LabeledContent("券商展示成本/份", value: holding.brokerDisplayCostPerUnit?.description ?? "未录入")
+                        if let updatedAt = holding.brokerDisplayCostUpdatedAt {
+                            LabeledContent("券商成本更新时间", value: updatedAt.formatted(date: .numeric, time: .shortened))
+                        }
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -344,7 +389,12 @@ struct HomeDestination: View {
                     Group {
                         LabeledContent("持仓状态", value: "已清仓")
                         LabeledContent("持仓周期", value: "\(history.episodes.count) 轮")
-                        LabeledContent("历史累计已实现盈亏", value: history.lifetimeRealizedProfit.description)
+                        LabeledContent(history.lifetimeHistoryIsComplete ? "历史累计已实现盈亏" : "F账本记录内已实现盈亏",
+                                       value: history.lifetimeRealizedProfit.description)
+                        if !history.lifetimeHistoryIsComplete {
+                            Text("导入前成交历史未录入；此数不代表证券完整历史累计。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -352,6 +402,27 @@ struct HomeDestination: View {
                     Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("盈亏口径").font(.headline)
+                    LabeledContent("今日证券总盈亏", value: "不可用 · 缺可靠前收与今日开盘持仓标记")
+                    LabeledContent("今日交易已实现盈亏", value: dailyTradingPnL)
+                    LabeledContent("今日做T贡献", value: dailyTDisplay)
+                    LabeledContent("历史做T累计贡献", value: lifetimeTDisplay)
+                    LabeledContent("当前Episode已实现盈亏", value: activeEpisode.map {
+                        $0.historyIsComplete ? $0.netRealizedProfit.description : "不可用 · 导入前本轮成交流水不完整"
+                    } ?? "无Active Episode")
+                    LabeledContent("当前Episode未实现盈亏", value: episodeUnrealized?.description ?? (holding == nil ? "无当前持仓" : "不可用 · 行情缺失或已过期"))
+                    LabeledContent("当前Episode盈亏", value: episodePnL?.description ?? (activeEpisode == nil ? "无Active Episode" : "不可用 · 行情缺失或已过期"))
+                    LabeledContent("历史Closed Episodes已实现", value: closedEpisodesRealized)
+                    LabeledContent("证券累计总盈亏", value: lifetimePnL?.description ??
+                        (history?.lifetimeHistoryIsComplete == false
+                            ? "不可用 · 导入前历史流水未录入"
+                            : "未实现部分不可用 · 行情缺失或已过期"))
+                    Text("今日证券总盈亏含全天市值变化；今日已实现仅统计卖出成交。做T需有明确成交标记，不能用普通卖出代替。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 if let history {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("持仓周期历史").font(.headline)
@@ -371,7 +442,7 @@ struct HomeDestination: View {
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 }
-                let snapshot = model.marketDataByCode[code]
+                let snapshot = quoteSnapshot
                     VStack(alignment: .leading, spacing: 8) {
                         Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "暂无有效行情")
                             .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
@@ -896,6 +967,21 @@ struct FLedgerConfirmationSheet: View {
                         .keyboardType(.numberPad)
                     TextField("实际成交价格", text: $model.actualFillPriceText)
                         .keyboardType(.decimalPad)
+                }
+                Section("成交性质（默认普通交易）") {
+                    Picker("用途", selection: $model.actualFillTradeIntent) {
+                        ForEach(FTradeIntent.allCases, id: \.self) { intent in
+                            Text(intent.displayName).tag(intent)
+                        }
+                    }
+                    .accessibilityIdentifier("ledger.fill.intent")
+                    if model.actualFillTradeIntent != .ordinary {
+                        TextField("T配对编号（卖出与买回填写相同值）",
+                                  text: $model.actualFillTCycleID)
+                            .accessibilityIdentifier("ledger.fill.t-cycle")
+                        Text("只有同一证券、同一交易日、相同编号且数量相等的真实确认卖出/买回，才计入T贡献。未配对或历史未分类成交会显示无法精确归类。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Section("不可逆确认") {
                     TextField("确认说明（必填）", text: $model.ledgerConfirmationNote,

@@ -47,6 +47,8 @@ public struct FPositionEpisodeTrade: Codable, Equatable, Sendable, Identifiable 
     public let price: Decimal
     public let fee: Decimal
     public let costBasisRemoved: Decimal?
+    public let tradeIntent: FTradeIntent?
+    public let tCycleID: String?
     public let confirmationNote: String
 
     fileprivate init(_ fill: FConfirmedFill) {
@@ -58,6 +60,8 @@ public struct FPositionEpisodeTrade: Codable, Equatable, Sendable, Identifiable 
         price = fill.price
         fee = fill.fee
         costBasisRemoved = fill.costBasisRemoved
+        tradeIntent = fill.tradeIntent
+        tCycleID = fill.tCycleID
         confirmationNote = fill.userConfirmation.confirmationNote
     }
 
@@ -76,6 +80,8 @@ public struct FPositionEpisode: Codable, Equatable, Sendable, Identifiable {
     public let episodeNumber: Int
     public let openedAt: Date
     public let closedAt: Date?
+    /// False when this episode is represented by an imported opening position without its opening fills.
+    public let historyIsComplete: Bool
     public let openingUnits: Int64
     public let currentUnits: Int64
     public let currentBookCost: Decimal
@@ -86,6 +92,7 @@ public struct FPositionEpisode: Codable, Equatable, Sendable, Identifiable {
     fileprivate init(instrumentCode: String, instrumentName: String, episodeNumber: Int,
                      openedAt: Date, closedAt: Date?, openingUnits: Int64,
                      currentUnits: Int64, currentBookCost: Decimal,
+                     historyIsComplete: Bool,
                      netRealizedProfit: Decimal, openingReason: String?,
                      trades: [FPositionEpisodeTrade]) {
         self.instrumentCode = instrumentCode
@@ -93,6 +100,7 @@ public struct FPositionEpisode: Codable, Equatable, Sendable, Identifiable {
         self.episodeNumber = episodeNumber
         self.openedAt = openedAt
         self.closedAt = closedAt
+        self.historyIsComplete = historyIsComplete
         self.openingUnits = openingUnits
         self.currentUnits = currentUnits
         self.currentBookCost = currentBookCost
@@ -113,18 +121,25 @@ public struct FInstrumentHistorySnapshot: Equatable, Sendable, Identifiable {
     public let firstHeldAt: Date
     public let lastActivityAt: Date
     public let episodes: [FPositionEpisode]
+    /// False when this account began from an imported open position without its prior fills.
+    public let lifetimeHistoryIsComplete: Bool
     public let lifetimeRealizedProfit: Decimal
+    public let cumulativeTContribution: Decimal?
     public let activeUnits: Int64
     public let activeBookCost: Decimal
 
     fileprivate init(instrumentCode: String, instrumentName: String, firstHeldAt: Date,
-                     lastActivityAt: Date, episodes: [FPositionEpisode]) {
+                     lastActivityAt: Date, episodes: [FPositionEpisode],
+                     lifetimeHistoryIsComplete: Bool,
+                     cumulativeTContribution: Decimal?) {
         self.instrumentCode = instrumentCode
         self.instrumentName = instrumentName
         self.firstHeldAt = firstHeldAt
         self.lastActivityAt = lastActivityAt
         self.episodes = episodes
+        self.lifetimeHistoryIsComplete = lifetimeHistoryIsComplete
         lifetimeRealizedProfit = episodes.reduce(Decimal.zero) { $0 + $1.netRealizedProfit }
+        self.cumulativeTContribution = cumulativeTContribution
         activeUnits = episodes.last(where: \.isActive)?.currentUnits ?? 0
         activeBookCost = episodes.last(where: \.isActive)?.currentBookCost ?? 0
     }
@@ -138,6 +153,7 @@ private struct FMutablePositionEpisode {
     var episodeNumber: Int
     var openedAt: Date
     var closedAt: Date?
+    var historyIsComplete: Bool
     var openingUnits: Int64
     var currentUnits: Int64
     var currentBookCost: Decimal
@@ -151,6 +167,7 @@ private struct FMutablePositionEpisode {
         self.episodeNumber = episodeNumber
         self.openedAt = openedAt
         closedAt = nil
+        historyIsComplete = false
         openingUnits = position.units
         currentUnits = position.units
         currentBookCost = position.bookCost
@@ -165,6 +182,7 @@ private struct FMutablePositionEpisode {
         self.episodeNumber = episodeNumber
         openedAt = fill.tradedAt
         closedAt = nil
+        historyIsComplete = true
         openingUnits = 0
         currentUnits = 0
         currentBookCost = 0
@@ -198,7 +216,8 @@ private struct FMutablePositionEpisode {
         FPositionEpisode(instrumentCode: instrumentCode, instrumentName: instrumentName,
                          episodeNumber: episodeNumber, openedAt: openedAt, closedAt: closedAt,
                          openingUnits: openingUnits, currentUnits: currentUnits,
-                         currentBookCost: currentBookCost, netRealizedProfit: netRealizedProfit,
+                         currentBookCost: currentBookCost, historyIsComplete: historyIsComplete,
+                         netRealizedProfit: netRealizedProfit,
                          openingReason: openingReason, trades: trades)
     }
 }
@@ -234,9 +253,17 @@ enum FLedgerHistoryProjection {
             let name = activeNames[code] ?? lastEventName ?? episodes.last?.instrumentName ?? "名称未记录"
             let firstHeld = episodes.map(\.openedAt).min() ?? book.openingSnapshot.capturedAt
             let lastActivity = book.fills.filter { $0.instrumentCode == code }.map(\.tradedAt).max() ?? firstHeld
+            let lifetimeHistoryIsComplete = !book.openingSnapshot.positions.contains {
+                $0.instrumentCode == code
+            }
             return FInstrumentHistorySnapshot(instrumentCode: code, instrumentName: name,
                                               firstHeldAt: firstHeld, lastActivityAt: lastActivity,
-                                              episodes: episodes)
+                                              episodes: episodes,
+                                              lifetimeHistoryIsComplete: lifetimeHistoryIsComplete,
+                                              cumulativeTContribution: lifetimeHistoryIsComplete
+                                                ? FTradeContributionCalculator.contribution(
+                                                    from: book.fills.filter { $0.instrumentCode == code })
+                                                : nil)
         }
     }
 

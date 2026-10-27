@@ -209,7 +209,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertEqual(request.portfolioContext?.cashBalance, 100)
         XCTAssertEqual(request.portfolioContext?.holdings.map(\.instrumentCode), ["159352"])
         XCTAssertEqual(request.portfolioContext?.observations, [quote])
-        XCTAssertTrue(request.portfolioContext?.matches(context) == true)
+        XCTAssertTrue(request.portfolioContext?.matches(context, scope: .portfolio) == true)
         XCTAssertEqual(FAdvisorPromptShortcuts.commonQuestions.count, 5)
     }
 

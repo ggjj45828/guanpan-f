@@ -328,6 +328,38 @@ final class LedgerSchemaTests: XCTestCase {
                        Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 6))
     }
 
+    func testBrokerDisplayCostSurvivesFullCloseAndSameSecurityReopen() throws {
+        let code = "159352"
+        let updatedAt = now.addingTimeInterval(-180)
+        let openingPosition = FPosition(instrumentCode: code, name: "A500", units: 100,
+                                        bookCost: 1_000,
+                                        brokerDisplayCostPerUnit: Decimal(string: "1.100")!,
+                                        brokerDisplayCostUpdatedAt: updatedAt)
+        var book = FAccountBook(openingSnapshot: opening(cash: 10_000, positions: [openingPosition]),
+                                cashBalance: 10_000, positions: [openingPosition],
+                                updatedAt: now.addingTimeInterval(-120))
+        let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                                  instrumentCode: code, side: .sell, units: 100, price: 12,
+                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  costBasisRemoved: 1_000, userConfirmation: confirmation(),
+                                  instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+        XCTAssertTrue(book.positions.isEmpty)
+        XCTAssertEqual(book.brokerDisplayCosts?.first?.costPerUnit, Decimal(string: "1.100"))
+
+        let buy = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
+                                 instrumentCode: code, side: .buy, units: 50, price: 11,
+                                 fee: FETFTradeFeePolicy.perConfirmedFill,
+                                 userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
+        let reopened = try XCTUnwrap(book.positions.first)
+        XCTAssertEqual(reopened.units, 50)
+        XCTAssertEqual(reopened.bookCost, Decimal(string: "550.10"))
+        XCTAssertEqual(reopened.brokerDisplayCostPerUnit, Decimal(string: "1.100"))
+        XCTAssertEqual(reopened.brokerDisplayCostUpdatedAt, updatedAt)
+        XCTAssertEqual(book.fills.count, 2)
+    }
+
     func testSameDaySellBuySellFullCloseAndReopenKeepsBrokerAndEpisodeCostsSeparate() throws {
         let code = "159352"
         let openingPosition = FPosition(instrumentCode: code, name: "A500", units: 100,
@@ -372,6 +404,20 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
                        Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 5))
         XCTAssertEqual(snapshot.cashBalance, Decimal(string: "5944.50"))
+        let daily = try XCTUnwrap(snapshot.dailyTradeSummaries.first)
+        XCTAssertEqual(daily.securityCode, code)
+        XCTAssertEqual(daily.tradingDate, "2027-01-15", "交易日期按Asia/Shanghai确定")
+        XCTAssertEqual(daily.buyQuantity, 45)
+        XCTAssertEqual(daily.buyAmount, 495)
+        XCTAssertEqual(daily.sellQuantity, 120)
+        XCTAssertEqual(daily.sellAmount, 1_440)
+        XCTAssertEqual(daily.buyFees, Decimal(string: "0.20"))
+        XCTAssertEqual(daily.sellFees, Decimal(string: "0.30"))
+        XCTAssertEqual(daily.totalFees, Decimal(string: "0.50"))
+        XCTAssertEqual(daily.realizedPnL, Decimal(string: "219.60"))
+        XCTAssertEqual(daily.fillCount, 5)
+        XCTAssertEqual(daily.firstFillTime, now)
+        XCTAssertEqual(daily.lastFillTime, now)
 
         let correction = try book.correctingBrokerDisplayCost(
             instrumentCode: code, costPerUnit: Decimal(string: "11.07")!,
@@ -385,7 +431,320 @@ final class LedgerSchemaTests: XCTestCase {
         let context = FDecisionContext(snapshot: corrected, observations: [])
         XCTAssertEqual(context.holdings.first?.brokerDisplayCostPerUnit, Decimal(string: "11.07"))
         XCTAssertEqual(context.holdings.first?.bookCost, Decimal(string: "275.10"))
+        XCTAssertEqual(context.dailyTradeSummaryDate, "2027-01-15")
+        XCTAssertEqual(context.dailyTradeSummaries, corrected.dailyTradeSummaries)
+        XCTAssertEqual(context.dailyPortfolioRealizedPnL, Decimal(string: "219.60"))
         XCTAssertNoThrow(try context.validate(now: now))
+        let request = try FAdvisorQuestionRequest(question: "今天159352做T赚了多少？",
+                                                 scope: .instrument(code), decisionContext: context, now: now)
+        XCTAssertEqual(request.portfolioContext?.dailyTradeSummaries, [daily])
+        XCTAssertEqual(request.portfolioContext?.dailyPortfolioRealizedPnL, Decimal(string: "219.60"))
+        XCTAssertTrue(request.portfolioContext?.matches(context, scope: .instrument(code)) == true)
+        let decodedRequest = try JSONDecoder().decode(FAdvisorQuestionRequest.self,
+                                                      from: JSONEncoder().encode(request))
+        XCTAssertTrue(decodedRequest.portfolioContext?.matches(context, scope: .instrument(code)) == true)
+        XCTAssertEqual(decodedRequest.portfolioContext?.dailyTradeSummaryDate, "2027-01-15")
+    }
+
+    func testDailyTradeSummaryUsesConfirmedBuySellBuyFactsAndKeepsAmountsAndFeesSeparate() throws {
+        let code = "159352"
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-60))
+        func fill(_ sequence: UInt64, _ side: FTradeSide, _ units: Int64, _ price: Decimal,
+                  _ tradedAt: Date, _ removed: Decimal? = nil) -> FConfirmedFill {
+            FConfirmedFill(sequence: sequence, tradedAt: tradedAt, instrumentCode: code,
+                           side: side, units: units, price: price,
+                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           costBasisRemoved: removed, userConfirmation: confirmation(),
+                           instrumentName: "A500")
+        }
+        book = try book.applyingUserConfirmedFill(
+            fill(1, .buy, 10, 10, now.addingTimeInterval(-30)), instrumentName: "A500", now: now)
+        book = try book.applyingUserConfirmedFill(
+            fill(2, .sell, 4, 12, now.addingTimeInterval(-20), Decimal(string: "40.04")!),
+            instrumentName: "A500", now: now)
+        book = try book.applyingUserConfirmedFill(
+            fill(3, .buy, 5, 11, now.addingTimeInterval(-10)), instrumentName: "A500", now: now)
+        let otherBuy = FConfirmedFill(sequence: 4, tradedAt: now.addingTimeInterval(-8),
+                                      instrumentCode: "159866", side: .buy, units: 1, price: 20,
+                                      fee: FETFTradeFeePolicy.perConfirmedFill,
+                                      userConfirmation: confirmation(), instrumentName: "日经ETF")
+        book = try book.applyingUserConfirmedFill(otherBuy, instrumentName: "日经ETF", now: now)
+        let otherSell = FConfirmedFill(sequence: 5, tradedAt: now.addingTimeInterval(-5),
+                                       instrumentCode: "159866", side: .sell, units: 1, price: 21,
+                                       fee: FETFTradeFeePolicy.perConfirmedFill,
+                                       costBasisRemoved: Decimal(string: "20.10")!,
+                                       userConfirmation: confirmation(), instrumentName: "日经ETF")
+        book = try book.applyingUserConfirmedFill(otherSell, instrumentName: "日经ETF", now: now)
+
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let daily = try XCTUnwrap(snapshot.dailyTradeSummaries.first)
+        XCTAssertEqual(snapshot.dailyTradeSummaryDate, "2027-01-15")
+        XCTAssertEqual(daily.buyQuantity, 15)
+        XCTAssertEqual(daily.buyAmount, 155)
+        XCTAssertEqual(daily.sellQuantity, 4)
+        XCTAssertEqual(daily.sellAmount, 48)
+        XCTAssertEqual(daily.buyFees, Decimal(string: "0.20"))
+        XCTAssertEqual(daily.sellFees, Decimal(string: "0.10"))
+        XCTAssertEqual(daily.totalFees, Decimal(string: "0.30"))
+        XCTAssertEqual(daily.realizedPnL, Decimal(string: "7.86"))
+        XCTAssertEqual(daily.fillCount, 3)
+        let context = FDecisionContext(snapshot: snapshot, observations: [])
+        XCTAssertEqual(snapshot.dailyTradeSummaries.count, 2)
+        XCTAssertEqual(snapshot.dailyTradeSummaries.last?.realizedPnL, Decimal(string: "0.80"))
+        XCTAssertEqual(context.dailyPortfolioRealizedPnL, Decimal(string: "8.66"),
+                       "组合当日已实现盈亏是所有证券confirmed-fill摘要的确定性合计")
+        let portfolioRequest = try FAdvisorQuestionRequest(question: "今天所有操作赚亏多少？",
+                                                            scope: .portfolio,
+                                                            decisionContext: context, now: now)
+        XCTAssertEqual(portfolioRequest.portfolioContext?.dailyTradeSummaries.count, 2)
+        XCTAssertEqual(portfolioRequest.portfolioContext?.dailyPortfolioRealizedPnL,
+                       Decimal(string: "8.66"))
+        XCTAssertTrue(portfolioRequest.portfolioContext?.matches(context, scope: .portfolio) == true)
+        let securityRequest = try FAdvisorQuestionRequest(question: "今天159352做T赚多少？",
+                                                           scope: .instrument(code),
+                                                           decisionContext: context, now: now)
+        XCTAssertEqual(securityRequest.portfolioContext?.dailyTradeSummaries.map(\.securityCode), [code])
+        XCTAssertEqual(securityRequest.portfolioContext?.dailyPortfolioRealizedPnL,
+                       Decimal(string: "7.86"))
+        XCTAssertTrue(securityRequest.portfolioContext?.matches(context, scope: .instrument(code)) == true)
+        XCTAssertEqual(snapshot.positions.first?.bookCost, Decimal(string: "115.16"))
+        XCTAssertEqual(snapshot.cashBalance, Decimal(string: "893.50"))
+        XCTAssertTrue(daily.isValid(asOf: now))
+    }
+
+    func testDailyTradeSummarySeparatesPriorTradingDateFromCurrentDayFill() throws {
+        let code = "159941"
+        let yesterday = now.addingTimeInterval(-24 * 60 * 60 - 60)
+        let initial = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-48 * 60 * 60),
+                                              cashBalance: 1_000)
+        var book = FAccountBook(openingSnapshot: initial, cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-48 * 60 * 60))
+        let priorDayBuy = FConfirmedFill(sequence: 1, tradedAt: yesterday, instrumentCode: code,
+                                         side: .buy, units: 10, price: 5,
+                                         fee: FETFTradeFeePolicy.perConfirmedFill,
+                                         userConfirmation: confirmation(), instrumentName: "纳指ETF")
+        book = try book.applyingUserConfirmedFill(priorDayBuy, instrumentName: "纳指ETF", now: now)
+        let todaySell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
+                                       instrumentCode: code, side: .sell, units: 2, price: 6,
+                                       fee: FETFTradeFeePolicy.perConfirmedFill,
+                                       costBasisRemoved: Decimal(string: "10.02")!,
+                                       userConfirmation: confirmation(), instrumentName: "纳指ETF")
+        book = try book.applyingUserConfirmedFill(todaySell, instrumentName: "纳指ETF", now: now)
+
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let daily = try XCTUnwrap(snapshot.dailyTradeSummaries.first)
+        XCTAssertEqual(daily.securityCode, code)
+        XCTAssertEqual(daily.buyQuantity, 0, "前一交易日买入不得混入今天摘要")
+        XCTAssertEqual(daily.buyAmount, 0)
+        XCTAssertEqual(daily.sellQuantity, 2)
+        XCTAssertEqual(daily.sellAmount, 12)
+        XCTAssertEqual(daily.sellFees, FETFTradeFeePolicy.perConfirmedFill)
+        XCTAssertEqual(daily.realizedPnL, Decimal(string: "1.88"))
+        XCTAssertEqual(daily.fillCount, 1)
+        XCTAssertEqual(daily.firstFillTime, todaySell.tradedAt)
+        XCTAssertEqual(daily.lastFillTime, todaySell.tradedAt)
+    }
+
+    func testSameDayFullCloseAndRebuyKeepsSecurityDayPnLSeparateFromNewEpisodePnL() throws {
+        let code = "159352"
+        let prior = FPosition(instrumentCode: code, name: "A500", units: 1_000,
+                              bookCost: 10_000)
+        var book = FAccountBook(openingSnapshot: opening(cash: 50_000, positions: [prior]),
+                                cashBalance: 50_000, positions: [prior],
+                                updatedAt: now.addingTimeInterval(-120))
+        let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                                  instrumentCode: code, side: .sell, units: 1_000, price: 11,
+                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  costBasisRemoved: 10_000, userConfirmation: confirmation(),
+                                  instrumentName: "A500", tradeIntent: nil)
+        book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+        XCTAssertTrue(book.positions.isEmpty)
+        let buyback = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
+                                     instrumentCode: code, side: .buy, units: 500, price: 10.50,
+                                     fee: FETFTradeFeePolicy.perConfirmedFill,
+                                     userConfirmation: confirmation(), instrumentName: "A500",
+                                     tradeIntent: nil)
+        book = try book.applyingUserConfirmedFill(buyback, instrumentName: "A500", now: now)
+
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let day = try XCTUnwrap(snapshot.dailyTradeSummaries.first)
+        let history = try XCTUnwrap(snapshot.instrumentHistories.first)
+        let current = try XCTUnwrap(history.episodes.last)
+        let securityDayPnL = try FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: code, tradingDate: day.tradingDate,
+            startOfDayUnits: 1_000, previousClose: 10, trades: day,
+            endOfDayUnits: 500, currentPrice: Decimal(string: "10.48")!)
+        let currentEpisodeUnrealized = try FSecurityPnLCalculator.episodeUnrealizedPnL(
+            units: current.currentUnits, bookCost: current.currentBookCost,
+            currentPrice: Decimal(string: "10.48")!)
+
+        XCTAssertEqual(securityDayPnL, Decimal(string: "989.80"),
+                       "全天PnL保留旧Episode清仓收益及新Episode当日浮动")
+        XCTAssertEqual(currentEpisodeUnrealized, Decimal(string: "-10.10"),
+                       "新Episode只按重新买回的500份和本轮成本计算")
+        XCTAssertEqual(current.netRealizedProfit, Decimal.zero)
+        XCTAssertEqual(history.lifetimeRealizedProfit, Decimal(string: "999.90"))
+        XCTAssertEqual(day.dailyRealizedTradingPnL, Decimal(string: "999.90"))
+        XCTAssertNil(day.tContribution, "历史成交未记录用途标签时不得把普通清仓收益叫作T")
+        XCTAssertEqual(snapshot.positions.first?.units, 500)
+        XCTAssertEqual(snapshot.positions.first?.bookCost, Decimal(string: "5250.10"))
+        XCTAssertEqual(snapshot.cashFlow.suffix(2).map(\.fee),
+                       [FETFTradeFeePolicy.perConfirmedFill, FETFTradeFeePolicy.perConfirmedFill])
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.count, 2)
+        XCTAssertEqual(history.episodes.map(\.historyIsComplete), [false, true],
+                       "导入时已有持仓的旧Episode不完整；确认买入开启的新Episode有完整成交事实")
+        XCTAssertFalse(history.lifetimeHistoryIsComplete,
+                       "导入前交易缺失时，不能声称证券生命周期累计完整")
+
+        let quoteTime = now.addingTimeInterval(-1)
+        let quote = FContextObservation(dataClass: .quote, subject: code, source: "test real quote",
+                                        observedAt: quoteTime, capturedAt: now,
+                                        decimalValue: Decimal(string: "10.48")!,
+                                        quoteTemporalMetadata: FQuoteTemporalMetadata(
+                                            quoteTimestamp: quoteTime, fetchedAt: now,
+                                            source: "test real quote",
+                                            timestampTrust: .verifiedExchangeTimestamp,
+                                            marketSessionStatus: .closed))
+        let context = FDecisionContext(snapshot: snapshot, observations: [quote])
+        let facts = try XCTUnwrap(context.instrumentPnLFacts.first)
+        XCTAssertNil(facts.securityDailyPnL,
+                     "缺少经过验证的前收与今日开盘持仓标记时，不允许把已实现值冒充全天总盈亏")
+        XCTAssertEqual(facts.dailyRealizedTradingPnL, Decimal(string: "999.90"))
+        XCTAssertNil(facts.dailyTContribution)
+        XCTAssertEqual(facts.currentEpisodeHistoryIsComplete, true)
+        XCTAssertEqual(facts.currentEpisodeUnrealizedPnL, Decimal(string: "-10.10"))
+        XCTAssertEqual(facts.currentEpisodeTotalPnL, Decimal(string: "-10.10"))
+        XCTAssertEqual(facts.securityLifetimeHistoryIsComplete, false)
+        XCTAssertNil(facts.securityLifetimeRealizedPnL)
+        XCTAssertNil(facts.closedEpisodesRealizedPnL)
+        XCTAssertNil(facts.securityLifetimeTotalPnL,
+                     "导入前基准持仓的成本和已实现历史未知，不得冒充完整Lifetime P&L")
+        XCTAssertEqual(facts.brokerDisplayCostPerUnit, nil)
+        XCTAssertEqual(facts.episodeEconomicCostPerUnit, Decimal(string: "10.5002"))
+        let request = try FAdvisorQuestionRequest(question: "今天这只赚了多少？",
+                                                 scope: .instrument(code),
+                                                 decisionContext: context, now: now)
+        XCTAssertEqual(request.portfolioContext?.instrumentPnLFacts, [facts])
+
+        var legacyObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(context)) as? [String: Any])
+        for key in ["instrumentPnLFacts", "positionHistory", "recentPositionEpisodes"] {
+            guard var rows = legacyObject[key] as? [[String: Any]] else { continue }
+            let completenessKeys = ["historyIsComplete", "lifetimeHistoryIsComplete",
+                                   "currentEpisodeHistoryIsComplete", "securityLifetimeHistoryIsComplete"]
+            rows = rows.map { row in
+                var legacyRow = row
+                completenessKeys.forEach { legacyRow.removeValue(forKey: $0) }
+                return legacyRow
+            }
+            legacyObject[key] = rows
+        }
+        let legacyContext = try JSONDecoder().decode(FDecisionContext.self,
+            from: JSONSerialization.data(withJSONObject: legacyObject))
+        XCTAssertNil(legacyContext.instrumentPnLFacts.first?.securityLifetimeHistoryIsComplete,
+                     "旧版DecisionContext缺少完整性字段时按未知处理，不能默认为完整")
+        XCTAssertNil(legacyContext.recentPositionEpisodes.last?.historyIsComplete)
+    }
+
+    func testSecurityDayLossCanCoexistWithProfitOnSameDayRebuyEpisode() throws {
+        let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [
+            FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                           instrumentCode: "159866", side: .sell, units: 1_000, price: 9,
+                           fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 10_000,
+                           userConfirmation: confirmation()),
+            FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
+                           instrumentCode: "159866", side: .buy, units: 500, price: 8,
+                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           userConfirmation: confirmation())
+        ], asOf: now).first)
+        let dailyPnL = try FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: "159866", tradingDate: summary.tradingDate,
+            startOfDayUnits: 1_000, previousClose: 10, trades: summary,
+            endOfDayUnits: 500, currentPrice: Decimal(string: "8.10")!)
+        let episodeUnrealized = try FSecurityPnLCalculator.episodeUnrealizedPnL(
+            units: 500, bookCost: Decimal(string: "4000.10")!,
+            currentPrice: Decimal(string: "8.10")!)
+        XCTAssertLessThan(dailyPnL, 0)
+        XCTAssertGreaterThan(episodeUnrealized, 0)
+    }
+
+    func testExplicitTContributionDoesNotReplaceSecurityLifetimePnLInEitherDirection() throws {
+        func context(oldBuy: Decimal, tSell: Decimal, tBuyback: Decimal,
+                     current: Decimal) throws -> FDecisionContext {
+            let code = "159866"
+            let priorDay = now.addingTimeInterval(-24 * 60 * 60)
+            var book = FAccountBook(openingSnapshot: .init(
+                capturedAt: now.addingTimeInterval(-48 * 60 * 60), cashBalance: 10_000),
+                cashBalance: 10_000, updatedAt: now.addingTimeInterval(-48 * 60 * 60))
+            let openingFill = FConfirmedFill(sequence: 1, tradedAt: priorDay,
+                                             instrumentCode: code, side: .buy, units: 10,
+                                             price: oldBuy,
+                                             fee: FETFTradeFeePolicy.perConfirmedFill,
+                                             userConfirmation: confirmation(), tradeIntent: .ordinary)
+            book = try book.applyingUserConfirmedFill(openingFill, instrumentName: "日经ETF", now: now)
+            let cycle = "\(code)-cycle-1"
+            let sell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-60),
+                                      instrumentCode: code, side: .sell, units: 10,
+                                      price: tSell, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                      costBasisRemoved: oldBuy * Decimal(10) + FETFTradeFeePolicy.perConfirmedFill,
+                                      userConfirmation: confirmation(), instrumentName: "日经ETF",
+                                      tradeIntent: .tSell, tCycleID: cycle)
+            book = try book.applyingUserConfirmedFill(sell, instrumentName: "日经ETF", now: now)
+            let buyback = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-30),
+                                         instrumentCode: code, side: .buy, units: 10,
+                                         price: tBuyback, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                         userConfirmation: confirmation(), instrumentName: "日经ETF",
+                                         tradeIntent: .tBuyback, tCycleID: cycle)
+            book = try book.applyingUserConfirmedFill(buyback, instrumentName: "日经ETF", now: now)
+            let snapshot = try book.readOnlySnapshot(capturedAt: now)
+            let quoteTime = now.addingTimeInterval(-1)
+            let quote = FContextObservation(
+                dataClass: .quote, subject: code, source: "test quote", observedAt: quoteTime,
+                capturedAt: now, decimalValue: current,
+                quoteTemporalMetadata: FQuoteTemporalMetadata(
+                    quoteTimestamp: quoteTime, fetchedAt: now, source: "test quote",
+                    timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .closed))
+            return FDecisionContext(snapshot: snapshot, observations: [quote])
+        }
+
+        let profitableT = try context(oldBuy: 15, tSell: 12, tBuyback: 9, current: 8)
+        let profitFacts = try XCTUnwrap(profitableT.instrumentPnLFacts.first)
+        XCTAssertEqual(profitFacts.dailyTContribution, Decimal(string: "29.80"))
+        XCTAssertEqual(profitFacts.cumulativeTContribution, Decimal(string: "29.80"))
+        XCTAssertEqual(profitFacts.currentEpisodeUnrealizedPnL, Decimal(string: "-10.10"))
+        XCTAssertEqual(profitFacts.securityLifetimeRealizedPnL, Decimal(string: "-30.20"))
+        XCTAssertEqual(profitFacts.securityLifetimeTotalPnL, Decimal(string: "-40.30"),
+                       "T贡献为正时，证券整体仍可亏损")
+
+        let losingT = try context(oldBuy: 5, tSell: 12, tBuyback: 13, current: Decimal(string: "13.50")!)
+        let lossFacts = try XCTUnwrap(losingT.instrumentPnLFacts.first)
+        XCTAssertEqual(lossFacts.dailyTContribution, Decimal(string: "-10.20"))
+        XCTAssertEqual(lossFacts.currentEpisodeUnrealizedPnL, Decimal(string: "4.90"))
+        XCTAssertEqual(lossFacts.securityLifetimeTotalPnL, Decimal(string: "74.70"),
+                       "T贡献为负时，证券历史总体仍可盈利")
+    }
+
+    func testTContributionIsUnavailableForLegacyOrUnbalancedCycles() throws {
+        let tSell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                                   instrumentCode: "159866", side: .sell, units: 10, price: 12,
+                                   fee: FETFTradeFeePolicy.perConfirmedFill,
+                                   costBasisRemoved: 100, userConfirmation: confirmation(),
+                                   tradeIntent: .tSell, tCycleID: "cycle-1")
+        let partialBuyback = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
+                                            instrumentCode: "159866", side: .buy, units: 9, price: 10,
+                                            fee: FETFTradeFeePolicy.perConfirmedFill,
+                                            userConfirmation: confirmation(), tradeIntent: .tBuyback,
+                                            tCycleID: "cycle-1")
+        XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
+                     "未完全配对的T数量不应伪装成精确贡献")
+
+        let legacyFill = FConfirmedFill(sequence: 3, tradedAt: now,
+                                        instrumentCode: "159866", side: .buy, units: 1,
+                                        price: 10, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                        userConfirmation: confirmation(), tradeIntent: nil)
+        XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback, legacyFill]),
+                     "存在未分类旧成交时，累计T贡献保持Unavailable")
     }
 
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {

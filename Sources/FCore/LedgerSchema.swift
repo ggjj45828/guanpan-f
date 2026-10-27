@@ -11,6 +11,9 @@ public struct FAccountBook: Codable, Equatable, Sendable {
     public var openingSnapshot: FAccountOpeningSnapshot
     public var cashBalance: Decimal
     public var positions: [FPosition]
+    /// Latest user-confirmed broker display cost per security, retained across full closes.
+    /// Optional for backward-compatible decoding of existing account files.
+    public var brokerDisplayCosts: [FBrokerDisplayCostRecord]?
     public var fills: [FConfirmedFill]
     public var cashMovements: [FCashMovement]
     public var audits: [FLedgerAuditEvent]
@@ -19,6 +22,7 @@ public struct FAccountBook: Codable, Equatable, Sendable {
     public init(accountID: UUID = UUID(), currencyCode: String = "CNY",
                 openingSnapshot: FAccountOpeningSnapshot, cashBalance: Decimal,
                 positions: [FPosition] = [], fills: [FConfirmedFill] = [],
+                brokerDisplayCosts: [FBrokerDisplayCostRecord]? = nil,
                 cashMovements: [FCashMovement] = [], audits: [FLedgerAuditEvent] = [],
                 updatedAt: Date = Date(), schemaVersion: Int = FAccountBook.currentSchemaVersion) {
         self.accountID = accountID
@@ -27,9 +31,23 @@ public struct FAccountBook: Codable, Equatable, Sendable {
         self.openingSnapshot = openingSnapshot
         self.cashBalance = cashBalance
         self.positions = positions
+        self.brokerDisplayCosts = brokerDisplayCosts
         self.fills = fills
         self.cashMovements = cashMovements
         self.audits = audits
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct FBrokerDisplayCostRecord: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { instrumentCode }
+    public let instrumentCode: String
+    public let costPerUnit: Decimal
+    public let updatedAt: Date
+
+    public init(instrumentCode: String, costPerUnit: Decimal, updatedAt: Date) {
+        self.instrumentCode = instrumentCode
+        self.costPerUnit = costPerUnit
         self.updatedAt = updatedAt
     }
 }
@@ -106,6 +124,17 @@ public enum FETFTradeFeePolicy {
 }
 
 public enum FTradeSide: String, Codable, Equatable, Sendable { case buy, sell }
+public enum FTradeIntent: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
+    case ordinary, tSell, tBuyback
+
+    public var displayName: String {
+        switch self {
+        case .ordinary: return "普通交易"
+        case .tSell: return "做T卖出"
+        case .tBuyback: return "做T买回"
+        }
+    }
+}
 
 /// Required confirmation metadata. The eventual ledger-writing use case must additionally be
 /// callable only from an explicit user confirmation action; these fields alone cannot prove actor identity.
@@ -138,11 +167,16 @@ public struct FConfirmedFill: Codable, Equatable, Sendable, Identifiable {
     /// Nil for buys. Realized profit is proceeds minus fee minus this amount.
     public var costBasisRemoved: Decimal?
     public var userConfirmation: FUserLedgerConfirmation
+    /// Nil is retained only for legacy fills whose user intent was never captured.
+    public var tradeIntent: FTradeIntent?
+    /// Shared explicit ID joining the sell and buyback legs of one T cycle.
+    public var tCycleID: String?
 
     public init(id: UUID = UUID(), sequence: UInt64, tradedAt: Date, instrumentCode: String, side: FTradeSide,
                 units: Int64, price: Decimal, fee: Decimal,
                 costBasisRemoved: Decimal? = nil, userConfirmation: FUserLedgerConfirmation,
-                instrumentName: String? = nil) {
+                instrumentName: String? = nil, tradeIntent: FTradeIntent? = .ordinary,
+                tCycleID: String? = nil) {
         self.id = id
         self.sequence = sequence
         self.tradedAt = tradedAt
@@ -154,6 +188,8 @@ public struct FConfirmedFill: Codable, Equatable, Sendable, Identifiable {
         self.fee = fee
         self.costBasisRemoved = costBasisRemoved
         self.userConfirmation = userConfirmation
+        self.tradeIntent = tradeIntent
+        self.tCycleID = tCycleID
     }
 }
 
@@ -200,7 +236,8 @@ public enum FLedgerValidationError: Error, Equatable, Sendable {
     case unsupportedSchema(Int), invalidCurrency, invalidCash
     case duplicatePositionID(UUID), duplicateInstrument(String), invalidPosition(UUID)
     case duplicateFillID(UUID), duplicateEventSequence(UInt64), invalidEventSequence(expected: UInt64, actual: UInt64)
-    case invalidFill(UUID), invalidConfirmation(UUID)
+    case invalidFill(UUID), invalidConfirmation(UUID), invalidBrokerDisplayCostRecord(String)
+    case invalidTradeClassification(UUID)
     case duplicateCashMovementID(UUID), invalidCashMovement(UUID), invalidCashMovementConfirmation(UUID)
     case duplicateAuditID(UUID), invalidAudit(UUID), implausibleTimestamp(String)
     case invalidOpeningSnapshot, unexpectedSellCostBasis(UUID), missingSellCostBasis(UUID)
@@ -257,6 +294,16 @@ public extension FAccountBook {
             }
         }
 
+        var brokerCostCodes = Set<String>()
+        for record in brokerDisplayCosts ?? [] {
+            guard Self.validCode(record.instrumentCode),
+                  brokerCostCodes.insert(record.instrumentCode).inserted,
+                  Self.isFinite(record.costPerUnit), record.costPerUnit >= 0,
+                  Self.isPlausible(record.updatedAt, now: now) else {
+                throw FLedgerValidationError.invalidBrokerDisplayCostRecord(record.instrumentCode)
+            }
+        }
+
         var fillIDs = Set<UUID>()
         var eventSequences = Set<UInt64>()
         for fill in fills {
@@ -272,6 +319,24 @@ public extension FAccountBook {
             if let name = fill.instrumentName,
                name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 throw FLedgerValidationError.invalidFill(fill.id)
+            }
+            switch fill.tradeIntent {
+            case .ordinary:
+                guard fill.tCycleID == nil else { throw FLedgerValidationError.invalidTradeClassification(fill.id) }
+            case .tSell:
+                guard fill.side == .sell,
+                      let cycle = fill.tCycleID,
+                      !cycle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw FLedgerValidationError.invalidTradeClassification(fill.id)
+                }
+            case .tBuyback:
+                guard fill.side == .buy,
+                      let cycle = fill.tCycleID,
+                      !cycle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw FLedgerValidationError.invalidTradeClassification(fill.id)
+                }
+            case nil:
+                guard fill.tCycleID == nil else { throw FLedgerValidationError.invalidTradeClassification(fill.id) }
             }
             if fill.side == .buy {
                 guard fill.costBasisRemoved == nil else {

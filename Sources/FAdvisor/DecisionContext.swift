@@ -104,6 +104,8 @@ public struct FDecisionPositionEpisode: Codable, Equatable, Sendable, Identifiab
     public let episodeNumber: Int
     public let openedAt: Date
     public let closedAt: Date?
+    /// Optional for backward decoding; nil in older serialized contexts is treated as incomplete.
+    public let historyIsComplete: Bool?
     public let openingUnits: Int64
     public let currentUnits: Int64
     public let currentBookCost: Decimal
@@ -116,6 +118,7 @@ public struct FDecisionPositionEpisode: Codable, Equatable, Sendable, Identifiab
         episodeNumber = episode.episodeNumber
         openedAt = episode.openedAt
         closedAt = episode.closedAt
+        historyIsComplete = episode.historyIsComplete
         openingUnits = episode.openingUnits
         currentUnits = episode.currentUnits
         currentBookCost = episode.currentBookCost
@@ -129,6 +132,8 @@ public struct FDecisionPositionHistory: Codable, Equatable, Sendable, Identifiab
     public let instrumentCode: String
     public let instrumentName: String
     public let episodeCount: Int
+    /// Optional for backward decoding; nil in older serialized contexts is treated as incomplete.
+    public let lifetimeHistoryIsComplete: Bool?
     public let lifetimeRealizedProfit: Decimal
     public let firstHeldAt: Date
     public let lastActivityAt: Date
@@ -137,9 +142,89 @@ public struct FDecisionPositionHistory: Codable, Equatable, Sendable, Identifiab
         instrumentCode = history.instrumentCode
         instrumentName = history.instrumentName
         episodeCount = history.episodes.count
+        lifetimeHistoryIsComplete = history.lifetimeHistoryIsComplete
         lifetimeRealizedProfit = history.lifetimeRealizedProfit
         firstHeldAt = history.firstHeldAt
         lastActivityAt = history.lastActivityAt
+    }
+}
+
+/// Deterministic, read-only P&L labels for one security. Nil means the source facts
+/// required for that specific accounting window were not captured; it never means zero.
+public struct FDecisionInstrumentPnL: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { instrumentCode }
+    public let instrumentCode: String
+    public let securityDailyPnL: Decimal?
+    public let dailyRealizedTradingPnL: Decimal?
+    public let dailyTContribution: Decimal?
+    public let cumulativeTContribution: Decimal?
+    public let dailyTContributionUnavailableReason: String?
+    public let cumulativeTContributionUnavailableReason: String?
+    public let currentEpisodeRealizedPnL: Decimal?
+    /// Optional for backward decoding; nil in older serialized contexts is treated as incomplete.
+    public let currentEpisodeHistoryIsComplete: Bool?
+    public let currentEpisodeUnrealizedPnL: Decimal?
+    public let currentEpisodeTotalPnL: Decimal?
+    /// Optional for backward decoding; nil in older serialized contexts is treated as incomplete.
+    public let securityLifetimeHistoryIsComplete: Bool?
+    public let securityLifetimeRealizedPnL: Decimal?
+    public let closedEpisodesRealizedPnL: Decimal?
+    public let securityLifetimeUnrealizedPnL: Decimal?
+    public let securityLifetimeTotalPnL: Decimal?
+    public let brokerDisplayCostPerUnit: Decimal?
+    public let episodeEconomicCostPerUnit: Decimal?
+
+    fileprivate init(instrumentCode: String, history: FInstrumentHistorySnapshot?,
+                     holding: FReadOnlyPositionSnapshot?, daily: FDailyTradeSummary?,
+                     dailySummaryDate: String?, quotePrice: Decimal?) {
+        self.instrumentCode = instrumentCode
+        let active = history?.episodes.last(where: \.isActive)
+        let episodeHistoryComplete = active?.historyIsComplete ?? true
+        let unrealized: Decimal? = if let active, let quotePrice {
+            try? FSecurityPnLCalculator.episodeUnrealizedPnL(
+                units: active.currentUnits, bookCost: active.currentBookCost,
+                currentPrice: quotePrice)
+        } else if active == nil { Decimal.zero } else { nil }
+        let episodeRealized = active?.netRealizedProfit
+        let historyComplete = history?.lifetimeHistoryIsComplete ?? true
+        let lifetimeRealized = history?.lifetimeRealizedProfit ?? .zero
+        let closedRealized = history?.episodes.filter { $0.closedAt != nil }
+            .reduce(Decimal.zero) { $0 + $1.netRealizedProfit } ?? .zero
+        securityDailyPnL = nil // No validated previous-close/opening-quantity pair is captured yet.
+        dailyRealizedTradingPnL = dailySummaryDate == nil ? nil :
+            (daily?.dailyRealizedTradingPnL ?? .zero)
+        let dailyT: Decimal? = if dailySummaryDate == nil {
+            nil
+        } else if let daily {
+            daily.tContribution
+        } else {
+            .zero
+        }
+        dailyTContribution = dailyT
+        cumulativeTContribution = historyComplete ? history?.cumulativeTContribution : nil
+        dailyTContributionUnavailableReason = dailyT == nil
+            ? "当日成交未全部分类或T配对不完整" : nil
+        cumulativeTContributionUnavailableReason = cumulativeTContribution == nil
+            ? "历史成交存在未分类记录或T配对不完整" : nil
+        currentEpisodeHistoryIsComplete = episodeHistoryComplete
+        currentEpisodeRealizedPnL = episodeHistoryComplete ? episodeRealized : nil
+        currentEpisodeUnrealizedPnL = active == nil ? nil : unrealized
+        currentEpisodeTotalPnL = if episodeHistoryComplete,
+                                   let episodeRealized, let episodeUnrealized = unrealized {
+            episodeRealized + episodeUnrealized
+        } else { nil }
+        securityLifetimeHistoryIsComplete = historyComplete
+        securityLifetimeRealizedPnL = historyComplete ? lifetimeRealized : nil
+        closedEpisodesRealizedPnL = historyComplete ? closedRealized : nil
+        let lifetimeUnrealized: Decimal? = active == nil ? .zero : unrealized
+        securityLifetimeUnrealizedPnL = lifetimeUnrealized
+        securityLifetimeTotalPnL = if historyComplete, let lifetimeUnrealized {
+            lifetimeRealized + lifetimeUnrealized
+        } else { nil }
+        brokerDisplayCostPerUnit = holding?.brokerDisplayCostPerUnit
+        episodeEconomicCostPerUnit = if let active, active.currentUnits > 0 {
+            active.currentBookCost / Decimal(active.currentUnits)
+        } else { nil }
     }
 }
 
@@ -152,6 +237,18 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     public let cashBalance: Decimal
     public let holdings: [FDecisionHoldingSnapshot]
     public let observations: [FContextObservation]
+    /// Read-only, per-security facts derived from confirmed fills on the captured
+    /// CN trading date. No raw Ledger records or mutation API are exposed here.
+    /// A non-nil date with an empty summary list means the Ledger confirms no fills
+    /// for that date; nil is reserved for legacy contexts without this projection.
+    public let dailyTradeSummaryDate: String?
+    public let dailyTradeSummaries: [FDailyTradeSummary]
+    /// Deterministic sum of the per-security realized P/L facts; nil means no
+    /// confirmed fills were captured for this trading date.
+    public let dailyPortfolioRealizedPnL: Decimal?
+    /// Per-security P&L facts are calculated before serialization. Daily total and T
+    /// values remain unavailable until their required market marks / explicit tags exist.
+    public let instrumentPnLFacts: [FDecisionInstrumentPnL]
     /// Compact NAS statistics captured by reference; never a mutable store or raw minute series.
     public let researchEvidence: [FDecisionResearchEvidence]
     public let positionHistory: [FDecisionPositionHistory]
@@ -173,6 +270,10 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
                                      brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
         }
         self.observations = observations
+        dailyTradeSummaryDate = snapshot.dailyTradeSummaryDate
+        dailyTradeSummaries = snapshot.dailyTradeSummaries
+        dailyPortfolioRealizedPnL = snapshot.dailyTradeSummaries.isEmpty ? nil :
+            snapshot.dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }
         self.researchEvidence = Self.deduplicatedResearchEvidence(researchEvidence)
         positionHistory = snapshot.instrumentHistories.map(FDecisionPositionHistory.init)
             .sorted { $0.instrumentCode < $1.instrumentCode }
@@ -180,10 +281,25 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
             .sorted { $0.openedAt < $1.openedAt }
         positionEpisodeHistoryIsTruncated = allEpisodes.count > 64
         recentPositionEpisodes = allEpisodes.suffix(64).map(FDecisionPositionEpisode.init)
+        let historyByCode = Dictionary(uniqueKeysWithValues: snapshot.instrumentHistories.map {
+            ($0.instrumentCode, $0)
+        })
+        let holdingByCode = Dictionary(uniqueKeysWithValues: snapshot.positions.map { ($0.instrumentCode, $0) })
+        let dailyByCode = Dictionary(uniqueKeysWithValues: snapshot.dailyTradeSummaries.map { ($0.securityCode, $0) })
+        let codes = Set(historyByCode.keys).union(holdingByCode.keys).union(dailyByCode.keys)
+        instrumentPnLFacts = codes.sorted().map { code in
+            let price = observations.filter { $0.dataClass == .quote && $0.subject == code }
+                .filter { $0.isFresh(at: createdAt) }
+                .max { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }?.decimalValue
+            return FDecisionInstrumentPnL(instrumentCode: code, history: historyByCode[code],
+                                          holding: holdingByCode[code], daily: dailyByCode[code],
+                                          dailySummaryDate: dailyTradeSummaryDate, quotePrice: price)
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, accountID, accountDigest, cashBalance, holdings, observations, researchEvidence
+        case id, createdAt, accountID, accountDigest, cashBalance, holdings, observations
+        case dailyTradeSummaryDate, dailyTradeSummaries, dailyPortfolioRealizedPnL, instrumentPnLFacts, researchEvidence
         case positionHistory, recentPositionEpisodes, positionEpisodeHistoryIsTruncated
     }
 
@@ -197,6 +313,13 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         cashBalance = try values.decode(Decimal.self, forKey: .cashBalance)
         holdings = try values.decode([FDecisionHoldingSnapshot].self, forKey: .holdings)
         observations = try values.decode([FContextObservation].self, forKey: .observations)
+        dailyTradeSummaryDate = try values.decodeIfPresent(String.self, forKey: .dailyTradeSummaryDate)
+        dailyTradeSummaries = try values.decodeIfPresent([FDailyTradeSummary].self,
+                                                        forKey: .dailyTradeSummaries) ?? []
+        dailyPortfolioRealizedPnL = try values.decodeIfPresent(Decimal.self,
+                                                               forKey: .dailyPortfolioRealizedPnL)
+        instrumentPnLFacts = try values.decodeIfPresent([FDecisionInstrumentPnL].self,
+                                                        forKey: .instrumentPnLFacts) ?? []
         researchEvidence = Self.deduplicatedResearchEvidence(
             try values.decodeIfPresent([FDecisionResearchEvidence].self, forKey: .researchEvidence) ?? [])
         positionHistory = try values.decodeIfPresent([FDecisionPositionHistory].self, forKey: .positionHistory) ?? []
@@ -216,6 +339,7 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     }
 
     public func validate(now: Date = Date()) throws {
+        let expectedDailyTradeSummaryDate = try? FDailyTradeSummary.tradingDate(for: createdAt)
         guard FDecisionContextValidation.plausible(createdAt, now: now),
               FDecisionContextValidation.digest(accountDigest),
               !cashBalance.isNaN, cashBalance >= 0,
@@ -223,6 +347,29 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
               holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 &&
                   ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true) }),
               Set(observations.map(\.id)).count == observations.count,
+              (dailyTradeSummaryDate == expectedDailyTradeSummaryDate ||
+               (dailyTradeSummaryDate == nil && dailyTradeSummaries.isEmpty && dailyPortfolioRealizedPnL == nil)),
+              Set(dailyTradeSummaries.map(\.id)).count == dailyTradeSummaries.count,
+              dailyTradeSummaries.allSatisfy({ $0.isValid(asOf: createdAt) }),
+              dailyPortfolioRealizedPnL == (dailyTradeSummaries.isEmpty ? nil :
+                  dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }),
+              Set(instrumentPnLFacts.map(\.instrumentCode)).count == instrumentPnLFacts.count,
+              instrumentPnLFacts.allSatisfy({
+                  FDecisionContextValidation.nonBlank($0.instrumentCode) &&
+                  ($0.securityLifetimeRealizedPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.securityDailyPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.dailyRealizedTradingPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.dailyTContribution.map { !$0.isNaN } ?? true) &&
+                  ($0.cumulativeTContribution.map { !$0.isNaN } ?? true) &&
+                  ($0.closedEpisodesRealizedPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.currentEpisodeRealizedPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.currentEpisodeUnrealizedPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.currentEpisodeTotalPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.securityLifetimeUnrealizedPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.securityLifetimeTotalPnL.map { !$0.isNaN } ?? true) &&
+                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true) &&
+                  ($0.episodeEconomicCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true)
+              }),
               Set(positionHistory.map(\.instrumentCode)).count == positionHistory.count,
               Set(recentPositionEpisodes.map(\.id)).count == recentPositionEpisodes.count,
               recentPositionEpisodes.count <= 64,
@@ -578,7 +725,7 @@ public enum FAIGuard {
                   request.accountDigest == context.accountDigest,
                   request.decisionContextID == context.id,
                   request.decisionContextCreatedAt == context.createdAt,
-                  request.portfolioContext?.matches(context) == true else {
+                  request.portfolioContext?.matches(context, scope: request.scope) == true else {
                 findings.append(.advisorRequestContextMismatch)
                 let failed = Array(Set(findings)).sorted {
                     String(describing: $0) < String(describing: $1)

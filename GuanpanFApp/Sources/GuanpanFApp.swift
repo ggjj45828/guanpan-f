@@ -17,6 +17,7 @@ struct FHomeHolding: Identifiable {
     let units: Int64
     let bookCost: Decimal
     let brokerDisplayCostPerUnit: Decimal?
+    let brokerDisplayCostUpdatedAt: Date?
 }
 
 typealias FHomeLedgerState = FHomeLedgerAvailability
@@ -70,6 +71,8 @@ final class FHomeModel: ObservableObject {
     @Published var actualFillUnitsText = ""
     @Published var actualFillPriceText = ""
     @Published var actualFillInstrumentName = ""
+    @Published var actualFillTradeIntent: FTradeIntent = .ordinary
+    @Published var actualFillTCycleID = ""
     @Published var ledgerConfirmationNote = ""
     @Published private(set) var writingConfirmedFill = false
     @Published private(set) var ledgerWriteStatus = ""
@@ -113,7 +116,8 @@ final class FHomeModel: ObservableObject {
             holdings = snapshot.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
                              units: $0.units, bookCost: $0.bookCost,
-                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit)
+                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit,
+                             brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
             }
             ledgerState = .available
             ledgerStatus = "真实账本 · 只读快照 · \(holdings.count) 项持仓"
@@ -165,6 +169,8 @@ final class FHomeModel: ObservableObject {
         pendingCandidateScope = result.scope
         actualFillUnitsText = String(units)
         actualFillPriceText = NSDecimalNumber(decimal: price).stringValue
+        actualFillTradeIntent = .ordinary
+        actualFillTCycleID = ""
         actualFillInstrumentName = latestLedgerSnapshot?.instrumentHistories.first(where: {
             $0.instrumentCode == code
         })?.instrumentName ?? latestLedgerSnapshot?.positions.first(where: {
@@ -226,6 +232,13 @@ final class FHomeModel: ObservableObject {
             ledgerWriteStatus = "做T、网格和回本计划必须逐笔记录真实成交，不能自动写入账本。"
             return
         }
+        if (actualFillTradeIntent == .tSell && side != .sell) ||
+            (actualFillTradeIntent == .tBuyback && side != .buy) ||
+            (actualFillTradeIntent != .ordinary &&
+             actualFillTCycleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+            ledgerWriteStatus = "做T成交请正确选择卖出/买回，并为同一组填写相同配对编号。"
+            return
+        }
         writingConfirmedFill = true
         defer { writingConfirmedFill = false }
         do {
@@ -255,7 +268,10 @@ final class FHomeModel: ObservableObject {
                                       instrumentCode: code, side: side, units: units, price: price,
                                       fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: removedCost,
                                       userConfirmation: confirmation,
-                                      instrumentName: actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines))
+                                      instrumentName: actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines),
+                                      tradeIntent: actualFillTradeIntent,
+                                      tCycleID: actualFillTradeIntent == .ordinary ? nil :
+                                        actualFillTCycleID.trimmingCharacters(in: .whitespacesAndNewlines))
             let writer = FConfirmedLedgerWriter(store: store)
             _ = try await writer.confirmFill(fill, instrumentName: actualFillInstrumentName,
                                              now: now)
@@ -373,7 +389,8 @@ final class FHomeModel: ObservableObject {
             holdings = freshLedger.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
                              units: $0.units, bookCost: $0.bookCost,
-                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit)
+                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit,
+                             brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
             }
 
             let sessionStatus = FMainlandTradingCalendar.status(at: contextCaptureTime)
