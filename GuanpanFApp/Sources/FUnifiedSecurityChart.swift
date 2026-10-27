@@ -121,26 +121,28 @@ struct FUnifiedSecurityChart: View {
 
     @ViewBuilder
     private func legend(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
-        HStack(spacing: 8) {
-            if case .daily = model.chart.window {
-                ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
-                    let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
-                    Label("MA\(period)", systemImage: "line.diagonal")
-                        .foregroundStyle(ready ? averageColors[index] : Color.secondary.opacity(0.5))
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if case .daily = model.chart.window {
+                    ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
+                        let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
+                        Label("MA\(period)", systemImage: "line.diagonal")
+                            .foregroundStyle(ready ? averageColors[index] : Color.secondary.opacity(0.5))
+                    }
+                    Label("成交量", systemImage: "chart.bar")
+                        .foregroundStyle(.secondary)
                 }
-                Label("成交量", systemImage: "chart.bar")
-                    .foregroundStyle(.secondary)
+                ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
+                    Label(overlayTitle(overlay.kind), systemImage: overlay.kind == .candidateBuy ? "arrowtriangle.up.fill" :
+                          overlay.kind == .candidateSell ? "arrowtriangle.down.fill" : "line.diagonal")
+                        .foregroundStyle(overlayColor(overlay.kind))
+                }
+                if model.iopv == nil { Label("IOPV Unavailable", systemImage: "minus.circle").foregroundStyle(.secondary) }
             }
-            ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
-                Label(overlayTitle(overlay.kind), systemImage: overlay.kind == .candidateBuy ? "arrowtriangle.up.fill" :
-                      overlay.kind == .candidateSell ? "arrowtriangle.down.fill" : "line.diagonal")
-                    .foregroundStyle(overlayColor(overlay.kind))
-            }
-            if model.iopv == nil { Label("IOPV Unavailable", systemImage: "minus.circle").foregroundStyle(.secondary) }
+            .font(.caption2.monospaced())
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .font(.caption2.monospaced())
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func movingAverages(for series: FChartSeries) -> [[Decimal?]] {

@@ -1,5 +1,27 @@
 # F 实时进度交接
 
+## 2026-10-27 18:34 Asia/Shanghai 实时状态（优先读取）
+
+- **当前工作树：** HEAD=`5b28a5e520152815052ed45482b542adc95d53e2`；本轮经允许联网的fetch成功，远端`main` (`FETCH_HEAD`)、本地`main`和`origin/main`均相同，未发现远端前进或冲突。普通受限网络fetch仍报`getaddrinfo() thread failed to start`。工作树有三个未提交文件：`GuanpanFApp/Sources/FUnifiedSecurityChart.swift`（图例横向滚动）、本交接文档及`F-B-145-TRACEABILITY.md`（双成本验收补充）。尚未commit/push，也未触发新CI。
+- **Apple/Simulator验证：** 最近可核实成功仍是run `40482433863`：FCore 121/121 executed/passed/0 failed、App UI XCTest 3/3 executed/passed/0 failed，XcodeGen、Device Build、Simulator Build和未签名IPA成功。该结果不覆盖当前未提交Swift修改。当前Windows环境没有`swift`、`xcodebuild`或`xcodegen`；没有本机Simulator可做手动交互，本轮没有新截图或人工操作验收。CI自动截图不等于Simulator手动验收。
+- **图表改动/现状：** 仍只有`FUnifiedSecurityChart`一个renderer；图例使用横向`ScrollView`，图表已有tap/long-press/drag/magnification手势代码，Model已有横屏呈现枚举；这些交互代码尚未由本轮CI编译，也没有本机Simulator实测。新图例修改仅静态检查通过，等待GitHub可连后先fetch/reconcile再送CI。
+- **NAS历史分钟真实缺口（静态审计）：** F NAS默认只配置Eastmoney exact-date历史1分钟与Tencent current-session分钟；后者明确拒绝历史日期。Eastmoney目前对指定日空响应时记为`unavailable / empty source response`。启动时每证券排队120个交易日，worker每轮仅尝试3项；不完整的任务被无限重排，因此用户看到约840项队列并不表示已有补采进展。静态源码与用户运行证据一致：过去日期多次空响应/断连，只有当天实时分钟已有归档证据。
+- **Provider覆盖边界证据：** AKShare文档（第三方适配器文档，非Eastmoney官方服务承诺）记载其Eastmoney A股1分钟接口只提供最近5个交易日；文档：[stock_zh_a_minute](https://akshare-hh.readthedocs.io/en/latest/data/stock/stock.html)。AKShare源码亦展示另一Sina分钟源请求`datalen=1970`：[stock_zh_a_sina.py](https://github.com/akfamily/akshare/blob/main/akshare/stock/stock_zh_a_sina.py)。1970条约等于8个240分钟交易日是推算，不是Sina保证，也未在当前NAS环境实测。本轮因此**没有**把它当作可用provider或声称历史分钟可补齐；需要部署环境逐日实测覆盖和质量后再决定。应调整初始化队列策略，保留范围外日期为Missing/不可得并停止无限重试，而不是伪造历史。
+- **研究门槛：** Eastmoney当前MinuteBar赋值`data_quality=80, source_trust=80`，而Research模块默认门槛为90；现档案即使存在，也不能自动变成合格研究证据。不得仅调高分数；须有独立来源/质量依据。历史分钟 → SQLite → coverage → exact-date API → iOS → Research Evidence → DecisionContext尚无真实端到端证据。
+- **双成本Ledger最终验收补充：** 静态代码显示`FPosition.bookCost`是当前账本持仓成本总额，Episode Projection保留当前轮成本及历史已实现盈亏；详情/顾问展示仍使用`bookCost`口径。本轮未发现独立券商/同花顺显示成本字段、录入/纠错入口或AI按问题选择券商成本与Episode真实成本的已执行验收。需求已追加至`F-B-145-TRACEABILITY.md`交叉验收补充；此项属于未完成，不能称双成本已支持。
+- **本轮验证数字：** 没有执行新的FCore/App UI/Python测试，数字为0 executed（最近基线仍按上文保留）；没有新NAS、行情、DeepSeek、Ledger成交E2E。
+- **当前下一步：** 远端已核对与本地基线一致；检查diff后commit并普通push这三项修改，观察Apple CI对图例Swift的编译与测试结果。Simulator可用性不能由Windows或CI构建结果替代；可取得可交互Simulator环境后按既定清单手动验收。随后优先修正NAS初始化120日队列与提供方实际覆盖能力不匹配的问题，并在NAS上实测历史日期、归档、coverage及iOS消费。双成本设计需要在最终Ledger验收明确两种成本口径及AI使用规则。
+
+## 2026-10-27 18:13 Asia/Shanghai 实时状态（优先读取）
+
+- **当前阶段：UI自动化恢复通过，开始Simulator可用性截图复核。** F主工作区仍是本仓库 `F`；已知基线 `main` HEAD=`5b28a5e520152815052ed45482b542adc95d53e2`，最近一次成功fetch时`origin/main`与之相同；此后fetch未成功。当前`FUnifiedSecurityChart.swift`与本handoff有未提交修改，不能把基线commit当作当前工作树状态。提交只作追溯，不定义实时状态。
+- **最近已完成并验证：** run `40482433863` / job `122115824924` 成功；FCore XCTest **121 executed / 121 passed / 0 failed**；App UI XCTest **3 / 3 / 0**。同一CI还成功执行XcodeGen、Device Build、Simulator Build、未签名IPA与产物上传。设置页NAS测试按钮定位修正已进入并通过该CI。
+- **已编码但未验证/外部待验：** 现有统一证券图表和Portfolio/Security Advisor代码虽通过CI编译，但真实行情/历史分钟/NAS/DeepSeek/真实成交E2E仍未验证。图表手势、横屏/状态恢复及真机仍未验收。
+- **截图复核：** 原始XCResult manifest标注设备为iPhone 16 Pro（iOS 18.5），导出的9张附件均为960×1440（2:3）；截图中一些图例/长文案被裁切，但比例不符使其是否代表真实设备布局仍待确认。真实资产截图来自空账本测试，不覆盖清仓/重建仓数据正确性。
+- **正在开发：** 对日K截图中MA/成交量图例压缩的问题做小范围SwiftUI修正：图例改为可横向滚动，完整保留MA5/10/20/60/250、成交量、Candidate标记与IOPV状态。当前仅静态审阅，尚未Apple编译/CI验证；GitHub fetch连续失败，待恢复后先fetch/reconcile再提交推送。
+- **当前测试：** 最近已验证基线为FCore 121/121/0、App UI 3/3/0；这些结果不覆盖当前未提交的图例Swift修改。NAS/Python本轮未执行。Simulator由UI测试启动，但无人手动操作验收；NAS、真实行情、DeepSeek E2E本轮未通过。
+- **最大缺口/下一步：** Apple CI尚未验证新增图例改动；截图边缘裁切是否来自设备布局仍不确定；Simulator手势/横屏未验收；NAS历史分钟/Research Evidence/DeepSeek/真实成交闭环未E2E。先恢复GitHub连接并把图例改动送CI，然后做真实Simulator图表交互验收。
+
 ## 2026-10-27 16:42 Asia/Shanghai 增补（Apple CI run #34）
 
 - 本地修正已推送，GitHub Actions run #34：`40473756900`，提交 `5f70db569b1f70e06867e1cef3ffb66d9f9e62e2`。截至16:30页面仍显示运行中；之后应用内浏览器访问GitHub返回连接关闭，桌面Edge窗口也无法由当前UI桥读取，因此本轮最终成功/失败与具体步骤**尚无法核实**，不能写成通过。
@@ -175,23 +197,6 @@ App UI XCTest：定义3项，日志确认 **3 executed / 2 passed / 1 failed**�
 
 当前先通过 NAS v5 取得实时 `ServiceError` 的具体原因并修复真实源头；Apple验证通道恢复后，先fetch核对远端，再推送当前本地提交与Swift scope修正，执行 FCore → XcodeGen → Device/Simulator Build → UI Test。v4修复“无限读取”脚本错误，v5补充runtime错误原因；随后人工复核截图，再推进 NAS 历史分钟和 DeepSeek成交闭环。
 
-F_CURRENT_STATUS_BEGIN
-
-当前开发阶段：可用性验收 → 修UI XCTest → 全流程Apple CI
-当前正在开发：设置页NAS测试按钮滚动导航修复已提交，等待推送
-刚刚完成：run #33真实执行Swift测试步骤、XcodeGen、Device Build、Simulator Build；首个UI失败根因是屏幕外Form行未进可访问树时就先等待存在；修复改为先滚动再检查
-未提交工作：仅F-REALTIME-HANDOFF.md更新；修正代码在本地提交e46814d
-iOS完成度：run #33 Device与Simulator均构建成功；UI自动化失败；无本轮人工视觉验收
-AI顾问完成度：已有代码；Portfolio/Security真实NAS/DeepSeek端到端未验证
-统一图表完成度：统一renderer通过既有编译；真实行情、完整交互/横屏人工验收未完成
-NAS历史数据完成度：服务Ready与实时分钟归档曾有证据；历史补采有断连/空响应，iOS指定日→Research Evidence未E2E
-Apple编译验证：run #33 F Swift package test步骤成功（精确计数未提取），XcodeGen/Device Build/Simulator Build成功；UI主导航检查失败。Windows本机无Xcode
-当前测试：FCore定义121；run #33测试步骤成功但执行汇总数字未提取；最近精确数字仍为121/121。UI Test本轮失败，完整suite计数未提取。Python/NAS维持最近已记录结果
-最大缺口：UI XCTest仍未通过；最新Simulator截图无人工检查；NAS历史分钟iOS消费和DeepSeek成交闭环未端到端
-下一步：GitHub连接恢复后先fetch，再普通推送e46814d并重跑全流程；CI通过后马上核对最新Simulator截图和交互
-
-F_CURRENT_STATUS_END
-
 ## 2026-10-27 运行证据更正：run #34 构建产物复核
 
 - 从本机 Downloads 中已存在的 `guanpan-f-ios-build-evidence.zip` 读取了真实 CI 日志和 UI 截图附件。它对应此前记录的 run #34 / commit `5f70db5`（本机 HEAD）。
@@ -199,6 +204,47 @@ F_CURRENT_STATUS_END
 - App UI XCTest：**3 executed / 2 passed / 1 failed**。失败为 `PrimaryNavigationUITests.testFivePrimaryDestinationsAreDistinctAndDiscoverable()`；日志报告源码位置 `PrimaryNavigationUITests.swift:59`、`XCTAssertTrue failed`。运行截图的 accessibility hierarchy 显示设置页主体为 `CollectionView`，未见 `settings.form` 标识；设置项滚动后仍未发现 NAS 测试按钮。根因指向 SwiftUI Form 可访问容器/滚动定位，但该解释仍需下一次 Apple CI 验证。
 - 因此先前“run #34 UI步骤成功/整体CI成功”的记录与构建产物日志矛盾，**以实际测试日志为准：UI suite失败；run整体状态需在Actions页面重新核对**。本次没有把成功摘要当作UI通过。
 - 已检查 run #34 导出的首页、行情、证券详情、日K、AI顾问和设置截图（iPhone 16 Pro Simulator 附件）。发现多处长标题/说明文字及卡片尾部内容在右侧被裁切，尤其首页横幅、顾问说明、行情卡片和图表控件；这是截图证据显示的可用性缺陷。尚未完成模拟器手势/导航人工验收，也未检查全部截图。
-- 当前本地未验证修改：UI XCTest改为使用iOS 18实际暴露的`CollectionView`作为Form滚动容器；原有NAS按钮`exists`与`isHittable`断言保留。该修正尚未Apple编译/执行。
-- 浏览器/远端日志读取仍不稳定；本机没有 `gh` CLI。CI后续必须用新的真实job日志确认测试计数和整体结论。Simulator截图来自CI自动化附件，人工看图不等于本机手动交互/真机验收。
-- 下一步：先核对Form容器改动与UI定位实际关系，再将当前改动送Apple CI；若仍失败，以新失败的首个断言和AX树修复。其后优先处理截图中确认的横向裁切，再进行Simulator逐页和交互验收；NAS/DeepSeek实网E2E仍未通过。
+- 上述UI测试滚动容器修正在后续run #35已通过Apple CI（FCore 121/121、UI 3/3）。本段run #34失败诊断保留为历史记录，不再代表当前验证状态。
+- CI自动截图的人工看图不等于本机手动Simulator交互或真机验收；后续阶段仍须分别记录。
+- 当前下一步以run #35段落为准：针对截图中可能存在的横向溢出/裁切检查实际布局边界，再决定是否修复并安排逐页/手势验收；NAS/DeepSeek实网E2E仍未通过。
+
+## 当前工作树补记（run #34证据复核之后）
+
+- 本地提交：`5b28a5e520152815052ed45482b542adc95d53e2`，仅修正UI XCTest滚动容器定位并更新本交接。
+- run #34时源码/测试状态、测试数和失败记录属于历史快照；run #35的最新结果见下节。
+- 当前环境是Windows，无`xcodebuild`/`xcodegen`；Swift/iOS的编译和测试由远端Apple CI执行。
+- run #34截图里发现的右缘裁切仅为当时的视觉线索；run #35新截图已再次查看，需进一步确认是布局缺陷还是截图/窗口范围问题，再决定是否修改SwiftUI。
+## 2026-10-27 Apple CI 重试结果：run #35
+
+- 本地提交`5b28a5e520152815052ed45482b542adc95d53e2`已成功普通推送到`main`。push前fetch确认远端`main`仍为`5f70db5`，只领先一个本地提交。
+- GitHub Actions run `40482433863` / job `122115824924` 已完成，job conclusion=`success`。真实步骤状态：Swift package tests成功、XcodeGen成功、Device Build成功、Simulator Build成功、App navigation UI Test步骤成功、截图导出成功、未签名IPA打包成功、产物上传成功。
+- 从已授权下载的artifact `12724285647`（5.93MB）逐项复核日志：FCore **121 executed / 121 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**。`PrimaryNavigationUITests.testFivePrimaryDestinationsAreDistinctAndDiscoverable()`本轮通过，DeepSeek Key入口、NAS测试按钮定位断言均保留。
+- XcodeGen、Device Build、Simulator Build、UI XCTest、截图导出和未签名IPA均有run #35日志证据并成功。当前本机仍是Windows，无Xcode；这是远端Apple CI验证，不代表本机编译。
+- 已查看run #35的首页、行情、证券详情、日K、历史分时、顾问、当前资产、设置及已清仓测试截图。长说明和部分卡片/图表内容在截图右缘看起来有裁切或超宽，尤其首页、行情、证券详情图表、顾问和设置；需要进一步在完整截图/实际设备宽度下复核并定位。这是基于CI自动导出截图的视觉检查，不是Simulator手动操作验收。`09-real-assets-closed`截图是在测试检查已清仓入口后自动截取，但截图本身不能证明真实Ledger数据或Episode场景正确。
+- 本轮UI自动化只验证导航/入口/状态可发现性；没有手势交互验收，没有Candidate成交写账本实测，没有真机验收。NAS历史分钟、真实行情、DeepSeek仍无本轮端到端通过证据。
+- 工作区追溯：HEAD与`origin/main`均为`5b28a5e520152815052ed45482b542adc95d53e2`；Swift源码/测试已提交，当前仅本交接文档有未提交更新，`git diff --check`通过。
+- 下一步先针对截图所见的横向溢出/裁切检查容器宽度和布局约束；修复必须保持五个主目的地、账本边界和图表共用renderer。随后安排最新CI截图与Simulator逐页/手势验收，再转入NAS→Research Evidence→DeepSeek和真实成交闭环。不可在仅CI截图的条件下宣称手势、真实Ledger或服务端E2E已通过。
+
+## 2026-10-27 18:13 视觉复核后的窄范围修改（尚未验证）
+
+- XCResult manifest标注 `iPhone 16 Pro` / `iOS 18.5`，但XCTest导出图像为 `960×1440`；这解释了为什么截图无法作为当前iPhone完整视口尺寸证据，右缘裁切先不升级为全局布局结论。
+- 源码和日K截图共同显示统一图表的MA/成交量/overlay图例挤在单行并显示省略号。已将唯一renderer `FUnifiedSecurityChart` 的图例行改为横向滚动，图例标签固定完整显示；没有创建第二renderer，也没有改图表数据/IOPV/Guard语义。
+- 本机 `git fetch origin main` 连续两次失败（`getaddrinfo() thread failed to start`），HTTP/1.1重试也失败。当前改动尚未commit、push或CI验证；必须待网络恢复后fetch核对，再普通push触发Apple CI。`git diff --check`通过；本机Windows无Xcode。
+- 截图检查和静态代码审阅不等于Simulator手动操作；AI、真实行情、NAS、Ledger成交链路状态仍按上一节标记为未E2E。
+
+F_CURRENT_STATUS_BEGIN
+
+当前开发阶段：可用性验收与真实数据链路收口；Apple远端连接暂不可用
+当前正在开发：FUnifiedSecurityChart图例横向滚动，尚待Apple CI；同时完成NAS分钟provider覆盖/队列静态审计
+刚刚完成：静态确认当前NAS历史源只有Eastmoney exact-date与Tencent current-session；120日初始化队列与来源覆盖不匹配；双成本验收缺口已记录
+未提交工作：FUnifiedSecurityChart.swift、F-REALTIME-HANDOFF.md、F-B-145-TRACEABILITY.md
+iOS完成度：run #35基线曾Device/Simulator Build成功、UI XCTest 3/3通过；当前Swift图例修改未编译；无本机Simulator手动验收/真机验证
+AI顾问完成度：真实上下文及Candidate代码存在；NAS历史Evidence、DeepSeek、成交后复判未真实E2E；AI双成本口径未完成
+统一图表完成度：一个renderer；点击/十字/拖动/缩放代码存在，未手动交互验收；横屏状态恢复未实测
+NAS历史数据完成度：当前日实时分钟有归档证据；旧日Exact-date常见空响应；120交易日任务无限退避重排；历史分钟→iOS→Research Evidence→DecisionContext未E2E
+Apple编译验证：Windows无Swift/Xcode/XcodeGen；最近成功CI为run 40482433863，未覆盖当前未提交Swift修改；受限fetch失败，但经允许联网fetch成功且确认远端基线一致
+当前测试：FCore 121 defined / 最近执行121 passed 0 failed；App UI 3 defined / 最近执行3 passed 0 failed；Python/NAS本轮0 executed
+最大缺口：图例修改待CI；Simulator手势/横屏人工验收不可用；NAS历史源覆盖与研究质量门不匹配；DeepSeek成交闭环未E2E；双成本缺独立字段及Advisor语义
+下一步：已fetch/reconcile且远端无新提交→commit/push三项修改→Apple CI；获得可交互Simulator后按清单验收；随后修正NAS队列/真实覆盖并做NAS→iOS→Evidence联调
+
+F_CURRENT_STATUS_END
