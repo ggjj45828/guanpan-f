@@ -16,6 +16,7 @@ struct FHomeHolding: Identifiable {
     let name: String
     let units: Int64
     let bookCost: Decimal
+    let brokerDisplayCostPerUnit: Decimal?
 }
 
 typealias FHomeLedgerState = FHomeLedgerAvailability
@@ -111,7 +112,8 @@ final class FHomeModel: ObservableObject {
             latestLedgerSnapshot = snapshot
             holdings = snapshot.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
-                             units: $0.units, bookCost: $0.bookCost)
+                             units: $0.units, bookCost: $0.bookCost,
+                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit)
             }
             ledgerState = .available
             ledgerStatus = "真实账本 · 只读快照 · \(holdings.count) 项持仓"
@@ -171,6 +173,31 @@ final class FHomeModel: ObservableObject {
         ledgerConfirmationNote = ""
         ledgerWriteStatus = "请核对并填写实际成交信息；此操作会更新真实账本。"
         showingLedgerConfirmation = true
+    }
+
+    func confirmBrokerDisplayCost(instrumentCode: String, costText: String, note: String) async {
+        guard let store = ledgerStore,
+              let cost = Decimal(string: costText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                 locale: Locale(identifier: "en_US_POSIX")), cost >= 0,
+              !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请输入有效的券商单位成本和本次修正说明。"
+            return
+        }
+        do {
+            let now = Date()
+            let confirmation = FUserLedgerConfirmation(
+                confirmedAt: now,
+                confirmationNote: "券商展示成本：" + note.trimmingCharacters(in: .whitespacesAndNewlines))
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmBrokerDisplayCost(instrumentCode: instrumentCode,
+                                                          costPerUnit: cost,
+                                                          confirmation: confirmation,
+                                                          now: now)
+            await loadLedger(from: store)
+            ledgerWriteStatus = "券商展示成本已保存；Episode经济成本和成交流水未被改写。"
+        } catch {
+            ledgerWriteStatus = "券商展示成本未保存：\(error.localizedDescription)"
+        }
     }
 
     func confirmPendingFill() {
@@ -345,7 +372,8 @@ final class FHomeModel: ObservableObject {
             cashFlow = freshLedger.cashFlow
             holdings = freshLedger.positions.map {
                 FHomeHolding(instrumentCode: $0.instrumentCode, name: $0.name,
-                             units: $0.units, bookCost: $0.bookCost)
+                             units: $0.units, bookCost: $0.bookCost,
+                             brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit)
             }
 
             let sessionStatus = FMainlandTradingCalendar.status(at: contextCaptureTime)

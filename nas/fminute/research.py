@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 from decimal import Decimal, InvalidOperation
-from math import ceil
+from math import ceil, isfinite
 from statistics import median, mean
 from typing import Mapping, Sequence
 from zoneinfo import ZoneInfo
@@ -17,6 +17,16 @@ def _is_aware(value: datetime) -> bool:
 
 def _valid_quality_threshold(value: int) -> bool:
     return type(value) is int and 0 <= value <= 100
+
+
+def _quality_gate(row: Mapping, minimum_quality: int) -> bool:
+    """Prefer the archive's transparent session score; retain strict legacy gates."""
+    score = row.get("research_quality")
+    if score is None:
+        return (type(row.get("data_quality")) is int and row["data_quality"] >= minimum_quality and
+                type(row.get("source_trust")) is int and row["source_trust"] >= minimum_quality)
+    return (type(score) in (int, float) and isfinite(score) and
+            minimum_quality <= score <= 100)
 
 
 def _walk_forward_summary(samples: Sequence[Mapping], *, value_key: str,
@@ -138,8 +148,7 @@ def build_vwap_break_evidence(sessions: Sequence[Mapping], *, research_as_of: da
                     price = Decimal(str(row["price"]))
                     volume = Decimal(str(row["minute_volume"]))
                     if (not price.is_finite() or price <= 0 or not volume.is_finite() or volume < 0 or
-                            type(row["data_quality"]) is not int or row["data_quality"] < minimum_quality or
-                            type(row["source_trust"]) is not int or row["source_trust"] < minimum_quality or
+                            not _quality_gate(row, minimum_quality) or
                             row["volume_method"] not in {"source_minute", "cumulative_delta"} or
                             not isinstance(row["source"], str) or not row["source"].strip()):
                         bad = True
@@ -220,8 +229,7 @@ def _eligible_session_bars(session: Mapping, cutoff: datetime, minimum_quality: 
             price = Decimal(str(row["price"]))
             volume = Decimal(str(row["minute_volume"]))
             if (not price.is_finite() or price <= 0 or not volume.is_finite() or volume < 0 or
-                    type(row["data_quality"]) is not int or row["data_quality"] < minimum_quality or
-                    type(row["source_trust"]) is not int or row["source_trust"] < minimum_quality or
+                    not _quality_gate(row, minimum_quality) or
                     row["volume_method"] not in {"source_minute", "cumulative_delta"} or
                     not isinstance(row["source"], str) or not row["source"].strip()):
                 return None

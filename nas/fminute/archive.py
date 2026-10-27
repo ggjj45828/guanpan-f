@@ -22,6 +22,18 @@ class ArchiveError(ValueError):
     pass
 
 
+class ProviderOutOfCoverage(ArchiveError):
+    """A provider explicitly confirmed that the requested date is outside its range."""
+
+
+def _valid_positive_decimal(value: object) -> bool:
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+    return number.is_finite() and number > 0
+
+
 @dataclass(frozen=True)
 class MinuteBar:
     security_code: str
@@ -292,7 +304,6 @@ class MinuteArchive:
         unexpected_count = sum(row["timestamp"] not in expected_set for row in rows)
         with self._connect() as db:
             missing = sorted(expected_set - set(observed))
-            quality_ok = bool(observed) and all(row["data_quality"] >= minimum_quality and row["source_trust"] >= minimum_quality for row in observed.values())
             completeness_ok = bool(observed) and all(row["completeness"] == "complete" for row in observed.values())
             volume_ok = bool(observed) and all(row["minute_volume"] is not None and row["volume_method"] != "unknown" for row in observed.values())
             ordered_rows = [observed[key] for key in sorted(observed)]
@@ -327,22 +338,70 @@ class MinuteArchive:
                            for left_index, right_index, left_time, right_time in
                            zip(observed_positions, observed_positions[1:], observed_timestamps, observed_timestamps[1:]))
             count_complete = len(observed) == len(expected_set) and bool(expected_set)
+            source_names = sorted({row["source"] for row in observed.values()})
+            source_trust_score = (sum(row["source_trust"] for row in observed.values()) / len(observed)
+                                  if observed else 0.0)
+            coverage_score = 100 * len(observed) / len(expected_set)
+            timestamp_validity = 0.0 if future_fetched or future_data_timestamp or unexpected_count else 100.0
+            session_completeness = 100.0 if count_complete and completeness_ok and not long_gap else coverage_score
+            missing_bar_score = coverage_score
+            prices_valid = all(_valid_positive_decimal(row["price"]) for row in observed.values())
+            cross_verified_timestamps = 0
+            if observed:
+                cutoff = self._iso(available_as_of) if available_as_of is not None else None
+                cross_sql = ("SELECT COUNT(*) FROM (SELECT timestamp FROM minute_observation "
+                             "WHERE security_code=? AND market=? AND trading_date=?")
+                cross_params: list[object] = [security_code, session.market, session.trading_date.isoformat()]
+                if cutoff is not None:
+                    cross_sql += " AND fetched_at<=? AND timestamp<=? AND (source_timestamp IS NULL OR source_timestamp<=?)"
+                    cross_params.extend((cutoff, cutoff, cutoff))
+                cross_sql += " GROUP BY timestamp HAVING COUNT(DISTINCT source)>=2)"
+                cross_verified_timestamps = int(db.execute(cross_sql, cross_params).fetchone()[0])
+            cross_source_score = (100.0 if cross_verified_timestamps >= len(observed) * 0.8 else
+                                  (65.0 if cross_verified_timestamps else 35.0))
+            latest_fetch = max((datetime.fromisoformat(row["fetched_at"]) for row in observed.values()),
+                               default=None)
+            fetch_age_days = (max(0.0, (evaluated_at - latest_fetch).total_seconds() / 86400)
+                              if latest_fetch else None)
+            freshness_score = (max(0.0, 100.0 - fetch_age_days * 4) if fetch_age_days is not None else 0.0)
+            volume_score = 100.0 if volume_ok else (50.0 if any(row["minute_volume"] is not None for row in observed.values()) else 0.0)
+            factors = {
+                "sourceTrust": round(source_trust_score, 2),
+                "coverage": round(coverage_score, 2),
+                "timestampValidity": round(timestamp_validity, 2),
+                "sessionCompleteness": round(session_completeness, 2),
+                "missingBars": round(missing_bar_score, 2),
+                "priceValidity": 100.0 if prices_valid else 0.0,
+                "volumeContinuity": round(volume_score, 2),
+                "crossSourceVerification": round(cross_source_score, 2),
+                "freshness": round(freshness_score, 2),
+            }
+            weights = {"sourceTrust": .20, "coverage": .18, "timestampValidity": .12,
+                       "sessionCompleteness": .15, "missingBars": .12, "priceValidity": .08,
+                       "volumeContinuity": .05, "crossSourceVerification": .05, "freshness": .05}
+            quality_score = round(sum(factors[key] * weight for key, weight in weights.items()), 2)
+            confidence_score = round(quality_score * (1.0 if cross_verified_timestamps else .78), 2)
+            quality_ok = bool(observed) and prices_valid and quality_score >= minimum_quality
             status = "complete" if count_complete and quality_ok and completeness_ok and volume_ok and not future_fetched and not future_data_timestamp and not long_gap and unexpected_count == 0 else ("partial" if observed else "missing")
-            sources = sorted({row["source"] for row in observed.values()})
             report = {"securityCode": security_code, "market": session.market, "tradingDate": session.trading_date.isoformat(),
                       "expectedCount": len(expected_set), "observedCount": len(observed), "missingTimestamps": missing,
                       "status": status, "qualityPassed": quality_ok, "volumePassed": volume_ok,
                       "completenessPassed": completeness_ok,
                       "longGap": long_gap, "unexpectedTimestampCount": unexpected_count,
                       "futureFetchedAt": future_fetched, "futureDataTimestamp": future_data_timestamp,
-                      "sources": sources,
+                      "sources": source_names,
+                      "qualityScore": quality_score,
+                      "confidenceScore": confidence_score,
+                      "qualityFactors": factors,
+                      "crossVerifiedTimestamps": cross_verified_timestamps,
+                      "fetchAgeDays": round(fetch_age_days, 3) if fetch_age_days is not None else None,
                       "firstAvailableDate": session.trading_date.isoformat() if observed else None,
                       "lastAvailableDate": session.trading_date.isoformat() if observed else None}
             # Point-in-time replay must not replace the current diagnostic projection.
             if available_as_of is None:
                 db.execute("INSERT OR REPLACE INTO session_coverage VALUES (?,?,?,?,?,?,?,?,?,?)", (
                     security_code, session.market, session.trading_date.isoformat(), len(expected_set), len(observed),
-                    json.dumps(missing), status, self._iso(evaluated_at), json.dumps(sources), SCHEMA_VERSION))
+                    json.dumps(missing), status, self._iso(evaluated_at), json.dumps(source_names), SCHEMA_VERSION))
             return report
 
     def query_day(self, security_code: str, market: str, trading_date: date, *,
@@ -371,7 +430,11 @@ class MinuteArchive:
                                          minimum_quality=min_quality, available_as_of=as_of)
         if coverage["status"] != "complete":
             return []
-        return self.query_day(security_code, market, trading_date, available_as_of=as_of)
+        rows = self.query_day(security_code, market, trading_date, available_as_of=as_of)
+        for row in rows:
+            row["research_quality"] = coverage["qualityScore"]
+            row["research_confidence"] = coverage["confidenceScore"]
+        return rows
 
     def backfill(self, security_code: str, market: str, sessions: Sequence[MarketSession],
                  providers: Sequence[MinuteProvider], *, fetched_at: datetime) -> list[dict]:
@@ -390,6 +453,8 @@ class MinuteArchive:
                 reports.append({"tradingDate": session.trading_date.isoformat(), "result": "already-covered", "source": None})
                 continue
             last_error = None
+            eligible_providers = 0
+            out_of_coverage_count = 0
             used_sources = []
             final_coverage = None
             for provider in providers:
@@ -400,6 +465,7 @@ class MinuteArchive:
                         session.trading_date != fetched_at.astimezone(
                             ZoneInfo(session.timezone_name)).date()):
                     continue
+                eligible_providers += 1
                 try:
                     rows = provider.fetch(security_code, market, session.trading_date)
                     if not rows:
@@ -418,10 +484,16 @@ class MinuteArchive:
                                                            evaluated_at=fetched_at)
                     if final_coverage["status"] == "complete":
                         break
+                except ProviderOutOfCoverage as exc:
+                    out_of_coverage_count += 1
+                    last_error = type(exc).__name__ + ": " + str(exc)
                 except Exception as exc:  # provider fallback is deliberate; error text retained for diagnosis
                     last_error = type(exc).__name__ + ": " + str(exc)
             if final_coverage is None:
-                reports.append({"tradingDate": session.trading_date.isoformat(), "result": "unavailable",
+                reports.append({"tradingDate": session.trading_date.isoformat(),
+                                "result": ("out_of_provider_coverage"
+                                           if eligible_providers > 0 and out_of_coverage_count == eligible_providers
+                                           else "unavailable"),
                                 "source": None, "reason": last_error or "no historical-capable providers configured"})
             else:
                 inserted = self.query_day(security_code, market, session.trading_date)

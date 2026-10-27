@@ -29,6 +29,9 @@ class BackfillQueueFull(ServiceError):
     pass
 
 
+DEFAULT_INITIAL_BACKFILL_SESSIONS = 5
+
+
 class MarketCalendar(Protocol):
     def sessions(self, market: str, start: date, end: date) -> Sequence[MarketSession]: ...
 
@@ -72,8 +75,10 @@ class MinuteArchiveService:
                  lease_seconds: int = 180,
                  retry_base_seconds: int = 60,
                  retry_max_seconds: int = 21_600,
+                 max_backfill_attempts: int = 5,
                  clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
-        if max_queued_sessions < 1 or lease_seconds < 1 or retry_base_seconds < 1 or retry_max_seconds < retry_base_seconds:
+        if (max_queued_sessions < 1 or lease_seconds < 1 or retry_base_seconds < 1 or
+                retry_max_seconds < retry_base_seconds or max_backfill_attempts < 1):
             raise ServiceError("invalid queue or retry bounds")
         self.archive = archive
         self.queue_path = Path(queue_path)
@@ -84,6 +89,7 @@ class MinuteArchiveService:
         self.lease_seconds = lease_seconds
         self.retry_base_seconds = retry_base_seconds
         self.retry_max_seconds = retry_max_seconds
+        self.max_backfill_attempts = max_backfill_attempts
         self.clock = clock
         with self._connect() as db:
             db.executescript("""
@@ -127,13 +133,20 @@ class MinuteArchiveService:
             raise ServiceError("backfill queue schema is incomplete")
         version = db.execute("SELECT value FROM queue_meta WHERE key='schema_version'").fetchone()
         if version is None:
-            # Existing v0 queues predate the explicit metadata row. Their data is
-            # validated below before being adopted as schema v1.
-            db.execute("INSERT INTO queue_meta(key,value) VALUES('schema_version','1')")
-        elif version[0] != "1":
+            # Existing v0 queues predate the explicit metadata row. Preserve their
+            # terminal failures while adopting the explicit status vocabulary.
+            db.execute("UPDATE backfill_task SET status='permanent_unavailable' WHERE status='failed'")
+            db.execute("INSERT INTO queue_meta(key,value) VALUES('schema_version','2')")
+        elif version[0] not in {"1", "2"}:
             raise ServiceError("backfill queue schema is unsupported")
+        elif version[0] == "1":
+            # v1 used one overloaded `failed` state. Preserve those rows as
+            # terminal unavailable tasks; operators may explicitly enqueue them again.
+            db.execute("UPDATE backfill_task SET status='permanent_unavailable' WHERE status='failed'")
+            db.execute("UPDATE queue_meta SET value='2' WHERE key='schema_version'")
         rows = db.execute("SELECT * FROM backfill_task").fetchall()
-        valid_statuses = {"queued", "running", "complete", "failed"}
+        valid_statuses = {"queued", "running", "complete", "partial", "missing",
+                          "out_of_provider_coverage", "retryable", "permanent_unavailable"}
         valid_priorities = {int(item) for item in BackfillPriority}
         for row in rows:
             try:
@@ -144,10 +157,16 @@ class MinuteArchiveService:
                         row["status"] not in valid_statuses or type(row["attempts"]) is not int or
                         row["attempts"] < 0):
                     raise ValueError("invalid queue enum or counter")
-                for key in ("next_attempt_at", "created_at", "updated_at"):
+                for key in ("created_at", "updated_at"):
                     stamp = datetime.fromisoformat(row[key])
                     if stamp.tzinfo is None or stamp.utcoffset() is None:
                         raise ValueError("naive queue timestamp")
+                if row["next_attempt_at"] is not None:
+                    stamp = datetime.fromisoformat(row["next_attempt_at"])
+                    if stamp.tzinfo is None or stamp.utcoffset() is None:
+                        raise ValueError("naive next-attempt timestamp")
+                elif row["status"] in {"queued", "retryable", "running"}:
+                    raise ValueError("retryable task has no next-attempt timestamp")
                 if row["lease_until"] is not None:
                     lease = datetime.fromisoformat(row["lease_until"])
                     if lease.tzinfo is None or lease.utcoffset() is None:
@@ -219,12 +238,12 @@ class MinuteArchiveService:
         inserted = 0
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            active = db.execute("SELECT COUNT(*) FROM backfill_task WHERE status IN ('queued','running')").fetchone()[0]
+            active = db.execute("SELECT COUNT(*) FROM backfill_task WHERE status IN ('queued','retryable','running')").fetchone()[0]
             new_keys = []
             for session in sessions:
                 found = db.execute("SELECT status FROM backfill_task WHERE security_code=? AND market=? AND trading_date=?",
                                    (security_code, market, session.trading_date.isoformat())).fetchone()
-                if found is None or found["status"] not in {"queued", "running"}:
+                if found is None or found["status"] not in {"queued", "retryable", "running"}:
                     new_keys.append(session)
             if active + len(new_keys) > self.max_queued_sessions:
                 raise BackfillQueueFull("backfill queue capacity reached")
@@ -237,6 +256,7 @@ class MinuteArchiveService:
                     VALUES (?,?,?,?, 'queued',0,?,NULL,NULL,?,?)
                     ON CONFLICT(security_code,market,trading_date) DO UPDATE SET
                     priority=MIN(backfill_task.priority,excluded.priority), status='queued',
+                    attempts=CASE WHEN backfill_task.status IN ('partial','missing','out_of_provider_coverage','permanent_unavailable') THEN 0 ELSE backfill_task.attempts END,
                     next_attempt_at=excluded.next_attempt_at, lease_until=NULL,last_error=NULL,updated_at=excluded.updated_at""",
                     (security_code, market, day, int(priority), now, now, now))
                 inserted += 1
@@ -246,7 +266,7 @@ class MinuteArchiveService:
                 "priority": priority.name.lower()}
 
     def enqueue_initial_history(self, security_code: str, market: str, *, through: date,
-                                sessions_back: int = 120,
+                                sessions_back: int = DEFAULT_INITIAL_BACKFILL_SESSIONS,
                                 priority: BackfillPriority = BackfillPriority.WATCHLIST) -> dict:
         self._validate_identity(security_code, market)
         if type(through) is not date:
@@ -269,7 +289,8 @@ class MinuteArchiveService:
                                      sessions[-1].trading_date, priority)
 
     def on_instrument_added(self, security_code: str, market: str, *, added_to: str,
-                            through: date, sessions_back: int = 120) -> dict:
+                            through: date,
+                            sessions_back: int = DEFAULT_INITIAL_BACKFILL_SESSIONS) -> dict:
         if not isinstance(added_to, str):
             raise ServiceError("unsupported instrument category")
         priorities = {"holding": BackfillPriority.HOLDING,
@@ -398,7 +419,30 @@ class MinuteArchiveService:
                 continue
             eligible.append({"tradingDate": session.trading_date.isoformat(),
                              "timezone": session.timezone_name, "complete": True,
+                             "qualityScore": coverage["qualityScore"],
+                             "confidenceScore": coverage["confidenceScore"],
+                             "qualityFactors": coverage["qualityFactors"],
+                             "crossVerifiedTimestamps": coverage["crossVerifiedTimestamps"],
                              "bars": rows})
+        if eligible:
+            factor_names = tuple(eligible[0]["qualityFactors"])
+            data_quality = {
+                "scoringMethod": "weighted-session-quality-v1",
+                "eligibleSessions": len(eligible),
+                "averageQuality": round(sum(row["qualityScore"] for row in eligible) / len(eligible), 2),
+                "averageConfidence": round(sum(row["confidenceScore"] for row in eligible) / len(eligible), 2),
+                "averageFactors": {name: round(sum(row["qualityFactors"][name] for row in eligible) /
+                                                len(eligible), 2) for name in factor_names},
+                "crossSourceVerifiedSessions": sum(row["crossVerifiedTimestamps"] > 0
+                                                    for row in eligible),
+                "singleSourceSessions": sum(row["crossVerifiedTimestamps"] == 0
+                                             for row in eligible),
+            }
+        else:
+            data_quality = {"scoringMethod": "weighted-session-quality-v1", "eligibleSessions": 0,
+                            "averageQuality": None, "averageConfidence": None,
+                            "averageFactors": {}, "crossSourceVerifiedSessions": 0,
+                            "singleSourceSessions": 0}
         vwap = build_vwap_break_evidence(eligible, research_as_of=as_of,
                                          minimum_independent_days=minimum_independent_days,
                                          minimum_quality=minimum_quality)
@@ -409,6 +453,9 @@ class MinuteArchiveService:
             eligible, research_as_of=as_of,
             spacing_percentages=(Decimal("0.5"), Decimal("1"), Decimal("1.5"), Decimal("2")),
             minimum_independent_days=minimum_independent_days, minimum_quality=minimum_quality)
+        vwap["dataQuality"] = data_quality
+        recovery["dataQuality"] = data_quality
+        grid["dataQuality"] = data_quality
         # Keep the mobile/AI payload compact: statistics and provenance, never raw bars,
         # session ledgers, or per-signal sample rows. Those remain available from NAS for
         # audited research and exact-date chart requests.
@@ -474,10 +521,10 @@ class MinuteArchiveService:
             raise ServiceError("security code and market filters must be provided together")
         if security_code is not None and market is not None:
             self._validate_identity(security_code, market)
-            where = "status IN ('queued','running') AND security_code=? AND market=?"
+            where = "status IN ('queued','retryable','running') AND security_code=? AND market=?"
             parameters = (security_code, market)
         else:
-            where = "status IN ('queued','running')"
+            where = "status IN ('queued','retryable','running')"
             parameters = ()
         with self._connect() as db:
             return int(db.execute(f"SELECT COUNT(*) FROM backfill_task WHERE {where}", parameters).fetchone()[0])
@@ -486,6 +533,71 @@ class MinuteArchiveService:
         with self._connect() as db:
             rows = db.execute("SELECT security_code,market,trading_date,priority,status,attempts,next_attempt_at,last_error FROM backfill_task WHERE status!='complete' ORDER BY priority,created_at,trading_date").fetchall()
             return [dict(row) for row in rows]
+
+    def backfill_status(self, securities: Sequence[str], market: str, *, through: date,
+                        sessions_back: int = DEFAULT_INITIAL_BACKFILL_SESSIONS) -> dict:
+        """Summarize a bounded, explicit recent-session plan without inventing coverage."""
+        if type(through) is not date or type(sessions_back) is not int or not 1 <= sessions_back <= 500:
+            raise ServiceError("invalid backfill status range")
+        unique = tuple(dict.fromkeys(securities))
+        if not unique:
+            return {"market": market, "securityCount": 0, "plannedSessions": 0,
+                    "plannedTasks": 0, "coveragePercent": 0.0,
+                    "complete": 0, "partial": 0, "missing": 0, "outOfProviderCoverage": 0, "retryable": 0,
+                    "permanentUnavailable": 0, "providerCoverage": self.provider_coverage(market),
+                    "earliestRealHistoryDate": None, "latestRealHistoryDate": None}
+        for code in unique:
+            self._validate_identity(code, market)
+        calendar = self._calendar(market)
+        start = through - timedelta(days=max(sessions_back * 2, sessions_back + 14))
+        sessions = [item for item in self._calendar_sessions(market, start, through)
+                    if item.expected_timestamps]
+        sessions = sessions[-sessions_back:]
+        counters = {key: 0 for key in ("complete", "partial", "missing", "outOfProviderCoverage",
+                                        "retryable", "permanentUnavailable")}
+        real_dates: set[str] = set()
+        archive_states: dict[tuple[str, str], str] = {}
+        for code in unique:
+            diag = self.archive.diagnostics(code, market, sessions, evaluated_at=self.clock())
+            for row in diag["days"]:
+                archive_states[(code, row["trading_date"])] = row["status"]
+                if row.get("count", 0) > 0: real_dates.add(row["trading_date"])
+        planned_tasks = len(sessions) * len(unique)
+        with self._connect() as db:
+            rows = db.execute("SELECT security_code,trading_date,status FROM backfill_task WHERE market=?", (market,)).fetchall()
+        task_states = {(row["security_code"], row["trading_date"]): row["status"] for row in rows}
+        for code in unique:
+            for session in sessions:
+                key = (code, session.trading_date.isoformat())
+                archive_state, task_state = archive_states.get(key, "missing"), task_states.get(key)
+                if archive_state == "complete": counters["complete"] += 1
+                elif archive_state == "partial": counters["partial"] += 1
+                elif task_state in {"queued", "retryable", "running"}: counters["retryable"] += 1
+                elif task_state == "partial": counters["partial"] += 1
+                elif task_state == "out_of_provider_coverage": counters["outOfProviderCoverage"] += 1
+                elif task_state == "permanent_unavailable": counters["permanentUnavailable"] += 1
+                else: counters["missing"] += 1
+        coverage = round(100 * counters["complete"] / planned_tasks, 2) if planned_tasks else 0.0
+        providers = self.provider_coverage(market)
+        return {"market": market, "securityCount": len(unique),
+                "plannedSessions": len(sessions), "plannedTasks": planned_tasks,
+                **counters, "coveragePercent": coverage,
+                "providerCoverage": providers,
+                "earliestRealHistoryDate": min(real_dates) if real_dates else None,
+                "latestRealHistoryDate": max(real_dates) if real_dates else None,
+                "planStartDate": sessions[0].trading_date.isoformat() if sessions else None,
+                "planEndDate": sessions[-1].trading_date.isoformat() if sessions else None}
+
+    def provider_coverage(self, market: str) -> list[dict]:
+        """Report only empirically declared provider bounds; unknown stays unknown."""
+        return [{"provider": provider.name,
+                 "coverageStart": (provider.coverage_start.isoformat()
+                                   if isinstance(getattr(provider, "coverage_start", None), date) else None),
+                 "coverageEnd": (provider.coverage_end.isoformat()
+                                 if isinstance(getattr(provider, "coverage_end", None), date) else None),
+                 "currentSessionOnly": bool(getattr(provider, "current_session_only", False)),
+                 "coverageEvidence": getattr(provider, "coverage_evidence", "not empirically established")}
+                for provider in self.providers.get(market, ())]
 
     def run_backfill_batch(self, *, limit: int = 10) -> list[dict]:
         if limit < 1 or limit > 500:
@@ -498,7 +610,7 @@ class MinuteArchiveService:
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
                 row = db.execute("""SELECT * FROM backfill_task
-                    WHERE status='queued' AND next_attempt_at<=?
+                    WHERE status IN ('queued','retryable') AND next_attempt_at<=?
                     OR (status='running' AND lease_until<=?)
                     ORDER BY priority,created_at,trading_date LIMIT 1""", (now, now)).fetchone()
                 if row is None:
@@ -522,18 +634,30 @@ class MinuteArchiveService:
                 report = {"tradingDate": day_text, "result": "unavailable",
                           "reason": type(exc).__name__ + ": " + str(exc)}
             complete = report.get("result") in {"complete", "already-covered", "not-a-session"}
+            known_out_of_coverage = report.get("result") == "out_of_provider_coverage"
+            terminal_failure = not complete and not known_out_of_coverage and attempts >= self.max_backfill_attempts
             delay = min(self.retry_max_seconds, self.retry_base_seconds * (2 ** min(attempts - 1, 12)))
             retry_at = self._stamp(now_dt + timedelta(seconds=delay))
             message = report.get("reason") or (None if complete else str(report.get("result", "incomplete")))
+            if complete:
+                status = "complete"
+            elif known_out_of_coverage:
+                status = "out_of_provider_coverage"
+            elif terminal_failure and report.get("result") == "partial":
+                status = "partial"
+            elif terminal_failure:
+                status = "permanent_unavailable"
+            else:
+                status = "retryable"
             with self._connect() as db:
                 db.execute("""UPDATE backfill_task SET status=?,lease_until=NULL,
                     next_attempt_at=?,last_error=?,updated_at=?
                     WHERE security_code=? AND market=? AND trading_date=?""",
-                    ("complete" if complete else "queued", retry_at, message, now,
+                    (status, retry_at, message, now,
                      *task_key))
             results.append({"securityCode": security, "market": market,
                             "tradingDate": day_text, "attempts": attempts,
-                            "queueStatus": "complete" if complete else "queued",
-                            "nextAttemptAt": None if complete else retry_at,
+                            "queueStatus": status,
+                            "nextAttemptAt": retry_at if status == "retryable" else None,
                             "report": report})
         return results

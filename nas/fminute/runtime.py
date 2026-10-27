@@ -48,21 +48,28 @@ def calendar_sync_due(now: datetime, last_month: tuple[int, int] | None,
 def summarize_backfill_cycle(results: list[dict], queue_depth: int) -> dict:
     """Report task outcomes, not just whether the worker loop raised an exception."""
     completed = [row for row in results if row.get("queueStatus") == "complete"]
-    requeued = [row for row in results if row.get("queueStatus") != "complete"]
+    requeued = [row for row in results if row.get("queueStatus") in {"queued", "retryable"}]
+    failed = [row for row in results if row.get("queueStatus") in {
+        "permanent_unavailable", "out_of_provider_coverage", "partial", "missing"}]
     failures = []
-    for row in requeued:
+    for row in [*requeued, *failed]:
         report = row.get("report") or {}
         failures.append({
             "securityCode": row.get("securityCode"),
             "tradingDate": row.get("tradingDate"),
             "attempts": row.get("attempts"),
+            "queueStatus": row.get("queueStatus"),
             "reason": report.get("reason") or report.get("result") or "incomplete",
         })
     return {
-        "status": "idle" if not results else ("degraded" if requeued else "ok"),
+        "status": "idle" if not results else ("degraded" if requeued or failed else "ok"),
         "processed": len(results),
         "completed": len(completed),
         "requeued": len(requeued),
+        "failed": len(failed),
+        "permanentUnavailable": sum(row.get("queueStatus") == "permanent_unavailable" for row in failed),
+        "outOfProviderCoverage": sum(row.get("queueStatus") == "out_of_provider_coverage" for row in failed),
+        "partial": sum(row.get("queueStatus") == "partial" for row in failed),
         "queueDepth": queue_depth,
         "lastFailures": failures[-3:],
     }
@@ -100,12 +107,12 @@ class MinuteRuntimeWorker:
         now = datetime.now(timezone.utc)
         startup_errors = []
         for code in self.securities:
-            # Queue 120 actually enumerated calendar sessions. Unsupported
-            # years fail closed and cannot create guessed weekdays.
+            # Prime only the recent provider window. Older history remains
+            # queryable as Missing and can be explicitly requested later.
             try:
                 self.service.enqueue_initial_history(
                     code, "CN", through=now.astimezone(SHANGHAI).date(),
-                    sessions_back=120, priority=BackfillPriority.HOLDING)
+                    priority=BackfillPriority.HOLDING)
             except Exception as exc:
                 startup_errors.append(type(exc).__name__)
         self.last_cycle = {"status": "degraded" if startup_errors else "starting",

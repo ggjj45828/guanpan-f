@@ -10,6 +10,8 @@ public struct FReadOnlyPositionSnapshot: Equatable, Sendable, Identifiable {
     public let units: Int64
     public let bookCost: Decimal
     public let acquiredAt: Date?
+    public let brokerDisplayCostPerUnit: Decimal?
+    public let brokerDisplayCostUpdatedAt: Date?
 
     fileprivate init(_ position: FPosition) {
         instrumentCode = position.instrumentCode
@@ -17,6 +19,8 @@ public struct FReadOnlyPositionSnapshot: Equatable, Sendable, Identifiable {
         units = position.units
         bookCost = position.bookCost
         acquiredAt = position.acquiredAt
+        brokerDisplayCostPerUnit = position.brokerDisplayCostPerUnit
+        brokerDisplayCostUpdatedAt = position.brokerDisplayCostUpdatedAt
     }
 }
 

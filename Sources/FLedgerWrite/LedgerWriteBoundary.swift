@@ -53,6 +53,21 @@ public actor FConfirmedLedgerWriter {
     }
 
     @discardableResult
+    public func confirmBrokerDisplayCost(instrumentCode: String, costPerUnit: Decimal,
+                                         confirmation: FUserLedgerConfirmation,
+                                         now: Date = Date()) async throws -> String {
+        try validate(confirmation, now: now)
+        guard let prior = try await store.load(now: now),
+              let digest = try await store.currentDigest(now: now) else {
+            throw FLedgerPersistenceError.primaryFileMissing
+        }
+        let updated = try prior.correctingBrokerDisplayCost(
+            instrumentCode: instrumentCode, costPerUnit: costPerUnit,
+            confirmation: confirmation, now: now)
+        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+    }
+
+    @discardableResult
     public func confirmInitialMigration(_ preview: FLegacyLedgerMigrationPreview,
                                         confirmation: FUserLedgerConfirmation,
                                         now: Date = Date()) async throws -> String {

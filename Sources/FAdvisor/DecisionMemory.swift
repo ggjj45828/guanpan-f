@@ -45,12 +45,18 @@ public struct FDecisionHoldingSnapshot: Codable, Equatable, Sendable, Identifiab
     public let name: String
     public let units: Int64
     public let bookCost: Decimal
+    public let brokerDisplayCostPerUnit: Decimal?
+    public let brokerDisplayCostUpdatedAt: Date?
 
-    public init(instrumentCode: String, name: String, units: Int64, bookCost: Decimal) {
+    public init(instrumentCode: String, name: String, units: Int64, bookCost: Decimal,
+                brokerDisplayCostPerUnit: Decimal? = nil,
+                brokerDisplayCostUpdatedAt: Date? = nil) {
         self.instrumentCode = instrumentCode
         self.name = name
         self.units = units
         self.bookCost = bookCost
+        self.brokerDisplayCostPerUnit = brokerDisplayCostPerUnit
+        self.brokerDisplayCostUpdatedAt = brokerDisplayCostUpdatedAt
     }
 }
 
@@ -222,7 +228,8 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
               Set(holdingsSnapshot.map(\.instrumentCode)).count == holdingsSnapshot.count,
               holdingsSnapshot.allSatisfy({
                   FDecisionValidation.nonBlank($0.instrumentCode) && FDecisionValidation.nonBlank($0.name) &&
-                  $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0
+                  $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true)
               }),
               Set(evidence.map(\.id)).count == evidence.count,
               evidence.allSatisfy({

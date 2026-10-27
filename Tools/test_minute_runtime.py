@@ -20,7 +20,23 @@ class BackfillCycleSummaryTests(unittest.TestCase):
         self.assertEqual(summary["processed"], 1)
         self.assertEqual(summary["completed"], 0)
         self.assertEqual(summary["requeued"], 1)
+        self.assertEqual(summary["failed"], 0)
         self.assertEqual(summary["lastFailures"][0]["reason"], "RemoteDisconnected")
+
+    def test_terminal_failure_is_reported_separately_from_requeued_tasks(self):
+        summary = summarize_backfill_cycle([{
+            "securityCode": "159352",
+            "tradingDate": "2026-04-29",
+            "attempts": 5,
+            "queueStatus": "permanent_unavailable",
+            "report": {"result": "unavailable", "reason": "empty source response"},
+        }], queue_depth=0)
+
+        self.assertEqual(summary["status"], "degraded")
+        self.assertEqual(summary["requeued"], 0)
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["lastFailures"][0]["queueStatus"], "permanent_unavailable")
+        self.assertEqual(summary["lastFailures"][0]["reason"], "empty source response")
 
     def test_empty_batch_is_idle_and_successful_batch_is_ok(self):
         self.assertEqual(summarize_backfill_cycle([], 840)["status"], "idle")
@@ -28,6 +44,7 @@ class BackfillCycleSummaryTests(unittest.TestCase):
         self.assertEqual(summary["status"], "ok")
         self.assertEqual(summary["completed"], 1)
         self.assertEqual(summary["requeued"], 0)
+        self.assertEqual(summary["failed"], 0)
 
 
 class RealtimeSessionFilterTests(unittest.TestCase):

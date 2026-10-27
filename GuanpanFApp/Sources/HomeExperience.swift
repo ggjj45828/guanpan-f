@@ -248,6 +248,9 @@ private struct RouteCard: View {
 struct HomeDestination: View {
     let route: FHomeRoute
     @ObservedObject var model: FHomeModel
+    @State private var showingBrokerCostEditor = false
+    @State private var brokerCostText = ""
+    @State private var brokerCostNote = ""
     var body: some View {
         Group {
             switch route {
@@ -262,7 +265,43 @@ struct HomeDestination: View {
             case let .instrument(code):
                 instrumentDestination(code)
             }
-        }.navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingBrokerCostEditor) {
+            NavigationStack {
+                Form {
+                    Section("券商 / 同花顺显示口径") {
+                        TextField("每份成本", text: $brokerCostText)
+                            .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("ledger.brokerCost.value")
+                        TextField("录入或修正原因", text: $brokerCostNote, axis: .vertical)
+                            .accessibilityIdentifier("ledger.brokerCost.note")
+                    }
+                    Section {
+                        Text("此值只记录你实际看到的券商单位成本，不会改写成交、现金或本轮真实经济成本。每次做T或券商口径变化后，可再次核对修正。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("券商展示成本")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { showingBrokerCostEditor = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") {
+                            guard case let .instrument(code) = route else { return }
+                            Task {
+                                await model.confirmBrokerDisplayCost(instrumentCode: code,
+                                                                     costText: brokerCostText,
+                                                                     note: brokerCostNote)
+                                showingBrokerCostEditor = false
+                            }
+                        }
+                        .accessibilityIdentifier("ledger.brokerCost.save")
+                    }
+                }
+            }
+        }
     }
 
     private func unavailable(_ title: String, _ description: String) -> some View {
@@ -287,10 +326,20 @@ struct HomeDestination: View {
                 if let holding {
                     Group {
                         LabeledContent("真实持仓", value: "\(holding.units) 份")
-                        LabeledContent("账面成本", value: holding.bookCost.description)
+                        LabeledContent("本轮经济成本/份", value: (holding.bookCost / Decimal(holding.units)).description)
+                        LabeledContent("券商展示成本/份", value: holding.brokerDisplayCostPerUnit?.description ?? "未录入")
                     }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    Button(holding.brokerDisplayCostPerUnit == nil ? "录入券商展示成本" : "修正券商展示成本") {
+                        brokerCostText = holding.brokerDisplayCostPerUnit.map {
+                            NSDecimalNumber(decimal: $0).stringValue
+                        } ?? ""
+                        brokerCostNote = ""
+                        showingBrokerCostEditor = true
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("ledger.brokerCost.edit")
                 } else if let history {
                     Group {
                         LabeledContent("持仓状态", value: "已清仓")

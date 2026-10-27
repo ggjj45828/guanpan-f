@@ -56,15 +56,23 @@ public struct FPosition: Codable, Equatable, Sendable, Identifiable {
     /// Total acquisition cost attributed to currently held units, including allocated fees.
     public var bookCost: Decimal
     public var acquiredAt: Date?
+    /// User-entered external broker display basis per unit. This is informational and
+    /// never participates in cash, fill, or economic-cost reconciliation.
+    public var brokerDisplayCostPerUnit: Decimal?
+    public var brokerDisplayCostUpdatedAt: Date?
 
     public init(id: UUID = UUID(), instrumentCode: String, name: String, units: Int64,
-                bookCost: Decimal, acquiredAt: Date? = nil) {
+                bookCost: Decimal, acquiredAt: Date? = nil,
+                brokerDisplayCostPerUnit: Decimal? = nil,
+                brokerDisplayCostUpdatedAt: Date? = nil) {
         self.id = id
         self.instrumentCode = instrumentCode
         self.name = name
         self.units = units
         self.bookCost = bookCost
         self.acquiredAt = acquiredAt
+        self.brokerDisplayCostPerUnit = brokerDisplayCostPerUnit
+        self.brokerDisplayCostUpdatedAt = brokerDisplayCostUpdatedAt
     }
 }
 
@@ -234,6 +242,14 @@ public extension FAccountBook {
                 guard position.instrumentCode == code, Self.validCode(code), !position.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       position.units > 0, Self.isFinite(position.bookCost), position.bookCost >= 0 else {
                     throw FLedgerValidationError.invalidPosition(position.id)
+                }
+                if let brokerCost = position.brokerDisplayCostPerUnit,
+                   !Self.isFinite(brokerCost) || brokerCost < 0 {
+                    throw FLedgerValidationError.invalidPosition(position.id)
+                }
+                if let costUpdatedAt = position.brokerDisplayCostUpdatedAt,
+                   !Self.isPlausible(costUpdatedAt, now: now) {
+                    throw FLedgerValidationError.implausibleTimestamp("position.brokerDisplayCostUpdatedAt")
                 }
                 if let acquiredAt = position.acquiredAt, !Self.isPlausible(acquiredAt, now: now) {
                     throw FLedgerValidationError.implausibleTimestamp("position.acquiredAt")

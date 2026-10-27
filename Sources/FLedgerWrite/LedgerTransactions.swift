@@ -9,9 +9,47 @@ public enum FLedgerMutationError: Error, Equatable, Sendable {
     case insufficientUnits(String)
     case invalidCostBasis(String)
     case invalidInstrumentName
+    case missingPositionForBrokerDisplayCost(String)
+    case invalidBrokerDisplayCost(String)
+    case invalidBrokerDisplayCostConfirmation
 }
 
 public extension FAccountBook {
+    /// Persists the broker's displayed per-unit cost as a user-confirmed annotation.
+    /// It never changes economic book cost, units, cash, or fills.
+    func correctingBrokerDisplayCost(instrumentCode: String, costPerUnit: Decimal,
+                                     confirmation: FUserLedgerConfirmation,
+                                     now: Date = Date()) throws -> FAccountBook {
+        try validate(now: now)
+        guard !costPerUnit.isNaN, costPerUnit >= 0 else {
+            throw FLedgerMutationError.invalidBrokerDisplayCost(instrumentCode)
+        }
+        guard !confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              confirmation.confirmedAt >= updatedAt,
+              confirmation.confirmedAt <= now.addingTimeInterval(300) else {
+            throw FLedgerMutationError.invalidBrokerDisplayCostConfirmation
+        }
+        guard let index = positions.firstIndex(where: { $0.instrumentCode == instrumentCode }),
+              positions[index].units > 0 else {
+            throw FLedgerMutationError.missingPositionForBrokerDisplayCost(instrumentCode)
+        }
+        var updated = self
+        let priorDigest = try ledgerStateDigest()
+        updated.positions[index].brokerDisplayCostPerUnit = costPerUnit
+        updated.positions[index].brokerDisplayCostUpdatedAt = confirmation.confirmedAt
+        updated.updatedAt = confirmation.confirmedAt
+        try updated.validate(now: now)
+        let resultingDigest = try updated.ledgerStateDigest()
+        updated.audits.append(FLedgerAuditEvent(
+            occurredAt: confirmation.confirmedAt,
+            action: "用户录入/修正券商展示成本",
+            reason: confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            priorLedgerDigest: priorDigest,
+            resultingLedgerDigest: resultingDigest))
+        try updated.validate(now: now)
+        return updated
+    }
+
     /// Returns an updated value only after the proposed user-confirmed fill reconciles.
     /// The application layer must call this only from an explicit user confirmation action.
     /// Durable storage must still succeed before the UI publishes the returned value.

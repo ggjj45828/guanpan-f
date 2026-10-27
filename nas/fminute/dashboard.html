@@ -73,7 +73,7 @@
       if (!value || Number.isNaN(parsed.getTime())) return value || "—";
       return new Intl.DateTimeFormat("zh-CN", {timeZone:timeZone || undefined, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false}).format(parsed);
     };
-    const statusLabel = value => ({complete:"Complete · 完整",partial:"Partial · 部分",missing:"Missing · 缺失",stale:"Stale · 过期",ready:"Ready · 服务可用",not_ready:"Not ready · 服务未就绪",degraded:"Degraded · 有失败",idle:"Idle · 当前空闲",ok:"OK",alive:"Alive · 进程存活",waiting_for_official_notice:"等待官方日历公告"}[value] || value || "Unavailable · 不可用");
+    const statusLabel = value => ({complete:"Complete · 完整",partial:"Partial · 部分",missing:"Missing · 缺失",out_of_provider_coverage:"Out of Provider Coverage · 来源范围外",permanent_unavailable:"Permanent Unavailable · 已停止重试",retryable:"Retryable · 等待重试",stale:"Stale · 过期",ready:"Ready · 服务可用",not_ready:"Not ready · 服务未就绪",degraded:"Degraded · 有失败",idle:"Idle · 当前空闲",ok:"OK",alive:"Alive · 进程存活",waiting_for_official_notice:"等待官方日历公告"}[value] || value || "Unavailable · 不可用");
     const statusClass = value => ["complete","partial","missing","stale","ready","not_ready","degraded","idle","error"].includes(value) ? value : "";
     async function getJSON(url) {
       const controller = new AbortController();
@@ -99,6 +99,7 @@
       if (Number.isInteger(worker.processed)) details.push(`处理 ${worker.processed}`);
       if (Number.isInteger(worker.completed)) details.push(`完成 ${worker.completed}`);
       if (Number.isInteger(worker.requeued)) details.push(`重排 ${worker.requeued}`);
+      if (Number.isInteger(worker.failed)) details.push(`停止重试 ${worker.failed}`);
       if (Number.isInteger(worker.queueDepth)) details.push(`队列 ${worker.queueDepth}`);
       if (worker.at) details.push(`周期 ${formatTime(worker.at)}`);
       const results = Array.isArray(worker.realtimeResults) ? worker.realtimeResults.map(row => {
@@ -122,6 +123,19 @@
         if (markets.length) $("market").innerHTML = markets.map(m => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join("");
         const calendarText = markets.map(m => `${m}: ${payload.calendar?.[m]?.supportedYears?.join(", ") || "无可用年份"}`).join("；") || "未配置市场";
         const providers = markets.flatMap(m => payload.providerNames?.[m] || []).join("；") || "无已配置来源";
+        const backfillCards = markets.flatMap(m => {
+          const state = payload.backfillStatus?.[m];
+          if (!state || state.status === "unavailable") return [card(`${m} 历史分钟覆盖`, state?.error || "状态不可用", "degraded")];
+          const providers = (state.providerCoverage || []).map(item =>
+            `${item.provider}: ${item.coverageStart || "最早未知"} → ${item.coverageEnd || (item.currentSessionOnly ? "仅当前交易日" : "最新未知")}（${item.coverageEvidence}）`).join("；") || "无可用provider";
+          return [
+            card(`${m} 历史分钟计划 / 完整`, `${state.plannedSessions}交易日 · ${state.securityCount || 0}只证券 / ${state.plannedTasks ?? state.plannedSessions}个任务 · 完整 ${state.complete} · coverage ${state.coveragePercent}%`),
+            card(`${m} Partial / Missing`, `${state.partial} / ${state.missing}`),
+            card(`${m} Retryable / 永久不可用 / 范围外`, `${state.retryable} / ${state.permanentUnavailable} / ${state.outOfProviderCoverage}`),
+            card(`${m} 实际归档日期`, `${state.earliestRealHistoryDate || "无"} → ${state.latestRealHistoryDate || "无"}`),
+            card(`${m} provider 覆盖声明`, providers)
+          ];
+        });
         $("healthCards").innerHTML = [
           card("服务状态", `${statusLabel(payload.status)} · HTTP ${response.status}`, payload.status),
           card("归档数据库", statusLabel(payload.archive), payload.archive),
@@ -129,6 +143,7 @@
           card("分钟来源", providers),
           workerCard("实时采集 worker", payload.realtimeWorker),
           workerCard("历史补采 worker", payload.backfillWorker),
+          ...backfillCards,
           card("日历同步", `${statusLabel(payload.calendarSync?.status)}${payload.calendarSync?.error ? " · " + payload.calendarSync.error : ""}`, payload.calendarSync?.status)
         ].join("");
         $("healthRaw").textContent = JSON.stringify(payload, null, 2);

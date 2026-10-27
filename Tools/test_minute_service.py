@@ -8,7 +8,7 @@ import threading
 import tempfile
 import unittest
 
-from nas.fminute.archive import ArchiveError, MarketSession, MinuteArchive, MinuteBar
+from nas.fminute.archive import ArchiveError, MarketSession, MinuteArchive, MinuteBar, ProviderOutOfCoverage
 from nas.fminute.service import (
     BackfillPriority, BackfillQueueFull, MinuteArchiveService, ServiceError,
 )
@@ -55,6 +55,20 @@ class Provider:
         if (security_code, market, trading_date) != ("159352", self.session.market, self.session.trading_date):
             return []
         return make_bars(self.session, fetched_at=datetime(2026, 10, 25, 1, tzinfo=UTC), count=self.count)
+
+
+class EmptyProvider:
+    name = "empty-fixture"
+
+    def fetch(self, security_code, market, trading_date):
+        return []
+
+
+class OutOfCoverageProvider:
+    name = "out-of-coverage-fixture"
+
+    def fetch(self, security_code, market, trading_date):
+        raise ProviderOutOfCoverage("requested date is older than provider history")
 
 
 class MutableClock:
@@ -120,6 +134,18 @@ class MinuteServiceTests(unittest.TestCase):
         self.assertEqual(report["requestedSessions"], 2)
         self.assertEqual([row["trading_date"] for row in queued], ["2026-10-21", "2026-10-22"])
 
+    def test_default_initial_backfill_is_limited_to_recent_sessions(self):
+        sessions = [make_session(date(2026, 10, day)) for day in range(1, 11)]
+        service = MinuteArchiveService(
+            self.archive, Path(self.temp.name) / "recent-lookback.sqlite",
+            {"CN": Calendar(sessions)}, {}, max_queued_sessions=10, clock=self.clock)
+        report = service.enqueue_initial_history(
+            "159352", "CN", through=date(2026, 10, 10),
+            priority=BackfillPriority.HOLDING)
+
+        self.assertEqual(report["requestedSessions"], 5)
+        self.assertEqual(len(service.queue_snapshot()), 5)
+
     def test_holdings_are_queued_ahead_of_watchlist_and_benchmark(self):
         self.service.on_instrument_added("159352", "CN", added_to="benchmark",
                                          through=date(2026, 10, 20), sessions_back=1)
@@ -177,12 +203,40 @@ class MinuteServiceTests(unittest.TestCase):
         service.enqueue_backfill("159352", "CN", session.trading_date, session.trading_date,
                                  BackfillPriority.HOLDING)
         first = service.run_backfill_batch(limit=1)[0]
-        self.assertEqual(first["queueStatus"], "queued")
+        self.assertEqual(first["queueStatus"], "retryable")
         self.assertEqual(first["report"]["result"], "partial")
         self.assertEqual(service.run_backfill_batch(limit=1), [])
         self.clock.value += timedelta(seconds=61)
         self.assertEqual(service.run_backfill_batch(limit=1)[0]["report"]["result"], "partial")
         self.assertEqual(provider.calls, 2)
+
+    def test_backfill_stops_after_max_attempts_and_manual_requeue_resets_attempts(self):
+        session = self.sessions[0]
+        service = MinuteArchiveService(
+            self.archive, Path(self.temp.name) / "terminal-retry.sqlite",
+            {"CN": self.calendar}, {"CN": [EmptyProvider()]}, clock=self.clock,
+            retry_base_seconds=60, max_backfill_attempts=2)
+        service.enqueue_backfill("159352", "CN", session.trading_date,
+                                 session.trading_date, BackfillPriority.HOLDING)
+
+        first = service.run_backfill_batch(limit=1)[0]
+        self.assertEqual(first["queueStatus"], "retryable")
+        self.clock.value += timedelta(seconds=61)
+        second = service.run_backfill_batch(limit=1)[0]
+        self.assertEqual(second["queueStatus"], "permanent_unavailable")
+        self.assertIsNone(second["nextAttemptAt"])
+        self.assertEqual(second["report"]["reason"], "empty source response")
+        self.assertEqual(service.queue_count(), 0)
+        failed_task = service.queue_snapshot()[0]
+        self.assertEqual(failed_task["status"], "permanent_unavailable")
+        self.assertEqual(failed_task["attempts"], 2)
+        self.assertEqual(failed_task["last_error"], "empty source response")
+
+        service.enqueue_backfill("159352", "CN", session.trading_date,
+                                 session.trading_date, BackfillPriority.HOLDING)
+        requeued_task = service.queue_snapshot()[0]
+        self.assertEqual(requeued_task["status"], "queued")
+        self.assertEqual(requeued_task["attempts"], 0)
 
     def test_diagnostics_report_coverage_sources_collection_times_and_database_size(self):
         complete, partial, missing = self.sessions
@@ -208,6 +262,50 @@ class MinuteServiceTests(unittest.TestCase):
         self.assertEqual([day["completeness"] for day in report["days"]],
                          ["complete", "partial", "missing"])
 
+    def test_backfill_status_is_bounded_and_distinguishes_missing_from_retryable(self):
+        summary = self.service.backfill_status(["159352"], "CN", through=date(2026, 10, 22),
+                                               sessions_back=3)
+        self.assertEqual(summary["plannedSessions"], 3)
+        self.assertEqual(summary["plannedTasks"], 3)
+        self.assertEqual(summary["missing"], 3)
+        self.assertEqual(summary["retryable"], 0)
+        self.assertEqual(summary["coveragePercent"], 0)
+        self.assertEqual(summary["earliestRealHistoryDate"], None)
+        self.assertEqual(summary["providerCoverage"][0]["coverageStart"], None)
+
+        multi_security = self.service.backfill_status(
+            ["159352", "159941"], "CN", through=date(2026, 10, 22), sessions_back=3)
+        self.assertEqual(multi_security["plannedSessions"], 3)
+        self.assertEqual(multi_security["plannedTasks"], 6)
+        self.assertEqual(multi_security["missing"], 6)
+
+    def test_research_quality_separates_single_source_quality_from_confidence(self):
+        session = self.sessions[0]
+        self.archive.ingest(make_bars(session, fetched_at=self.clock(), quality=80,
+                                      source="single-real-source"), mode="backfill")
+        coverage = self.archive.evaluate_session("159352", session, evaluated_at=self.clock(),
+                                                 minimum_quality=90)
+        self.assertTrue(coverage["qualityPassed"])
+        self.assertEqual(coverage["qualityFactors"]["sourceTrust"], 80)
+        self.assertGreaterEqual(coverage["qualityScore"], 90)
+        self.assertLess(coverage["confidenceScore"], coverage["qualityScore"])
+        rows = self.archive.research_rows("159352", "CN", session.trading_date,
+                                          session, as_of=self.clock(), min_quality=90)
+        self.assertEqual(len(rows), len(session.expected_timestamps))
+        self.assertEqual(rows[0]["research_quality"], coverage["qualityScore"])
+        self.assertEqual(rows[0]["research_confidence"], coverage["confidenceScore"])
+
+    def test_explicit_provider_coverage_exclusion_is_terminal_without_retry(self):
+        day = self.sessions[0].trading_date
+        service = MinuteArchiveService(self.archive, Path(self.temp.name) / "coverage.sqlite",
+                                       {"CN": self.calendar}, {"CN": [OutOfCoverageProvider()]},
+                                       clock=self.clock)
+        service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
+        result = service.run_backfill_batch(limit=1)[0]
+        self.assertEqual(result["queueStatus"], "out_of_provider_coverage")
+        self.assertIsNone(result["nextAttemptAt"])
+        self.assertEqual(service.queue_count(), 0)
+
     def test_diagnostics_include_calendar_timezone_and_missing_expected_sessions(self):
         report = self.service.get_diagnostics("159352", "CN", date(2026, 10, 20), date(2026, 10, 22))
         self.assertEqual(report["timezone"], "Asia/Shanghai")
@@ -232,14 +330,14 @@ class MinuteServiceTests(unittest.TestCase):
         limited.enqueue_backfill("159352", "CN", first.trading_date, second.trading_date,
                                  BackfillPriority.HOLDING)
         with sqlite3.connect(limited.queue_path) as db:
-            db.execute("UPDATE backfill_task SET status='failed' WHERE trading_date=?",
+            db.execute("UPDATE backfill_task SET status='permanent_unavailable' WHERE trading_date=?",
                        (first.trading_date.isoformat(),))
         with self.assertRaises(BackfillQueueFull):
             limited.enqueue_backfill("159352", "CN", first.trading_date, third.trading_date,
                                      BackfillPriority.HOLDING)
         self.assertEqual(limited.queue_count(), 1)
         statuses = {item["trading_date"]: item["status"] for item in limited.queue_snapshot()}
-        self.assertEqual(statuses, {first.trading_date.isoformat(): "failed",
+        self.assertEqual(statuses, {first.trading_date.isoformat(): "permanent_unavailable",
                                     second.trading_date.isoformat(): "queued"})
 
     def test_archive_gap_requeues_a_previously_complete_task(self):
@@ -576,7 +674,8 @@ class MinuteServiceTests(unittest.TestCase):
         self.service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
         with sqlite3.connect(self.service.queue_path) as db:
             version = db.execute("SELECT value FROM queue_meta WHERE key='schema_version'").fetchone()
-            self.assertEqual(version[0], "1")
+        self.assertEqual(version[0], "2")
+        with sqlite3.connect(self.service.queue_path) as db:
             db.execute("UPDATE backfill_task SET priority=999 WHERE trading_date=?", (day.isoformat(),))
         with self.assertRaises(ServiceError):
             MinuteArchiveService(self.archive, self.service.queue_path, {"CN": self.calendar},

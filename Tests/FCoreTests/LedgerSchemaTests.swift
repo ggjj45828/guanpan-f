@@ -328,6 +328,66 @@ final class LedgerSchemaTests: XCTestCase {
                        Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 6))
     }
 
+    func testSameDaySellBuySellFullCloseAndReopenKeepsBrokerAndEpisodeCostsSeparate() throws {
+        let code = "159352"
+        let openingPosition = FPosition(instrumentCode: code, name: "A500", units: 100,
+                                        bookCost: 1_000,
+                                        brokerDisplayCostPerUnit: Decimal(string: "10.35")!,
+                                        brokerDisplayCostUpdatedAt: now.addingTimeInterval(-120))
+        var book = FAccountBook(openingSnapshot: opening(cash: 5_000, positions: [openingPosition]),
+                                cashBalance: 5_000, positions: [openingPosition],
+                                updatedAt: now.addingTimeInterval(-120))
+        func fill(_ sequence: UInt64, _ side: FTradeSide, _ units: Int64, _ price: Decimal,
+                  _ removed: Decimal? = nil) -> FConfirmedFill {
+            FConfirmedFill(sequence: sequence, tradedAt: now, instrumentCode: code, side: side,
+                           units: units, price: price,
+                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           costBasisRemoved: removed, userConfirmation: confirmation(),
+                           instrumentName: "A500")
+        }
+        book = try book.applyingUserConfirmedFill(fill(1, .sell, 40, 12, 400), instrumentName: "A500", now: now)
+        book = try book.applyingUserConfirmedFill(fill(2, .buy, 20, 11), instrumentName: "A500", now: now)
+        book = try book.applyingUserConfirmedFill(fill(3, .sell, 30, 12, Decimal(string: "307.5375")!), instrumentName: "A500", now: now)
+        book = try book.applyingUserConfirmedFill(fill(4, .sell, 50, 12, Decimal(string: "512.5625")!), instrumentName: "A500", now: now)
+
+        XCTAssertTrue(book.positions.isEmpty)
+        XCTAssertEqual(book.fills.count, 4)
+        let closed = try book.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(closed.instrumentHistories.first?.episodes.count, 1)
+        XCTAssertNotNil(closed.instrumentHistories.first?.episodes[0].closedAt)
+        XCTAssertEqual(closed.instrumentHistories.first?.lifetimeRealizedProfit,
+                       Decimal(string: "219.60"))
+
+        book = try book.applyingUserConfirmedFill(fill(5, .buy, 25, 11), instrumentName: "A500", now: now)
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let position = try XCTUnwrap(snapshot.positions.first)
+        XCTAssertEqual(position.units, 25)
+        XCTAssertEqual(position.bookCost, Decimal(string: "275.10"))
+        XCTAssertNil(position.brokerDisplayCostPerUnit, "新 Episode 不继承上一轮券商成本录入")
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.count, 2)
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[1].currentBookCost,
+                       Decimal(string: "275.10"))
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[0].netRealizedProfit,
+                       Decimal(string: "219.60"))
+        XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
+                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 5))
+        XCTAssertEqual(snapshot.cashBalance, Decimal(string: "5944.50"))
+
+        let correction = try book.correctingBrokerDisplayCost(
+            instrumentCode: code, costPerUnit: Decimal(string: "11.07")!,
+            confirmation: confirmation(), now: now)
+        let corrected = try correction.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(corrected.positions.first?.brokerDisplayCostPerUnit, Decimal(string: "11.07"))
+        XCTAssertEqual(corrected.positions.first?.bookCost, Decimal(string: "275.10"),
+                       "券商成本修正不改写 Episode 经济成本")
+        XCTAssertEqual(correction.fills.count, 5)
+        XCTAssertEqual(correction.audits.last?.action, "用户录入/修正券商展示成本")
+        let context = FDecisionContext(snapshot: corrected, observations: [])
+        XCTAssertEqual(context.holdings.first?.brokerDisplayCostPerUnit, Decimal(string: "11.07"))
+        XCTAssertEqual(context.holdings.first?.bookCost, Decimal(string: "275.10"))
+        XCTAssertNoThrow(try context.validate(now: now))
+    }
+
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {
         let source = FAccountBook(openingSnapshot: opening(cash: 100), cashBalance: 100, updatedAt: now.addingTimeInterval(-60))
         let fill = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "510300", side: .buy, units: 100,

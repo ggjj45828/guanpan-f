@@ -99,6 +99,18 @@ def make_handler(service: MinuteArchiveService):
                              not calendar_errors and
                              all(value["currentYear"] in value["supportedYears"]
                                  for value in calendar_status.values()))
+                    worker = getattr(service, "runtime_worker", None)
+                    backfill_status = {}
+                    if worker is not None:
+                        for market in configured_markets:
+                            try:
+                                zone = ZoneInfo(getattr(service.calendars[market], "timezone_name", "UTC"))
+                                backfill_status[market] = service.backfill_status(
+                                    worker.securities, market,
+                                    through=datetime.now(zone).date())
+                            except Exception as exc:
+                                backfill_status[market] = {"status": "unavailable",
+                                                           "error": type(exc).__name__ + ": " + str(exc)}
                     status = HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE
                     self._json(status, {"status": "ready" if ready else "not_ready",
                                         "archive": archive_status,
@@ -107,6 +119,7 @@ def make_handler(service: MinuteArchiveService):
                                         "calendarErrors": calendar_errors,
                                         "providerNames": {market: [provider.name for provider in service.providers[market]]
                                                           for market in configured_markets},
+                                        "backfillStatus": backfill_status,
                                         "realtimeWorker": getattr(getattr(service, "runtime_worker", None),
                                                                   "last_cycle", {"status": "not_configured"}),
                                         "backfillWorker": getattr(getattr(service, "runtime_worker", None),

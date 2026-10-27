@@ -168,7 +168,9 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         cashBalance = snapshot.cashBalance
         holdings = snapshot.positions.map {
             FDecisionHoldingSnapshot(instrumentCode: $0.instrumentCode, name: $0.name,
-                                     units: $0.units, bookCost: $0.bookCost)
+                                     units: $0.units, bookCost: $0.bookCost,
+                                     brokerDisplayCostPerUnit: $0.brokerDisplayCostPerUnit,
+                                     brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
         }
         self.observations = observations
         self.researchEvidence = Self.deduplicatedResearchEvidence(researchEvidence)
@@ -218,7 +220,8 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
               FDecisionContextValidation.digest(accountDigest),
               !cashBalance.isNaN, cashBalance >= 0,
               Set(holdings.map(\.instrumentCode)).count == holdings.count,
-              holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 }),
+              holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true) }),
               Set(observations.map(\.id)).count == observations.count,
               Set(positionHistory.map(\.instrumentCode)).count == positionHistory.count,
               Set(recentPositionEpisodes.map(\.id)).count == recentPositionEpisodes.count,

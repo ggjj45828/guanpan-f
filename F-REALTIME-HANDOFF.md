@@ -1,16 +1,29 @@
 # F 实时进度交接
 
-## 2026-10-27 18:34 Asia/Shanghai 实时状态（优先读取）
+## 2026-10-27 19:14 Asia/Shanghai 实时状态（优先读取）
 
-- **当前工作树：** HEAD=`5b28a5e520152815052ed45482b542adc95d53e2`；本轮经允许联网的fetch成功，远端`main` (`FETCH_HEAD`)、本地`main`和`origin/main`均相同，未发现远端前进或冲突。普通受限网络fetch仍报`getaddrinfo() thread failed to start`。工作树有三个未提交文件：`GuanpanFApp/Sources/FUnifiedSecurityChart.swift`（图例横向滚动）、本交接文档及`F-B-145-TRACEABILITY.md`（双成本验收补充）。尚未commit/push，也未触发新CI。
-- **Apple/Simulator验证：** 最近可核实成功仍是run `40482433863`：FCore 121/121 executed/passed/0 failed、App UI XCTest 3/3 executed/passed/0 failed，XcodeGen、Device Build、Simulator Build和未签名IPA成功。该结果不覆盖当前未提交Swift修改。当前Windows环境没有`swift`、`xcodebuild`或`xcodegen`；没有本机Simulator可做手动交互，本轮没有新截图或人工操作验收。CI自动截图不等于Simulator手动验收。
-- **图表改动/现状：** 仍只有`FUnifiedSecurityChart`一个renderer；图例使用横向`ScrollView`，图表已有tap/long-press/drag/magnification手势代码，Model已有横屏呈现枚举；这些交互代码尚未由本轮CI编译，也没有本机Simulator实测。新图例修改仅静态检查通过，等待GitHub可连后先fetch/reconcile再送CI。
+- **当前工作区：** 本轮从 `8c6921123c7e888ad8601186bae459ac090b7b1c` 继续；当前源码和测试有未提交修改，尚未fetch、commit或送Apple CI。HEAD仅供追溯，当前状态以这份dirty工作树为准。
+- **NAS补采状态模型：** 已编码有限尝试（默认5次）、五交易日启动预热、显式 `retryable / partial / missing / out_of_provider_coverage / permanent_unavailable / complete` 状态，以及v1失败行迁移。真正超出覆盖范围只在全部历史provider显式返回 `ProviderOutOfCoverage` 时标记；空响应经有限次数后停止为 `permanent_unavailable`。队列状态和首页worker字段已调整。SQLite旧表的 `next_attempt_at` 仍为NOT NULL，因此终态任务保留时间字段但不再被worker调度。
+- **NAS状态页：** `/readyz` 新增近五个计划交易日的计划数、Complete/Partial/Missing/Retryable/Out of Provider Coverage/Permanent Unavailable、coverage%、实际最早/最新归档日期及provider覆盖声明。没有实测证据的provider起止范围显示未知。旧有更早任务不会伪装成已覆盖；首页摘要按当前五日计划计算，不代表120日完成率。
+- **Research Evidence质量：** 已加入可审计加权评分因子：source trust、coverage、时间戳有效性、session完整度、缺失bar、价格有效性、量连续性、跨源验证和采集新鲜度；质量分与单源置信度分开，单源完整数据可通过质量分进入研究，但置信度乘以单源折减，原始sourceTrust仍保留80。研究摘要新增平均质量、置信度、因子和单源/交叉验证样本数。该评分代码尚未在NAS真实数据库/实网验证；质量设计仍需审查。
+- **Provider实测：** 尚未抽测最近、5、10、30、60、120交易日前的Eastmoney/Sina数据。Windows本机向Eastmoney出站请求被系统拒绝（`WinError 10013`）；provider覆盖边界仍是未知，没有启用新provider fallback，也没有宣称历史分钟已补齐。Nas每日实时归档仍保留。
+- **Ledger双成本：** 已编码可选 `brokerDisplayCostPerUnit` 与录入时间，真实成交经济成本仍由fills/当前episode计算；`FConfirmedLedgerWriter.confirmBrokerDisplayCost`要求用户确认并记录审计，不影响现金、成交或bookCost。证券详情加入券商成本录入/修正表单，Advisor上下文携带字段，并补充按问题选择券商口径、本轮经济成本、当日真实T成交盈亏和历史累计盈亏的提示。清仓持仓投影删除后新Episode不会继承旧券商录入。
+- **Ledger测试准备：** 新增同日卖出→买入→再次卖出→清仓→重建仓场景，覆盖每笔¥0.10费用、现金、历史已实现盈亏、新Episode成本和券商成本修正。FCore测试定义数增加至122；新测试尚未编译或执行。
+- **本轮验证：** Python `py_compile`通过；`git diff --check`通过。选择了34项不依赖本地HTTP socket的NAS/runtime测试，**34 executed / 34 passed / 0 failed**。HTTP/readyz测试因Windows本机localhost socket权限被排除；这不是完整NAS测试套件结果。Swift/FCore/App UI本轮0 executed；Apple验证最近可精确证实仍是FCore 121/121、UI 3/3（run #35）；run #36步骤成功但计数未取得。
+- **Simulator/真实服务：** Windows没有Xcode或可手工操作的iOS Simulator；图表手势、横屏和返回状态恢复仍External Pending。NAS provider实网测试、DeepSeek端到端、成交确认→Ledger→AI复判均未执行。
+- **接下来：** 先进行fetch/reconcile；若远端安全且Apple CI通道可用，将这一批Swift+NAS修改送完整CI，优先核实122项FCore与App Build。NAS真provider日期矩阵只能在具备上游网络的部署环境运行；确认质量报告后再接Sina或任何provider fallback。人工Simulator继续标为External Pending。
+
+## 2026-10-27 18:47 Asia/Shanghai 实时状态（优先读取）
+
+- **当前工作树：** commit `8c6921123c7e888ad8601186bae459ac090b7b1c` 已普通推送到`main`。推送前fetch确认远端与基线一致；GitHub Actions run `40489587708` 已完成且成功。推送包含图例横向滚动、实时交接和双成本最终验收补充；Swift源码无未提交修改，本交接文档有本轮CI结果更新待提交。
+- **Apple/Simulator验证：** run `40489587708` 的job `122139860644` 已成功，逐步确认Swift Package Test、XcodeGen、Device Build、Simulator Build、App navigation UI Test、Simulator截图导出、未签名IPA和产物上传步骤均为success。GitHub可读job元数据显示测试步骤成功，但日志下载当前返回Forbidden，未取得本轮精确测试执行计数；不能把上一轮数字直接冒充本轮。最近精确计数仍是run `40482433863`：FCore 121/121、App UI XCTest 3/3。Windows无`swift`、`xcodebuild`或`xcodegen`，无本机Simulator手动交互/真机验收；CI截图导出不等于人工交互验收。
+- **图表改动/现状：** 仍只有`FUnifiedSecurityChart`一个renderer；图例横向滚动已由run `40489587708`的Device及Simulator Build步骤编译验证，相关CI UI测试步骤也成功。图表tap/long-press/drag/magnification手势和横屏呈现模型仅有既有代码及构建验证，本轮没有Simulator手动操作、横屏状态恢复或真机验收。
 - **NAS历史分钟真实缺口（静态审计）：** F NAS默认只配置Eastmoney exact-date历史1分钟与Tencent current-session分钟；后者明确拒绝历史日期。Eastmoney目前对指定日空响应时记为`unavailable / empty source response`。启动时每证券排队120个交易日，worker每轮仅尝试3项；不完整的任务被无限重排，因此用户看到约840项队列并不表示已有补采进展。静态源码与用户运行证据一致：过去日期多次空响应/断连，只有当天实时分钟已有归档证据。
 - **Provider覆盖边界证据：** AKShare文档（第三方适配器文档，非Eastmoney官方服务承诺）记载其Eastmoney A股1分钟接口只提供最近5个交易日；文档：[stock_zh_a_minute](https://akshare-hh.readthedocs.io/en/latest/data/stock/stock.html)。AKShare源码亦展示另一Sina分钟源请求`datalen=1970`：[stock_zh_a_sina.py](https://github.com/akfamily/akshare/blob/main/akshare/stock/stock_zh_a_sina.py)。1970条约等于8个240分钟交易日是推算，不是Sina保证，也未在当前NAS环境实测。本轮因此**没有**把它当作可用provider或声称历史分钟可补齐；需要部署环境逐日实测覆盖和质量后再决定。应调整初始化队列策略，保留范围外日期为Missing/不可得并停止无限重试，而不是伪造历史。
 - **研究门槛：** Eastmoney当前MinuteBar赋值`data_quality=80, source_trust=80`，而Research模块默认门槛为90；现档案即使存在，也不能自动变成合格研究证据。不得仅调高分数；须有独立来源/质量依据。历史分钟 → SQLite → coverage → exact-date API → iOS → Research Evidence → DecisionContext尚无真实端到端证据。
 - **双成本Ledger最终验收补充：** 静态代码显示`FPosition.bookCost`是当前账本持仓成本总额，Episode Projection保留当前轮成本及历史已实现盈亏；详情/顾问展示仍使用`bookCost`口径。本轮未发现独立券商/同花顺显示成本字段、录入/纠错入口或AI按问题选择券商成本与Episode真实成本的已执行验收。需求已追加至`F-B-145-TRACEABILITY.md`交叉验收补充；此项属于未完成，不能称双成本已支持。
-- **本轮验证数字：** 没有执行新的FCore/App UI/Python测试，数字为0 executed（最近基线仍按上文保留）；没有新NAS、行情、DeepSeek、Ledger成交E2E。
-- **当前下一步：** 远端已核对与本地基线一致；检查diff后commit并普通push这三项修改，观察Apple CI对图例Swift的编译与测试结果。Simulator可用性不能由Windows或CI构建结果替代；可取得可交互Simulator环境后按既定清单手动验收。随后优先修正NAS初始化120日队列与提供方实际覆盖能力不匹配的问题，并在NAS上实测历史日期、归档、coverage及iOS消费。双成本设计需要在最终Ledger验收明确两种成本口径及AI使用规则。
+- **本轮验证数字：** 本机本轮没有执行FCore/App UI/Python测试；run `40489587708` 的FCore测试步骤与App UI测试步骤均成功，但本轮精确计数未取到；最近精确计数run `40482433863`仍为FCore 121/121、App UI 3/3。没有新NAS、行情、DeepSeek、Ledger成交E2E。
+- **当前下一步：** 图例修改已完成本轮Apple CI验证。优先取得可交互Simulator执行既定手势验收；若当前环境仍不可用，则继续推进NAS历史分钟provider/队列与真实数据链路静态查漏，保留Simulator验收为外部待验证。双成本设计需要在最终Ledger验收明确两种成本口径及AI使用规则。
 
 ## 2026-10-27 18:13 Asia/Shanghai 实时状态（优先读取）
 
@@ -234,17 +247,124 @@ App UI XCTest：定义3项，日志确认 **3 executed / 2 passed / 1 failed**�
 
 F_CURRENT_STATUS_BEGIN
 
-当前开发阶段：可用性验收与真实数据链路收口；Apple远端连接暂不可用
-当前正在开发：FUnifiedSecurityChart图例横向滚动，尚待Apple CI；同时完成NAS分钟provider覆盖/队列静态审计
-刚刚完成：静态确认当前NAS历史源只有Eastmoney exact-date与Tencent current-session；120日初始化队列与来源覆盖不匹配；双成本验收缺口已记录
-未提交工作：FUnifiedSecurityChart.swift、F-REALTIME-HANDOFF.md、F-B-145-TRACEABILITY.md
-iOS完成度：run #35基线曾Device/Simulator Build成功、UI XCTest 3/3通过；当前Swift图例修改未编译；无本机Simulator手动验收/真机验证
+当前开发阶段：Apple CI基础收口已通过，转向Simulator交互验收与真实数据链路收口
+当前正在开发：安排FUnifiedSecurityChart手动Simulator交互验收；当前无本机iOS Simulator时继续NAS历史分钟provider/队列查漏
+刚刚完成：commit 8c69211普通推送；run 40489587708全部workflow步骤成功，包括Swift测试、XcodeGen、Device/Simulator Build、App UI测试、截图导出与IPA打包
+未提交工作：仅F-REALTIME-HANDOFF.md的run #36结果/精确计数不可得说明
+iOS完成度：run 40489587708所有构建和UI Test步骤成功；本轮测试计数尚未从日志核实；无手动Simulator手势验收/真机验证
 AI顾问完成度：真实上下文及Candidate代码存在；NAS历史Evidence、DeepSeek、成交后复判未真实E2E；AI双成本口径未完成
 统一图表完成度：一个renderer；点击/十字/拖动/缩放代码存在，未手动交互验收；横屏状态恢复未实测
 NAS历史数据完成度：当前日实时分钟有归档证据；旧日Exact-date常见空响应；120交易日任务无限退避重排；历史分钟→iOS→Research Evidence→DecisionContext未E2E
-Apple编译验证：Windows无Swift/Xcode/XcodeGen；最近成功CI为run 40482433863，未覆盖当前未提交Swift修改；受限fetch失败，但经允许联网fetch成功且确认远端基线一致
+Apple编译验证：run 40489587708针对commit 8c69211全部成功；本轮FCore/UI XCTest步骤成功但精确计数未取得；Windows无Swift/Xcode/XcodeGen
 当前测试：FCore 121 defined / 最近执行121 passed 0 failed；App UI 3 defined / 最近执行3 passed 0 failed；Python/NAS本轮0 executed
-最大缺口：图例修改待CI；Simulator手势/横屏人工验收不可用；NAS历史源覆盖与研究质量门不匹配；DeepSeek成交闭环未E2E；双成本缺独立字段及Advisor语义
-下一步：已fetch/reconcile且远端无新提交→commit/push三项修改→Apple CI；获得可交互Simulator后按清单验收；随后修正NAS队列/真实覆盖并做NAS→iOS→Evidence联调
+最大缺口：Simulator手势/横屏人工验收未完成；NAS历史源覆盖与研究质量门不匹配；DeepSeek成交闭环未E2E；双成本缺独立字段及Advisor语义；本轮XCTest精确计数待日志
+下一步：Simulator可交互环境→逐项验收图表/资产/顾问；环境不可用时→NAS provider/队列实测准备→NAS→iOS→Evidence联调
 
+F_CURRENT_STATUS_END
+
+## 2026-10-27 19:19 实时进度：NAS队列收敛、研究质量与双成本收口
+
+本节覆盖此前交接中“当前工作树补记”的旧状态；以此处记录为准。
+
+### 工作区与验证边界
+
+- 当前F工作树HEAD：`8c6921123c7e888ad8601186bae459ac090b7b1c`。本轮改动仍未提交；HEAD仅用于追溯，不定义F当前状态。
+- 当前修改覆盖NAS补采状态/仪表板/研究质量，以及真实Ledger双成本、Advisor上下文和一项同日复杂成交XCTest。
+- Apple CI最近已知成功基线：run `40489587708`，当时工作树有121项FCore测试通过、3项App UI XCTest通过；本轮新增1项FCore测试，最新源码应为122项defined。新测试没有在Apple CI执行。
+- 当前Windows环境没有`xcodebuild`、XcodeGen或可交互iOS Simulator。Simulator手势验收：External Pending。
+
+### 本轮实际完成
+
+1. NAS backfill初始任务默认缩到最近5个市场交易日，避免对未经验证的历史覆盖范围批量堆入120日任务；手工请求仍可指定日期范围。
+2. Backfill队列加入有限重试（默认最多5次）及`retryable`、`partial`、`missing`、`out_of_provider_coverage`、`permanent_unavailable`状态；仅明确声明超出范围的provider结果进入范围外终态，空响应有限重试后转为永久不可用；人工重新入队会重置终态任务次数。已运行schema v1失败行迁移到永久不可用，不会继续无限重试。
+3. `/readyz`和NAS网页增加最近计划窗口的交易日数、Complete/Partial/Missing/Retryable/范围外/永久不可用计数、真实归档起止日期、coverage百分比及provider覆盖证据；无实测范围时明确显示未知。
+4. Research Evidence增加九项可解释质量因子、实际quality/confidence、采集时效及交叉来源覆盖摘要。单源可信度80仍保留为80；完整单源可以按加权质量门进入研究，同时降低confidence。严格不完整或质量不足的session仍不进入统计；Partial目前标为降级并排除，不会冒充完整样本。
+5. Ledger增加用户确认录入/修正的Broker Display Cost及更新时间；该券商口径只供显示/AI解释，不影响成交、现金或经济成本。当前Episode的真实成交成本仍来自FPosition.bookCost/Position Episode投影。重新建仓不继承上一轮券商成本，历史Episode已实现盈亏保留。Advisor上下文和系统指引区分券商成本、当前Episode成本、当日真实成交盈亏及跨Episode累计盈亏。
+6. 新增同日卖出→买入→再次卖出→清仓→再建仓的FCore XCTest定义，覆盖现金、逐笔¥0.10 ETF手续费、Episode关闭/重建、旧盈利隔离和券商成本修正。该测试当前是defined，尚未Apple编译或执行。
+
+### 本轮验证结果
+
+- Python语法检查：相关NAS服务、provider、研究和测试模块`py_compile`通过。
+- NAS service/runtime非socket测试：34 executed / 34 passed / 0 failed。
+- 针对新队列/质量行为的焦点测试：8 executed / 8 passed / 0 failed。
+- 扩展组合执行：94项尝试，87 passed、2 failed、5 errors。5项错误涉及Windows下SQLite文件句柄未释放、硬链接/目录fsync受限；2项日历同步fixture在当前Windows沙箱返回not_updated。不能将该组合记为全绿，也不能据此宣称这些OS相关路径已通过。
+- `git diff --check`通过。
+- 本机没有Swift/Xcode/XcodeGen；FCore新增测试、App双成本入口与Advisor提示均未编译。当前最近Apple证据仍是基线121/121、UI 3/3，不包含本轮Swift修改。
+- 没有可用的手动Simulator；没有新截图/手势验收；没有真机验证。
+- 新历史分钟候选源的真实日期探测未完成：本机HTTPS外连先前被系统拒绝（WinError 10013）。Eastmoney/Tencent仍是代码中的既有来源；没有证据证明它们覆盖120个历史交易日，也没有启用未经实测的备用provider。当天归档已有NAS先前实证，但本轮未做新的线上端到端请求。
+- 本轮没有真实NAS→iOS历史分时→Research Evidence→DecisionContext、DeepSeek、Candidate确认成交→Ledger更新的E2E验证。
+
+### 当前明确缺口与下一步
+
+1. GitHub/远端同步：先fetch核对本地与远端，再提交本轮工作并触发FCore/XcodeGen/Device Build/Simulator Build/UI Test；若网络仍不可用，不把修改写成已编译。
+2. NAS历史provider：恢复真实外网后按最近、5、10、30、60、120交易日验证候选源的日期覆盖和数据质量；只有实测结果才填写provider范围，不造分钟数据。实时归档继续让今日数据自然成为后续历史。
+3. Research质量：当前完整单源置信度已折减；Partial样本暂时排除，尚未实现安全的部分样本加权统计；需独立定义算法和防前视验证后再纳入。
+4. 双成本：代码和用户纠正入口已编码；待Apple CI验证JSON兼容、同日复杂成交测试及UI写入流程，并待实际券商对账验证成本口径。
+5. 可用性：Simulator交互、图表手势/横屏、历史日期iOS显示、DeepSeek真实闭环、成交后现金与持仓复判、真机验收仍待完成。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：NAS队列收敛、Research质量门与Ledger双成本收口；Apple CI触发前
+当前正在开发：有限重试的历史分钟归档、Evidence质量/置信度字段、用户可纠正Broker Display Cost
+刚刚完成：34项NAS service/runtime非socket测试通过；8项新行为焦点测试通过；Python语法与diff检查通过
+未提交工作：NAS service/archive/research/runtime/API/dashboard/test和Swift Ledger/Advisor/UI/XCTest修改及本交接
+iOS完成度：现有能力已进远端CI基线；本轮双成本及同日交易测试已编码未编译
+AI顾问完成度：成本语义和读取字段已编码；DeepSeek/成交后复判无真实E2E
+统一图表完成度：现有共用renderer保留；本轮没有做Simulator手势验收
+NAS历史数据完成度：队列不再无限重排；历史provider实测范围未知，旧日补采和iOS消费链未打通
+Apple编译验证：无本地Xcode；本轮Swift未验证；最近基线FCore 121/121、App UI 3/3
+当前测试：FCore 122 defined / 最近执行121 passed 0 failed；App UI 3 defined / 最近执行3 passed 0 failed；Python/NAS 34 passed(非socket主组)+8 passed(焦点组)，扩展94组有2 failed、5环境错误
+最大缺口：真实历史分钟provider覆盖；Partial研究加权；Apple验证本轮Swift；Simulator手势验收；DeepSeek到真实成交Ledger E2E
+下一步：fetch/reconcile远端；可达时提交并触发全Apple CI；随后继续历史provider日期实测与真实NAS→iOS联调
+F_CURRENT_STATUS_END
+
+### 19:22 补充核对
+
+- 状态页现将`plannedSessions`定义为计划交易日数、`plannedTasks`定义为证券×交易日任务数；coverage按任务数计算，避免多证券时把任务数误说成交易日数。多证券口径已纳入队列状态测试，并由8项焦点测试复跑通过。
+- service/runtime非socket组复跑：34/34通过；焦点组：8/8通过。`py_compile`与`git diff --check`再次通过。
+- 扩展NAS组的Windows限制仍如上：总计94项中87通过、2失败、5错误；失败/错误主要是Windows沙箱不支持目录fsync/硬链接、SQLite打开句柄阻止临时目录清理。日历两个fixture也因此没有得到Linux/容器部署环境等价验证。
+- `git fetch origin main`本轮重试两次均失败：`getaddrinfo() thread failed to start`。GitHub Actions页面抓取也未取得缓存内容。故未提交、未push，避免在无法核对远端时声称已触发CI；本地改动仍保留。
+
+## 2026-10-27 19:37 再审计：做T日盈亏输入缺失
+
+- 源码检查发现，DeepSeek请求的`FDecisionContext`只含持仓摘要、现金、观察、研究与Episode历史；FReadOnlyLedgerSnapshot也没有向Advisor暴露逐笔成交明细。因此此前prompt要求“根据该日真实fills汇总做T盈亏”超出了实际输入能力，存在让模型误报的风险。
+- 已收紧`FAdvisorVerticalSlice.swift`的系统提示：当前上下文未明确提供当日成交时，Advisor必须说缺少当天成交明细，禁止声称已经汇总真实手续费/已实现盈亏，禁止用跨周期累计盈亏代替。
+- 这是安全降级，不代表“当天做T真实盈亏”功能已实现。下一步要在只读Snapshot/DecisionContext加入受限的成交事实投影（逐笔成交或精确到日/证券的已实现盈亏及费用摘要），再通过测试和Apple CI验证；绝不可给Candidate/Advisor增加Ledger写权限。
+- 上述Swift提示词修改未编译；其他验证计数见19:19与19:22记录。GitHub fetch仍受DNS错误阻断，所以未提交/推送。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：NAS收敛与真实Ledger/Advisor数据一致性修正
+当前正在开发：NAS有限重试及证据评分；双成本；查漏Advisor逐笔成交事实输入
+刚刚完成：发现Advisor prompt与实际DecisionContext不一致并增加缺成交明细时的禁止推算约束
+未提交工作：NAS队列/质量、Swift Ledger双成本/Advisor/UI/XCTest与实时交接
+iOS完成度：既有远端基线可构建；本轮Swift改动未编译
+AI顾问完成度：券商/本轮经济成本已编码；当天成交盈亏目前只能安全提示Unavailable，未接入逐笔成交摘要
+统一图表完成度：共享renderer沿用；手势/横屏Simulator验收未执行
+NAS历史数据完成度：backfill有限重试、终态和覆盖状态已编码并通过主组测试；历史provider真实覆盖仍未知
+Apple编译验证：本机缺Xcode/XcodeGen；当前Swift修改External Verification Pending
+当前测试：FCore 122 defined / 最近真实执行121 passed 0 failed；App UI 3 defined / 最近执行3 passed 0 failed；NAS service/runtime 34/34；新队列/质量焦点8/8；扩展NAS组合94项=87 passed、2 failed、5环境错误
+最大缺口：历史分钟provider实测覆盖；当日成交明细进入DecisionContext；Swift Apple CI；Simulator手势验收；DeepSeek/真实成交E2E
+下一步：网络恢复后fetch/reconcile→提交并跑Apple CI；同时安全实现只读成交摘要；再按日期实测历史provider并联调NAS→iOS
+F_CURRENT_STATUS_END
+
+- 同一轮Advisor提示词审计还发现券商成本“过期”没有已定义的时限规则。已改成展示用户录入时间，时间较早时请用户核对；不让模型自行发明过期阈值或推算券商口径。
+
+## 2026-10-27 19:39 推送续试结果
+
+- 本轮已将NAS队列/Research质量/状态页与Ledger双成本/Advisor边界修改提交到本地`main`，本地HEAD相对缓存的`origin/main`领先一个提交；提交ID以当前Git HEAD为准。父提交为`8c6921123c7e888ad8601186bae459ac090b7b1c`。
+- `origin/main`本地缓存仍指向父提交8c69211。实时`git fetch origin main`连续失败；普通`git push origin main`及HTTP/1.1重试也失败，均因`getaddrinfo() thread failed to start`。独立`curl`检查返回`Could not resolve host: github.com`。因此当前提交仅在本机，未推送，Apple CI未触发；没有使用强推。
+- HEAD是本地F当前源码追溯点，不定义功能完成度。Swift/Apple验证、NAS历史provider实测、Simulator及实网E2E状态仍按上文External Verification Pending处理。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：NAS队列与Ledger双成本改动已形成本地提交，等待GitHub连通后推送验证
+当前正在开发：等待网络恢复后fetch/reconcile；随后普通push并查看Apple CI
+刚刚完成：本地提交领先缓存远端一个提交；34项NAS service/runtime测试与8项焦点测试通过，Python语法和diff检查通过
+未提交工作：产品源码修改已提交；仍有一个Windows锁定的本地临时测试日志目录显示为untracked
+iOS完成度：本轮双成本入口、DecisionContext和XCTest已编码，未编译；Simulator/真机未验收
+AI顾问完成度：双成本语义已编码；当前上下文缺逐笔fills，prompt已要求无明细时拒绝计算当日做T盈亏
+统一图表完成度：已有共享renderer；本轮无Simulator手势验收
+NAS历史数据完成度：有限重试和状态统计已编码并通过主组测试；历史分钟provider覆盖未知，未实测候选源
+Apple编译验证：本轮未触发；本机缺Xcode/XcodeGen；最近基线FCore 121/121、UI 3/3
+当前测试：FCore 122 defined / 本轮新增测试未执行；App UI 3 defined / 最近3 passed；NAS主组34/34、焦点8/8；扩展组94项为87 passed、2 failed、5 Windows环境错误
+最大缺口：GitHub DNS无法连通；历史provider日期覆盖；逐笔成交未进入DecisionContext；本轮Swift未Apple验证；Simulator和真实服务闭环未验收
+下一步：网络恢复后fetch并reconcile，再普通推送当前本地HEAD并执行完整Apple CI
 F_CURRENT_STATUS_END
