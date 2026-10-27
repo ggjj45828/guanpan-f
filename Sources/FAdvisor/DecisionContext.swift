@@ -258,8 +258,11 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     public init(id: UUID = UUID(), snapshot: FReadOnlyLedgerSnapshot,
                 observations: [FContextObservation],
                 researchEvidence: [FDecisionResearchEvidence] = []) {
+        let capturedAt = snapshot.capturedAt
+        let capturedDailyTradeSummaryDate = snapshot.dailyTradeSummaryDate
+        let capturedObservations = observations
         self.id = id
-        createdAt = snapshot.capturedAt
+        createdAt = capturedAt
         accountID = snapshot.accountID
         accountDigest = snapshot.ledgerDigest
         cashBalance = snapshot.cashBalance
@@ -270,7 +273,7 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
                                      brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
         }
         self.observations = observations
-        dailyTradeSummaryDate = snapshot.dailyTradeSummaryDate
+        dailyTradeSummaryDate = capturedDailyTradeSummaryDate
         dailyTradeSummaries = snapshot.dailyTradeSummaries
         dailyPortfolioRealizedPnL = snapshot.dailyTradeSummaries.isEmpty ? nil :
             snapshot.dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }
@@ -288,12 +291,12 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         let dailyByCode = Dictionary(uniqueKeysWithValues: snapshot.dailyTradeSummaries.map { ($0.securityCode, $0) })
         let codes = Set(historyByCode.keys).union(holdingByCode.keys).union(dailyByCode.keys)
         instrumentPnLFacts = codes.sorted().map { code in
-            let price = observations.filter { $0.dataClass == .quote && $0.subject == code }
-                .filter { $0.isFresh(at: createdAt) }
+            let price = capturedObservations.filter { $0.dataClass == .quote && $0.subject == code }
+                .filter { $0.isFresh(at: capturedAt) }
                 .max { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }?.decimalValue
             return FDecisionInstrumentPnL(instrumentCode: code, history: historyByCode[code],
                                           holding: holdingByCode[code], daily: dailyByCode[code],
-                                          dailySummaryDate: dailyTradeSummaryDate, quotePrice: price)
+                                          dailySummaryDate: capturedDailyTradeSummaryDate, quotePrice: price)
         }
     }
 

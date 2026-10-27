@@ -551,3 +551,56 @@ Apple编译验证：本机无Xcode；待本轮Apple CI执行
 最大缺口：本轮Swift未编译；Simulator人工交互；NAS历史分钟真实进入iOS；DeepSeek/真实成交闭环
 下一步：普通commit/push→Apple完整CI→按首个实际错误修复
 F_CURRENT_STATUS_END
+
+## 2026-10-27 21:45 Asia/Shanghai Apple CI run #37 结果
+
+- 本地/远端已同步：`main=origin/main=6b23ebd`（提交`Complete ledger PnL semantics and advisor facts`）；当前跟踪工作树干净。未跟踪锁定临时日志目录保留；没有再提交或推送。
+- 右侧GitHub Actions可确认新run #37，run ID `40512269257`，job ID `122216941864`，对应HEAD `6b23ebd`。状态失败，总时长约1分18秒；唯一执行到失败的步骤是`Run F Swift package tests`（约41秒，exit code 1）。因此本run没有执行成功的FCore测试结果；实际通过/失败项数无法从公开页面获知。XcodeGen、Device Build、Simulator Build、App UI XCTest均未运行。
+- 页面明确显示日志须登录；当前自动读取只返回失败步骤名称与exit code，没有第一个编译诊断或失败XCTAssert。右侧已打开该job链接。公开1.83KB artifact页面显示存在，但未登录的直接下载返回404；GitHub API受匿名rate limit限制。没有据此猜原因、删断言或改测试。
+- 当前FCore测试定义数静态计数129。最近可确认的历史成功执行仍是121/121通过、0失败（旧提交）；不能将其视为当前HEAD通过。UI仍只有最近旧成功基线3/3；当前run未启动UI测试。
+- 当前环境没有本地Swift/Xcode/XcodeGen；未在本机编译。本轮也未运行Simulator、Python/NAS、真机或真实服务E2E。
+- 为继续按“首个真实根因修复”流程，需要读取右侧job的`Run F Swift package tests`展开日志；目前GitHub要求登录。CI/源码状态以此为准，待可读取日志后只修第一个真实失败，再普通push触发完整CI。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger/Advisor收益口径已推送，进入run #37真实Swift测试失败定位
+当前正在开发：等待读取Swift package测试日志中的首个真实诊断
+刚刚完成：commit 6b23ebd普通推送并成功进入GitHub；run #37实际执行并在Swift测试步骤失败
+未提交工作：跟踪文件干净；仅有此前锁定临时目录未跟踪
+iOS完成度：修改已提交；本机未编译；run #37未通过F Swift package tests
+AI顾问完成度：口径、只读Daily Trade Summary、历史完整性约束已编码；DeepSeek实网与真实成交后复判未验证
+统一图表完成度：当前共享renderer代码随commit推送；本轮无Simulator交互验收
+NAS历史数据完成度：本轮未进行NAS历史分钟真实E2E
+Apple编译验证：本机无Xcode；CI run #37失败于Swift package tests；未进入App Build/UI Test
+当前测试：FCore 129 defined / run #37尝试`swift test`但实际执行/通过/失败数量未从日志确认；旧最近可核实结果121 passed、0 failed；App UI 3 defined / 本run 0 executed；Python/NAS 0 executed
+最大缺口：首个Swift测试/编译诊断需登录查看；本轮App Build与UI Test未跑；NAS分钟入iOS及DeepSeek真实闭环未验证
+下一步：在右侧GitHub job查看`Run F Swift package tests`原始日志 → 按首个真实错误修复 → 普通push → 完整Apple CI
+F_CURRENT_STATUS_END
+
+## 2026-10-27 用户补充 CI 错误片段
+
+- 用户提供失败输出片段：`error: fatalError`，作业最终 `Process completed with exit code 1`。
+- 该片段没有测试名称、文件/行号、fatal error message 或前后文；无法判断是Swift编译/测试运行器崩溃，还是某个测试触发fatalError。GitHub匿名页面仍只显示失败步骤 `Run F Swift package tests`，原始步骤日志要求登录后查看；本机没有GitHub CLI凭据、Swift/Xcode/XcodeGen，无法在本机复现。
+- 本轮静态检查：当前产品源码未发现显式`fatalError`/`preconditionFailure`/`assertionFailure`；测试中发现既有 `MarketChartAcceptanceTests.swift` 存在`try!`，但没有证据表明它与本次失败有关，不据此推断或修改。
+- 当前仍不改断言/不做猜测性修复。要锁定根因，需要该步骤中`fatalError`上下至少约20行，尤其是fatal error完整文本、测试名/文件行号和最早出现的`error:`行。
+
+## 2026-10-27 22:xx Asia/Shanghai run #37 编译根因修复
+
+- 用户提供 `logs_109802610885.zip` 后，已读取真实Swift日志。首个根因：`Sources/FAdvisor/DecisionContext.swift:290:49`，Swift报 `constant 'self.instrumentPnLFacts' captured by a closure before being initialized`。`error: fatalError`是Swift前述编译诊断的汇总，不是XCTest断言/运行时失败。
+- 最小修复：在`FDecisionContext.init`开头捕获`capturedAt`、`capturedDailyTradeSummaryDate`与`capturedObservations`局部值，并让构造PnL事实的闭包只用这些局部值；不改变PnL计算语义、不删测试或断言。
+- `git diff --check`通过。Windows无Swift/Xcode/XcodeGen，修复此刻仍是“已编码未编译”。本地先普通`git fetch origin main`失败，随后联网重试成功；核对`origin/main=6b23ebd2a823e38ba42da5434d9b8f31487a6e88`，与本地修复基线一致，无远端新增提交/分叉，可安全普通提交并推送。
+- 下一步：提交源码修复及本交接更新→普通push→等待新的Apple CI完成；以真实日志确认FCore、工程生成、Device/Simulator Build和UI XCTest结果。旧run #37是编译失败，当前HEAD仍没有通过证据。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：修复run #37确认的Swift编译根因并重跑Apple CI
+当前正在开发：`FDecisionContext.init`初始化闭包避免过早捕获self
+刚刚完成：读取用户提供run #37日志并定位首个编译错误；最小源码修复已编码，静态diff检查通过
+未提交工作：`Sources/FAdvisor/DecisionContext.swift`编译修复、`F-REALTIME-HANDOFF.md`状态更新；锁定临时目录保留且不纳入提交
+iOS完成度：编译错误已静态修复但尚未由Apple编译
+AI顾问完成度：DecisionContext PnL事实投影修正已编码，运行/业务回归待Apple XCTest
+统一图表完成度：本轮未改动；暂无新的Simulator交互验收
+NAS历史数据完成度：本轮未改动，未做新的历史分钟E2E
+Apple编译验证：run #37失败根因已确认为初始化闭包过早捕获self；修复待新CI验证
+当前测试：FCore 129 defined / run #37编译阶段失败，当前HEAD executed/passed/failed未知；UI 3 defined / run #37 0 executed；Python/NAS本轮0 executed
+最大缺口：修复后的Apple完整CI；NAS历史分钟进iOS/Research Evidence；Simulator交互与DeepSeek真实闭环
+下一步：普通commit/push→等待Apple CI→检查实际FCore/XcodeGen/Device/Simulator/UI结果
+F_CURRENT_STATUS_END
