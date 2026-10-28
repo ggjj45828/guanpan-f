@@ -1,3 +1,4 @@
+from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
@@ -329,7 +330,7 @@ class MinuteServiceTests(unittest.TestCase):
         first, second, third = self.sessions
         limited.enqueue_backfill("159352", "CN", first.trading_date, second.trading_date,
                                  BackfillPriority.HOLDING)
-        with sqlite3.connect(limited.queue_path) as db:
+        with closing(sqlite3.connect(limited.queue_path)) as db, db:
             db.execute("UPDATE backfill_task SET status='permanent_unavailable' WHERE trading_date=?",
                        (first.trading_date.isoformat(),))
         with self.assertRaises(BackfillQueueFull):
@@ -343,7 +344,7 @@ class MinuteServiceTests(unittest.TestCase):
     def test_archive_gap_requeues_a_previously_complete_task(self):
         day = self.sessions[0].trading_date
         self.service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
-        with sqlite3.connect(self.service.queue_path) as db:
+        with closing(sqlite3.connect(self.service.queue_path)) as db, db:
             db.execute("UPDATE backfill_task SET status='complete' WHERE trading_date=?",
                        (day.isoformat(),))
         result = self.service.enqueue_backfill("159352", "CN", day, day,
@@ -672,10 +673,10 @@ class MinuteServiceTests(unittest.TestCase):
     def test_backfill_queue_revalidates_persisted_schema_and_rows_after_restart(self):
         day = self.sessions[0].trading_date
         self.service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
-        with sqlite3.connect(self.service.queue_path) as db:
+        with closing(sqlite3.connect(self.service.queue_path)) as db, db:
             version = db.execute("SELECT value FROM queue_meta WHERE key='schema_version'").fetchone()
         self.assertEqual(version[0], "2")
-        with sqlite3.connect(self.service.queue_path) as db:
+        with closing(sqlite3.connect(self.service.queue_path)) as db, db:
             db.execute("UPDATE backfill_task SET priority=999 WHERE trading_date=?", (day.isoformat(),))
         with self.assertRaises(ServiceError):
             MinuteArchiveService(self.archive, self.service.queue_path, {"CN": self.calendar},
@@ -684,7 +685,7 @@ class MinuteServiceTests(unittest.TestCase):
         clean_queue = Path(self.temp.name) / "future-version-queue.sqlite"
         MinuteArchiveService(self.archive, clean_queue, {"CN": self.calendar},
                              {"CN": [Provider(self.sessions[-1])]}, clock=self.clock)
-        with sqlite3.connect(clean_queue) as db:
+        with closing(sqlite3.connect(clean_queue)) as db, db:
             db.execute("UPDATE queue_meta SET value='999' WHERE key='schema_version'")
         with self.assertRaises(ServiceError):
             MinuteArchiveService(self.archive, clean_queue, {"CN": self.calendar},
@@ -694,7 +695,7 @@ class MinuteServiceTests(unittest.TestCase):
         lease_service = MinuteArchiveService(self.archive, lease_queue, {"CN": self.calendar},
                                              {"CN": [Provider(self.sessions[-1])]}, clock=self.clock)
         lease_service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
-        with sqlite3.connect(lease_queue) as db:
+        with closing(sqlite3.connect(lease_queue)) as db, db:
             db.execute("UPDATE backfill_task SET status='running', lease_until=NULL WHERE trading_date=?",
                        (day.isoformat(),))
         with self.assertRaises(ServiceError):
@@ -705,7 +706,7 @@ class MinuteServiceTests(unittest.TestCase):
         no_key_service = MinuteArchiveService(self.archive, no_key_queue, {"CN": self.calendar},
                                               {"CN": [Provider(self.sessions[-1])]}, clock=self.clock)
         no_key_service.enqueue_backfill("159352", "CN", day, day, BackfillPriority.HOLDING)
-        with sqlite3.connect(no_key_queue) as db:
+        with closing(sqlite3.connect(no_key_queue)) as db, db:
             db.execute("DROP INDEX idx_backfill_ready")
             db.execute("ALTER TABLE backfill_task RENAME TO old_backfill_task")
             db.execute("""CREATE TABLE backfill_task (

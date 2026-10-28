@@ -118,9 +118,10 @@ public enum FAccountingPolicy {
     }
 }
 
-/// F ETF trade records use one fixed fee per confirmed fill.
+/// Suggested ETF fee reference for the fill-confirmation form. Real fills must
+/// store the fee confirmed by the user from the broker, which may differ.
 public enum FETFTradeFeePolicy {
-    public static let perConfirmedFill = Decimal(string: "0.10")!
+    public static let defaultReferencePerFill = Decimal(string: "0.10")!
 }
 
 public enum FTradeSide: String, Codable, Equatable, Sendable { case buy, sell }

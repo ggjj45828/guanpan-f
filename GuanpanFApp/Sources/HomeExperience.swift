@@ -967,6 +967,11 @@ struct FLedgerConfirmationSheet: View {
                         .keyboardType(.numberPad)
                     TextField("实际成交价格", text: $model.actualFillPriceText)
                         .keyboardType(.decimalPad)
+                    TextField("实际手续费（默认参考 ¥0.10）", text: $model.actualFillFeeText)
+                        .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("ledger.fill.actual-fee")
+                    Text("请按券商实际收取金额填写；¥0.10只是默认参考，确认后将按此费用记入现金和成本/盈亏。")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("成交性质（默认普通交易）") {
                     Picker("用途", selection: $model.actualFillTradeIntent) {

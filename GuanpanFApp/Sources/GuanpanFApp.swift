@@ -70,6 +70,7 @@ final class FHomeModel: ObservableObject {
     @Published var showingLedgerConfirmation = false
     @Published var actualFillUnitsText = ""
     @Published var actualFillPriceText = ""
+    @Published var actualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
     @Published var actualFillInstrumentName = ""
     @Published var actualFillTradeIntent: FTradeIntent = .ordinary
     @Published var actualFillTCycleID = ""
@@ -169,6 +170,7 @@ final class FHomeModel: ObservableObject {
         pendingCandidateScope = result.scope
         actualFillUnitsText = String(units)
         actualFillPriceText = NSDecimalNumber(decimal: price).stringValue
+        actualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
         actualFillTradeIntent = .ordinary
         actualFillTCycleID = ""
         actualFillInstrumentName = latestLedgerSnapshot?.instrumentHistories.first(where: {
@@ -219,9 +221,11 @@ final class FHomeModel: ObservableObject {
               units > 0,
               let price = Decimal(string: actualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines),
                                   locale: Locale(identifier: "en_US_POSIX")), price > 0,
+              let fee = Decimal(string: actualFillFeeText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                locale: Locale(identifier: "en_US_POSIX")), fee >= 0,
               !actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !ledgerConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            ledgerWriteStatus = "请填写有效的实际成交份额、价格、证券名称和确认说明。"
+            ledgerWriteStatus = "请填写有效的实际成交份额、价格、手续费、证券名称和确认说明。"
             return
         }
         let side: FTradeSide
@@ -266,7 +270,7 @@ final class FHomeModel: ObservableObject {
                                                         .trimmingCharacters(in: .whitespacesAndNewlines))
             let fill = FConfirmedFill(sequence: lastSequence + 1, tradedAt: now,
                                       instrumentCode: code, side: side, units: units, price: price,
-                                      fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: removedCost,
+                                      fee: fee, costBasisRemoved: removedCost,
                                       userConfirmation: confirmation,
                                       instrumentName: actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines),
                                       tradeIntent: actualFillTradeIntent,
@@ -464,8 +468,8 @@ final class FHomeModel: ObservableObject {
             let changesAssets = [.buy, .sell, .dayTrade, .grid].contains(modelAssessment.candidate.action)
             let candidateCode = modelAssessment.candidate.instrumentCode
             if changesAssets {
-                let expectedFee: Decimal = modelAssessment.candidate.action == .dayTrade ? 0.20 : 0.10
-                if modelAssessment.candidate.estimatedFee != expectedFee {
+                let minimumEstimatedFee: Decimal = modelAssessment.candidate.action == .dayTrade ? 0.20 : 0.10
+                if modelAssessment.candidate.estimatedFee < minimumEstimatedFee {
                     guardFindings.append(.invalidCandidate)
                 }
             }

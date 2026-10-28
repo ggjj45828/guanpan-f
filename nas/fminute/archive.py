@@ -640,10 +640,16 @@ class MinuteArchive:
             self._fsync_directory(destination.parent)
             return self._logical_digest(destination)
         except FileExistsError as exc:
+            if target is not None:
+                target.close()
+                target = None
             if temporary.exists():
                 temporary.unlink()
             raise ArchiveError("backup destination already exists") from exc
         except Exception:
+            if target is not None:
+                target.close()
+                target = None
             if temporary.exists():
                 temporary.unlink()
             raise
@@ -679,8 +685,14 @@ class MinuteArchive:
             temporary.unlink()
             cls._fsync_directory(destination.parent)
         except FileExistsError as exc:
+            if target is not None:
+                target.close()
+                target = None
             raise ArchiveError("restore destination already exists") from exc
         except Exception:
+            if target is not None:
+                target.close()
+                target = None
             if temporary.exists():
                 temporary.unlink()
             raise
@@ -712,8 +724,11 @@ class MinuteArchive:
                        "completeness", "schema_version")
         for table in ("minute_bar", "minute_observation"):
             cursor = db.execute(f"SELECT {','.join(bar_columns)} FROM {table}")
-            for values in cursor:
-                MinuteArchive._validate_stored_bar(dict(zip(bar_columns, values)))
+            try:
+                for values in cursor:
+                    MinuteArchive._validate_stored_bar(dict(zip(bar_columns, values)))
+            finally:
+                cursor.close()
 
         coverage_columns = ("security_code", "market", "trading_date", "expected_count",
                             "observed_count", "missing_timestamps", "status", "evaluated_at",

@@ -10,7 +10,8 @@ from datetime import date, datetime, timedelta, timezone
 from enum import IntEnum
 from decimal import Decimal
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, Sequence
+from contextlib import contextmanager
+from typing import Callable, Iterator, Mapping, Protocol, Sequence
 import sqlite3
 
 from .archive import ArchiveError, MarketSession, MinuteArchive, MinuteBar, MinuteProvider
@@ -178,10 +179,15 @@ class MinuteArchiveService:
             except (KeyError, TypeError, ValueError, OverflowError) as exc:
                 raise ServiceError("backfill queue contains invalid task data") from exc
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.queue_path, timeout=30, isolation_level="IMMEDIATE")
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _stamp(value: datetime) -> str:

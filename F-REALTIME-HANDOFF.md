@@ -262,6 +262,7 @@ Apple编译验证：run 40489587708针对commit 8c69211全部成功；本轮FCor
 
 F_CURRENT_STATUS_END
 
+
 ## 2026-10-27 21:08 补齐T成交标记与券商成本跨清仓保留
 
 - 继续同一F工作树和HEAD `4972f843f208dd1a622ec42205f80b5a059718cb`，没有切换/回退/提交/推送；当前源码变更仍dirty。GitHub最新可见页面记录仍是先前浏览器看到的`8c692112`，本轮没有新fetch证据。
@@ -603,4 +604,144 @@ Apple编译验证：run #37失败根因已确认为初始化闭包过早捕获se
 当前测试：FCore 129 defined / run #37编译阶段失败，当前HEAD executed/passed/failed未知；UI 3 defined / run #37 0 executed；Python/NAS本轮0 executed
 最大缺口：修复后的Apple完整CI；NAS历史分钟进iOS/Research Evidence；Simulator交互与DeepSeek真实闭环
 下一步：普通commit/push→等待Apple CI→检查实际FCore/XcodeGen/Device/Simulator/UI结果
+F_CURRENT_STATUS_END
+
+## 2026-10-27 22:05 Asia/Shanghai Apple CI 重跑与外部账单阻塞
+
+- 最新用户附件 `logs_109810963070.zip` 实际只有22字节，ZIP内没有日志文件，不能据此证明有新的编译或测试执行结果。
+- 针对run #38（run ID `40515211860`、job ID `122227273267`），GitHub页面给出的失败原因是任务未启动：账户近期付款失败，或 Actions spending limit 需要提高。macOS runner没有启动，因此run #38没有编译、FCore测试、App Build或UI测试结果。
+- 按用户“多试几次”的授权，通过当前已登录的右侧GitHub页面点击了“Re-run failed jobs”并确认重跑；等待后仍没有新attempt编号或步骤日志。之后刷新右侧页面，GitHub返回`ERR_CONNECTION_CLOSED`（github.com无法访问）。没有runner启动或编译执行证据，不能把点击/等待视为重跑成功。
+- 本轮没有新增源码修改。HEAD和远端仍为`b75d00856a197506429754452d8dc56995d3ae7b`；跟踪工作树干净，锁定临时目录保持未跟踪并原样保留。Windows仍无Swift/Xcode/XcodeGen，本地无法替代Apple编译。
+- 先前run #37的真实编译根因已在`DecisionContext.swift`修复并随b75d008推送；当前修复仍未被run #38编译验证。FCore仍为129 defined；最近实际成功证据为历史基线121/121（旧代码），不能计作当前提交通过。App UI 3项的最近成功证据同样是旧基线；run #38未执行。
+- 下一步阻塞解除条件：GitHub账户所有者在 Settings → Billing & plans 处理失败付款或调整 Actions spending limit。该账户/付款设置由用户自行处理；之后可从Actions页面重新运行失败作业。不要继续重复点击被相同账单门槛拒绝的重跑。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：修复run #37 Swift初始化编译错误后等待Apple CI实际验证
+当前正在开发：源码未改动；核实GitHub Actions runner是否恢复
+刚刚完成：检查新上传日志包为空；尝试从右侧GitHub UI重跑run #38失败作业
+未提交工作：跟踪工作树干净；锁定临时目录保持未跟踪
+iOS完成度：编译修复已编码并推送；当前b75d008尚无新CI编译证据
+AI顾问完成度：DecisionContext闭包修复等待XCTest及App编译验证；真实DeepSeek闭环未验证
+统一图表完成度：本轮未改动；Simulator手势验收仍待可交互Apple环境
+NAS历史数据完成度：本轮未改动；历史分钟iOS/Evidence E2E未验证
+Apple编译验证：run #38因GitHub账户付款失败/Actions spending limit在runner启动前被拦；已请求重跑但无新attempt执行证据，当前右侧页面网络错误`ERR_CONNECTION_CLOSED`
+当前测试：FCore 129 defined / run #38 0 executed；最近历史执行121 passed、0 failed（旧提交）。App UI 3 defined / run #38 0 executed；Python/NAS本轮0 executed
+最大缺口：解除GitHub账单/Actions spending limit阻塞并重新触发CI；完成当前源码编译/测试；Simulator交互与真实服务闭环
+下一步：用户处理GitHub账户Billing & plans后重跑当前失败workflow；读取新attempt日志再确认Swift Compile→FCore→XcodeGen→Device/Simulator Build→UI Test
+F_CURRENT_STATUS_END
+
+## 2026-10-28 非Apple工作队列：NAS SQLite连接生命周期
+
+- 按用户指示暂停编译/Apple CI重试，转做不依赖Apple环境的NAS收口。本机仍无Swift/Xcode/XcodeGen。
+- NAS源码审查发现 `MinuteArchiveService._connect()` 返回裸 `sqlite3.Connection`，而服务各处通过 `with self._connect()` 使用。SQLite连接的上下文管理器负责事务提交/回滚，但不会关闭连接；Windows下队列文件因此持续被锁，临时数据库清理失败。这是服务连接生命周期缺陷，不是历史分钟provider失败。
+- 修正为事务作用域连接：退出时始终显式 `close()`。测试里直接打开SQLite文件的少量fixture也改为显式关闭，避免Windows文件锁掩盖断言结果。没有改变队列状态机、provider规则或Research Evidence计算。
+- 验证：`Tools.test_minute_service.MinuteServiceTests`中不使用本地HTTP监听的29项实际执行并通过；provider定向6项（Eastmoney exact-date/当前日拒绝、Tencent时间戳与旧日期拒绝）实际执行并通过。合计本轮定向NAS Python测试35 passed、0 failed。
+- 更广的48项尝试曾受运行环境限制：localhost监听测试报 `WinError 10013`；日历原子发布相关用例无法打开目录文件描述符。此环境限制项未计入通过，需在CI或容许本地socket/目录fsync的环境执行。早期出现的临时SQLite文件锁已由连接关闭修复和定向测试fixture关闭修复后消除。
+- Swift源码未改动；没有Apple编译、Simulator、真机、真实NAS历史分钟补采或DeepSeek E2E。本轮修改尚未提交/推送。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：暂停Apple编译重试，继续NAS与产品逻辑收口
+当前正在开发：NAS持久层连接生命周期与跨平台测试清理
+刚刚完成：修正backfill SQLite连接未关闭；29项MinuteService测试和6项provider定向测试实际通过
+未提交工作：`nas/fminute/service.py`、`Tools/test_minute_service.py`、本交接文件；锁定临时目录仍原样保留
+iOS完成度：当前源码状态未由本机Apple工具验证；本轮未改Swift
+AI顾问完成度：既有只读语义未改；DeepSeek真实服务闭环未验证
+统一图表完成度：未改动；Simulator人工交互仍待Apple环境
+NAS历史数据完成度：队列/质量门相关35项定向测试通过；实际历史分钟补采及iOS查询E2E仍未验证
+Apple编译验证：按用户要求暂缓；本机无Xcode
+当前测试：FCore defined 129 / 当前未执行；最近历史成功证据121 passed、0 failed（旧代码）。App UI defined 3 / 当前未执行；Python/NAS本轮35 passed、0 failed（定向）。广泛运行中因本机localhost/目录句柄权限失败的用例尚未验证
+最大缺口：当前Swift修改后的Apple CI；NAS真实历史provider覆盖与iOS链路；Simulator人工操作；DeepSeek真实闭环
+下一步：继续非编译静态查漏与NAS实际数据能力边界核验；Apple验证恢复后再按用户指示回到CI
+F_CURRENT_STATUS_END
+
+## 2026-10-28 非Apple工作队列续：NAS归档失败清理
+
+- 继续复核NAS SQLite资源生命周期时，发现归档备份/恢复在数据校验抛错时，异常处理先删除临时目标文件，目标连接却延后到`finally`关闭；校验游标遇到坏行时也可能仍处于打开状态。Windows会拒绝删除被SQLite占用的临时文件，导致原本应当干净失败的校验路径报`PermissionError`并遗留临时文件。
+- 修正备份/恢复异常分支：删除临时文件前显式关闭目标连接；数据库行校验游标使用`finally`关闭。正常发布流程、验证标准、硬链接原子发布语义没有放宽。
+- 同时让归档测试中直接打开的fixture连接显式关闭，避免Windows测试清理时残留句柄。
+- 最新定向执行：MinuteService 29/29通过；Minute Providers相关6/6通过；Minute Archive 42/42通过（跳过2项需要当前执行环境允许`os.link`原子发布的测试）。总计77项实际执行并通过，0项失败。服务HTTP的3个localhost监听测试因当前环境拒绝socket（WinError 10013）未执行；2项硬链接发布场景未验证。未将任何被跳过项算作通过。
+- Swift未改动；按用户要求没有启动编译/Apple CI。本轮未做真实NAS公网provider、历史分钟进入iOS、DeepSeek或Simulator E2E。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：暂停Apple编译重试，继续NAS可用性与故障路径收口
+当前正在开发：NAS SQLite连接、归档失败清理与跨平台测试可靠性
+刚刚完成：backfill连接关闭；备份/恢复失败时先关目标连接并关闭校验游标；归档fixture显式释放连接
+未提交工作：`nas/fminute/service.py`、`nas/fminute/archive.py`、`Tools/test_minute_service.py`、`Tools/test_minute_archive.py`、本交接文件；锁定临时目录仍原样保留
+iOS完成度：本轮未改Swift；当前代码尚无新的Apple编译证据
+AI顾问完成度：静态语义仍分离；DeepSeek真实闭环未验证
+统一图表完成度：未改动；Simulator人工操作仍待Apple环境
+NAS历史数据完成度：MinuteService 29/29、provider 6/6、归档42/42定向测试通过；3个localhost测试和2个依赖硬链接原子发布的测试受执行环境限制而未执行；NAS真实历史分钟provider覆盖及iOS E2E仍未验证
+Apple编译验证：用户要求暂缓；本机无Swift/Xcode/XcodeGen
+当前测试：FCore defined 129 / 本轮未执行；最近历史成功证据121 passed、0 failed（旧代码）。App UI defined 3 / 本轮未执行。Python/NAS本轮77 executed / 77 passed / 0 failed；另有5项环境受限未执行
+最大缺口：NAS历史分钟真实provider覆盖与iOS消费链；当前Swift修改Apple CI；Simulator人工交互；DeepSeek真实成交后复判
+下一步：继续非编译查漏，优先NAS状态与Evidence链静态核对；待用户要求或编译通道恢复后再进行Apple验证
+F_CURRENT_STATUS_END
+
+## 2026-10-28 用户新增：真实账户对账需求登记
+
+- 用户补充实际使用需求：手续费及其他费用可能导致F账面与券商真实账户出现差异，需要允许适度手动对账。
+- 静态审查当前实现：`correctingBrokerDisplayCost`只修正用户录入的券商展示成本；`FCashMovement`可记现金变化但目前投影为存入/取出类现金流水，没有成交关联、费用类别与证券PnL口径。因此不能把现有入口描述为已完成真实费用对账。
+- 已把对账范围、追加式可审计事件原则、成交相关手续费和账户杂费的分离、份额差异不得伪造成成交、以及最低回归要求写入`F-B-145-TRACEABILITY.md`。原confirmed fills不得覆盖/删除；候选计划和Advisor仍无Ledger写权限。
+- 该需求会影响真实现金、成本与PnL语义；当前只登记验收边界，尚未改Swift/数据模式。继续暂停Apple编译。下一实施阶段按追加式Ledger调整事件设计，费用必须只计一次并可冲正；再加最小App入口及回归测试。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：暂停Apple编译，NAS资源缺陷收口并登记真实账户对账需求
+当前正在开发：真实Ledger对账模型的边界与回归验收定义
+刚刚完成：NAS服务/归档SQLite句柄释放缺陷修复，相关定向Python测试77项通过；补充对账需求设计和追溯要求
+未提交工作：NAS Python修复、测试fixture资源关闭、F-145追溯矩阵与本交接文件；锁定临时目录原样保留
+iOS完成度：本轮未改Swift；无新增Apple编译证据
+AI顾问完成度：既有P&L语义保持；Advisor只读，不可改账；真实DeepSeek闭环未验证
+统一图表完成度：本轮未改动；Simulator手势待外部Apple环境
+NAS历史数据完成度：MinuteService 29/29、provider定向6/6、archive 42/42；localhost 3项和硬链接发布2项环境受限未执行；真实历史provider覆盖/iOS E2E未验证
+Apple编译验证：按用户要求暂缓；本机无Xcode
+当前测试：FCore 129 defined / 本轮0 executed；最近旧基线121 passed、0 failed。App UI 3 defined / 本轮0 executed。Python/NAS 77 executed / 77 passed / 0 failed（定向）；另5项受当前执行环境限制未执行
+最大缺口：当前Swift修改Apple验证；NAS历史分钟进入iOS及研究链；真实成交后DeepSeek复判；真实账户对账模型尚未实现
+下一步：在不扩写大量未编译Swift的前提下，审计Ledger重放/现金守恒设计，为追加式对账事件形成兼容模型和测试边界；Apple验证依然暂停
+F_CURRENT_STATUS_END
+
+## 2026-10-28 手续费与主题状态补充
+
+- 用户确认券商实际手续费有时不是¥0.10。旧的“每笔固定¥0.10”只能作为历史默认假设/示例，不再能代表真实手续费规则。真实成交确认应录入实际每笔费用；候选`estimatedFee`仅为估算。过账后费用差异按用户选择的规则关联原fill，保留原fill并追加可审计修正，按原成交日回算PnL/剩余成本，现金变化在差额确认时反映。
+- 静态代码发现当前 App 确认成交仍把`FETFTradeFeePolicy.perConfirmedFill`硬编码成fill实际手续费；Advisor candidate guard也把预估手续费强制限制为0.10/0.20。它们与用户新确认的“实费可能变化”不一致，应在费用修正模型实现时同步拆分“估算值”和“实际确认费用”。此处已记录为真实产品缺口，本轮未改Swift。
+- 主题核对：五个首页主题都有各自`HomeLayout`分支；尚无证据证明全部页面均有五种独立结构，也没有本轮Apple编译/Simulator视觉验收。暂不新增主题。
+- 用户已确定手续费差异归属到具体成交，旧买入差额按原成交回算，余额差异在实际补录日体现；账户级无法分配杂费只影响现金。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：暂停Apple编译；NAS关闭资源缺陷已修，转入真实手续费与账户对账设计
+当前正在开发：以实际逐笔费用替代固定fee假设，定义确认成交与事后差额追加事件
+刚刚完成：确认并记录实际券商手续费可能不等于¥0.10；静态确认首页五布局已有源码，但全App主题未完成验收
+未提交工作：NAS修复/测试fixture、手续费/对账验收矩阵、实时交接文件；锁定临时目录原样保留
+iOS完成度：当前成交UI仍硬编码¥0.10，未适配实际费用输入；本轮未改Swift、无新的Apple编译
+theme完成度：五个首页结构分支已编码；其他页面结构差异与Simulator视觉验收未完成
+AI顾问完成度：Candidate费用仍按0.10/0.20校验，需区分估算与实费；真实DeepSeek闭环未验证
+Ledger对账：券商展示成本可手工修正；关联成交实费调整/账户杂费对账尚未实现。要求追加审计事件，原fill不改写
+NAS历史数据完成度：MinuteService 29/29、provider定向6/6、archive 42/42；3个localhost和2个硬链接发布用例受当前环境限制未执行；真实历史分钟iOS E2E未验证
+Apple编译验证：按用户要求暂缓；本机无Xcode
+当前测试：FCore 129 defined / 本轮0 executed；App UI 3 defined / 本轮0 executed；Python/NAS本轮77 passed、0 failed（定向）
+最大缺口：真实费用输入与费用修正事件；当前Swift Apple验证；NAS历史分钟iOS消费链；Simulator人工验收和DeepSeek实网闭环
+下一步：先完成追加式费用差额及实际费用语义的Ledger重放/现金守恒设计与回归定义；费用模型稳定后再做最小Swift接线，CI恢复后优先编译
+F_CURRENT_STATUS_END
+
+## 2026-10-28 本轮实现状态：成交确认允许录入实际手续费
+
+- 根据用户明确纠正，“每笔固定¥0.10”已从产品规则改为默认参考值。`FETFTradeFeePolicy.defaultReferencePerFill`只供表单默认填入，Ledger fill仍保存用户确认的实际金额。
+- 成交确认表单新增“实际手续费”输入，默认显示¥0.10；确认时解析该值并传入`FConfirmedFill.fee`，非负有效金额才能保存。Candidate estimatedFee守卫从“必须等于¥0.10/¥0.20”放宽为不得低于对应默认参考，AI提示明确其仅为估算；它不替代用户确认的actual fee。
+- 新增FCore XCTest定义：用¥0.16实际手续费确认买入，验证现金减少¥300.16、Episode成本¥300.16、流水fee为¥0.16。FCore当前静态defined计数130；本轮没有编译或执行此XCTest。
+- 该改动仅完成“成交时录入实际手续费”。成交后发现差额、关联原fill、按原成交日回算、递延杂费/现金对账事件仍是未实现需求；本轮不声称对账功能完成。没有改动confirmed fill历史。
+- 当前五种主题仅能确认首页各有独立布局分支；全App主题视觉与交互无新的Simulator验收。本轮没有增加主题数量。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：暂停Apple编译；收敛真实手续费入账与NAS跨平台资源缺陷
+当前正在开发：真实fee与估算fee分离，并准备追加式成交费用差额模型
+刚刚完成：实际成交确认可录入用户核实手续费；Candidate费用仅作为下限参考估算；增加¥0.16手续费回归定义
+未提交工作：NAS SQLite修复/测试fixture、成交fee UI与model改动、测试、F-145追溯与实时交接；锁定临时目录原样保留
+iOS完成度：成交费用输入已编码未编译；对账修正事件未编码。没有新的Apple编译证据
+AI顾问完成度：候选估算与成交actual fee已在提示/表单层分开；真实DeepSeek E2E未验证
+主题完成度：五个首页布局分支已有代码；全App五主题视觉未验收，未增加其他主题
+Ledger对账：初始成交fee可输入实际值；补录手续费差额的追加事件、原成交日PnL回算和现金杂费记录未实现
+NAS历史数据完成度：29项服务测试、6项provider定向测试、42项归档测试通过；3个localhost与2个硬链接发布测试受当前环境限制未执行；真实历史分钟iOS E2E未验证
+Apple编译验证：用户要求暂缓；本机无Xcode
+当前测试：FCore defined 130 / 本轮0 executed；App UI defined 3 / 本轮0 executed；Python/NAS 77 executed / 77 passed / 0 failed（定向）；另5项环境受限未执行
+最大缺口：事后费用差额对账与历史重放；当前Swift改动的Apple CI；NAS历史分钟进iOS；Simulator人工验收及DeepSeek真实成交后复判
+下一步：设计并实现追加式费用差额事件，费用关联fill且不可覆盖；验证原fill、现金、Episode成本和历史/今日PnL不会重复计费；本阶段不扩主题数量、不编译
 F_CURRENT_STATUS_END

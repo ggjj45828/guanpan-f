@@ -1,3 +1,4 @@
+from contextlib import closing
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from dataclasses import replace
 from decimal import Decimal
@@ -97,7 +98,7 @@ class MinuteArchiveTests(unittest.TestCase):
         with self.assertRaises(ArchiveError):
             self.archive.ingest([bars(self.session)[1], conflicting], mode="backfill")
         self.assertEqual(self.archive.query_day("159352", "CN", DAY)[0]["price"], row.price)
-        with sqlite3.connect(self.archive.path) as db:
+        with closing(sqlite3.connect(self.archive.path)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM minute_observation").fetchone()[0], 1)
         self.assertEqual(len(self.archive.query_day("159352", "CN", DAY)), 1)
 
@@ -157,11 +158,11 @@ class MinuteArchiveTests(unittest.TestCase):
     def test_existing_archive_without_valid_schema_version_is_not_relabelled(self):
         row = bars(self.session)[0]
         self.archive.ingest([row], mode="backfill")
-        with sqlite3.connect(self.archive.path) as db:
+        with closing(sqlite3.connect(self.archive.path)) as db, db:
             db.execute("DELETE FROM archive_meta WHERE key='schema_version'")
         with self.assertRaises(ArchiveError):
             MinuteArchive(self.archive.path)
-        with sqlite3.connect(self.archive.path) as db:
+        with closing(sqlite3.connect(self.archive.path)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM minute_bar").fetchone()[0], 1)
             self.assertIsNone(db.execute("SELECT value FROM archive_meta WHERE key='schema_version'").fetchone())
             db.execute("INSERT INTO archive_meta(key,value) VALUES('schema_version','01')")
@@ -174,7 +175,7 @@ class MinuteArchiveTests(unittest.TestCase):
 
         invalid_path = Path(self.tmp.name) / "invalid-version.sqlite"
         MinuteArchive(invalid_path)
-        with sqlite3.connect(invalid_path) as db:
+        with closing(sqlite3.connect(invalid_path)) as db, db:
             db.execute("UPDATE archive_meta SET value='unknown' WHERE key='schema_version'")
         with self.assertRaises(ArchiveError):
             MinuteArchive(invalid_path)
@@ -333,7 +334,7 @@ class MinuteArchiveTests(unittest.TestCase):
 
     def test_integrity_and_backup_restore_reject_semantically_corrupt_rows(self):
         self.archive.ingest(bars(self.session), mode="backfill")
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("UPDATE minute_bar SET price='NaN' WHERE timestamp=(SELECT MIN(timestamp) FROM minute_bar)")
         with self.assertRaises(ArchiveError):
             self.archive.integrity_check()
@@ -545,14 +546,14 @@ class MinuteArchiveTests(unittest.TestCase):
 
     def test_ingest_batch_rolls_back_atomically_after_database_failure(self):
         rows = bars(self.session)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TRIGGER reject_second BEFORE INSERT ON minute_bar "
                        "WHEN NEW.timestamp LIKE '%09:32:00%' "
                        "BEGIN SELECT RAISE(ABORT,'injected failure'); END")
         with self.assertRaises(sqlite3.IntegrityError):
             self.archive.ingest(rows, mode="backfill")
         self.assertEqual(self.archive.query_day("159352", "CN", DAY), [])
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM minute_observation").fetchone()[0], 0)
 
     def test_cumulative_volume_regression_marks_session_partial(self):
@@ -619,10 +620,10 @@ class MinuteArchiveTests(unittest.TestCase):
         self.assertEqual(report["completeDays"], 1)
         self.assertGreater(report["databaseBytes"], 0)
         self.assertIsNotNone(report["lastRealtimeCollection"])
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("DROP INDEX idx_collection_log_instrument_mode_fetched")
         MinuteArchive(self.path)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             index_names = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         self.assertIn("idx_collection_log_instrument_mode_fetched", index_names)
 

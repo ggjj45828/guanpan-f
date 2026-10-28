@@ -222,18 +222,34 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNotEqual(updated.audits[0].priorLedgerDigest, updated.audits[0].resultingLedgerDigest)
     }
 
+    func testConfirmedFillUsesUserEnteredActualFeeInsteadOfFixedETFDefault() throws {
+        let source = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                 updatedAt: now.addingTimeInterval(-60))
+        let actualFee = Decimal(string: "0.16")!
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "159352",
+                                  side: .buy, units: 100, price: 3, fee: actualFee,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+
+        let updated = try source.applyingUserConfirmedFill(fill, instrumentName: "A500", now: now)
+
+        XCTAssertEqual(updated.fills.first?.fee, actualFee)
+        XCTAssertEqual(updated.cashBalance, Decimal(string: "699.84"))
+        XCTAssertEqual(updated.positions.first?.bookCost, Decimal(string: "300.16"))
+        XCTAssertEqual(try updated.readOnlySnapshot(capturedAt: now).cashFlow.last?.fee, actualFee)
+    }
+
     func testConfirmedCloseAndReopenRetainsHistoryAndStartsFreshEpisodeAndCashFlow() throws {
         let code = "159352"
         var book = FAccountBook(openingSnapshot: opening(cash: 10_000), cashBalance: 10_000,
                                 updatedAt: now.addingTimeInterval(-60))
         let buy1 = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-30),
                                   instrumentCode: code, side: .buy, units: 100, price: 10,
-                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                   userConfirmation: confirmation(), instrumentName: "A500")
         book = try book.applyingUserConfirmedFill(buy1, instrumentName: "A500", now: now)
         let sell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-20),
                                   instrumentCode: code, side: .sell, units: 100, price: 12,
-                                  fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 1_000.10,
+                                  fee: FETFTradeFeePolicy.defaultReferencePerFill, costBasisRemoved: 1_000.10,
                                   userConfirmation: confirmation(), instrumentName: "A500")
         book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
 
@@ -250,7 +266,7 @@ final class LedgerSchemaTests: XCTestCase {
 
         let buy2 = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-10),
                                   instrumentCode: code, side: .buy, units: 50, price: 11,
-                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                   userConfirmation: confirmation(), instrumentName: "A500")
         book = try book.applyingUserConfirmedFill(buy2, instrumentName: "A500", now: now)
         let snapshot = try book.readOnlySnapshot(capturedAt: now)
@@ -270,7 +286,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.cashFlow.count, 4)
         XCTAssertEqual(snapshot.cashFlow.last?.resultingCashBalance, book.cashBalance)
         XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
-                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 3))
+                       Array(repeating: FETFTradeFeePolicy.defaultReferencePerFill, count: 3))
         XCTAssertEqual(snapshot.cashFlow.map(\.cashDelta), [10_000, -1_000.10, 1_199.90, -550.10])
         let context = FDecisionContext(snapshot: snapshot, observations: [])
         let request = try FAdvisorQuestionRequest(question: "A500 历史上一共赚了多少？",
@@ -284,7 +300,7 @@ final class LedgerSchemaTests: XCTestCase {
         let openingPosition = FPosition(instrumentCode: "159352", name: "A500", units: 100,
                                         bookCost: 1_000)
         let sale = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "159352", side: .sell,
-                                  units: 40, price: 12, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  units: 40, price: 12, fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                   costBasisRemoved: 400, userConfirmation: confirmation(), instrumentName: "A500")
         let book = FAccountBook(openingSnapshot: opening(cash: 5_000, positions: [openingPosition]),
                                 cashBalance: 5_479.90,
@@ -306,13 +322,13 @@ final class LedgerSchemaTests: XCTestCase {
             sequence += 1
             let buy = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(TimeInterval(episode - 10)),
                                      instrumentCode: "159352", side: .buy, units: 10, price: 10,
-                                     fee: FETFTradeFeePolicy.perConfirmedFill,
+                                     fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                      userConfirmation: confirmation(), instrumentName: "A500")
             book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
             sequence += 1
             let sell = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(TimeInterval(episode - 9)),
                                       instrumentCode: "159352", side: .sell, units: 10, price: 11,
-                                      fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 100.10,
+                                      fee: FETFTradeFeePolicy.defaultReferencePerFill, costBasisRemoved: 100.10,
                                       userConfirmation: confirmation(), instrumentName: "A500")
             book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
         }
@@ -325,7 +341,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(history.lifetimeRealizedProfit, Decimal(string: "29.40"))
         XCTAssertEqual(book.fills.count, 6)
         XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
-                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 6))
+                       Array(repeating: FETFTradeFeePolicy.defaultReferencePerFill, count: 6))
     }
 
     func testBrokerDisplayCostSurvivesFullCloseAndSameSecurityReopen() throws {
@@ -340,7 +356,7 @@ final class LedgerSchemaTests: XCTestCase {
                                 updatedAt: now.addingTimeInterval(-120))
         let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
                                   instrumentCode: code, side: .sell, units: 100, price: 12,
-                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                   costBasisRemoved: 1_000, userConfirmation: confirmation(),
                                   instrumentName: "A500")
         book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
@@ -349,7 +365,7 @@ final class LedgerSchemaTests: XCTestCase {
 
         let buy = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
                                  instrumentCode: code, side: .buy, units: 50, price: 11,
-                                 fee: FETFTradeFeePolicy.perConfirmedFill,
+                                 fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                  userConfirmation: confirmation(), instrumentName: "A500")
         book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
         let reopened = try XCTUnwrap(book.positions.first)
@@ -373,7 +389,7 @@ final class LedgerSchemaTests: XCTestCase {
                   _ removed: Decimal? = nil) -> FConfirmedFill {
             FConfirmedFill(sequence: sequence, tradedAt: now, instrumentCode: code, side: side,
                            units: units, price: price,
-                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           fee: FETFTradeFeePolicy.defaultReferencePerFill,
                            costBasisRemoved: removed, userConfirmation: confirmation(),
                            instrumentName: "A500")
         }
@@ -402,7 +418,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[0].netRealizedProfit,
                        Decimal(string: "219.60"))
         XCTAssertEqual(snapshot.cashFlow.dropFirst().map(\.fee),
-                       Array(repeating: FETFTradeFeePolicy.perConfirmedFill, count: 5))
+                       Array(repeating: FETFTradeFeePolicy.defaultReferencePerFill, count: 5))
         XCTAssertEqual(snapshot.cashBalance, Decimal(string: "5944.50"))
         let daily = try XCTUnwrap(snapshot.dailyTradeSummaries.first)
         XCTAssertEqual(daily.securityCode, code)
@@ -454,7 +470,7 @@ final class LedgerSchemaTests: XCTestCase {
                   _ tradedAt: Date, _ removed: Decimal? = nil) -> FConfirmedFill {
             FConfirmedFill(sequence: sequence, tradedAt: tradedAt, instrumentCode: code,
                            side: side, units: units, price: price,
-                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           fee: FETFTradeFeePolicy.defaultReferencePerFill,
                            costBasisRemoved: removed, userConfirmation: confirmation(),
                            instrumentName: "A500")
         }
@@ -467,12 +483,12 @@ final class LedgerSchemaTests: XCTestCase {
             fill(3, .buy, 5, 11, now.addingTimeInterval(-10)), instrumentName: "A500", now: now)
         let otherBuy = FConfirmedFill(sequence: 4, tradedAt: now.addingTimeInterval(-8),
                                       instrumentCode: "159866", side: .buy, units: 1, price: 20,
-                                      fee: FETFTradeFeePolicy.perConfirmedFill,
+                                      fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                       userConfirmation: confirmation(), instrumentName: "日经ETF")
         book = try book.applyingUserConfirmedFill(otherBuy, instrumentName: "日经ETF", now: now)
         let otherSell = FConfirmedFill(sequence: 5, tradedAt: now.addingTimeInterval(-5),
                                        instrumentCode: "159866", side: .sell, units: 1, price: 21,
-                                       fee: FETFTradeFeePolicy.perConfirmedFill,
+                                       fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                        costBasisRemoved: Decimal(string: "20.10")!,
                                        userConfirmation: confirmation(), instrumentName: "日经ETF")
         book = try book.applyingUserConfirmedFill(otherSell, instrumentName: "日经ETF", now: now)
@@ -522,12 +538,12 @@ final class LedgerSchemaTests: XCTestCase {
                                 updatedAt: now.addingTimeInterval(-48 * 60 * 60))
         let priorDayBuy = FConfirmedFill(sequence: 1, tradedAt: yesterday, instrumentCode: code,
                                          side: .buy, units: 10, price: 5,
-                                         fee: FETFTradeFeePolicy.perConfirmedFill,
+                                         fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                          userConfirmation: confirmation(), instrumentName: "纳指ETF")
         book = try book.applyingUserConfirmedFill(priorDayBuy, instrumentName: "纳指ETF", now: now)
         let todaySell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
                                        instrumentCode: code, side: .sell, units: 2, price: 6,
-                                       fee: FETFTradeFeePolicy.perConfirmedFill,
+                                       fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                        costBasisRemoved: Decimal(string: "10.02")!,
                                        userConfirmation: confirmation(), instrumentName: "纳指ETF")
         book = try book.applyingUserConfirmedFill(todaySell, instrumentName: "纳指ETF", now: now)
@@ -539,7 +555,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(daily.buyAmount, 0)
         XCTAssertEqual(daily.sellQuantity, 2)
         XCTAssertEqual(daily.sellAmount, 12)
-        XCTAssertEqual(daily.sellFees, FETFTradeFeePolicy.perConfirmedFill)
+        XCTAssertEqual(daily.sellFees, FETFTradeFeePolicy.defaultReferencePerFill)
         XCTAssertEqual(daily.realizedPnL, Decimal(string: "1.88"))
         XCTAssertEqual(daily.fillCount, 1)
         XCTAssertEqual(daily.firstFillTime, todaySell.tradedAt)
@@ -555,14 +571,14 @@ final class LedgerSchemaTests: XCTestCase {
                                 updatedAt: now.addingTimeInterval(-120))
         let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
                                   instrumentCode: code, side: .sell, units: 1_000, price: 11,
-                                  fee: FETFTradeFeePolicy.perConfirmedFill,
+                                  fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                   costBasisRemoved: 10_000, userConfirmation: confirmation(),
                                   instrumentName: "A500", tradeIntent: nil)
         book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
         XCTAssertTrue(book.positions.isEmpty)
         let buyback = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
                                      instrumentCode: code, side: .buy, units: 500, price: 10.50,
-                                     fee: FETFTradeFeePolicy.perConfirmedFill,
+                                     fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                      userConfirmation: confirmation(), instrumentName: "A500",
                                      tradeIntent: nil)
         book = try book.applyingUserConfirmedFill(buyback, instrumentName: "A500", now: now)
@@ -590,7 +606,7 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.positions.first?.units, 500)
         XCTAssertEqual(snapshot.positions.first?.bookCost, Decimal(string: "5250.10"))
         XCTAssertEqual(snapshot.cashFlow.suffix(2).map(\.fee),
-                       [FETFTradeFeePolicy.perConfirmedFill, FETFTradeFeePolicy.perConfirmedFill])
+                       [FETFTradeFeePolicy.defaultReferencePerFill, FETFTradeFeePolicy.defaultReferencePerFill])
         XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.count, 2)
         XCTAssertEqual(history.episodes.map(\.historyIsComplete), [false, true],
                        "导入时已有持仓的旧Episode不完整；确认买入开启的新Episode有完整成交事实")
@@ -651,11 +667,11 @@ final class LedgerSchemaTests: XCTestCase {
         let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [
             FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
                            instrumentCode: "159866", side: .sell, units: 1_000, price: 9,
-                           fee: FETFTradeFeePolicy.perConfirmedFill, costBasisRemoved: 10_000,
+                           fee: FETFTradeFeePolicy.defaultReferencePerFill, costBasisRemoved: 10_000,
                            userConfirmation: confirmation()),
             FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
                            instrumentCode: "159866", side: .buy, units: 500, price: 8,
-                           fee: FETFTradeFeePolicy.perConfirmedFill,
+                           fee: FETFTradeFeePolicy.defaultReferencePerFill,
                            userConfirmation: confirmation())
         ], asOf: now).first)
         let dailyPnL = try FSecurityPnLCalculator.dailySecurityPnL(
@@ -680,20 +696,20 @@ final class LedgerSchemaTests: XCTestCase {
             let openingFill = FConfirmedFill(sequence: 1, tradedAt: priorDay,
                                              instrumentCode: code, side: .buy, units: 10,
                                              price: oldBuy,
-                                             fee: FETFTradeFeePolicy.perConfirmedFill,
+                                             fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                              userConfirmation: confirmation(), tradeIntent: .ordinary)
             book = try book.applyingUserConfirmedFill(openingFill, instrumentName: "日经ETF", now: now)
             let cycle = "\(code)-cycle-1"
             let sell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-60),
                                       instrumentCode: code, side: .sell, units: 10,
-                                      price: tSell, fee: FETFTradeFeePolicy.perConfirmedFill,
-                                      costBasisRemoved: oldBuy * Decimal(10) + FETFTradeFeePolicy.perConfirmedFill,
+                                      price: tSell, fee: FETFTradeFeePolicy.defaultReferencePerFill,
+                                      costBasisRemoved: oldBuy * Decimal(10) + FETFTradeFeePolicy.defaultReferencePerFill,
                                       userConfirmation: confirmation(), instrumentName: "日经ETF",
                                       tradeIntent: .tSell, tCycleID: cycle)
             book = try book.applyingUserConfirmedFill(sell, instrumentName: "日经ETF", now: now)
             let buyback = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-30),
                                          instrumentCode: code, side: .buy, units: 10,
-                                         price: tBuyback, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                         price: tBuyback, fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                          userConfirmation: confirmation(), instrumentName: "日经ETF",
                                          tradeIntent: .tBuyback, tCycleID: cycle)
             book = try book.applyingUserConfirmedFill(buyback, instrumentName: "日经ETF", now: now)
@@ -728,12 +744,12 @@ final class LedgerSchemaTests: XCTestCase {
     func testTContributionIsUnavailableForLegacyOrUnbalancedCycles() throws {
         let tSell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
                                    instrumentCode: "159866", side: .sell, units: 10, price: 12,
-                                   fee: FETFTradeFeePolicy.perConfirmedFill,
+                                   fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                    costBasisRemoved: 100, userConfirmation: confirmation(),
                                    tradeIntent: .tSell, tCycleID: "cycle-1")
         let partialBuyback = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
                                             instrumentCode: "159866", side: .buy, units: 9, price: 10,
-                                            fee: FETFTradeFeePolicy.perConfirmedFill,
+                                            fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                             userConfirmation: confirmation(), tradeIntent: .tBuyback,
                                             tCycleID: "cycle-1")
         XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
@@ -741,7 +757,7 @@ final class LedgerSchemaTests: XCTestCase {
 
         let legacyFill = FConfirmedFill(sequence: 3, tradedAt: now,
                                         instrumentCode: "159866", side: .buy, units: 1,
-                                        price: 10, fee: FETFTradeFeePolicy.perConfirmedFill,
+                                        price: 10, fee: FETFTradeFeePolicy.defaultReferencePerFill,
                                         userConfirmation: confirmation(), tradeIntent: nil)
         XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback, legacyFill]),
                      "存在未分类旧成交时，累计T贡献保持Unavailable")
