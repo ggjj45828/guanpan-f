@@ -672,6 +672,9 @@ struct RealAssetsOverview: View {
                     FCashAdjustmentSheet(model: model)
                 }
                 .accessibilityIdentifier("ledger.cash-adjustment.begin")
+                if !model.cashAdjustmentStatus.isEmpty {
+                    Text(model.cashAdjustmentStatus).font(.footnote).foregroundStyle(.secondary)
+                }
                 if model.cashFlow.isEmpty { Text("暂无可读取的现金流水").foregroundStyle(.secondary) }
                 ForEach(model.cashFlow.reversed()) { entry in
                     VStack(alignment: .leading, spacing: 3) {
@@ -1104,8 +1107,8 @@ struct FCashAdjustmentSheet: View {
                               axis: .vertical)
                         .lineLimit(2...4)
                 }
-                if !model.ledgerWriteStatus.isEmpty {
-                    Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
+                if !model.cashAdjustmentStatus.isEmpty {
+                    Section("状态") { Text(model.cashAdjustmentStatus).font(.footnote) }
                 }
             }
             .navigationTitle("现金对账差额")

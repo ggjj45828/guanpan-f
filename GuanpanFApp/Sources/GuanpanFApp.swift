@@ -80,6 +80,7 @@ final class FHomeModel: ObservableObject {
     @Published var cashAdjustmentReason = ""
     @Published var cashAdjustmentConfirmationNote = ""
     @Published private(set) var writingCashAdjustment = false
+    @Published private(set) var cashAdjustmentStatus = ""
     @Published var actualFillUnitsText = ""
     @Published var actualFillPriceText = ""
     @Published var actualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
@@ -240,7 +241,7 @@ final class FHomeModel: ObservableObject {
         cashAdjustmentAddsCash = false
         cashAdjustmentReason = ""
         cashAdjustmentConfirmationNote = ""
-        ledgerWriteStatus = "现金对账差额只改变现金余额，不归属到任何证券成本或盈亏。"
+        cashAdjustmentStatus = "现金对账差额只改变现金余额，不归属到任何证券成本或盈亏。"
         showingCashAdjustment = true
     }
 
@@ -256,7 +257,7 @@ final class FHomeModel: ObservableObject {
               !enteredAmount.isNaN, enteredAmount > 0,
               !cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            ledgerWriteStatus = "请填写正数金额、原因和确认说明。增加或减少方向由选择器指定。"
+            cashAdjustmentStatus = "请填写正数金额、原因和确认说明。增加或减少方向由选择器指定。"
             return
         }
         let amount = cashAdjustmentAddsCash ? enteredAmount : -enteredAmount
@@ -286,9 +287,9 @@ final class FHomeModel: ObservableObject {
             pendingCandidateScope = nil
             advisorResult = nil
             showingCashAdjustment = false
-            ledgerWriteStatus = "现金对账差额已追加；证券持仓、成本及盈亏未改变。旧AI候选已失效。"
+            cashAdjustmentStatus = "现金对账差额已追加；证券持仓、成本及盈亏未改变。旧AI候选已失效。"
         } catch {
-            ledgerWriteStatus = "现金对账差额未保存：\(error.localizedDescription)"
+            cashAdjustmentStatus = "现金对账差额未保存：\(error.localizedDescription)"
         }
     }
 
