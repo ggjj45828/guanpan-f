@@ -921,7 +921,8 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(corrected.positions.first?.bookCost, Decimal(string: "60.06"),
                        "卖出费用修正不改变移除成本")
         XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.first?.netRealizedProfit,
-                       Decimal(string: "7.51"))
+                       Decimal(string: "7.61"),
+                       "卖出净实现盈亏=48.00成交额−0.35实际手续费−40.04已记录移除成本")
         XCTAssertEqual(snapshot.cashFlow.last?.cashDelta, Decimal(string: "-0.25"))
         XCTAssertEqual(corrected.fills.first?.fee, Decimal(string: "0.10"))
     }

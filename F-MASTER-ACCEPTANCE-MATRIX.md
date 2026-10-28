@@ -1,5 +1,16 @@
 # F Master Acceptance Matrix
 
+## 2026-10-28 远端同步补记
+
+- GitHub Desktop已对真正的F工作目录Fetch后普通Push；远端`main`现与`0fbf76d2ae3aed4cb5f32cbedbf6fe23180a446d`一致。推送只包含已提交历史，不包含当前两份未提交文档改动或受保护临时目录。
+- 当前HEAD的Apple CI尚未由检查状态证实；历史CI不能继承为当前HEAD通过。
+
+## 2026-10-28 手续费修正CI结果
+
+| 验收项 | 实际执行证据 | 结果 | 当前处理 |
+|---|---|---|---|
+| 卖出手续费事后更正后已实现盈亏，basis保持不变 | Actions run `40644859601`：FCore 139项实际执行，138通过/1失败；唯一失败是将`48.00 - 0.35 - 40.04`期望为7.51 | 当前提交未通过；App/Simulator/UI步骤未执行 | 计算与Ledger模型一致应为7.61；测试期望已修正，等待新HEAD Apple CI实际执行 |
+
 ## 当前主题/布局实现状态（2026-10-28）
 
 主题验收ID沿用F扩展项，不替代或重编号B-001～B-145。当前实现仅为未经Apple编译的源码状态：
@@ -14,6 +25,12 @@
 | F-THEME-06 专业详情页稳定 | 当前没有复制Security Detail/Chart renderer；episode/broker cost、MA、IOPV、Candidate、买卖点token虽登记，尚未接入统一图表 | 部分编码 | 图表/日期/缩放/横屏状态待Simulator验证 |
 | F-THEME-07 真实数据状态覆盖与可读性 | 未注入任何主题mock持仓；主题预览只显示结构示意 | 尚待验证 | 空仓/Unavailable/Partial/风险/Candidate等逐态截图 |
 | F-THEME-08 外观兼容 | Manifest诚实标注浅色基础token已接入，深色/护眼与Dynamic Type待完成 | 部分编码 | light/dark/eye-care、文字缩放和小屏待验 |
+
+## 关键Ledger字段当前实现边界
+
+| 能力 | 当前源码事实 | 状态 | 未完成条件 |
+|---|---|---|---|
+| Security Daily P&L / 今日盈亏 | `Sources/FAdvisor/DecisionContext.swift`构建`FDecisionInstrumentPnL`时将`securityDailyPnL`设为`nil`；提示词会要求Unavailable，不会借用已实现盈亏代替 | 尚未接通，安全降级已编码 | 增加可追溯的当日开盘持仓数量来源，以及带日期/来源/质量的可靠前收输入；二者完整时才调用确定性公式，并覆盖日内清仓重买和跨日测试 |
 
 本轮没有新Apple执行证据：FCore最近定义计数139仍是defined，不得改写为passed；本机无Xcode/Simulator。设计文档存在或Swift源码存在均不等同完成验收。
 

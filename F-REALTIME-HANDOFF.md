@@ -1,11 +1,36 @@
 # F 实时进度交接
 
+## 2026-10-28 GitHub Desktop 推送结果补正
+
+- 已在 GitHub Desktop 添加并打开真正的 F 工作目录；此前 Desktop 显示干净的是另一个 `guanpan-f` 本地副本，未对该副本做提交或推送。
+- 对 F 工作目录先 Fetch，再执行普通 Push；未强推。GitHub 只读比较确认远端 `main` 与本地HEAD `0fbf76d2ae3aed4cb5f32cbedbf6fe23180a446d` 完全一致，原有24个本地提交已到达新账号仓库。
+- 本轮推送未包含工作树改动：`F-MASTER-ACCEPTANCE-MATRIX.md`、`F-REALTIME-HANDOFF.md`仍有未提交修改；受保护未跟踪目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`仍未触碰。GitHub Desktop没有把这些改动提交。
+- 推送后 commit status API暂未返回任何检查项，因此当前HEAD的Apple CI结果仍待 Actions 页面实际确认；不能把旧CI结果继承到`0fbf76d`。
+
+## 2026-10-28 Apple CI失败诊断与修正
+
+- 用户提供的 Actions 运行`40644859601`日志已读取。FCore在当前推送提交`0fbf76d`上实际执行139项：138通过、1失败；失败位于`LedgerSchemaTests.testPostTradeSellFeeCorrectionUpdatesRealizedPnLWithoutChangingBasis`，断言期望`7.51`而投影得到`7.61`。失败发生在FCore步骤，后续XcodeGen/App Build/UI Test步骤未执行。
+- 静态复核确定此处是测试期望值不符合Ledger口径，不是费用修正投影错误：48.00卖出成交额 − 0.35更正后卖出费用 − 40.04原始/重放一致的cost basis removed = 7.61；“不改变basis”断言仍应保持40.04。已将该断言期望修正为7.61并加上计算说明，未降低断言。
+- 修正尚未Apple编译或执行；下一步是仅暂存并提交`LedgerSchemaTests.swift`及两份状态文档，排除受保护临时目录，然后Fetch/确认远端并普通Push，等待该修正提交的完整CI。
+
 ## 2026-10-28 推送尝试最新状态
 
 - 当前本地HEAD为`8dfb656`（`Implement ten home theme layouts`），父链保留此前22个本地提交；当前跟踪点远端`main`为`7a2d63e`，GitHub插件只读确认远端仍以该提交为HEAD，且它是本地提交链祖先。
 - 已提交本轮十主题Manifest/Home布局与交接/矩阵校正。`git fetch origin main`与普通`git push origin main`都因本机`getaddrinfo() thread failed to start`失败；没有强推，也没有通过GitHub内容API压缩/改写提交历史。远端尚未收到`8dfb656`，Apple CI没有因本次提交启动。
 - 工作树已提交文件保持干净；受保护未跟踪目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`仍在且未触碰。由于fetch失败，远端在插件最近一次只读核对之后若有新提交，普通push会由Git服务器拒绝，届时需先重新核对再处理。
 - 主题Swift仍为已编码、未Apple编译；Windows无Swift/Xcode/XcodeGen/Simulator。本地`git diff --cached --check`通过；该检查不是Swift验证。主题截图/人工验收未进行。
+
+## 2026-10-28 Ledger静态审计补记
+
+- 对`DecisionContext.swift`与市场行情模型静态核验：`FDecisionInstrumentPnL.securityDailyPnL`目前被明确置为`nil`；`FCurrentIntradaySnapshot`只有当前分钟序列，没有前收字段。AI系统提示词正确要求把该字段解释为Unavailable，不能用当日已实现盈亏冒充全天证券账户贡献。
+- 所以“今日盈亏”尚未实现为可用数字。要安全接通，必须同时具备：可验证的CN交易日开始持仓数量（若Ledger opening snapshot晚于当日开始且缺少此前流水，应保持Unavailable）和带交易日期/来源/数据质量的真实前收；再与当前真实行情、当日费用调整后fills按既定确定性公式计算。不能从当前持仓反推期初数量，也不能从分钟末价伪造前收。
+- 本轮仅记录静态发现，没有新增Swift功能或测试，也没有编译/执行。当前本地HEAD`0fbf76d`；GitHub插件最近确认远端main`7a2d63e`，本地fetch与普通push继续因`getaddrinfo() thread failed to start`失败；主题实现未进入CI。此项纳入下阶段Ledger优先缺口。
+
+## 2026-10-28 本机DNS重试诊断
+
+- 用户要求继续尝试推送后，重新以HTTP/1.1尝试`git fetch`与普通`git push`，仍返回`getaddrinfo() thread failed to start`。
+- 本机DNS只读检查显示系统DNS指向`127.0.0.1`但请求超时；直接查询`1.1.1.1`也超时。未修改网络适配器、DNS配置、hosts或代理。GitHub插件仍可访问API，因此这是本机Git网络路径问题，不是GitHub插件不可用。
+- 插件API再次确认远端`main=7a2d63e98927f9cf16fd40a5597d618741df1640`；旧CI run `40622847995`仍成功，验证的是远端旧提交，未验证本地`0fbf76d`及工作树文档改动。没有push、没有新CI。
 
 ## 2026-10-28 多主题/首页布局首轮Swift落地（当前源码，未编译）
 
