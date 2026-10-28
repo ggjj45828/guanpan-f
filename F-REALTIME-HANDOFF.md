@@ -1,5 +1,14 @@
 # F 实时进度交接
 
+## 2026-10-28 手续费事后更正实现快照（最新工作树）
+
+- 当前基础HEAD为`72593282cf403840b06a337b934fde9ee8b9d48a`。本轮新编码尚未提交；tracked dirty文件为`Sources/FCore/LedgerSchema.swift`、新增`LedgerFeeProjection.swift`、`LedgerSnapshot.swift`、`LedgerHistoryProjection.swift`、`RealizedPerformance.swift`、`FLedgerWrite/LedgerTransactions.swift`、`LedgerWriteBoundary.swift`、`GuanpanFApp.swift`、`HomeExperience.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`及验收文档。受保护临时目录未动。刚才fetch仍因`getaddrinfo() thread failed to start`失败；缓存origin未刷新，不能push。
+- **已编码（未验证）：** 新增追加式`FFillFeeAdjustment`；费用delta在更正sequence作为现金结算，原`FConfirmedFill`及旧`costBasisRemoved`保持不变；校验、序列、ledger digest、后续fill sequence和archive字段接入。费用投影用修正后fee重算原交易经济basis与Episode/realized/daily/T摘要；现金流水保留原始fill现金事件并独立列出更正日差额。资产页增加逐笔手续费更正表单，经用户确认后只调用`FConfirmedLedgerWriter.confirmFillFeeCorrection`；表单sheet附着在真实资产页面，避免和根页面的成交确认sheet争抢展示。
+- 新增6项测试定义：买入费用补录/部分卖出basis重算/冲回及archive恢复；卖出费用补录；旧Episode补录不得污染重开Episode成本；旧Episode清仓卖出费用补扣及退回不能影响重开成本；通过唯一确认Writer保存并重载；补费导致负现金时原子拒绝。FCore当前静态`func test...`计数138。当前HEAD源码没有Swift/Xcode/XcodeGen，本轮compile/test executed均为0；Apple CI仍未运行。多次历史修正的服务端实际重放、UI操作和Apple运行验证仍未完成。
+- **T Contribution：** 之前提交的FIFO部分配对实现和超额买回测试也仍未Apple CI验证。旧run 130/130不能覆盖当前F源代码。
+- 静态检查：`git diff --check`通过（Windows仅提示CRLF转换）；静态测试定义计数138。此次检查不代表Swift编译或测试执行。`git status`显示手续费更正Swift/UI、回归定义和三份状态/验收文档尚未提交；受保护临时目录保持原样。当前HEAD `72593282cf403840b06a337b934fde9ee8b9d48a`，相对缓存`origin/main` ahead 11；fetch因DNS线程启动错误失败，缓存不能视为实时远端状态。
+- 下步保持范围：先审查费用事件重放和兼容性，补Ledger边界用例，随后网络可用先fetch/reconcile、普通push并运行Apple CI；若CI失败按首个根因修。Simulator手续费对账表单/图表人工操作仍External Pending。NAS历史分钟→iOS/Research Evidence及DeepSeek真实闭环仍未E2E。
+
 ## 2026-10-28 T配对超额边界补充
 
 - 在已有132项静态定义的FCore测试中，补入累计买回量超过可配对卖出量的回归断言（卖出1000、先买回500、再多买回501应Unavailable）。仍是测试定义，没有Swift编译或执行证据。

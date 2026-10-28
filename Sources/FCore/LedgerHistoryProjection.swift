@@ -1,7 +1,7 @@
 import Foundation
 
 public enum FReadOnlyCashFlowKind: String, Codable, Equatable, Sendable {
-    case openingBalance, buy, sell, deposit, withdrawal
+    case openingBalance, buy, sell, feeAdjustment, deposit, withdrawal
 }
 
 /// One cash-changing ledger event with its resulting reconciled cash balance.
@@ -12,25 +12,30 @@ public struct FReadOnlyCashFlowEntry: Equatable, Sendable, Identifiable {
     public let kind: FReadOnlyCashFlowKind
     public let instrumentCode: String?
     public let instrumentName: String?
+    public let sourceFillID: UUID?
     public let units: Int64?
     public let price: Decimal?
     public let fee: Decimal
+    /// Latest effective total fee for a confirmed fill; nil for non-fill events.
+    public let effectiveFee: Decimal?
     public let cashDelta: Decimal
     public let resultingCashBalance: Decimal
     public let reason: String
 
     fileprivate init(sequence: UInt64, occurredAt: Date, kind: FReadOnlyCashFlowKind,
-                     instrumentCode: String?, instrumentName: String?, units: Int64?,
-                     price: Decimal?, fee: Decimal, cashDelta: Decimal,
+                     instrumentCode: String?, instrumentName: String?, sourceFillID: UUID?,
+                     units: Int64?, price: Decimal?, fee: Decimal, effectiveFee: Decimal?, cashDelta: Decimal,
                      resultingCashBalance: Decimal, reason: String) {
         self.sequence = sequence
         self.occurredAt = occurredAt
         self.kind = kind
         self.instrumentCode = instrumentCode
         self.instrumentName = instrumentName
+        self.sourceFillID = sourceFillID
         self.units = units
         self.price = price
         self.fee = fee
+        self.effectiveFee = effectiveFee
         self.cashDelta = cashDelta
         self.resultingCashBalance = resultingCashBalance
         self.reason = reason
@@ -223,7 +228,8 @@ private struct FMutablePositionEpisode {
 }
 
 enum FLedgerHistoryProjection {
-    static func instruments(from book: FAccountBook) -> [FInstrumentHistorySnapshot] {
+    static func instruments(from book: FAccountBook,
+                            fills: [FConfirmedFill]) -> [FInstrumentHistorySnapshot] {
         var episodesByCode: [String: [FMutablePositionEpisode]] = [:]
         for position in book.openingSnapshot.positions {
             let date = position.acquiredAt ?? book.openingSnapshot.capturedAt
@@ -231,7 +237,7 @@ enum FLedgerHistoryProjection {
                 FMutablePositionEpisode(position: position, episodeNumber: 1, openedAt: date))
         }
 
-        for fill in book.fills.sorted(by: { $0.sequence < $1.sequence }) {
+        for fill in fills.sorted(by: { $0.sequence < $1.sequence }) {
             var episodes = episodesByCode[fill.instrumentCode, default: []]
             if fill.side == .buy {
                 if episodes.last?.closedAt != nil || episodes.isEmpty {
@@ -248,11 +254,11 @@ enum FLedgerHistoryProjection {
         return episodesByCode.keys.sorted().compactMap { code in
             guard let mutableEpisodes = episodesByCode[code], !mutableEpisodes.isEmpty else { return nil }
             let episodes = mutableEpisodes.map { $0.snapshot() }
-            let lastEventName = book.fills.sorted(by: { $0.sequence < $1.sequence })
+            let lastEventName = fills.sorted(by: { $0.sequence < $1.sequence })
                 .last(where: { $0.instrumentCode == code })?.instrumentName
             let name = activeNames[code] ?? lastEventName ?? episodes.last?.instrumentName ?? "名称未记录"
             let firstHeld = episodes.map(\.openedAt).min() ?? book.openingSnapshot.capturedAt
-            let lastActivity = book.fills.filter { $0.instrumentCode == code }.map(\.tradedAt).max() ?? firstHeld
+            let lastActivity = fills.filter { $0.instrumentCode == code }.map(\.tradedAt).max() ?? firstHeld
             let lifetimeHistoryIsComplete = !book.openingSnapshot.positions.contains {
                 $0.instrumentCode == code
             }
@@ -262,53 +268,72 @@ enum FLedgerHistoryProjection {
                                               lifetimeHistoryIsComplete: lifetimeHistoryIsComplete,
                                               cumulativeTContribution: lifetimeHistoryIsComplete
                                                 ? FTradeContributionCalculator.contribution(
-                                                    from: book.fills.filter { $0.instrumentCode == code })
+                                                    from: fills.filter { $0.instrumentCode == code })
                                                 : nil)
         }
     }
 
     static func cashFlow(from book: FAccountBook,
-                         namesByCode: [String: String]) -> [FReadOnlyCashFlowEntry] {
+                         namesByCode: [String: String]) throws -> [FReadOnlyCashFlowEntry] {
         struct Event {
             let sequence: UInt64
             let date: Date
             let kind: FReadOnlyCashFlowKind
             let code: String?
             let name: String?
+            let sourceFillID: UUID?
             let units: Int64?
             let price: Decimal?
             let fee: Decimal
+            let effectiveFee: Decimal?
             let delta: Decimal
             let reason: String
         }
+        let effectiveFees = try FLedgerFeeProjection.effectiveFees(in: book)
         var events = book.fills.map { fill -> Event in
             let gross = fill.price * Decimal(fill.units)
             let buy = fill.side == .buy
             return Event(sequence: fill.sequence, date: fill.tradedAt,
                          kind: buy ? .buy : .sell, code: fill.instrumentCode,
                          name: fill.instrumentName ?? namesByCode[fill.instrumentCode],
-                         units: fill.units, price: fill.price, fee: fill.fee,
+                         sourceFillID: fill.id, units: fill.units, price: fill.price, fee: fill.fee,
+                         effectiveFee: effectiveFees[fill.id],
                          delta: buy ? -(gross + fill.fee) : gross - fill.fee,
                          reason: fill.userConfirmation.confirmationNote)
         }
         events += book.cashMovements.map { movement in
             Event(sequence: movement.sequence, date: movement.occurredAt,
                   kind: movement.amount > 0 ? .deposit : .withdrawal, code: nil, name: nil,
-                  units: nil, price: nil, fee: 0, delta: movement.amount,
+                  sourceFillID: nil, units: nil, price: nil, fee: 0, effectiveFee: nil,
+                  delta: movement.amount,
                   reason: movement.reason + " · " + movement.userConfirmation.confirmationNote)
+        }
+        let fillsByID = Dictionary(uniqueKeysWithValues: book.fills.map { ($0.id, $0) })
+        events += (book.feeAdjustments ?? []).map { adjustment in
+            let fill = fillsByID[adjustment.fillID]
+            return Event(sequence: adjustment.sequence, date: adjustment.occurredAt,
+                         kind: .feeAdjustment, code: fill?.instrumentCode,
+                         name: fill?.instrumentName ?? fill.flatMap { namesByCode[$0.instrumentCode] },
+                         sourceFillID: nil, units: nil, price: nil, fee: adjustment.feeDelta,
+                         effectiveFee: nil,
+                         delta: -adjustment.feeDelta,
+                         reason: "手续费差额更正 · \(adjustment.reason) · \(adjustment.userConfirmation.confirmationNote)")
         }
 
         var balance = book.openingSnapshot.cashBalance
         var entries = [FReadOnlyCashFlowEntry(
             sequence: 0, occurredAt: book.openingSnapshot.capturedAt, kind: .openingBalance,
-            instrumentCode: nil, instrumentName: nil, units: nil, price: nil, fee: 0,
+            instrumentCode: nil, instrumentName: nil, sourceFillID: nil,
+            units: nil, price: nil, fee: 0, effectiveFee: nil,
             cashDelta: balance, resultingCashBalance: balance, reason: "真实账本期初现金")]
         for event in events.sorted(by: { $0.sequence < $1.sequence }) {
             balance += event.delta
             entries.append(FReadOnlyCashFlowEntry(
                 sequence: event.sequence, occurredAt: event.date, kind: event.kind,
-                instrumentCode: event.code, instrumentName: event.name, units: event.units,
-                price: event.price, fee: event.fee, cashDelta: event.delta,
+                instrumentCode: event.code, instrumentName: event.name,
+                sourceFillID: event.sourceFillID, units: event.units,
+                price: event.price, fee: event.fee, effectiveFee: event.effectiveFee,
+                cashDelta: event.delta,
                 resultingCashBalance: balance, reason: event.reason))
         }
         return entries

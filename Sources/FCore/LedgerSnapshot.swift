@@ -50,13 +50,14 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
         cashBalance = book.cashBalance
         positions = book.positions.map(FReadOnlyPositionSnapshot.init)
             .sorted { $0.instrumentCode < $1.instrumentCode }
-        instrumentHistories = FLedgerHistoryProjection.instruments(from: book)
+        let economicFills = try FLedgerFeeProjection.adjustedFills(in: book)
+        instrumentHistories = FLedgerHistoryProjection.instruments(from: book, fills: economicFills)
         let names = Dictionary(uniqueKeysWithValues: instrumentHistories.map {
             ($0.instrumentCode, $0.instrumentName)
         })
-        cashFlow = FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
+        cashFlow = try FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
         dailyTradeSummaryDate = try FDailyTradeSummary.tradingDate(for: capturedAt)
-        dailyTradeSummaries = try FDailyTradeSummary.derive(from: book.fills, asOf: capturedAt)
+        dailyTradeSummaries = try FDailyTradeSummary.derive(from: economicFills, asOf: capturedAt)
         confirmedFillIDs = Set(book.fills.map(\.id))
         confirmedFillTimestamps = Dictionary(uniqueKeysWithValues: book.fills.map { ($0.id, $0.tradedAt) })
     }
@@ -88,6 +89,7 @@ public extension FAccountBook {
             var positions: [FPosition]
             var brokerDisplayCosts: [FBrokerDisplayCostRecord]?
             var fills: [FConfirmedFill]
+            var feeAdjustments: [FFillFeeAdjustment]?
             var cashMovements: [FCashMovement]
             var updatedAt: Date
         }
@@ -104,6 +106,7 @@ public extension FAccountBook {
                 if $0.tradedAt != $1.tradedAt { return $0.tradedAt < $1.tradedAt }
                 return $0.id.uuidString < $1.id.uuidString
             },
+            feeAdjustments: feeAdjustments?.sorted { $0.sequence < $1.sequence },
             cashMovements: cashMovements.sorted {
                 if $0.occurredAt != $1.occurredAt { return $0.occurredAt < $1.occurredAt }
                 return $0.id.uuidString < $1.id.uuidString

@@ -4,6 +4,7 @@ import Foundation
 public enum FLedgerMutationError: Error, Equatable, Sendable {
     case duplicateFill(UUID)
     case duplicateCashMovement(UUID)
+    case invalidFeeAdjustment(UUID)
     case insufficientCash
     case missingPosition(String)
     case insufficientUnits(String)
@@ -35,6 +36,65 @@ private extension FAccountBook {
 }
 
 public extension FAccountBook {
+    /// Appends a user-confirmed correction to one fill's fee. The original fill is untouched;
+    /// cash settles now while the economic projection attributes the corrected fee to that fill.
+    func correctingFillFee(fillID: UUID, correctedFee: Decimal, reason: String,
+                           confirmation: FUserLedgerConfirmation,
+                           now: Date = Date()) throws -> FAccountBook {
+        try validate(now: now)
+        guard let fill = fills.first(where: { $0.id == fillID }),
+              !correctedFee.isNaN, correctedFee >= 0,
+              !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              confirmation.confirmedAt >= updatedAt,
+              confirmation.confirmedAt <= now.addingTimeInterval(300) else {
+            throw FLedgerMutationError.invalidFeeAdjustment(fillID)
+        }
+        let effectiveFees = try FLedgerFeeProjection.effectiveFees(in: self)
+        let priorFee = effectiveFees[fillID] ?? fill.fee
+        let delta = correctedFee - priorFee
+        guard delta != 0 else { throw FLedgerMutationError.invalidFeeAdjustment(fillID) }
+        let newCash = cashBalance - delta
+        guard !newCash.isNaN, newCash >= 0 else { throw FLedgerMutationError.insufficientCash }
+
+        let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence) +
+                            (feeAdjustments ?? []).map(\.sequence)).max() ?? 0
+        guard lastSequence < UInt64.max else { throw FLedgerMutationError.invalidFeeAdjustment(fillID) }
+        let beforeDigest = try ledgerStateDigest()
+        var updated = self
+        let event = FFillFeeAdjustment(
+            sequence: lastSequence + 1, fillID: fillID, feeDelta: delta,
+            occurredAt: confirmation.confirmedAt,
+            reason: reason.trimmingCharacters(in: .whitespacesAndNewlines),
+            userConfirmation: confirmation)
+        updated.feeAdjustments = (updated.feeAdjustments ?? []) + [event]
+        updated.cashBalance = newCash
+        updated.updatedAt = confirmation.confirmedAt
+
+        let correctedFees = try FLedgerFeeProjection.effectiveFees(in: updated)
+        let projected = try FLedgerFeeProjection.replay(
+            opening: updated.openingSnapshot, fills: updated.fills,
+            fees: correctedFees, recalculateSellBasis: true).state
+        for index in updated.positions.indices {
+            let code = updated.positions[index].instrumentCode
+            guard projected.units[code, default: 0] == updated.positions[index].units else {
+                throw FLedgerValidationError.positionUnitReconciliation(
+                    code: code, expected: projected.units[code, default: 0],
+                    actual: updated.positions[index].units)
+            }
+            updated.positions[index].bookCost = projected.costs[code, default: 0]
+        }
+        try updated.validate(now: now)
+        let afterDigest = try updated.ledgerStateDigest()
+        updated.audits.append(FLedgerAuditEvent(
+            occurredAt: confirmation.confirmedAt,
+            action: "用户确认修正成交手续费",
+            reason: "\(fill.instrumentCode) · \(reason.trimmingCharacters(in: .whitespacesAndNewlines)) · \(confirmation.confirmationNote)",
+            priorLedgerDigest: beforeDigest, resultingLedgerDigest: afterDigest))
+        try updated.validate(now: now)
+        return updated
+    }
+
     /// Persists the broker's displayed per-unit cost as a user-confirmed annotation.
     /// It never changes economic book cost, units, cash, or fills.
     func correctingBrokerDisplayCost(instrumentCode: String, costPerUnit: Decimal,
@@ -81,7 +141,8 @@ public extension FAccountBook {
         guard !fills.contains(where: { $0.id == fill.id }) else {
             throw FLedgerMutationError.duplicateFill(fill.id)
         }
-        let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence)).max() ?? 0
+        let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence) +
+                            (feeAdjustments ?? []).map(\.sequence)).max() ?? 0
         guard lastSequence < UInt64.max, fill.sequence == lastSequence + 1 else {
             let expected = lastSequence == UInt64.max ? UInt64.max : lastSequence + 1
             throw FLedgerValidationError.invalidEventSequence(expected: expected, actual: fill.sequence)
@@ -181,7 +242,8 @@ public extension FAccountBook {
         guard !cashMovements.contains(where: { $0.id == movement.id }) else {
             throw FLedgerMutationError.duplicateCashMovement(movement.id)
         }
-        let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence)).max() ?? 0
+        let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence) +
+                            (feeAdjustments ?? []).map(\.sequence)).max() ?? 0
         guard lastSequence < UInt64.max, movement.sequence == lastSequence + 1 else {
             let expected = lastSequence == UInt64.max ? UInt64.max : lastSequence + 1
             throw FLedgerValidationError.invalidEventSequence(expected: expected, actual: movement.sequence)

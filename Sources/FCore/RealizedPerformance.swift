@@ -46,7 +46,8 @@ public struct FRealizedPerformanceSnapshot: Equatable, Sendable {
         var totals = Accumulator()
         var instruments: [String: Accumulator] = [:]
 
-        for fill in book.fills.sorted(by: { $0.sequence < $1.sequence }) where fill.side == .sell {
+        let economicFills = try FLedgerFeeProjection.adjustedFills(in: book)
+        for fill in economicFills.sorted(by: { $0.sequence < $1.sequence }) where fill.side == .sell {
             guard let removed = fill.costBasisRemoved else {
                 throw FLedgerValidationError.missingSellCostBasis(fill.id)
             }

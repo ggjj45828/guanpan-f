@@ -68,6 +68,12 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var isAskingAdvisor = false
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
     @Published var showingLedgerConfirmation = false
+    @Published var showingFeeCorrection = false
+    @Published var feeCorrectionFillID: UUID?
+    @Published var correctedFeeText = ""
+    @Published var feeCorrectionReason = ""
+    @Published var feeCorrectionConfirmationNote = ""
+    @Published private(set) var writingFeeCorrection = false
     @Published var actualFillUnitsText = ""
     @Published var actualFillPriceText = ""
     @Published var actualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
@@ -208,6 +214,53 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    func beginFeeCorrection(for entry: FReadOnlyCashFlowEntry) {
+        guard let fillID = entry.sourceFillID, let fee = entry.effectiveFee else { return }
+        feeCorrectionFillID = fillID
+        correctedFeeText = NSDecimalNumber(decimal: fee).stringValue
+        feeCorrectionReason = ""
+        feeCorrectionConfirmationNote = ""
+        ledgerWriteStatus = "请输入券商实际收取的该笔总手续费；保存时仅追加费用更正事件。"
+        showingFeeCorrection = true
+    }
+
+    func confirmFeeCorrection() {
+        guard !writingFeeCorrection else { return }
+        Task { await writeFeeCorrection() }
+    }
+
+    private func writeFeeCorrection() async {
+        guard let store = ledgerStore, let fillID = feeCorrectionFillID,
+              let correctedFee = Decimal(string: correctedFeeText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                          locale: Locale(identifier: "en_US_POSIX")), correctedFee >= 0,
+              !feeCorrectionReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !feeCorrectionConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请填写有效的修正后手续费、差额原因和确认说明。"
+            return
+        }
+        writingFeeCorrection = true
+        defer { writingFeeCorrection = false }
+        do {
+            let now = Date()
+            let confirmation = FUserLedgerConfirmation(
+                confirmedAt: now,
+                confirmationNote: feeCorrectionConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines))
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmFillFeeCorrection(
+                fillID: fillID, correctedFee: correctedFee,
+                reason: feeCorrectionReason.trimmingCharacters(in: .whitespacesAndNewlines),
+                confirmation: confirmation, now: now)
+            await loadLedger(from: store)
+            pendingCandidate = nil
+            pendingCandidateScope = nil
+            advisorResult = nil
+            showingFeeCorrection = false
+            ledgerWriteStatus = "手续费更正已追加；现金按补录日结算，历史成本与盈亏按原成交重算。原AI候选已失效，请使用更新后的账本重新提问。"
+        } catch {
+            ledgerWriteStatus = "手续费更正未保存：\(error.localizedDescription)"
+        }
+    }
+
     func confirmPendingFill() {
         guard !writingConfirmedFill else { return }
         Task { await writePendingConfirmedFill() }
@@ -252,7 +305,8 @@ final class FHomeModel: ObservableObject {
                   let book = try await store.load(now: now) else {
                 throw FAdvisorLiveError.ledgerChangedDuringAnalysis
             }
-            let lastSequence = (book.fills.map(\.sequence) + book.cashMovements.map(\.sequence)).max() ?? 0
+            let lastSequence = (book.fills.map(\.sequence) + book.cashMovements.map(\.sequence) +
+                                (book.feeAdjustments ?? []).map(\.sequence)).max() ?? 0
             guard lastSequence < UInt64.max else { throw FAdvisorLiveError.ledgerChangedDuringAnalysis }
             let removedCost: Decimal?
             if side == .sell {

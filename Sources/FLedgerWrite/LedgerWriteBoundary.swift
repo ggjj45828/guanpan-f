@@ -40,6 +40,22 @@ public actor FConfirmedLedgerWriter {
         return try await store.save(updated, expectedPriorDigest: digest, now: now)
     }
 
+    /// Appends an after-the-fact fee correction only after explicit user confirmation.
+    @discardableResult
+    public func confirmFillFeeCorrection(fillID: UUID, correctedFee: Decimal, reason: String,
+                                         confirmation: FUserLedgerConfirmation,
+                                         now: Date = Date()) async throws -> String {
+        try validate(confirmation, now: now)
+        guard let prior = try await store.load(now: now),
+              let digest = try await store.currentDigest(now: now) else {
+            throw FLedgerPersistenceError.primaryFileMissing
+        }
+        let updated = try prior.correctingFillFee(
+            fillID: fillID, correctedFee: correctedFee, reason: reason,
+            confirmation: confirmation, now: now)
+        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+    }
+
     @discardableResult
     public func confirmCashMovement(_ movement: FCashMovement,
                                     now: Date = Date()) async throws -> String {

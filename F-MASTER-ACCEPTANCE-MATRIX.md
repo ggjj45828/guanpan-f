@@ -2,12 +2,14 @@
 
 ## 当前工作树续更（2026-10-28；以本段为最新状态）
 
+- 本轮编码逐笔手续费事后更正：追加`FFillFeeAdjustment`、现金补录日结算、有效手续费与成本basis重放、只读历史/日汇总/realized/T投影、现金流水更正行、用户确认Writer入口与资产页简单更正表单；旧fill不改。新增6项Ledger回归测试定义（含旧周期清仓卖出补扣/退费、重开Episode隔离及Archive恢复）。全项仍未Apple编译/执行，详见实时交接和F-145。
+
 - 新增多主题/多布局架构设计：[F-THEME-LAYOUT-MANIFEST-DESIGN.md](F-THEME-LAYOUT-MANIFEST-DESIGN.md)。既有5套首页分支加上5个新增方向，共规划10套；Theme/Layout Manifest注册、共享role renderer及Simulator结构差异验收均尚未实现/验证。该事项排在当前Ledger、Apple CI、NAS历史分钟iOS链路和DeepSeek闭环之后，不新增主题Swift代码。
 
-- HEAD `5f2a1f7c61aec0c29ce4e11430f8b1e9aefcb45c`，本地相对缓存`origin/main` ahead 7；最新fetch失败（DNS thread启动错误），远端实时状态未知。当前T实现/测试及交接矩阵有未提交变更；锁定临时目录未动。
+- 本轮新增代码以HEAD `72593282cf403840b06a337b934fde9ee8b9d48a`为基准；本地相对缓存`origin/main` ahead 11，fetch失败（DNS thread启动错误），远端实时状态未知。T与手续费修正Swift/测试及验收文档在当前工作树未提交；锁定临时目录未动。
 - T Contribution现按时间排序和FIFO批次只匹配先卖后买的实际配对份额；1000卖/500买回只计500及按比例卖出费；普通卖出/减仓不当作T；买回早于卖出或买回量超过此前剩余卖量保持Unavailable。源码/测试位置：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`。
-- FCore定义方法当前静态计数132。当前HEAD compile、XCTest执行、passed/failed均无执行证据；旧CI #41 `40622847995`（130/130）仅验证`7a2d63e`，不能覆盖本轮部分配对FIFO改动。App/UI旧CI数据同样不验证本轮Swift修改。本机无Swift/Xcode/XcodeGen。
-- 事后手续费修正仍未编码：原始fill和原始`costBasisRemoved`不可变；后续必须实现追加式费用调整事件、补录时现金结算、原成交日费用/成本/已实现盈亏确定性重放，并覆盖跨清仓/重建仓与恢复。不能只做cash movement。当前无新增费用调整测试定义。
+- FCore测试定义方法当前静态计数138。当前工作树compile、XCTest执行、passed/failed均无执行证据；旧CI #41 `40622847995`（130/130）仅验证`7a2d63e`，不能覆盖T FIFO或手续费修正。App/UI旧CI数据同样不验证本轮Swift修改。本机无Swift/Xcode/XcodeGen。
+- 事后手续费修正已编码，仍未编译/执行：原始fill和原始`costBasisRemoved`保持不变；追加事件负责补录时现金结算，经济投影按有效费用回算basis/已实现和Episode结果。新增6项测试定义，覆盖买入费用补录/冲回、部分卖出basis、卖出手续费、跨Episode隔离、清仓卖出手续费补扣/退回、Writer/Archive恢复和负现金原子拒绝。UI XCTest/Simulator验证仍缺。
 - NAS历史分钟进入iOS/Research Evidence、DeepSeek真实E2E、Candidate→确认成交→Ledger→Advisor复判、Simulator人工手势/视觉仍未通过真实端到端验收；人工Simulator为External Pending。
 
 ## 当前工作树状态（2026-10-28；优先于下方历史快照）

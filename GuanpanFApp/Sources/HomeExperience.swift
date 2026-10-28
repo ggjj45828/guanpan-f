@@ -671,6 +671,13 @@ struct RealAssetsOverview: View {
                         Text("\(entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
                         Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · 手续费 \(entry.fee.description)")
                             .font(.caption).foregroundStyle(.secondary)
+                        if let fillID = entry.sourceFillID, let effectiveFee = entry.effectiveFee {
+                            Button("对账 / 更正此笔手续费（当前 \(effectiveFee.description)）") {
+                                model.beginFeeCorrection(for: entry)
+                            }
+                            .font(.caption)
+                            .accessibilityIdentifier("ledger.fee-correction.\(fillID.uuidString)")
+                        }
                     }
                 }
             }
@@ -682,6 +689,9 @@ struct RealAssetsOverview: View {
         }
         .accessibilityIdentifier("assets.list")
         .navigationTitle("真实资产")
+        .sheet(isPresented: $model.showingFeeCorrection) {
+            FLedgerFeeCorrectionSheet(model: model)
+        }
     }
 
     private func assetSummaryRow(_ title: String, value: String) -> some View {
@@ -702,6 +712,7 @@ private extension FReadOnlyCashFlowKind {
         case .openingBalance: "期初现金"
         case .buy: "买入"
         case .sell: "卖出"
+        case .feeAdjustment: "手续费调整"
         case .deposit: "现金转入"
         case .withdrawal: "现金转出"
         }
@@ -984,7 +995,7 @@ struct FLedgerConfirmationSheet: View {
                         TextField("T配对编号（卖出与买回填写相同值）",
                                   text: $model.actualFillTCycleID)
                             .accessibilityIdentifier("ledger.fill.t-cycle")
-                        Text("只有同一证券、同一交易日、相同编号且数量相等的真实确认卖出/买回，才计入T贡献。未配对或历史未分类成交会显示无法精确归类。")
+                        Text("只有同一证券、同一交易日、相同编号且先卖后买的真实确认成交才计入T贡献；按成交顺序FIFO匹配已买回份额，未买回卖出余量不算完成T，买回超出可配对卖出量时显示无法精确归类。")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
@@ -1010,6 +1021,49 @@ struct FLedgerConfirmationSheet: View {
                     }
                     .disabled(model.writingConfirmedFill ||
                               model.ledgerConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+struct FLedgerFeeCorrectionSheet: View {
+    @ObservedObject var model: FHomeModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("逐笔成交费用对账") {
+                    TextField("修正后的该笔总手续费", text: $model.correctedFeeText)
+                        .keyboardType(.decimalPad)
+                    TextField("差额原因（如券商费用补扣/退回）", text: $model.feeCorrectionReason,
+                              axis: .vertical)
+                        .lineLimit(2...3)
+                    Text("原成交记录不会修改。现金差额记在今天；证券成本和历史盈亏按这笔原始成交重新计算。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("确认更正") {
+                    TextField("确认说明（必填）", text: $model.feeCorrectionConfirmationNote,
+                              axis: .vertical)
+                        .lineLimit(2...4)
+                }
+                if !model.ledgerWriteStatus.isEmpty {
+                    Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
+                }
+            }
+            .navigationTitle("成交费用对账")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }.disabled(model.writingFeeCorrection)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.writingFeeCorrection ? "保存中" : "确认更正") {
+                        model.confirmFeeCorrection()
+                    }
+                    .disabled(model.writingFeeCorrection ||
+                              model.feeCorrectionReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                              model.feeCorrectionConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }

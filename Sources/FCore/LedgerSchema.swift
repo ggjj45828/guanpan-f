@@ -14,6 +14,8 @@ public struct FAccountBook: Codable, Equatable, Sendable {
     /// Latest user-confirmed broker display cost per security, retained across full closes.
     /// Optional for backward-compatible decoding of existing account files.
     public var brokerDisplayCosts: [FBrokerDisplayCostRecord]?
+    /// Append-only fee corrections. Nil is the legacy-file representation of no corrections.
+    public var feeAdjustments: [FFillFeeAdjustment]?
     public var fills: [FConfirmedFill]
     public var cashMovements: [FCashMovement]
     public var audits: [FLedgerAuditEvent]
@@ -23,6 +25,7 @@ public struct FAccountBook: Codable, Equatable, Sendable {
                 openingSnapshot: FAccountOpeningSnapshot, cashBalance: Decimal,
                 positions: [FPosition] = [], fills: [FConfirmedFill] = [],
                 brokerDisplayCosts: [FBrokerDisplayCostRecord]? = nil,
+                feeAdjustments: [FFillFeeAdjustment]? = nil,
                 cashMovements: [FCashMovement] = [], audits: [FLedgerAuditEvent] = [],
                 updatedAt: Date = Date(), schemaVersion: Int = FAccountBook.currentSchemaVersion) {
         self.accountID = accountID
@@ -32,10 +35,37 @@ public struct FAccountBook: Codable, Equatable, Sendable {
         self.cashBalance = cashBalance
         self.positions = positions
         self.brokerDisplayCosts = brokerDisplayCosts
+        self.feeAdjustments = feeAdjustments
         self.fills = fills
         self.cashMovements = cashMovements
         self.audits = audits
         self.updatedAt = updatedAt
+    }
+}
+
+/// An immutable correction event that changes the effective fee attributed to one
+/// confirmed fill. Cash settles at this event's sequence; economics are replayed at the
+/// original fill date. The original FConfirmedFill is never rewritten.
+public struct FFillFeeAdjustment: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let sequence: UInt64
+    public let fillID: UUID
+    /// Positive means additional fee owed; negative means fee returned by the broker.
+    public let feeDelta: Decimal
+    public let occurredAt: Date
+    public let reason: String
+    public let userConfirmation: FUserLedgerConfirmation
+
+    public init(id: UUID = UUID(), sequence: UInt64, fillID: UUID, feeDelta: Decimal,
+                occurredAt: Date, reason: String,
+                userConfirmation: FUserLedgerConfirmation) {
+        self.id = id
+        self.sequence = sequence
+        self.fillID = fillID
+        self.feeDelta = feeDelta
+        self.occurredAt = occurredAt
+        self.reason = reason
+        self.userConfirmation = userConfirmation
     }
 }
 
@@ -239,6 +269,7 @@ public enum FLedgerValidationError: Error, Equatable, Sendable {
     case duplicateFillID(UUID), duplicateEventSequence(UInt64), invalidEventSequence(expected: UInt64, actual: UInt64)
     case invalidFill(UUID), invalidConfirmation(UUID), invalidBrokerDisplayCostRecord(String)
     case invalidTradeClassification(UUID)
+    case duplicateFeeAdjustmentID(UUID), invalidFeeAdjustment(UUID), feeAdjustmentTargetMissing(UUID)
     case duplicateCashMovementID(UUID), invalidCashMovement(UUID), invalidCashMovementConfirmation(UUID)
     case duplicateAuditID(UUID), invalidAudit(UUID), implausibleTimestamp(String)
     case invalidOpeningSnapshot, unexpectedSellCostBasis(UUID), missingSellCostBasis(UUID)
@@ -365,6 +396,36 @@ public extension FAccountBook {
             }
         }
 
+        let fillsByID = Dictionary(uniqueKeysWithValues: fills.map { ($0.id, $0) })
+        var feeAdjustmentIDs = Set<UUID>()
+        var effectiveFees = Dictionary(uniqueKeysWithValues: fills.map { ($0.id, $0.fee) })
+        for adjustment in (feeAdjustments ?? []).sorted(by: { $0.sequence < $1.sequence }) {
+            guard feeAdjustmentIDs.insert(adjustment.id).inserted else {
+                throw FLedgerValidationError.duplicateFeeAdjustmentID(adjustment.id)
+            }
+            guard adjustment.sequence > 0, eventSequences.insert(adjustment.sequence).inserted else {
+                throw FLedgerValidationError.duplicateEventSequence(adjustment.sequence)
+            }
+            guard let fill = fillsByID[adjustment.fillID] else {
+                throw FLedgerValidationError.feeAdjustmentTargetMissing(adjustment.fillID)
+            }
+            guard adjustment.sequence > fill.sequence,
+                  Self.isFinite(adjustment.feeDelta), adjustment.feeDelta != 0,
+                  !adjustment.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  Self.isPlausible(adjustment.occurredAt, now: now),
+                  adjustment.occurredAt >= fill.tradedAt,
+                  Self.isPlausible(adjustment.userConfirmation.confirmedAt, now: now),
+                  adjustment.userConfirmation.confirmedAt >= adjustment.occurredAt,
+                  !adjustment.userConfirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw FLedgerValidationError.invalidFeeAdjustment(adjustment.id)
+            }
+            let correctedFee = (effectiveFees[adjustment.fillID] ?? fill.fee) + adjustment.feeDelta
+            guard Self.isFinite(correctedFee), correctedFee >= 0 else {
+                throw FLedgerValidationError.invalidFeeAdjustment(adjustment.id)
+            }
+            effectiveFees[adjustment.fillID] = correctedFee
+        }
+
         var movementIDs = Set<UUID>()
         for movement in cashMovements {
             guard movementIDs.insert(movement.id).inserted else {
@@ -420,14 +481,19 @@ public extension FAccountBook {
         enum Event {
             case fill(FConfirmedFill)
             case cash(FCashMovement)
+            case feeAdjustment(FFillFeeAdjustment)
             var sequence: UInt64 {
                 switch self {
                 case .fill(let value): return value.sequence
                 case .cash(let value): return value.sequence
+                case .feeAdjustment(let value): return value.sequence
                 }
             }
         }
-        let events = fills.map(Event.fill) + cashMovements.map(Event.cash)
+        let events = fills.map(Event.fill) + cashMovements.map(Event.cash) +
+            (feeAdjustments ?? []).map(Event.feeAdjustment)
+        var knownEffectiveFees = Dictionary(uniqueKeysWithValues: fills.map { ($0.id, $0.fee) })
+        var fillsBeforeCurrentEvent: [FConfirmedFill] = []
         for event in events.sorted(by: { $0.sequence < $1.sequence }) {
             let fill: FConfirmedFill
             switch event {
@@ -436,6 +502,18 @@ public extension FAccountBook {
                 guard expectedCash >= 0 else {
                     throw FLedgerValidationError.historicalCashUnderflow(sequence: movement.sequence)
                 }
+                continue
+            case .feeAdjustment(let adjustment):
+                expectedCash -= adjustment.feeDelta
+                guard expectedCash >= 0 else {
+                    throw FLedgerValidationError.historicalCashUnderflow(sequence: adjustment.sequence)
+                }
+                knownEffectiveFees[adjustment.fillID, default: 0] += adjustment.feeDelta
+                let replayed = try FLedgerFeeProjection.replay(
+                    opening: openingSnapshot, fills: fillsBeforeCurrentEvent,
+                    fees: knownEffectiveFees, recalculateSellBasis: true).state
+                expectedUnits = replayed.units
+                expectedCost = replayed.costs
                 continue
             case .fill(let value):
                 fill = value
@@ -471,6 +549,7 @@ public extension FAccountBook {
                 expectedCash += fill.price * Decimal(fill.units) - fill.fee
                 expectedCost[code] = currentCost - removed
             }
+            fillsBeforeCurrentEvent.append(fill)
         }
         guard expectedCash == cashBalance else {
             throw FLedgerValidationError.cashReconciliation(expected: expectedCash, actual: cashBalance)

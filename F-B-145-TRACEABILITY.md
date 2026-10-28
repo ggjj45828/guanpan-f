@@ -247,7 +247,16 @@ B 中涉及“删除旧模拟方向”的条目保留其清理目标；任何把
 - 买回早于任何可配对T卖出、买回数量超过此前剩余T卖出数量、旧fill未分类，仍返回Unavailable；普通减仓没有明确T标签时不计入T贡献。未配对的T卖出不产生已完成T贡献。
 - 新增/更新FCore XCTest定义覆盖1000卖/500买回的部分配对、反序成交、普通减仓、多个卖出/买回交错FIFO、同日清仓后重开以及T贡献和证券Lifetime P&L方向不同。旧的“T周期必须整体完全配平”断言已替换成部分成交精确匹配断言。
 - 当前FCore测试方法数从130增至132（本地按 `func test...` 静态计数；不是执行结果）。新增/调整Swift尚未本地编译或执行，也未进入CI；最近可核实的130/130仍只覆盖旧源码提交`7a2d63e`。
-- 手续费事后差额调整仍未实现。实施前必须让不可变原fill事实、按原成交日回算的修正费用/卖出basis投影、补录日现金结算事件三者独立且可重放；不能改旧fill的费用或`costBasisRemoved`，也不能只增加cash movement。当前Windows无Swift/Xcode环境，暂不在未编译状态下堆叠这项跨Projection/Archive的Ledger改动。
+- 上一续记时手续费事后差额调整尚未实现；后续已开始实现，当前实际完成情况、测试定义及未验证项见下方“逐笔成交手续费事后更正实现续记”。
+
+### 逐笔成交手续费事后更正实现续记（2026-10-28）
+
+- 新增append-only `FFillFeeAdjustment`，按fillID记录有符号fee delta、修正时间、原因、用户确认和账本事件sequence；原始`FConfirmedFill.fee`与其已确认`costBasisRemoved`不变。旧账户文件将缺失的可选adjustments字段解释为无更正。
+- `FAccountBook`余额重放将fee delta作为修正当时的现金事件（正delta扣现、负delta返现）；成本投影在修正事件处按当前有效费用重放此前成交，并重新计算其后的经济cost basis。之后新卖出的costBasisRemoved按包含已生效修正的当前账本成本计算。费用修正被纳入ledger digest、序号唯一性、校验和archive恢复。
+- ReadOnly Snapshot、Episode历史、逐日Trade Facts、Realized Performance、T Contribution使用修正后有效费用/重算后的sell basis；现金流水同时保留原成交费用与补录日期的独立调整行。真实资产现金流水增加“对账/更正此笔手续费”入口，用户确认后经`FConfirmedLedgerWriter`唯一真实写入口保存。
+- 新增6个FCore测试定义：买入费用补录→部分卖出basis/当日已实现重算→费用冲回及归档恢复；卖出费用补录仅改realized和补录现金、不改basis；已清仓旧Episode买入费用修正不污染重开Episode；已清仓旧Episode卖出费用补扣/退回不污染重开Episode并验证归档恢复；通过真实`FConfirmedLedgerWriter`保存更正并重载账本；补费会导致现金为负时原子拒绝。
+- 当前FCore `func test...`静态计数138。新增Ledger/SwiftUI代码和测试未编译、未执行；旧CI不覆盖。手续费修改入口没有UI XCTest/Simulator实测。
+- 尚需补齐并执行：多次历史更正事件顺序/负现金拒绝；清仓旧卖出费用修正与历史累计PnL；NAS/Advisor真实数据闭环不受影响；Writer/store恢复/备份回滚实测。不得将本续记当作Apple测试通过。
 
 ### 用户补充：手续费不保证为¥0.10（覆盖旧固定假设）
 

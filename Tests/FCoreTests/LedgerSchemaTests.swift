@@ -831,6 +831,207 @@ final class LedgerSchemaTests: XCTestCase {
                        "同日清仓后重新买入，输入数组顺序不影响基于成交时间的配对")
     }
 
+    func testPostTradeBuyFeeCorrectionReplaysPartialSaleBasisAndCanBeReversed() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-300))
+        let buy = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-120),
+                                 instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                 fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                 instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
+        let sell = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-60),
+                                  instrumentCode: "159352", side: .sell, units: 4, price: 12,
+                                  fee: Decimal(string: "0.10")!, costBasisRemoved: Decimal(string: "40.04")!,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+
+        let added = try book.correctingFillFee(
+            fillID: buy.id, correctedFee: Decimal(string: "0.30")!, reason: "券商补扣买入手续费",
+            confirmation: confirmation(), now: now)
+        XCTAssertEqual(added.fills[0].fee, Decimal(string: "0.10"), "原始fill不可修改")
+        XCTAssertEqual(added.fills[1].costBasisRemoved, Decimal(string: "40.04"),
+                       "原始卖出basis事实不可覆盖")
+        XCTAssertEqual(added.positions.first?.bookCost, Decimal(string: "60.18"),
+                       "旧买入费用增加后，部分卖出basis按修正费用回放")
+        XCTAssertEqual(added.cashBalance, Decimal(string: "947.60"),
+                       "费用差额在补录日真实扣款")
+        XCTAssertEqual(added.feeAdjustments?.count, 1)
+        XCTAssertEqual(added.audits.last?.action, "用户确认修正成交手续费")
+        let correctedFacts = try added.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(correctedFacts.instrumentHistories.first?.activeBookCost, Decimal(string: "60.18"))
+        XCTAssertEqual(correctedFacts.instrumentHistories.first?.episodes.first?.netRealizedProfit,
+                       Decimal(string: "7.78"))
+        XCTAssertEqual(correctedFacts.dailyTradeSummaries.first?.realizedPnL, Decimal(string: "7.78"))
+        XCTAssertEqual(correctedFacts.dailyTradeSummaries.first?.buyFees, Decimal(string: "0.30"))
+        XCTAssertEqual(correctedFacts.cashFlow.last?.kind, .feeAdjustment)
+        XCTAssertEqual(correctedFacts.cashFlow.last?.cashDelta, Decimal(string: "-0.20"))
+
+        let reversed = try added.correctingFillFee(
+            fillID: buy.id, correctedFee: Decimal(string: "0.10")!, reason: "券商撤销重复手续费",
+            confirmation: confirmation(), now: now)
+        XCTAssertEqual(reversed.cashBalance, Decimal(string: "947.80"))
+        XCTAssertEqual(reversed.positions.first?.bookCost, Decimal(string: "60.06"))
+        XCTAssertEqual(reversed.feeAdjustments?.count, 2, "更正冲回也必须追加事件而非覆盖旧修正")
+        XCTAssertEqual(reversed.fills[0], buy)
+
+        let archive = try FAccountBookArchive(accountBook: added, archivedAt: now)
+        let bytes = try JSONEncoder().encode(archive)
+        let restored = try JSONDecoder().decode(FAccountBookArchive.self, from: bytes)
+        try restored.validate(now: now)
+        let restoredSnapshot = try restored.accountBook.readOnlySnapshot(capturedAt: now)
+        let addedSnapshot = try added.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(restoredSnapshot, addedSnapshot,
+                       "归档恢复后费用、成本、现金和历史盈亏投影一致")
+    }
+
+    func testPostTradeSellFeeCorrectionUpdatesRealizedPnLWithoutChangingBasis() throws {
+        let openingPosition = FPosition(instrumentCode: "159352", name: "A500", units: 10,
+                                        bookCost: Decimal(string: "100.10")!)
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000, positions: [openingPosition]),
+                                cashBalance: 1_000, positions: [openingPosition],
+                                updatedAt: now.addingTimeInterval(-180))
+        let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                                  instrumentCode: "159352", side: .sell, units: 4, price: 12,
+                                  fee: Decimal(string: "0.10")!, costBasisRemoved: Decimal(string: "40.04")!,
+                                  userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+        let corrected = try book.correctingFillFee(
+            fillID: sell.id, correctedFee: Decimal(string: "0.35")!, reason: "券商卖出费用高于预录",
+            confirmation: confirmation(), now: now)
+        let snapshot = try corrected.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(corrected.cashBalance, Decimal(string: "1047.65"))
+        XCTAssertEqual(corrected.positions.first?.bookCost, Decimal(string: "60.06"),
+                       "卖出费用修正不改变移除成本")
+        XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.first?.netRealizedProfit,
+                       Decimal(string: "7.51"))
+        XCTAssertEqual(snapshot.cashFlow.last?.cashDelta, Decimal(string: "-0.25"))
+        XCTAssertEqual(corrected.fills.first?.fee, Decimal(string: "0.10"))
+    }
+
+    func testOldEpisodeFeeCorrectionDoesNotPolluteReopenedEpisodeCost() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-300))
+        let oldBuy = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-180),
+                                    instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                    fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                    instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(oldBuy, instrumentName: "A500", now: now)
+        let close = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-120),
+                                   instrumentCode: "159352", side: .sell, units: 10, price: 12,
+                                   fee: Decimal(string: "0.10")!, costBasisRemoved: Decimal(string: "100.10")!,
+                                   userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(close, instrumentName: "A500", now: now)
+        let newBuy = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-60),
+                                    instrumentCode: "159352", side: .buy, units: 5, price: 11,
+                                    fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                    instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(newBuy, instrumentName: "A500", now: now)
+
+        let corrected = try book.correctingFillFee(
+            fillID: oldBuy.id, correctedFee: Decimal(string: "0.30")!,
+            reason: "旧持仓买入费用补录", confirmation: confirmation(), now: now)
+        let history = try XCTUnwrap(corrected.readOnlySnapshot(capturedAt: now).instrumentHistories.first)
+        XCTAssertEqual(history.episodes.count, 2)
+        XCTAssertEqual(history.episodes[0].netRealizedProfit, Decimal(string: "19.60"))
+        XCTAssertEqual(history.episodes[1].currentBookCost, Decimal(string: "55.10"),
+                       "旧Episode费用回算不能污染重新建仓的经济成本")
+        XCTAssertEqual(corrected.positions.first?.bookCost, Decimal(string: "55.10"))
+        XCTAssertEqual(corrected.fills[0].fee, Decimal(string: "0.10"))
+    }
+
+    func testClosedEpisodeSellFeeCorrectionAndRefundLeaveReopenedEpisodeIndependent() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                updatedAt: now.addingTimeInterval(-300))
+        let oldBuy = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-240),
+                                    instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                    fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                    instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(oldBuy, instrumentName: "A500", now: now)
+        let close = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-180),
+                                   instrumentCode: "159352", side: .sell, units: 10, price: 12,
+                                   fee: Decimal(string: "0.10")!, costBasisRemoved: Decimal(string: "100.10")!,
+                                   userConfirmation: confirmation(), instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(close, instrumentName: "A500", now: now)
+        let newBuy = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-120),
+                                    instrumentCode: "159352", side: .buy, units: 5, price: 11,
+                                    fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                    instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(newBuy, instrumentName: "A500", now: now)
+
+        let corrected = try book.correctingFillFee(
+            fillID: close.id, correctedFee: Decimal(string: "0.30")!,
+            reason: "旧周期卖出费用补扣", confirmation: confirmation(), now: now)
+        var history = try XCTUnwrap(corrected.readOnlySnapshot(capturedAt: now).instrumentHistories.first)
+        XCTAssertEqual(corrected.cashBalance, Decimal(string: "964.50"))
+        XCTAssertEqual(history.episodes[0].netRealizedProfit, Decimal(string: "19.60"))
+        XCTAssertEqual(history.episodes[1].currentBookCost, Decimal(string: "55.10"))
+        XCTAssertEqual(history.lifetimeRealizedProfit, Decimal(string: "19.60"))
+        XCTAssertEqual(corrected.fills.first(where: { $0.id == close.id })?.fee, Decimal(string: "0.10"))
+        XCTAssertEqual(corrected.fills.first(where: { $0.id == close.id })?.costBasisRemoved,
+                       Decimal(string: "100.10"), "关闭旧周期的原始成本移除事实不可改写")
+
+        let refunded = try corrected.correctingFillFee(
+            fillID: close.id, correctedFee: Decimal(string: "0.05")!,
+            reason: "券商退回多扣费用", confirmation: confirmation(), now: now)
+        history = try XCTUnwrap(refunded.readOnlySnapshot(capturedAt: now).instrumentHistories.first)
+        XCTAssertEqual(refunded.cashBalance, Decimal(string: "964.75"))
+        XCTAssertEqual(refunded.feeAdjustments?.count, 2)
+        XCTAssertEqual(history.episodes[0].netRealizedProfit, Decimal(string: "19.85"))
+        XCTAssertEqual(history.episodes[1].currentBookCost, Decimal(string: "55.10"))
+        let archive = try FAccountBookArchive(accountBook: refunded, archivedAt: now)
+        try archive.validate(now: now)
+        XCTAssertEqual(try archive.accountBook.readOnlySnapshot(capturedAt: now),
+                       try refunded.readOnlySnapshot(capturedAt: now))
+    }
+
+    func testFeeCorrectionPersistsThroughTheConfirmedLedgerWriter() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("F-Fee-Correction-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FAccountBookStore(fileURL: directory.appendingPathComponent("account.json"))
+        let writer = FConfirmedLedgerWriter(store: store)
+        let openingBook = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+                                       updatedAt: now.addingTimeInterval(-120))
+        _ = try await writer.confirmInitialLedger(openingBook, confirmation: confirmation(), now: now)
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-30),
+                                  instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                  fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                  instrumentName: "A500")
+        _ = try await writer.confirmFill(fill, instrumentName: "A500", now: now)
+        _ = try await writer.confirmFillFeeCorrection(
+            fillID: fill.id, correctedFee: Decimal(string: "0.25")!,
+            reason: "券商实际买入费用", confirmation: confirmation(), now: now)
+
+        let loaded = try await store.load(now: now)
+        let restored = try XCTUnwrap(loaded)
+        XCTAssertEqual(restored.cashBalance, Decimal(string: "899.75"))
+        XCTAssertEqual(restored.positions.first?.bookCost, Decimal(string: "100.25"))
+        XCTAssertEqual(restored.fills.first?.fee, Decimal(string: "0.10"), "writer不得覆盖原始成交")
+        XCTAssertEqual(restored.feeAdjustments?.count, 1)
+        try restored.validate(now: now)
+    }
+
+    func testFeeCorrectionThatWouldMakeCashNegativeIsRejectedAtomically() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: Decimal(string: "100.10")!),
+                                cashBalance: Decimal(string: "100.10")!,
+                                updatedAt: now.addingTimeInterval(-120))
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-30),
+                                  instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                  fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                  instrumentName: "A500")
+        book = try book.applyingUserConfirmedFill(fill, instrumentName: "A500", now: now)
+        XCTAssertEqual(book.cashBalance, .zero)
+        XCTAssertThrowsError(try book.correctingFillFee(
+            fillID: fill.id, correctedFee: Decimal(string: "0.20")!, reason: "补录费用",
+            confirmation: confirmation(), now: now)) {
+            XCTAssertEqual($0 as? FLedgerMutationError, .insufficientCash)
+        }
+        XCTAssertEqual(book.cashBalance, .zero, "失败更正不能部分改变现金")
+        XCTAssertNil(book.feeAdjustments)
+        XCTAssertEqual(book.fills.first?.fee, Decimal(string: "0.10"))
+    }
+
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {
         let source = FAccountBook(openingSnapshot: opening(cash: 100), cashBalance: 100, updatedAt: now.addingTimeInterval(-60))
         let fill = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "510300", side: .buy, units: 100,
