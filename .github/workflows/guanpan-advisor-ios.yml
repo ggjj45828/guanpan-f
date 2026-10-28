@@ -117,8 +117,8 @@ jobs:
           mkdir -p build/Package/Payload
           cp -R "$APP_PATH" build/Package/Payload/
           cd build/Package
-          ditto -c -k --sequesterRsrc --keepParent Payload ../GuanpanF-unsigned.ipa
-          unzip -t ../GuanpanF-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘Max-unsigned.ipa
+          unzip -t ../观盘Max-unsigned.ipa
 
       - name: Upload iOS build artifacts
         if: always()
@@ -132,6 +132,6 @@ jobs:
             GuanpanFApp/build-ui-tests.log
             GuanpanFApp/build/FApp-UI.xcresult
             GuanpanFApp/build/UI-Screenshots/**
-            GuanpanFApp/build/GuanpanF-unsigned.ipa
+            GuanpanFApp/build/观盘Max-unsigned.ipa
           if-no-files-found: warn
           retention-days: 14
