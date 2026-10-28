@@ -7,6 +7,7 @@ import FAdvisor
 struct FUnifiedSecurityChart: View {
     let model: FChartOverlayModel?
     let height: CGFloat
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @AppStorage("guanpan.f.chart.visibleLayers") private var visibleLayerKeysRaw = "ma5,ma10,ma20,ma60,ma250,volume,cost,brokerCost,intradayAverage,previousClose,candidateBuy,candidateSell,iopv"
     @State private var zoomScale: CGFloat = 1
     @State private var windowEndOffset = 0
@@ -16,6 +17,7 @@ struct FUnifiedSecurityChart: View {
 
     private let averagePeriods = [5, 10, 20, 60, 250]
     private let averageColors: [Color] = [.orange, .blue, .purple, .teal, .pink]
+    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     var body: some View {
         GeometryReader { proxy in
@@ -41,8 +43,14 @@ struct FUnifiedSecurityChart: View {
                                                          visibleMovingAveragePeriods: selectedAveragePeriods)
                 let averages = movingAverages(for: series)
 
-                VStack(alignment: .leading, spacing: 5) {
-                    layerControls(for: model, averages: averages, range: visibleRange)
+                let compact = height < 180
+                VStack(alignment: .leading, spacing: compact ? 3 : 9) {
+                    if compact {
+                        compactHeader(model: model, window: model.chart.window)
+                    } else {
+                        chartHeader(model: model, series: series, selectedIndex: selectedIndex)
+                        layerControls(for: model, averages: averages, range: visibleRange)
+                    }
                     Canvas { context, size in
                         draw(model: displayModel, series: series, range: visibleRange,
                              visibleTimes: visibleTimes, averages: averages,
@@ -50,12 +58,12 @@ struct FUnifiedSecurityChart: View {
                              visibleLayers: visibleLayerKeys,
                              context: &context, size: size)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .simultaneousGesture(SpatialTapGesture().onEnded { value in
-                        let local = Double(value.location.x / max(proxy.size.width, 1))
-                        let offset = min(max(Int(local * Double(visibleRange.count)), 0),
-                                         max(visibleRange.count - 1, 0))
-                        selectedTimestamp = timestamps[start + offset]
+                        selectedTimestamp = timestamps[nearestIndex(
+                            at: value.location.x, width: proxy.size.width,
+                            series: series, range: visibleRange)]
                         crosshairEnabled = true
                     })
                     // Allow the parent detail ScrollView to scroll when the user starts a
@@ -63,12 +71,9 @@ struct FUnifiedSecurityChart: View {
                     // updated simultaneously and remains constrained to the chart data.
                     .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { value in
                         if crosshairEnabled {
-                            let local = Double(value.location.x / max(proxy.size.width, 1))
-                            let index = min(max(Int((local * Double(visibleRange.count)).rounded(.down)), 0),
-                                            max(visibleRange.count - 1, 0))
-                            if visibleRange.contains(start + index) {
-                                selectedTimestamp = timestamps[start + index]
-                            }
+                            selectedTimestamp = timestamps[nearestIndex(
+                                at: value.location.x, width: proxy.size.width,
+                                series: series, range: visibleRange)]
                         } else if zoomScale > 1.01 {
                             if dragOriginOffset == nil { dragOriginOffset = windowEndOffset }
                             let shift = Int((value.translation.width / max(proxy.size.width, 1)) *
@@ -85,33 +90,23 @@ struct FUnifiedSecurityChart: View {
                     .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                         crosshairEnabled = true
                     })
-                    HStack {
-                        Text(timestampLabel(timestamps[start], window: model.chart.window))
-                        Spacer()
-                        if let selectedIndex {
-                            Text(selectionText(series: series, index: selectedIndex))
-                                .fontWeight(.semibold)
-                        }
-                        Spacer()
-                        Text(timestampLabel(timestamps[end - 1], window: model.chart.window))
-                    }
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    HStack {
-                        Text(unavailableOverlaySummary(model))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        Spacer()
-                        Button(crosshairEnabled ? "退出十字" : "十字") {
-                            crosshairEnabled.toggle()
-                            if !crosshairEnabled { selectedTimestamp = nil }
+                    if !compact {
+                        HStack {
+                            Text(unavailableOverlaySummary(model))
+                                .lineLimit(1).minimumScaleFactor(0.75)
+                            Spacer()
+                            Text(timestampLabel(timestamps[start], window: model.chart.window))
+                            Text("—").foregroundStyle(.tertiary)
+                            Text(timestampLabel(timestamps[end - 1], window: model.chart.window))
+                            Button(crosshairEnabled ? "退出十字" : "十字") {
+                                crosshairEnabled.toggle()
+                                if !crosshairEnabled { selectedTimestamp = nil }
+                            }
+                            .font(.caption2.weight(.semibold)).buttonStyle(.bordered).controlSize(.mini)
                         }
                         .font(.caption2)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
                 }
             } else {
                 Text("当前图表数据不可用；不会补造价格或曲线。")
@@ -121,7 +116,7 @@ struct FUnifiedSecurityChart: View {
         }
         .frame(height: height)
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .modifier(FChartSurfaceModifier(theme: theme))
         .accessibilityLabel("统一证券图表")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }
@@ -163,6 +158,122 @@ struct FUnifiedSecurityChart: View {
         }
     }
 
+    private func chartHeader(model: FChartOverlayModel, series: FChartSeries,
+                             selectedIndex: Int?) -> some View {
+        let quality = model.chart.quality
+        let statusColor: Color = {
+            switch quality {
+            case .complete: return .green
+            case .partial: return .orange
+            case .stale: return .red
+            case .unavailable: return .secondary
+            }
+        }()
+        let activeIndex = selectedIndex ?? max(0, series.count - 1)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(chartTitle(model.chart.window)).font(.subheadline.weight(.semibold))
+                Spacer(minLength: 4)
+                Text(qualityLabel(quality))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(statusColor.opacity(0.10), in: Capsule())
+            }
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isDaily(series) ? "收盘" : "最新")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(primaryValue(series: series, index: activeIndex))
+                        .font(.system(size: 25, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(theme.ink).lineLimit(1).minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(selectionTimestamp(series: series, index: activeIndex))
+                    if let source = model.chart.temporalMetadata?.source { Text(source) }
+                }
+                .font(.system(size: 9)).foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.middle)
+            }
+            if isDaily(series) {
+                Text(selectionText(series: series, index: activeIndex))
+                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(theme.ink.opacity(0.82))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func compactHeader(model: FChartOverlayModel, window: FChartWindow) -> some View {
+        HStack(spacing: 5) {
+            Text(chartTitle(window)).font(.system(size: 10, weight: .semibold))
+            Spacer(minLength: 4)
+            Text(qualityLabel(model.chart.quality))
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(qualityColor(model.chart.quality))
+        }
+    }
+
+    private func chartTitle(_ window: FChartWindow) -> String {
+        switch window {
+        case .liveIntraday: return "实时分时"
+        case let .historicalIntraday(tradingDate):
+            return "历史分时 · \(tradingDate.formatted(.dateTime.year().month().day()))"
+        case .daily: return "日 K"
+        }
+    }
+
+    private func qualityLabel(_ quality: FChartDataQuality) -> String {
+        switch quality {
+        case .complete: return "完整"
+        case .partial(_): return "部分"
+        case .stale(_): return "过期"
+        case .unavailable(_): return "不可用"
+        }
+    }
+
+    private func qualityColor(_ quality: FChartDataQuality) -> Color {
+        switch quality {
+        case .complete: return .green
+        case .partial(_): return .orange
+        case .stale(_): return .red
+        case .unavailable(_): return .secondary
+        }
+    }
+
+    private func nearestIndex(at locationX: CGFloat, width: CGFloat,
+                              series: FChartSeries, range: Range<Int>) -> Int {
+        guard !range.isEmpty else { return 0 }
+        let left: CGFloat = 54
+        let right: CGFloat = 8
+        let plotWidth = max(1, width - left - right)
+        let fraction = min(max((locationX - left) / plotWidth, 0), 1)
+        switch series {
+        case .daily:
+            return min(range.upperBound - 1,
+                       range.lowerBound + Int((fraction * CGFloat(range.count)).rounded(.down)))
+        case let .minute(samples):
+            let target = Double(fraction) * 252
+            return range.min(by: {
+                abs(sessionMinute(samples[$0].timestamp) - target) <
+                    abs(sessionMinute(samples[$1].timestamp) - target)
+            }) ?? range.lowerBound
+        }
+    }
+
+    private func sessionMinute(_ date: Date) -> Double {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        let minute = Double((parts.hour ?? 9) * 60 + (parts.minute ?? 30))
+        if minute <= 570 { return 0 }
+        if minute <= 690 { return minute - 570 }
+        if minute < 780 { return 120 + Double(minute - 690) / 90 * 12 }
+        if minute <= 900 { return 132 + minute - 780 }
+        return 252
+    }
+
     private func draw(model: FChartOverlayModel, series: FChartSeries, range: Range<Int>,
                       visibleTimes: Set<Date>, averages: [[Decimal?]], priceRange: ClosedRange<Decimal>?,
                       selectedIndex: Int?, visibleLayers: Set<String>,
@@ -170,47 +281,96 @@ struct FUnifiedSecurityChart: View {
         guard let priceRange, range.count > 0 else { return }
         let low = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
         let high = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
+        let leftAxis: CGFloat = 54
+        let rightInset: CGFloat = 8
+        let topInset: CGFloat = 8
+        let bottomAxis: CGFloat = 24
         let showVolume = isDaily(series) && visibleLayers.contains("volume")
-        let priceHeight = showVolume ? size.height * 0.74 : size.height
-        let volumeHeight = max(size.height - priceHeight, 0)
+        let volumeHeight: CGFloat = showVolume ? max(34, size.height * 0.19) : 0
+        let volumeTop = size.height - bottomAxis - volumeHeight
+        let priceTop = topInset
+        let priceBottom = volumeTop - (showVolume ? 8 : 0)
+        let priceHeight = max(priceBottom - priceTop, 1)
+        let plotWidth = max(size.width - leftAxis - rightInset, 1)
         let span = max(high - low, 0.000001)
         func y(_ value: Decimal) -> CGFloat {
-            priceHeight * (1 - CGFloat((NSDecimalNumber(decimal: value).doubleValue - low) / span))
+            priceTop + priceHeight * (1 - CGFloat((NSDecimalNumber(decimal: value).doubleValue - low) / span))
         }
-        for step in 0...3 {
-            let lineY = priceHeight * CGFloat(step) / 3
-            var grid = Path(); grid.move(to: CGPoint(x: 0, y: lineY)); grid.addLine(to: CGPoint(x: size.width, y: lineY))
+        func x(_ index: Int) -> CGFloat {
+            let fraction: CGFloat
+            switch series {
+            case .daily:
+                fraction = (CGFloat(index - range.lowerBound) + 0.5) / CGFloat(max(range.count, 1))
+            case let .minute(samples):
+                fraction = CGFloat(sessionMinute(samples[index].timestamp) / 252)
+            }
+            return leftAxis + min(max(fraction, 0), 1) * plotWidth
+        }
+        for step in 0...4 {
+            let fraction = Double(step) / 4
+            let lineY = priceTop + priceHeight * CGFloat(fraction)
+            var grid = Path(); grid.move(to: CGPoint(x: leftAxis, y: lineY)); grid.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
             context.stroke(grid, with: .color(.secondary.opacity(0.12)), lineWidth: 1)
+            let value = high - span * fraction
+            let label = Text(String(format: "%.3f", value)).font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+            context.draw(label, at: CGPoint(x: leftAxis - 4, y: lineY), anchor: .trailing)
         }
-        let stepX = size.width / CGFloat(max(range.count, 1))
+        var axis = Path(); axis.move(to: CGPoint(x: leftAxis, y: priceTop)); axis.addLine(to: CGPoint(x: leftAxis, y: size.height - bottomAxis))
+        context.stroke(axis, with: .color(.secondary.opacity(0.18)), lineWidth: 1)
         switch series {
         case let .minute(samples):
             var path = Path()
             for index in range {
-                let point = CGPoint(x: stepX * (CGFloat(index - range.lowerBound) + 0.5), y: y(samples[index].price))
+                let point = CGPoint(x: x(index), y: y(samples[index].price))
                 if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
             }
-            context.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+            let ticks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"), (132, "13:00"), (192, "14:00"), (252, "15:00")]
+            for (minute, label) in ticks {
+                let tickX = leftAxis + CGFloat(minute / 252) * plotWidth
+                var tick = Path(); tick.move(to: CGPoint(x: tickX, y: priceBottom)); tick.addLine(to: CGPoint(x: tickX, y: priceBottom + 3))
+                context.stroke(tick, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
+                context.draw(Text(label).font(.system(size: 8, design: .monospaced)).foregroundColor(.secondary),
+                            at: CGPoint(x: tickX, y: size.height - 8))
+            }
         case let .daily(bars):
             let volumes = range.map { NSDecimalNumber(decimal: bars[$0].volume).doubleValue }
             let maxVolume = max(volumes.max() ?? 0, 1)
             for index in range {
                 let bar = bars[index]
-                let x = stepX * (CGFloat(index - range.lowerBound) + 0.5)
+                let centerX = x(index)
+                let stepX = plotWidth / CGFloat(max(range.count, 1))
                 let rising = bar.close >= bar.open
                 let color: Color = rising ? .red : .green
-                var wick = Path(); wick.move(to: CGPoint(x: x, y: y(bar.high))); wick.addLine(to: CGPoint(x: x, y: y(bar.low)))
+                var wick = Path(); wick.move(to: CGPoint(x: centerX, y: y(bar.high))); wick.addLine(to: CGPoint(x: centerX, y: y(bar.low)))
                 context.stroke(wick, with: .color(color), lineWidth: 1)
                 let top = min(y(bar.open), y(bar.close))
-                let body = CGRect(x: x - max(stepX * 0.27, 0.6), y: top,
+                let body = CGRect(x: centerX - max(stepX * 0.27, 0.6), y: top,
                                   width: max(stepX * 0.54, 1), height: max(abs(y(bar.open) - y(bar.close)), 1))
                 context.fill(Path(body), with: .color(color.opacity(0.85)))
                 if showVolume {
                     let volume = NSDecimalNumber(decimal: bar.volume).doubleValue
-                    let volumeBar = CGRect(x: x - max(stepX * 0.3, 0.6),
-                                           y: priceHeight + volumeHeight * (1 - CGFloat(volume / maxVolume)),
-                                           width: max(stepX * 0.6, 1), height: volumeHeight * CGFloat(volume / maxVolume))
+                    let barHeight = (volumeHeight - 4) * CGFloat(volume / maxVolume)
+                    let volumeBar = CGRect(x: centerX - max(stepX * 0.3, 0.6),
+                                           y: volumeTop + 2 + volumeHeight - 4 - barHeight,
+                                           width: max(stepX * 0.6, 1), height: barHeight)
                     context.fill(Path(volumeBar), with: .color(color.opacity(0.55)))
+                }
+            }
+            if showVolume {
+                var divider = Path(); divider.move(to: CGPoint(x: leftAxis, y: volumeTop)); divider.addLine(to: CGPoint(x: size.width - rightInset, y: volumeTop))
+                context.stroke(divider, with: .color(.secondary.opacity(0.2)), lineWidth: 1)
+                context.draw(Text("VOL").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
+                            at: CGPoint(x: 3, y: volumeTop + volumeHeight / 2), anchor: .leading)
+            }
+            let tickCount = min(5, range.count)
+            if tickCount > 0 {
+                for tick in 0..<tickCount {
+                    let index = range.lowerBound + (range.count - 1) * tick / max(tickCount - 1, 1)
+                    let date = bars[index].tradingDate
+                    let label = date.formatted(.dateTime.month(.abbreviated).day())
+                    context.draw(Text(label).font(.system(size: 8)).foregroundColor(.secondary),
+                                at: CGPoint(x: x(index), y: size.height - 8))
                 }
             }
             for (seriesIndex, values) in averages.enumerated() {
@@ -218,7 +378,7 @@ struct FUnifiedSecurityChart: View {
                 var path = Path(); var started = false
                 for index in range {
                     guard let value = values[index] else { started = false; continue }
-                    let point = CGPoint(x: stepX * (CGFloat(index - range.lowerBound) + 0.5), y: y(value))
+                    let point = CGPoint(x: x(index), y: y(value))
                     if started { path.addLine(to: point) } else { path.move(to: point); started = true }
                 }
                 context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 1)
@@ -233,34 +393,65 @@ struct FUnifiedSecurityChart: View {
             var path = Path()
             let lineY = y(value)
             if overlay.kind == .candidateBuy || overlay.kind == .candidateSell {
-                path.move(to: CGPoint(x: 0, y: lineY)); path.addLine(to: CGPoint(x: size.width, y: lineY))
+                path.move(to: CGPoint(x: leftAxis, y: lineY)); path.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
                 context.stroke(path, with: .color(overlayColor(overlay.kind)), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
                 context.draw(Text(overlayTitle(overlay.kind)).font(.caption2.bold()).foregroundColor(overlayColor(overlay.kind)),
-                            at: CGPoint(x: 30, y: max(8, lineY - 8)))
+                            at: CGPoint(x: leftAxis + 30, y: max(8, lineY - 8)))
             } else {
                 let matching = overlay.points.filter { visibleTimes.contains($0.timestamp) }
                 for point in matching {
                     guard let index = series.timestamps.firstIndex(of: point.timestamp), range.contains(index) else { continue }
-                    let x = stepX * (CGFloat(index - range.lowerBound) + 0.5)
-                    path.move(to: CGPoint(x: x, y: y(point.value)))
-                    path.addLine(to: CGPoint(x: x + stepX, y: y(point.value)))
+                    let pointX = x(index)
+                    let stepX = plotWidth / CGFloat(max(range.count, 1))
+                    path.move(to: CGPoint(x: pointX, y: y(point.value)))
+                    path.addLine(to: CGPoint(x: min(pointX + stepX, size.width - rightInset), y: y(point.value)))
                 }
                 context.stroke(path, with: .color(overlayColor(overlay.kind)), style: StrokeStyle(lineWidth: 1.3, dash: [3, 2]))
             }
         }
+        if visibleLayers.contains("iopv"), let observation = model.iopv,
+           !isUnavailable(observation.quality), let value = observation.value {
+            let lineY = y(value)
+            var iopvPath = Path()
+            iopvPath.move(to: CGPoint(x: leftAxis, y: lineY))
+            iopvPath.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
+            context.stroke(iopvPath, with: .color(overlayColor(.iopv)),
+                           style: StrokeStyle(lineWidth: 1.3, dash: [2, 3]))
+            context.draw(Text("IOPV").font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(overlayColor(.iopv)),
+                         at: CGPoint(x: leftAxis + 24, y: max(priceTop + 7, lineY - 7)))
+        }
         if let selectedIndex, range.contains(selectedIndex) {
-            let x = stepX * (CGFloat(selectedIndex - range.lowerBound) + 0.5)
-            var cursor = Path(); cursor.move(to: CGPoint(x: x, y: 0)); cursor.addLine(to: CGPoint(x: x, y: size.height))
+            let cursorX = x(selectedIndex)
+            var cursor = Path(); cursor.move(to: CGPoint(x: cursorX, y: priceTop)); cursor.addLine(to: CGPoint(x: cursorX, y: size.height - bottomAxis))
             context.stroke(cursor, with: .color(.secondary.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
         }
     }
 
     private func selectionText(series: FChartSeries, index: Int) -> String {
         switch series {
-        case let .minute(samples): return "¥\(NSDecimalNumber(decimal: samples[index].price).stringValue)"
+        case .minute: return ""
         case let .daily(bars):
             let bar = bars[index]
-            return "开 \(bar.open) 高 \(bar.high) 低 \(bar.low) 收 \(bar.close) 量 \(bar.volume)"
+            return "开 \(bar.open)  高 \(bar.high)  低 \(bar.low)  收 \(bar.close)  量 \(bar.volume)"
+        }
+    }
+
+    private func primaryValue(series: FChartSeries, index: Int) -> String {
+        let value: Decimal
+        switch series {
+        case let .minute(samples): value = samples[index].price
+        case let .daily(bars): value = bars[index].close
+        }
+        return "¥\(NSDecimalNumber(decimal: value).stringValue)"
+    }
+
+    private func selectionTimestamp(series: FChartSeries, index: Int) -> String {
+        switch series {
+        case let .minute(samples):
+            return samples[index].timestamp.formatted(date: .omitted, time: .shortened)
+        case let .daily(bars):
+            return bars[index].tradingDate.formatted(.dateTime.year().month().day())
         }
     }
 
@@ -360,6 +551,33 @@ struct FUnifiedSecurityChart: View {
         }
         if model.iopv.map({ isUnavailable($0.quality) }) != false { unavailable.append("IOPV不可用") }
         return unavailable.joined(separator: " · ")
+    }
+}
+
+private struct FChartSurfaceModifier: ViewModifier {
+    let theme: FHomeTheme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: theme.surfaceTreatment == .terminal || theme.surfaceTreatment == .minimal ? 8 : 16)
+        switch theme.surfaceTreatment {
+        case .terminal, .minimal:
+            content.background(theme.background.opacity(0.97), in: shape)
+                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.55)).frame(height: 1) }
+        case .glass, .orbit:
+            content.background(.ultraThinMaterial, in: shape)
+                .overlay(shape.stroke(.white.opacity(0.32), lineWidth: 1))
+                .shadow(color: theme.accent.opacity(0.14), radius: 14, y: 7)
+        case .ink:
+            content.background(theme.background.opacity(0.86), in: shape)
+                .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 2) }
+        case .magazine:
+            content.background(theme.background.opacity(0.90), in: shape)
+                .overlay(alignment: .top) { Rectangle().fill(theme.accent.opacity(0.75)).frame(height: 1) }
+        default:
+            content.background(.regularMaterial, in: shape)
+                .overlay(shape.stroke(theme.accent.opacity(0.12), lineWidth: 1))
+        }
     }
 }
 

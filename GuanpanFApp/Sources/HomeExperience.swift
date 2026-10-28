@@ -259,6 +259,7 @@ private struct AdvisorComposer: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
     let instrumentCode: String?
+    @FocusState private var composerFocused: Bool
 
     init(model: FHomeModel, theme: FHomeTheme, instrumentCode: String? = nil) {
         self.model = model
@@ -279,6 +280,7 @@ private struct AdvisorComposer: View {
             TextField(instrumentCode.map { "例如：\($0) 现在需要操作吗？" } ??
                       "例如：今天我的持仓需要操作吗？", text: $model.question, axis: .vertical)
                 .lineLimit(2...4).textFieldStyle(.roundedBorder)
+                .focused($composerFocused)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                 ForEach(model.commonQuestions(for: instrumentCode), id: \.self) { prompt in
@@ -292,7 +294,10 @@ private struct AdvisorComposer: View {
             }
             HStack {
                 Spacer()
-                Button { model.askAdvisor(instrumentCode: instrumentCode) } label: {
+                Button {
+                    composerFocused = false
+                    model.askAdvisor(instrumentCode: instrumentCode)
+                } label: {
                     Label(model.isAskingAdvisor ? "分析中" : "发送",
                           systemImage: model.isAskingAdvisor ? "hourglass" : "arrow.up.circle.fill")
                 }.buttonStyle(.borderedProminent).tint(theme.accent)
@@ -309,6 +314,13 @@ private struct AdvisorComposer: View {
         }
         .padding(16)
         .modifier(FThemeSurfaceModifier(theme: theme, radius: 22))
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("收起键盘") { composerFocused = false }
+            }
+        }
     }
 }
 
@@ -675,7 +687,7 @@ struct HomeDestination: View {
                         model: FChartPresentationBuilder.live(snapshot, holding: holding,
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                        height: 190)
+                        height: 330)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("日 K 与均线").font(.headline)
@@ -690,7 +702,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 250)
+                                height: 315)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -727,7 +739,7 @@ struct HomeDestination: View {
                             FUnifiedSecurityChart(
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 200)
+                                height: 330)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
@@ -951,6 +963,7 @@ struct SettingsOverview: View {
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
     @State private var deepSeekKeyDraft = ""
     @State private var hasAutoCheckedNAS = false
+    @FocusState private var settingsInputFocused: Bool
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     var body: some View {
@@ -959,8 +972,10 @@ struct SettingsOverview: View {
                 SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .focused($settingsInputFocused)
                     .accessibilityIdentifier("settings.ai.deepseekKey")
                 Button("安全保存 DeepSeek Key") {
+                    settingsInputFocused = false
                     model.saveDeepSeekKey(deepSeekKeyDraft)
                     deepSeekKeyDraft = ""
                 }
@@ -972,7 +987,9 @@ struct SettingsOverview: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
+                    .focused($settingsInputFocused)
                 Button {
+                    settingsInputFocused = false
                     Task {
                         await model.configureAndTestNAS(baseAddress: nasBaseAddress)
                     }
@@ -992,8 +1009,13 @@ struct SettingsOverview: View {
                     Text(model.nasConnectionStatus)
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("NAS API 不要求单独令牌。测试只读取 /readyz，不发送持仓。局域网 http://内网IP:8788 需要连接同一 Wi‑Fi 或 VPN；手机使用 5G 远程访问时需要可达的 HTTPS 地址。8788 对可达网络开放，请限制网络入口。")
+                Text("局域网请连接同一 Wi‑Fi 或 VPN；蜂窝网络请使用可达的 HTTPS 地址。")
                     .font(.footnote).foregroundStyle(.secondary)
+                DisclosureGroup("连接方式与安全说明") {
+                    Text("连接测试只读取 /readyz，不发送持仓，也不要求单独令牌。NAS 的 8788 端口对可达网络开放，请限制网络入口。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 LabeledContent("历史数据同步", value: "未接入")
                 LabeledContent("新闻", value: "未接入")
             }
@@ -1053,7 +1075,15 @@ struct SettingsOverview: View {
         }
         .accessibilityIdentifier("settings.form")
         .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
         .tint(theme.accent)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("收起键盘") { settingsInputFocused = false }
+            }
+        }
         .task {
             guard !hasAutoCheckedNAS else { return }
             hasAutoCheckedNAS = true
