@@ -114,11 +114,18 @@ jobs:
             echo "Device build succeeded but no .app was produced" >&2
             exit 1
           fi
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP_PATH/Info.plist")"
+          test "$DISPLAY_NAME" = "观盘max"
+          test "$ICON_NAME" = "AppIcon"
+          test -s "$APP_PATH/Assets.car"
+          echo "Verified installed app label: $DISPLAY_NAME"
+          echo "Verified compiled app icon set: $ICON_NAME (Assets.car present)"
           mkdir -p build/Package/Payload
           cp -R "$APP_PATH" build/Package/Payload/
           cd build/Package
-          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘Max-unsigned.ipa
-          unzip -t ../观盘Max-unsigned.ipa
+          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
+          unzip -t ../观盘max.ipa
 
       - name: Upload iOS build artifacts
         if: always()
@@ -132,6 +139,6 @@ jobs:
             GuanpanFApp/build-ui-tests.log
             GuanpanFApp/build/FApp-UI.xcresult
             GuanpanFApp/build/UI-Screenshots/**
-            GuanpanFApp/build/观盘Max-unsigned.ipa
+            GuanpanFApp/build/观盘max.ipa
           if-no-files-found: warn
           retention-days: 14

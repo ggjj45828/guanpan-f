@@ -789,7 +789,7 @@ struct FHomeRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
-        .alert("观盘 F", isPresented: Binding(
+        .alert("观盘max", isPresented: Binding(
             get: { model.alertMessage != nil },
             set: { if !$0 { model.alertMessage = nil } }
         )) {

@@ -45,7 +45,8 @@ enum FNASReadinessClient {
 
     static func check(baseAddress: String) async throws -> String {
         guard let url = validateAddress(baseAddress) else { throw FNASConnectionError.invalidAddress }
-        var request = URLRequest(url: url, timeoutInterval: 8)
+        // Allow slower public tunnel hops more time than a typical LAN request.
+        var request = URLRequest(url: url, timeoutInterval: 20)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -67,10 +68,17 @@ enum FNASReadinessClient {
         switch urlError.code {
         case .cannotFindHost, .dnsLookupFailed:
             return "找不到 NAS 主机。请核对地址，并确认 iPhone 与 NAS 在同一局域网或已连接 VPN。"
-        case .cannotConnectToHost, .timedOut, .networkConnectionLost:
-            return "无法连接 NAS。请核对地址、8788 端口、容器状态及网络权限；iPhone 局域网访问请在设置 → 隐私与安全性 → 本地网络中允许观盘 F。远程连接请使用可达的 HTTPS 地址。"
+        case .cannotConnectToHost:
+            return "无法建立到 NAS 的连接。请核对穿透域名和 8788 端口映射；如果是局域网地址，请确认观盘 F 已获本地网络权限。"
+        case .timedOut:
+            return "连接 NAS 超时（等待 20 秒仍未收到响应）。请检查穿透链路或 NAS 容器响应。"
+        case .networkConnectionLost:
+            return "连接 NAS 时网络中断。请检查手机当前网络和穿透链路后重试。"
         case .appTransportSecurityRequiresSecureConnection:
             return "iOS 阻止了不安全的远程 HTTP 连接。远程 NAS 请配置 HTTPS，或通过可信 VPN 连接。"
+        case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+             .serverCertificateHasBadDate, .clientCertificateRejected:
+            return "NAS 的 HTTPS 证书校验失败。请检查穿透域名与证书是否匹配、有效并受 iOS 信任。"
         default:
             return "NAS 网络请求失败：\(urlError.localizedDescription)"
         }
