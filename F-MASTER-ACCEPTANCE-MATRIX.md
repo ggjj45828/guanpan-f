@@ -1,5 +1,17 @@
 # F Master Acceptance Matrix
 
+## 2026-10-28 最新 Apple CI 证据（run 40646378647）
+
+| 验收项 | 实际结果 | 当前处置 |
+|---|---|---|
+| FCore XCTest | 139 defined / 139 executed / 139 passed / 0 failed | 当前CI提交`476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`通过 |
+| 工程生成与App构建 | XcodeGen成功；iOS Device Build成功；iOS Simulator Build成功 | 当前CI提交通过 |
+| App UI XCTest | 3 defined / 3 executed / 2 passed / 1 failed | `testFivePrimaryDestinationsAreDistinctAndDiscoverable`在`PrimaryNavigationUITests.swift:53`找不到首屏不可访问树中的DeepSeek SecureField；产品将在线AI设置前移到主题Gallery之前，原断言保留，修正待新CI验证 |
+| Simulator截图导出 | CI执行成功，导出43项UI附件 | 自动截图已导出；没有人工视觉/手势验收证据 |
+| 未签名IPA | 步骤跳过 | UI Test步骤失败后未打包 |
+
+本轮工作树Swift修改仅为`SettingsOverview`设置段排序，未Apple编译；fetch因本机`getaddrinfo() thread failed to start`失败，未能核实远端实时状态或触发新CI。旧run的139/139不能继承给此工作树改动。
+
 ## 2026-10-28 远端同步补记
 
 - GitHub Desktop已对真正的F工作目录Fetch后普通Push；远端`main`现与`0fbf76d2ae3aed4cb5f32cbedbf6fe23180a446d`一致。推送只包含已提交历史，不包含当前两份未提交文档改动或受保护临时目录。
@@ -10,6 +22,8 @@
 | 验收项 | 实际执行证据 | 结果 | 当前处理 |
 |---|---|---|---|
 | 卖出手续费事后更正后已实现盈亏，basis保持不变 | Actions run `40644859601`：FCore 139项实际执行，138通过/1失败；唯一失败是将`48.00 - 0.35 - 40.04`期望为7.51 | 当前提交未通过；App/Simulator/UI步骤未执行 | 计算与Ledger模型一致应为7.61；测试期望已修正，等待新HEAD Apple CI实际执行 |
+
+修正提交`476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`已普通推送并与远端`main`确认一致；其Apple CI仍待实际检查结果。
 
 ## 当前主题/布局实现状态（2026-10-28）
 

@@ -921,16 +921,6 @@ struct SettingsOverview: View {
 
     var body: some View {
         Form {
-            Section("主题") {
-                ForEach(FHomeTheme.allCases) { item in
-                    Button { themeRaw = item.rawValue } label: {
-                        FThemeGalleryRow(theme: item, selected: theme == item)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
             Section("在线 AI") {
                 SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
                     .textInputAutocapitalization(.never)
@@ -942,6 +932,16 @@ struct SettingsOverview: View {
                 }
                 .accessibilityIdentifier("settings.ai.saveKey")
                 LabeledContent("状态", value: model.aiKeyStatus)
+            }
+            Section("主题") {
+                ForEach(FHomeTheme.allCases) { item in
+                    Button { themeRaw = item.rawValue } label: {
+                        FThemeGalleryRow(theme: item, selected: theme == item)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("NAS 连接") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
