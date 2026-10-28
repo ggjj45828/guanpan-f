@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 24886)
+Total output lines: 1918
+
 import SwiftUI
 import FCore
 import FAdvisor
@@ -34,13 +37,11 @@ struct HomeLayout: View {
     }
 
     private var editorial: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("把每次决定，放回你的长期计划里。")
-                .font(.system(size: 27, weight: .bold, design: .serif))
-            role(.advisorGuidance)
-            role(.portfolio)
-            role(.marketObservation)
-            role(.crossMarketPulse)
+        VStack(alignment: .leading, spacing: 18) {
+            HomeMasthead(model: model, theme: theme, eyebrow: "观盘手记 · 今日组合")
+            HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
+            HomePortfolioLead(model: model, theme: theme, treatment: .editorial)
+            HomeMarketResearchStrip(model: model, theme: theme)
         }
     }
 
@@ -56,23 +57,17 @@ struct HomeLayout: View {
     }
 
     private var dashboard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("组合现金").font(.caption).foregroundStyle(.secondary)
-                    Text(model.cashText).font(.system(size: 30, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                }
-                Spacer()
-                Text("真实账本").font(.caption.weight(.semibold))
-                    .padding(9).overlay(Capsule().stroke(theme.accent, lineWidth: 1))
-            }
-            role(.portfolio)
-            HStack(spacing: 10) {
-                role(.marketObservation)
-                role(.crossMarketPulse)
-            }
-            role(.advisorGuidance)
+        VStack(alignment: .leading, spacing: 0) {
+            HomeMasthead(model: model, theme: theme, eyebrow: "观盘max / LIVE PORTFOLIO")
+                .padding(.bottom, 14)
+            HomePortfolioLead(model: model, theme: theme, treatment: .terminal)
+                .padding(.bottom, 12)
+            Divider().overlay(theme.accent.opacity(0.5))
+            HomeMarketResearchStrip(model: model, theme: theme)
+                .padding(.vertical, 12)
+            Divider().overlay(theme.accent.opacity(0.5))
+            HomeAdvisorLead(model: model, theme: theme, treatment: .terminal)
+                .padding(.top, 12)
         }
     }
 
@@ -107,20 +102,15 @@ struct HomeLayout: View {
     }
 
     private var inkEditorial: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Text("观盘手记 · 今日主笔").font(.caption.weight(.semibold)).tracking(1.4)
-            Text("先看风险，\n再做决定。")
+        VStack(alignment: .leading, spacing: 24) {
+            HomeMasthead(model: model, theme: theme, eyebrow: "编辑部 · 观盘手记")
+            Text("先看组合，\n再做决定。")
                 .font(.system(size: 38, weight: .regular, design: .serif))
+                .fixedSize(horizontal: false, vertical: true)
             Rectangle().fill(theme.accent).frame(width: 44, height: 3)
-            role(.advisorGuidance)
-            HStack(alignment: .firstTextBaseline) {
-                Text("资产与现金").font(.title3.weight(.semibold))
-                Spacer()
-                Text("真实账本").font(.caption).foregroundStyle(.secondary)
-            }
-            role(.portfolio)
-            role(.marketObservation)
-            role(.crossMarketPulse)
+            HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
+            HomePortfolioLead(model: model, theme: theme, treatment: .editorial)
+            HomeMarketResearchStrip(model: model, theme: theme)
         }
     }
 
@@ -144,18 +134,15 @@ struct HomeLayout: View {
     }
 
     private var fluidGlass: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("你的投资空间").font(.system(size: 30, weight: .semibold, design: .rounded))
-            role(.advisorGuidance)
+        VStack(alignment: .leading, spacing: 16) {
+            HomeMasthead(model: model, theme: theme, eyebrow: "你的投资空间")
+            HomeAdvisorLead(model: model, theme: theme, treatment: .glass)
             HStack(alignment: .top, spacing: 12) {
-                role(.portfolio).frame(maxWidth: .infinity)
-                VStack(spacing: 12) {
-                    role(.marketObservation)
-                    role(.crossMarketPulse)
-                }.frame(maxWidth: .infinity)
+                HomePortfolioLead(model: model, theme: theme, treatment: .glass)
+                    .frame(maxWidth: .infinity)
+                HomeMarketResearchStrip(model: model, theme: theme, compact: true)
+                    .frame(maxWidth: .infinity)
             }
-            Text("玻璃仅用于外围层次，行情与风险数字保持高对比。")
-                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -255,889 +242,271 @@ struct HomeLayout: View {
 
 }
 
-private struct AdvisorComposer: View {
+private enum HomeLeadTreatment: Equatable {
+    case editorial, terminal, glass
+}
+
+private struct HomeMasthead: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
-    let instrumentCode: String?
-    @FocusState private var composerFocused: Bool
+    let eyebrow: String
 
-    init(model: FHomeModel, theme: FHomeTheme, instrumentCode: String? = nil) {
-        self.model = model
-        self.theme = theme
-        self.instrumentCode = instrumentCode
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(eyebrow.uppercased())
+                    .font(.caption.weight(.semibold)).tracking(1.1)
+                    .foregroundStyle(theme.accent)
+                Spacer(minLength: 8)
+                Text(Date.now.formatted(.dateTime.month(.abbreviated).day().weekday(.wide)))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            HStack(spacing: 7) {
+                Circle().fill(model.ledgerState == .available ? Color.green : Color.orange)
+                    .frame(width: 7, height: 7)
+                Text(model.ledgerState == .available ? "本机真实账本" : model.ledgerStatus)
+                    .font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                Text("只读快照")
+                    .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct HomeAdvisorLead: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+    let treatment: HomeLeadTreatment
+
+    private var portfolioResult: FAdvisorVerticalSliceResult? {
+        guard let result = model.advisorResult, result.scope == .portfolio else { return nil }
+        return result
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "sparkles").foregroundStyle(theme.accent)
-                Text(instrumentCode.map { "证券分析 · \($0)" } ?? "组合顾问 · 可指定证券代码")
-                    .font(.headline)
+                Text("AI 今日指导").font(.headline)
                 Spacer()
-                Text(model.portfolioContextLabel)
-                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(portfolioResult?.isReviewable == true ? "已完成组合分析" : "组合级")
+                    .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
             }
-            TextField(instrumentCode.map { "例如：\($0) 现在需要操作吗？" } ??
-                      "例如：今天我的持仓需要操作吗？", text: $model.question, axis: .vertical)
-                .lineLimit(2...4).textFieldStyle(.roundedBorder)
-                .focused($composerFocused)
-            ScrollView(.horizontal, showsIndicators: false) {
+
+            if let result = portfolioResult {
+                Text(result.narrative.conclusion)
+                    .font(.system(size: 23, weight: .semibold, design: treatment == .terminal ? .monospaced : .serif))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("home.advisor.portfolio-conclusion")
+                Text(result.narrative.basis)
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                ForEach(model.commonQuestions(for: instrumentCode), id: \.self) { prompt in
-                        Button(prompt) { model.question = prompt }
-                            .font(.caption)
-                            .buttonStyle(.bordered)
-                            .tint(theme.accent)
-                            .fixedSize(horizontal: true, vertical: false)
+                    if result.isReviewable {
+                        Label(result.candidate.action.displayName,
+                              systemImage: result.candidate.action == .wait || result.candidate.action == .hold
+                                ? "pause.circle" : "checkmark.shield")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.accent)
+                    } else {
+                        Label("Guard 阻止候选", systemImage: "exclamationmark.shield")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.manifest.tokens.warning)
+                    }
+                    if let firstRisk = result.narrative.risks.first {
+                        Text(firstRisk).font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-            }
-            HStack {
-                Spacer()
-                Button {
-                    composerFocused = false
-                    model.askAdvisor(instrumentCode: instrumentCode)
-                } label: {
-                    Label(model.isAskingAdvisor ? "分析中" : "发送",
-                          systemImage: model.isAskingAdvisor ? "hourglass" : "arrow.up.circle.fill")
-                }.buttonStyle(.borderedProminent).tint(theme.accent)
-                    .disabled(model.isAskingAdvisor)
-            }
-            Text(model.advisorStatus).font(.caption).foregroundStyle(.secondary)
-            Text("组合问题会纳入全部真实持仓；证券详情入口只分析目标证券。账本、行情和合格 NAS 证据只读传入，Candidate Plan 不会改写资产。")
-                .font(.caption2).foregroundStyle(.secondary)
-            if let result = model.advisorResult {
-                FAdvisorResultCard(result: result, accent: theme.accent) {
-                    model.beginLedgerConfirmation(for: result)
+                if let invalidation = result.narrative.invalidationConditions.first {
+                    Text("失效条件 · \(invalidation)")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
-            }
-        }
-        .padding(16)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: 22))
-        .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("收起键盘") { composerFocused = false }
-            }
-        }
-    }
-}
-
-private struct PortfolioCard: View {
-    @ObservedObject var model: FHomeModel
-    var theme: FHomeTheme = .editorial
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("真实组合").font(.headline)
-            LabeledContent("现金", value: model.cashText)
-            LabeledContent("持仓", value: "\(model.holdings.count) 项")
-            LabeledContent("今日证券盈亏", value: "不可用 · 缺可靠前收与日初持仓口径")
-            if model.ledgerState == .available && model.holdings.isEmpty {
-                Text("账本已读取，当前没有真实持仓").font(.subheadline).foregroundStyle(.secondary)
-            } else if model.ledgerState != .available {
-                Text("持仓状态未确认 · \(model.ledgerStatus)")
+            } else if let result = model.advisorResult {
+                Text("最近分析针对 \(result.securityCode)，不是组合判断。")
+                    .font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                Text("首页不会把单只证券结论当成全组合建议。")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else {
-                ForEach(model.holdings) { item in
-                    NavigationLink(value: FHomeRoute.instrument(item.instrumentCode)) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(item.name).font(.subheadline.weight(.medium))
-                                Text(item.instrumentCode).font(.caption).foregroundStyle(.secondary)
-                                holdingMark(item)
-                            }
-                            Spacer()
-                            Text("\(item.units) 份").monospacedDigit()
-                        }
-                        .padding(.vertical, 4)
-                    }.buttonStyle(.plain)
+                Text("先读完整持仓，再给今天的判断。")
+                    .font(.system(size: 23, weight: .semibold, design: treatment == .terminal ? .monospaced : .serif))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(model.advisorStatus == "尚未开始分析"
+                     ? "组合判断尚未生成。生成前不会用单只证券替代整个组合。"
+                     : model.advisorStatus)
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    model.question = "今天我的持仓需要操作吗？"
+                    model.askAdvisor()
+                } label: {
+                    HStack(spacing: 7) {
+                        if model.isAskingAdvisor { ProgressView().tint(.white) }
+                        Text(model.isAskingAdvisor ? "正在分析真实组合" : "分析我的真实组合")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 14)
+                    .foregroundStyle(.white)
+                    .background(theme.accent, in: Capsule())
                 }
+                .disabled(model.isAskingAdvisor || model.ledgerState != .available)
+                .accessibilityIdentifier("home.advisor.analyze-portfolio")
+
+                NavigationLink(value: FHomeRoute.advisor) {
+                    Label("查看证据", systemImage: "arrow.up.right")
+                        .font(.subheadline.weight(.medium))
+                        .frame(minHeight: 44).padding(.horizontal, 8)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(16)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: 20))
-    }
-
-    @ViewBuilder
-    private func holdingMark(_ holding: FHomeHolding) -> some View {
-        let now = Date()
-        if let snapshot = model.marketDataByCode[holding.instrumentCode],
-           let price = snapshot.latestPrice,
-           snapshot.quoteTimestamp <= now,
-           now.timeIntervalSince(snapshot.quoteTimestamp) <= 120,
-           let unrealized = try? FSecurityPnLCalculator.episodeUnrealizedPnL(
-                units: holding.units, bookCost: holding.bookCost, currentPrice: price
-           ) {
-            Text("现价 ¥\(NSDecimalNumber(decimal: price).stringValue) · 本轮持仓浮盈亏 ¥\(NSDecimalNumber(decimal: unrealized).stringValue)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(unrealized >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        } else if model.marketDataByCode[holding.instrumentCode] != nil {
-            Text("行情已过时或无有效价格 · 暂不计算持仓浮盈亏")
-                .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
-                .fixedSize(horizontal: false, vertical: true)
-        } else {
-            Text("等待真实行情 · 持仓浮盈亏暂不可用")
-                .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
-                .fixedSize(horizontal: false, vertical: true)
+        .padding(treatment == .terminal ? 12 : 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: treatment == .glass ? 28 : 20))
+        .overlay(alignment: .leading) {
+            if treatment == .editorial {
+                Rectangle().fill(theme.accent).frame(width: 3).padding(.vertical, 18)
+            }
         }
+        .accessibilityIdentifier("home.advisor.lead")
     }
 }
 
-private struct RouteCard: View {
-    let route: FHomeRoute
-    let title: String
-    let detail: String
-    let icon: String
+private struct HomePortfolioLead: View {
+    @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
-    private var accent: Color { theme.accent }
+    let treatment: HomeLeadTreatment
+
+    private var freshQuoteCount: Int {
+        let now = Date()
+        return model.holdings.filter { holding in
+            guard let quote = model.marketDataByCode[holding.instrumentCode] else { return false }
+            return quote.latestPrice != nil && quote.quoteTimestamp <= now &&
+                now.timeIntervalSince(quote.quoteTimestamp) <= 120
+        }.count
+    }
+
     var body: some View {
-        NavigationLink(value: route) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.title3).foregroundStyle(accent)
-                    .frame(width: 38, height: 38)
-                    .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline)
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("我的真实资产").font(.headline)
+                    Text(model.ledgerState == .available ? "来自本机 Ledger" : model.ledgerStatus)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
-        }.buttonStyle(.plain)
-    }
-}
-
-private struct FThemeSurfaceModifier: ViewModifier {
-    let theme: FHomeTheme
-    let radius: CGFloat
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        switch theme.surfaceTreatment {
-        case .terminal, .minimal:
-            content.background(theme.manifest.tokens.background.opacity(0.96))
-                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.35)).frame(height: 0.5) }
-        case .glass, .orbit:
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius + 8))
-                .overlay(RoundedRectangle(cornerRadius: radius + 8).stroke(.white.opacity(0.28), lineWidth: 1))
-                .shadow(color: theme.accent.opacity(0.12), radius: 16, y: 8)
-        case .ink:
-            content.background(theme.manifest.tokens.background.opacity(0.78))
-                .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 2) }
-        case .magazine:
-            content.background(theme.manifest.tokens.background.opacity(0.9))
-                .overlay(alignment: .top) { Rectangle().fill(theme.accent.opacity(0.7)).frame(height: 1) }
-        case .bento, .adaptive:
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius + 4))
-                .overlay(RoundedRectangle(cornerRadius: radius + 4).stroke(theme.accent.opacity(0.18), lineWidth: 1))
-        case .editorial, .card:
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
-        }
-    }
-}
-
-private struct FHomeRoleRenderer: View {
-    let role: FHomeCardRole
-    @ObservedObject var model: FHomeModel
-    let theme: FHomeTheme
-
-    var body: some View {
-        Group {
-            if role == .portfolio {
-                PortfolioCard(model: model, theme: theme)
-            } else if role == .advisorGuidance {
-                VStack(spacing: 8) {
-                    RouteCard(route: role.route, title: role.title, detail: role.detail,
-                              icon: role.symbol, theme: theme)
-                    AdvisorComposer(model: model, theme: theme)
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    Image(systemName: "arrow.up.right")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-            } else {
-                RouteCard(route: role.route, title: role.title, detail: role.detail,
-                          icon: role.symbol, theme: theme)
+                .buttonStyle(.plain)
+                .accessibilityLabel("查看真实资产明细")
             }
-        }
-        .accessibilityIdentifier("home.role.\(role.rawValue)")
-    }
-}
 
-struct HomeDestination: View {
-    let route: FHomeRoute
-    @ObservedObject var model: FHomeModel
-    @State private var showingBrokerCostEditor = false
-    @State private var brokerCostText = ""
-    @State private var brokerCostNote = ""
-    var body: some View {
-        Group {
-            switch route {
-            case .market:
-                MarketOverview(model: model)
-            case .crossMarket:
-                CrossMarketOverview()
-            case .advisor:
-                AdvisorOverview(model: model)
-            case .portfolio:
-                RealAssetsOverview(model: model)
-            case let .instrument(code):
-                instrumentDestination(code)
+            HStack(alignment: .top, spacing: 0) {
+                metric("可用现金", value: model.cashText)
+                Rectangle().fill(theme.ink.opacity(0.12)).frame(width: 1, height: 42)
+                    .padding(.horizontal, 14)
+                metric("当前持仓", value: model.ledgerState == .available ? "\(model.holdings.count) 只" : "未确认")
             }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingBrokerCostEditor) {
-            NavigationStack {
-                Form {
-                    Section("券商 / 同花顺显示口径") {
-                        TextField("每份成本", text: $brokerCostText)
-                            .keyboardType(.decimalPad)
-                            .accessibilityIdentifier("ledger.brokerCost.value")
-                        TextField("录入或修正原因", text: $brokerCostNote, axis: .vertical)
-                            .accessibilityIdentifier("ledger.brokerCost.note")
-                    }
-                    Section {
-                        Text("此值只记录你实际看到的券商单位成本，不会改写成交、现金或本轮真实经济成本。每次做T或券商口径变化后，可再次核对修正。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                .navigationTitle("券商展示成本")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { showingBrokerCostEditor = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") {
-                            guard case let .instrument(code) = route else { return }
-                            Task {
-                                await model.confirmBrokerDisplayCost(instrumentCode: code,
-                                                                     costText: brokerCostText,
-                                                                     note: brokerCostNote)
-                                showingBrokerCostEditor = false
-                            }
-                        }
-                        .accessibilityIdentifier("ledger.brokerCost.save")
-                    }
-                }
-            }
-        }
-    }
 
-    private func unavailable(_ title: String, _ description: String) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(title).font(.largeTitle.bold())
-            Text(description).foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .navigationTitle(title)
-    }
-
-    private func instrumentDestination(_ code: String) -> some View {
-        let holding = model.holdings.first { $0.instrumentCode == code }
-        let history = model.instrumentHistories.first { $0.instrumentCode == code }
-        let instrumentName = holding?.name ?? history?.instrumentName ?? code
-        let quoteSnapshot = model.marketDataByCode[code]
-        let quoteNow = Date()
-        let freshPrice: Decimal? = {
-            guard let quoteSnapshot, quoteSnapshot.quoteTimestamp <= quoteNow,
-                  quoteNow.timeIntervalSince(quoteSnapshot.quoteTimestamp) <= 120 else { return nil }
-            return quoteSnapshot.latestPrice
-        }()
-        let dailySummary = model.latestLedgerSnapshot?.dailyTradeSummaries.first { $0.securityCode == code }
-        let dailyTradingPnL: String = {
-            guard model.latestLedgerSnapshot?.dailyTradeSummaryDate != nil else {
-                return "不可用 · 历史账本无当日摘要"
-            }
-            return dailySummary?.dailyRealizedTradingPnL.description ?? "0 · 今日无确认成交"
-        }()
-        let dailyTDisplay: String = {
-            guard model.latestLedgerSnapshot?.dailyTradeSummaryDate != nil else {
-                return "不可用 · 历史账本无当日摘要"
-            }
-            guard let dailySummary else { return "0 · 今日无确认成交" }
-            return dailySummary.tContribution?.description ?? "不可精确归类 · 存在未标记/未配对成交"
-        }()
-        let lifetimeTDisplay = history?.cumulativeTContribution?.description ??
-            "不可精确归类 · 存在历史未标记/未配对成交"
-        let activeEpisode = history?.episodes.last(where: \.isActive)
-        let recordedClosedEpisodesRealized = history?.episodes
-            .filter { $0.closedAt != nil }
-            .reduce(Decimal.zero) { $0 + $1.netRealizedProfit } ?? .zero
-        let closedEpisodesRealized: String = history?.lifetimeHistoryIsComplete == true
-            ? recordedClosedEpisodesRealized.description
-            : "不可完整统计 · 导入前流水缺失"
-        let episodeUnrealized: Decimal? = if let holding, let freshPrice {
-            Decimal(holding.units) * freshPrice - holding.bookCost
-        } else { nil }
-        let episodePnL: Decimal? = if let activeEpisode, let episodeUnrealized {
-            activeEpisode.netRealizedProfit + episodeUnrealized
-        } else { nil }
-        let lifetimePnL: Decimal? = if let history, history.lifetimeHistoryIsComplete,
-                              history.activeUnits == 0 {
-            history.lifetimeRealizedProfit
-        } else if let history, history.lifetimeHistoryIsComplete, let episodeUnrealized {
-            history.lifetimeRealizedProfit + episodeUnrealized
-        } else { nil }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(instrumentName).font(.largeTitle.bold())
-                Text(code).font(.headline.monospaced())
-                if let holding {
-                    Group {
-                        LabeledContent("真实持仓", value: "\(holding.units) 份")
-                        LabeledContent("本轮真实成本/份", value: (holding.bookCost / Decimal(holding.units)).description)
-                        LabeledContent("券商展示成本/份", value: holding.brokerDisplayCostPerUnit?.description ?? "未录入")
-                        if let updatedAt = holding.brokerDisplayCostUpdatedAt {
-                            LabeledContent("券商成本更新时间", value: updatedAt.formatted(date: .numeric, time: .shortened))
-                        }
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    Button(holding.brokerDisplayCostPerUnit == nil ? "录入券商展示成本" : "修正券商展示成本") {
-                        brokerCostText = holding.brokerDisplayCostPerUnit.map {
-                            NSDecimalNumber(decimal: $0).stringValue
-                        } ?? ""
-                        brokerCostNote = ""
-                        showingBrokerCostEditor = true
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("ledger.brokerCost.edit")
-                } else if let history {
-                    Group {
-                        LabeledContent("持仓状态", value: "已清仓")
-                        LabeledContent("持仓周期", value: "\(history.episodes.count) 轮")
-                        LabeledContent(history.lifetimeHistoryIsComplete ? "历史累计已实现盈亏" : "F账本记录内已实现盈亏",
-                                       value: history.lifetimeRealizedProfit.description)
-                        if !history.lifetimeHistoryIsComplete {
-                            Text("导入前成交历史未录入；此数不代表证券完整历史累计。")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                } else {
-                    Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("盈亏口径").font(.headline)
-                    LabeledContent("今日证券总盈亏", value: "不可用 · 缺可靠前收与今日开盘持仓标记")
-                    LabeledContent("今日交易已实现盈亏", value: dailyTradingPnL)
-                    LabeledContent("今日做T贡献", value: dailyTDisplay)
-                    LabeledContent("历史做T累计贡献", value: lifetimeTDisplay)
-                    LabeledContent("当前Episode已实现盈亏", value: activeEpisode.map {
-                        $0.historyIsComplete ? $0.netRealizedProfit.description : "不可用 · 导入前本轮成交流水不完整"
-                    } ?? "无Active Episode")
-                    LabeledContent("当前Episode未实现盈亏", value: episodeUnrealized?.description ?? (holding == nil ? "无当前持仓" : "不可用 · 行情缺失或已过期"))
-                    LabeledContent("当前Episode盈亏", value: episodePnL?.description ?? (activeEpisode == nil ? "无Active Episode" : "不可用 · 行情缺失或已过期"))
-                    LabeledContent("历史Closed Episodes已实现", value: closedEpisodesRealized)
-                    LabeledContent("证券累计总盈亏", value: lifetimePnL?.description ??
-                        (history?.lifetimeHistoryIsComplete == false
-                            ? "不可用 · 导入前历史流水未录入"
-                            : "未实现部分不可用 · 行情缺失或已过期"))
-                    Text("今日证券总盈亏含全天市值变化；今日已实现仅统计卖出成交。做T需有明确成交标记，不能用普通卖出代替。")
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundStyle(theme.accent).frame(width: 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("今日盈亏")
+                        .font(.subheadline.weight(.medium))
+                    Text("暂不可用 · 缺少可靠的日初持仓与前收口径")
                         .font(.caption).foregroundStyle(.secondary)
-                }
-                .padding(14)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                if let history {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("持仓周期历史").font(.headline)
-                        ForEach(history.episodes) { episode in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("第\(episode.episodeNumber)轮 · 建仓 \(episode.openedAt.formatted(date: .numeric, time: .omitted))")
-                                    .font(.subheadline.weight(.medium))
-                                Text(episode.closedAt.map { "清仓 \($0.formatted(date: .numeric, time: .omitted))" } ?? "当前持仓周期")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                Text("本轮已实现盈亏 \(episode.netRealizedProfit.description)")
-                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 5)
-                        }
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                }
-                let snapshot = quoteSnapshot
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "暂无有效行情")
-                            .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
-                            .minimumScaleFactor(0.75)
-                            .lineLimit(1)
-                        Button {
-                            Task { await model.refreshMarketData(for: [code]) }
-                        } label: {
-                            if model.refreshingMarketCodes.contains(code) {
-                                Label("刷新中", systemImage: "hourglass")
-                            } else {
-                                Label("刷新实时分时", systemImage: "arrow.clockwise")
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .font(.subheadline)
-                        .disabled(model.refreshingMarketCodes.contains(code))
-                        .accessibilityIdentifier("market.refresh.\(code)")
-                    }
-                    FUnifiedSecurityChart(
-                        model: FChartPresentationBuilder.live(snapshot, holding: holding,
-                                                              candidate: model.advisorResult?.candidate,
-                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                        height: 330)
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("日 K 与均线").font(.headline)
-                            Spacer()
-                            Button {
-                                Task { await model.refreshDailyKline(for: code) }
-                            } label: { Label("刷新日 K", systemImage: "arrow.clockwise") }
-                                .buttonStyle(.bordered).controlSize(.small)
-                        }
-                        if let daily = model.dailyKlineByCode[code] {
-                            FUnifiedSecurityChart(
-                                model: FChartPresentationBuilder.daily(daily, holding: holding,
-                                                                       candidate: model.advisorResult?.candidate,
-                                                                       ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 315)
-                        } else {
-                            Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
-                                .font(.caption).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, minHeight: 64)
-                        }
-                        Text(model.dailyKlineStateByCode[code] ?? "数据源：腾讯日 K · 未复权；等待请求")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    Text(model.marketRefreshStateByCode[code] ?? "尚未取得实时行情")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(snapshot.map { "\($0.source) · 行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard))" }
-                         ?? "无数据时明确显示不可用，不使用占位或模拟价格。")
-                        .font(.caption2).foregroundStyle(.secondary)
-                    if let snapshot {
-                        Text(Self.quoteFreshnessText(snapshot, now: Date()))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("NAS 历史分时").font(.headline)
-                        DatePicker("历史交易日", selection: $model.selectedHistoryDate,
-                                   in: ...Date(), displayedComponents: .date)
-                            .datePickerStyle(.compact)
-                        Button {
-                            Task { await model.loadArchivedIntraday(for: code) }
-                        } label: {
-                            Label("查询所选交易日", systemImage: "calendar.badge.clock")
-                        }
-                        .buttonStyle(.bordered)
-                        Text(model.archiveRefreshStateByCode[code] ?? "选择日期后，从 NAS 分钟归档读取；缺失或部分覆盖会如实标注。")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let archived = model.archivedIntradayByCode[code], !archived.samples.isEmpty {
-                            FUnifiedSecurityChart(
-                                model: FChartPresentationBuilder.historical(archived, holding: holding,
-                                                                             ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 330)
-                            Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
-                                .font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                AdvisorComposer(model: model, theme: .editorial, instrumentCode: code)
-            }
-            .padding(18)
-        }
-        .accessibilityIdentifier("market.security-detail.scroll")
-        .navigationTitle(code)
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            model.selectInstrument(code)
-            async let quote: Void = model.refreshMarketData(for: [code])
-            async let daily: Void = model.refreshDailyKline(for: code)
-            _ = await (quote, daily)
-        }
-        .onDisappear {
-            if model.selectedInstrumentCode == code { model.selectInstrument(nil) }
-        }
-    }
-
-    private static func quoteFreshnessText(_ snapshot: FCurrentIntradaySnapshot, now: Date) -> String {
-        let age = max(0, now.timeIntervalSince(snapshot.quoteTimestamp))
-        switch FMainlandTradingCalendar.status(at: now) {
-        case .continuous:
-            return age <= 300 ? "行情新鲜 · \(Int(age)) 秒前" : "行情已滞后 · \(Int(age / 60)) 分钟前"
-        case .lunchBreak: return "午间休市 · 最后分钟 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
-        case .preOpen: return "开盘前 · 保留上次有效行情"
-        case .closed: return "已收盘或休市 · 最后分钟 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
-        case .unknown: return "交易日历未覆盖当前年份 · 时间状态待核验"
-        }
-    }
-}
-
-struct AdvisorOverview: View {
-    @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("AI 私人投资顾问")
-                    .font(.largeTitle.bold())
-                Text("未指定持仓证券的提问按真实组合分析；明确指定证券代码或从证券详情进入时按证券级分析。")
-                    .foregroundStyle(.secondary)
-                Text("发送后会将只读账本快照、行情和合格 NAS 研究发送至设置中配置的 DeepSeek。")
-                    .font(.footnote).foregroundStyle(.secondary)
-                AdvisorComposer(model: model, theme: theme)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("本次可用上下文").font(.headline)
-                    LabeledContent("真实账本", value: model.ledgerStatus)
-                    LabeledContent("持仓行情", value: model.holdings.isEmpty ? "暂无证券行情请求" : "按持仓证券逐项获取")
-                    LabeledContent("NAS 历史研究", value: model.nasResearchStatus)
-                    LabeledContent("新闻", value: "新闻源尚未接入")
-                    HStack {
-                        Text("在线 AI")
-                        Spacer()
-                        Text(model.aiKeyStatus).foregroundStyle(.secondary)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("advisor.ai-key-status")
-                }
-                .font(.subheadline)
-                .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-                Text("发送时重新读取本机真实账本，获取标的行情与 NAS 研究，再构建 DecisionContext 并运行 Risk Guard / AI Guard。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            .padding(18)
-        }
-        .navigationTitle("AI 私人投资顾问")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct CrossMarketOverview: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "globe.asia.australia")
-                .font(.largeTitle).foregroundStyle(.secondary)
-            Text("暂无合格跨市场证据").font(.title2.bold())
-            Text("此页面只呈现 NAS 跨市场研究结果。样本、时区或数据质量未达到门槛时，不会把行情观察伪装成研究结论。")
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .navigationTitle("跨市场脉搏")
-    }
-}
-
-struct RealAssetsOverview: View {
-    @ObservedObject var model: FHomeModel
-    @State private var selectedView = 0
-
-    var body: some View {
-        List {
-            Section("本机真实账本 · 只读") {
-                assetSummaryRow("账本状态", value: model.ledgerStatus)
-                assetSummaryRow("可用现金", value: model.cashText)
-                assetSummaryRow("真实持仓", value: "\(model.holdings.count) 项")
-                Picker("资产视图", selection: $selectedView) {
-                    Text("当前持仓").tag(0)
-                    Text("已清仓").tag(1)
-                }.pickerStyle(.segmented)
-            }
-            if selectedView == 0 {
-                Section("当前持仓") {
-                if model.holdings.isEmpty {
-                    Text(model.ledgerState == .available ? "账本已读取，当前没有真实持仓" : "真实持仓尚不可用")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(model.holdings) { item in
-                    NavigationLink(value: FHomeRoute.instrument(item.instrumentCode)) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.name).font(.headline)
-                            Text("\(item.instrumentCode) · \(item.units) 份 · 账面成本 \(item.bookCost.description)")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                }
-            } else {
-                Section("已清仓 / 历史持仓") {
-                    let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
-                    if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(.secondary) }
-                    ForEach(closed) { history in
-                        NavigationLink(value: FHomeRoute.instrument(history.instrumentCode)) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("\(history.instrumentName) · \(history.instrumentCode)").font(.headline)
-                                Text("\(history.episodes.count) 个持仓周期 · 历史已实现 \(history.lifetimeRealizedProfit.description)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                ForEach(history.episodes) { episode in
-                                    Text("第\(episode.episodeNumber)轮：\(episode.openedAt.formatted(date: .numeric, time: .omitted)) 建仓 → \(episode.closedAt?.formatted(date: .numeric, time: .omitted) ?? "持有中") · 已实现 \(episode.netRealizedProfit.description)")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Section("现金与成交流水") {
-                Button("录入其他费用 / 现金对账差额") {
-                    model.beginCashAdjustment()
-                }
-                .sheet(isPresented: $model.showingCashAdjustment) {
-                    FCashAdjustmentSheet(model: model)
-                }
-                .accessibilityIdentifier("ledger.cash-adjustment.begin")
-                if !model.cashAdjustmentStatus.isEmpty {
-                    Text(model.cashAdjustmentStatus).font(.footnote).foregroundStyle(.secondary)
-                }
-                if model.cashFlow.isEmpty { Text("暂无可读取的现金流水").foregroundStyle(.secondary) }
-                ForEach(model.cashFlow.reversed()) { entry in
-                    VStack(alignment: .leading, spacing: 3) {
-                        let isCashOnlyAdjustment = entry.reason.hasPrefix("其他费用/现金对账：")
-                        let isFeeAdjustment = entry.kind == .feeAdjustment
-                        let displayedFee = isFeeAdjustment ? entry.fee : (entry.effectiveFee ?? entry.fee)
-                        let feeLabel = isFeeAdjustment ? "手续费差额" :
-                            (entry.effectiveFee != nil && entry.effectiveFee != entry.fee
-                                ? "手续费（修正后）" : "手续费")
-                        Text("\(isCashOnlyAdjustment ? "现金对账调整" : entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
-                        Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · \(feeLabel) \(displayedFee.description)")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if isCashOnlyAdjustment { Text(entry.reason).font(.caption2).foregroundStyle(.secondary) }
-                        if let fillID = entry.sourceFillID, let effectiveFee = entry.effectiveFee {
-                            Button("对账 / 更正此笔手续费（当前 \(effectiveFee.description)）") {
-                                model.beginFeeCorrection(for: entry)
-                            }
-                            .font(.caption)
-                            .accessibilityIdentifier("ledger.fee-correction.\(fillID.uuidString)")
-                        }
-                    }
-                }
-            }
-            Section("资产安全") {
-                Label("AI 建议和候选计划不写入真实账本", systemImage: "lock.shield")
-                Text("只有用户确认实际成交后才写入账本；所有成交和现金变动保留在历史流水中。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityIdentifier("assets.list")
-        .navigationTitle("真实资产")
-        .sheet(isPresented: $model.showingFeeCorrection) {
-            FLedgerFeeCorrectionSheet(model: model)
-        }
-    }
-
-    private func assetSummaryRow(_ title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title)：\(value)")
-    }
-}
-
-private extension FReadOnlyCashFlowKind {
-    var label: String {
-        switch self {
-        case .openingBalance: "期初现金"
-        case .buy: "买入"
-        case .sell: "卖出"
-        case .feeAdjustment: "手续费调整"
-        case .deposit: "现金转入"
-        case .withdrawal: "现金转出"
-        }
-    }
-}
-
-struct SettingsOverview: View {
-    @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
-    @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
-    @State private var deepSeekKeyDraft = ""
-    @State private var hasAutoCheckedNAS = false
-    @FocusState private var settingsInputFocused: Bool
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
-
-    var body: some View {
-        Form {
-            Section("在线 AI") {
-                SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($settingsInputFocused)
-                    .accessibilityIdentifier("settings.ai.deepseekKey")
-                Button("安全保存 DeepSeek Key") {
-                    settingsInputFocused = false
-                    model.saveDeepSeekKey(deepSeekKeyDraft)
-                    deepSeekKeyDraft = ""
-                }
-                .accessibilityIdentifier("settings.ai.saveKey")
-                LabeledContent("状态", value: model.aiKeyStatus)
-            }
-            Section("NAS 连接") {
-                TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .focused($settingsInputFocused)
-                Button {
-                    settingsInputFocused = false
-                    Task {
-                        await model.configureAndTestNAS(baseAddress: nasBaseAddress)
-                    }
-                } label: {
-                    if model.checkingNASConnection {
-                        HStack { ProgressView().controlSize(.small); Text("正在检查 NAS") }
-                    } else {
-                        Label("保存并测试 NAS", systemImage: "network")
-                    }
-                }
-                .disabled(model.checkingNASConnection)
-                .accessibilityIdentifier("settings.nas.test")
-                if nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("尚未填写 NAS 地址，连接测试还没有开始。")
-                        .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
-                } else {
-                    Text(model.nasConnectionStatus)
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Text("局域网请连接同一 Wi‑Fi 或 VPN；蜂窝网络请使用可达的 HTTPS 地址。")
-                    .font(.footnote).foregroundStyle(.secondary)
-                DisclosureGroup("连接方式与安全说明") {
-                    Text("连接测试只读取 /readyz，不发送持仓，也不要求单独令牌。NAS 的 8788 端口对可达网络开放，请限制网络入口。")
-                        .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                LabeledContent("历史数据同步", value: "未接入")
-                LabeledContent("新闻", value: "未接入")
+                Spacer(minLength: 0)
             }
-            Section("主题") {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(FHomeTheme.allCases) { item in
-                            Button { themeRaw = item.rawValue } label: {
-                                HStack(spacing: 5) {
-                                    if theme == item {
-                                        Image(systemName: "checkmark.circle.fill")
-                                    }
-                                    Text(item.manifest.name)
+            .padding(.top, 2)
+
+            if !model.holdings.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(model.holdings.prefix(2))) { holding in
+                        NavigationLink(value: FHomeRoute.instrument(holding.instrumentCode)) {
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(holding.name).font(.subheadline.weight(.semibold))
+                                        .lineLimit(1).minimumScaleFactor(0.8)
+                                    Text("\(holding.instrumentCode) · \(holding.units) 份")
+                                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                 }
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(theme == item ? theme.accent : theme.ink)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background(theme == item ? theme.accent.opacity(0.13) : theme.background.opacity(0.72),
-                                            in: Capsule())
-                                .overlay(Capsule().stroke(theme.accent.opacity(theme == item ? 0.55 : 0.16), lineWidth: 1))
+                                Spacer(minLength: 6)
+                                compactHoldingMark(holding)
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("theme.selector.\(item.rawValue)")
-                        }
-                    }
-                }
-                Text("当前：\(theme.manifest.name) · \(theme.manifest.layout.description)")
-                    .font(.footnote).foregroundStyle(.secondary)
-                DisclosureGroup("查看全部主题预览") {
-                    ForEach(FHomeTheme.allCases) { item in
-                        Button { themeRaw = item.rawValue } label: {
-                            FThemeGalleryRow(theme: item, selected: theme == item)
+                            .padding(.vertical, 9)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        if holding.id != model.holdings.prefix(2).last?.id {
+                            Divider().opacity(0.6)
+                        }
                     }
                 }
-                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
-                    .font(.footnote).foregroundStyle(.secondary)
+                .padding(.top, 2)
+            } else if model.ledgerState == .available {
+                Text("账本已读取，目前没有真实持仓。历史清仓记录仍保留在资产页。")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Section("数据诊断") {
-                LabeledContent("真实账本", value: model.ledgerStatus)
-                LabeledContent("交易日历", value: model.marketCalendarStatusText)
-                if model.marketRefreshStateByCode.isEmpty {
-                    Text("尚无行情请求记录").foregroundStyle(.secondary)
-                } else {
-                    ForEach(model.marketRefreshStateByCode.keys.sorted(), id: \.self) { code in
-                        LabeledContent(code, value: model.marketRefreshStateByCode[code] ?? "状态未知")
-                    }
-                }
-            }
-            Section("高级研究") {
-                LabeledContent("股息判断", value: "自动 / AI 综合判断")
-                Text("4% 仅作为研究参考；当前 App 尚未提供自定义最低股息率设置。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityIdentifier("settings.form")
-        .navigationTitle("设置")
-        .navigationBarTitleDisplayMode(.inline)
-        .tint(theme.accent)
-        .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("收起键盘") { settingsInputFocused = false }
-            }
-        }
-        .task {
-            guard !hasAutoCheckedNAS else { return }
-            hasAutoCheckedNAS = true
-            guard !nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            await model.configureAndTestNAS(baseAddress: nasBaseAddress)
-        }
-    }
-}
 
-private struct FThemeGalleryRow: View {
-    let theme: FHomeTheme
-    let selected: Bool
-    private var manifest: FThemeManifest { theme.manifest }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(manifest.name).font(.headline)
-                Spacer()
-                if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.accent) }
+            HStack(spacing: 6) {
+                Circle().fill(freshQuoteCount == model.holdings.count && !model.holdings.isEmpty
+                              ? theme.manifest.tokens.positive : theme.manifest.tokens.unavailable)
+                    .frame(width: 6, height: 6)
+                Text("持仓行情 \(freshQuoteCount)/\(model.holdings.count) 条新鲜")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Text("Episode成本为主 · 券商成本辅助")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-            structuralPreview
-            Text(manifest.layout.description).font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Text("密度：\(manifest.layout.informationDensity)")
-                Spacer()
-                Text(manifest.useCase)
-            }
-            .font(.caption2).foregroundStyle(.secondary)
-            Text(manifest.appearanceCompatibility)
-                .font(.caption2).foregroundStyle(.tertiary)
+            .padding(.top, 2)
         }
-        .padding(.vertical, 7)
-        .contentShape(Rectangle())
-        .accessibilityIdentifier("theme.gallery.\(theme.rawValue)")
+        .padding(treatment == .terminal ? 12 : 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: treatment == .glass ? 24 : 18))
+        .accessibilityIdentifier("home.portfolio.lead")
     }
 
-    private var isTerminal: Bool { theme.surfaceTreatment == .terminal || theme.surfaceTreatment == .minimal }
+    private func metric(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.system(size: treatment == .terminal ? 21 : 25,
+                                     weight: .bold,
+                                     design: treatment == .terminal ? .monospaced : .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     @ViewBuilder
-    private var structuralPreview: some View {
-        switch theme.layoutFamily {
-        case .radialMap:
-            GeometryReader { proxy in
-                ZStack {
-                    Circle().stroke(theme.accent.opacity(0.35), lineWidth: 1)
-                        .frame(width: 46, height: 46)
-                        .position(x: proxy.size.width / 2, y: 25)
-                    Circle().fill(theme.accent.opacity(0.55))
-                        .frame(width: 14, height: 14)
-                        .position(x: proxy.size.width / 2, y: 25)
-                    ForEach(0..<4, id: \.self) { index in
-                        Capsule().fill(theme.accent.opacity(0.35 + Double(index) * 0.12))
-                            .frame(width: 26, height: 7)
+    private func compactHoldingMark(_ holding: FHomeHolding) -> some View {
+        let now = Date()
+        if let quote = model.marketDataByCode[holding.instrumentCode],
+           let price = quote.latestPrice,
+           quote.quoteTimestamp <= now, now.timeIntervalSince(quote.quoteTimestamp) <= 120,
+           let pnl = try? FSecurityPnLCalculator.episodeUnrealizedPnL(
+                units: holding.units, bookCost: holding.bookCost, currentPrice: price
+           ) {
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("¥\(NSDecimalNumber(decimal: price).stringValue)")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                Text("本轮 \(pnl >= 0 ? "+" : "")¥\(NSDecimalNumber(decimal: pnl).stringValue)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(pnl >= 0 ? theme.manifest.tokens.p…12886 tokens truncated…rame(width: 26, height: 7)
                             .position(x: [proxy.size.width / 2, proxy.size.width - 24,
                                           proxy.size.width / 2, 24][index],
                                       y: [5, 25, 45, 25][index])
@@ -1596,3 +965,4 @@ private extension FDecisionGuardFinding {
         }
     }
 }
+
