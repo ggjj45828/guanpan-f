@@ -170,12 +170,18 @@ public enum FTradeContributionCalculator {
         }
         var total = Decimal.zero
         for cycleFills in cycles.values {
+            let orderedCycleFills = cycleFills.sorted {
+                if $0.tradedAt != $1.tradedAt { return $0.tradedAt < $1.tradedAt }
+                if $0.sequence != $1.sequence { return $0.sequence < $1.sequence }
+                return $0.id.uuidString < $1.id.uuidString
+            }
             var sellUnits: Int64 = 0
             var buybackUnits: Int64 = 0
+            var unmatchedSellUnits: Int64 = 0
             var sellAmount = Decimal.zero
             var buybackAmount = Decimal.zero
             var fees = Decimal.zero
-            for fill in cycleFills {
+            for fill in orderedCycleFills {
                 guard let intent = fill.tradeIntent,
                       let cycle = fill.tCycleID,
                       !cycle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -184,17 +190,22 @@ public enum FTradeContributionCalculator {
                     let (next, overflow) = sellUnits.addingReportingOverflow(fill.units)
                     guard !overflow else { return nil }
                     sellUnits = next
+                    let (unmatched, unmatchedOverflow) = unmatchedSellUnits.addingReportingOverflow(fill.units)
+                    guard !unmatchedOverflow else { return nil }
+                    unmatchedSellUnits = unmatched
                     sellAmount += fill.price * Decimal(fill.units)
                 case (.tBuyback, .buy):
                     let (next, overflow) = buybackUnits.addingReportingOverflow(fill.units)
                     guard !overflow else { return nil }
                     buybackUnits = next
+                    guard fill.units <= unmatchedSellUnits else { return nil }
+                    unmatchedSellUnits -= fill.units
                     buybackAmount += fill.price * Decimal(fill.units)
                 default: return nil
                 }
                 fees += fill.fee
             }
-            guard sellUnits > 0, sellUnits == buybackUnits,
+            guard sellUnits > 0, sellUnits == buybackUnits, unmatchedSellUnits == 0,
                   !sellAmount.isNaN, !buybackAmount.isNaN, !fees.isNaN else { return nil }
             total += sellAmount - buybackAmount - fees
         }

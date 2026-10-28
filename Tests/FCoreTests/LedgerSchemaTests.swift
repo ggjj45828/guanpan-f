@@ -756,6 +756,19 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
                      "未完全配对的T数量不应伪装成精确贡献")
 
+        let earlierBuyback = FConfirmedFill(sequence: 4, tradedAt: now.addingTimeInterval(-120),
+                                            instrumentCode: "159866", side: .buy, units: 10, price: 10,
+                                            fee: FETFTradeFeePolicy.defaultReferencePerFill,
+                                            userConfirmation: confirmation(), tradeIntent: .tBuyback,
+                                            tCycleID: "cycle-reversed")
+        let laterTSell = FConfirmedFill(sequence: 5, tradedAt: now.addingTimeInterval(-60),
+                                        instrumentCode: "159866", side: .sell, units: 10, price: 12,
+                                        fee: FETFTradeFeePolicy.defaultReferencePerFill,
+                                        costBasisRemoved: 100, userConfirmation: confirmation(),
+                                        tradeIntent: .tSell, tCycleID: "cycle-reversed")
+        XCTAssertNil(FTradeContributionCalculator.contribution(from: [earlierBuyback, laterTSell]),
+                     "先买回后卖出的成交不能标记为已配对T贡献")
+
         let legacyFill = FConfirmedFill(sequence: 3, tradedAt: now,
                                         instrumentCode: "159866", side: .buy, units: 1,
                                         price: 10, fee: FETFTradeFeePolicy.defaultReferencePerFill,

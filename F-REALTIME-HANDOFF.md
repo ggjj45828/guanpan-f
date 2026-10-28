@@ -1,5 +1,29 @@
 # F 实时进度交接
 
+## 2026-10-28 最新续作快照
+
+- 本轮复查GitHub时 `git fetch origin main` 仍因 `getaddrinfo() thread failed to start` 失败；最近可见跟踪点仍为 `7a2d63e`，本地此前已有两个仅文档提交领先，未推送/未强推。当前新增的代码与文档修改尚未提交。跟踪引用不能证明远端实时状态，网络恢复后仍先fetch/reconcile。
+- 复核成交盈亏投影后发现一个实际分类风险：`FTradeContributionCalculator`原先只要求同一T周期卖出数量与买回数量最终相等，没有要求买回时已有足量未买回的先前卖出。于是反序成交（先买回、后卖出）可能被误算成正向T贡献。
+- 已编码最小边界修正：按成交时间排序，同时间按账本sequence及ID稳定排序；仅当买回份额不超过此前尚未买回的T卖出份额且周期最终全部配平，才生成T Contribution。为反序成交补了回归断言；未放宽任何现有断言，也未改变fills/现金/持仓。
+- **验证状态：** FCore仍定义130个测试；本轮没有Apple/Xcode，也没有执行Swift测试，所以当前改动的 executed/pass/fail 均为0/0/0（这是本轮增量执行数）；最近历史CI run `40622847995`的130/130通过只覆盖旧代码提交`7a2d63e`，不能替代本轮验证。UI最近CI结果3/3成功，同样未包含本轮Swift修正。`git diff --check`通过，仅有Windows CRLF提示。
+- **其他验证：** 当前Windows仍无Xcode/Swift/Simulator；人工Simulator和真机External Pending。NAS定向测试最近有效证据仍为77/77通过；本轮未重跑Python、NAS公网provider、历史分钟iOS链路、真实行情或DeepSeek E2E。
+- **费用对账状态：** 通过静态检查确认历史费用调整不能被实现成单纯cash movement；旧fill的`costBasisRemoved`有顺序重放强校验。详细双投影约束已在F-145中记录；本轮仍未实现fee correction事件或UI。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Apple CI暂停期间的小范围真实Ledger语义查漏
+当前正在开发：T Contribution必须按真实成交时间先卖后买，并逐笔配平
+刚刚完成：增加T周期时间顺序/未配对份额保护及一个反序成交回归断言；补记费用回算架构限制
+未提交工作：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`、`F-B-145-TRACEABILITY.md`、本交接文档；此前两个交接文档提交仍领先最近成功fetch跟踪点；锁定临时目录保持原样
+iOS完成度：本轮Swift修正已编码但未编译；最近CI对旧源码130/130及UI 3/3通过
+AI顾问完成度：Advisor只读账本；真实DeepSeek与成交后复判E2E未验证；T贡献顺序误分类已静态修正待CI
+统一图表完成度：未改；CI build/UI通过，人工图表手势和横屏待Simulator验收
+NAS历史数据完成度：实时归档有部署证据；历史provider覆盖有限且exact-date存在空响应；历史分钟进入iOS/Research Evidence未E2E
+Apple编译验证：本机工具缺失；最近成功run 40622847995不覆盖当前改动
+当前测试：FCore defined 130 / 当前改动尚未执行（最近旧源码CI 130 executed / 130 passed / 0 failed）；App UI defined 3 / 本轮0 executed（最近旧源码CI 3/3成功）；Python/NAS最近77 executed / 77 passed / 0 failed（定向，非全套）
+最大缺口：验证当前Swift修改；费用差额历史回算；NAS历史分钟消费链；人工Simulator；真实DeepSeek闭环
+下一步：fetch成功后先安全reconcile，再普通提交/推送并跑完整Apple CI；若网络持续不可用，继续有限范围静态查漏，不声称当前改动通过
+F_CURRENT_STATUS_END
+
 ## 2026-10-28 最新实时状态（当前工作树优先）
 
 - **当前工作区：** 本地 `main` 为 `86a673af008da0a6dc7bdb36af3a66d3bee55d84`，它是记录Apple CI成功结果的交接文档提交；代码提交 `7a2d63e98927f9cf16fd40a5597d618741df1640` 位于其父链且已推送。最近一次本地状态为 `main...origin/main [ahead 1]`，只有受保护的 `.task-python-temp-b252c94955274b7c90bce865b594fca4/` 未跟踪目录；没有未提交的tracked Swift/NAS源码修改。此刻 `git fetch origin main` 因 `getaddrinfo() thread failed to start` 失败，故远端实时同步状态尚未刷新；未推送、未强推、未覆盖远端。
