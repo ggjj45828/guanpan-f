@@ -5,6 +5,7 @@
 - 静态审查发现：worker启动会重新调用`enqueue_initial_history`；该UPSERT会把`out_of_provider_coverage`、`permanent_unavailable`、`partial`等终态重新置为queued。容器每次重启都可能重新尝试同一批已知空响应日期，削弱此前的有限重试收敛。
 - 已编码修复：自动worker启动传入`requeue_terminal=False`，终态结果保持原样；显式请求/手动补采仍默认允许重新排队、清零重试次数。计划响应会报`preservedTerminalSessions`。这不改变provider对历史日期的实际覆盖能力，也不表示历史分钟已取得。
 - 回归验证：Python定向执行2项（有限重试后手动重排；重复startup-style计划保留终态但显式重试恢复队列），`2 executed / 2 passed / 0 failed`。第一次运行在Windows隔离Temp目录因SQLite `unable to open database file`初始化失败；将测试临时目录定向到F工作区后成功。该错误是执行环境目录权限，不是NAS接口认证/DB服务权限。非NAS全套测试，也没有真实NAS/公网provider E2E。
+- 已生成可部署包`../F-NAS-QUEUE-RETRY-FIX.zip`，来源代码提交`f6d153a`；ZIP完整性检查通过，共20个文件、56,680字节，并确认包中包含更新后的`service.py`与`runtime.py`。未执行Docker镜像构建或目标NAS部署，不能将其写作已部署。
 - Apple状态不变：FCore defined 138；当前Ledger修改无新Xcode执行，历史130/130是旧源码结果。Windows无Swift/Xcode/XcodeGen。NAS本轮为已编码且上述2项Python定向验证通过；其余NAS套件、容器部署和公网provider仍未验证。
 - GitHub fetch继续报`getaddrinfo() thread failed to start`；origin已是`https://github.com/ggjj45830/guanpan-f.git`。没有push或触发CI。本阶段修订涉及`nas/fminute/service.py`、`nas/fminute/runtime.py`、`Tools/test_minute_service.py`、本交接和验收矩阵；受保护临时目录未触碰。
 - 下一步：网络恢复后先fetch/reconcile再普通push。随后需要在NAS部署环境观察一次“终态日期经重启不重排、人工重试可排队”，并继续实测provider日期能力，不得把worker健康当作数据覆盖证据。
