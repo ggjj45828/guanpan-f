@@ -2,16 +2,16 @@
 
 ## 权威当前状态覆盖（2026-10-28，本节优先于下方旧快照）
 
-- 本地分支 `main` 包含本轮完整实现提交，工作树干净、尚未push。已fetch确认 `origin/main=b099c9d0d9c703f56540b6fa4d3d30cfbb3ddefe`，本地分支ahead 1 / behind 0；接下来普通push即可，不需要强推。
-- Run [40710039609](https://github.com/ggjj45828/guanpan-f/actions/runs/40710039609)指向基线SHA；run结论failure但唯一job结论为cancelled、没有执行步骤。它没有编译/测试当前本地提交，也不能称为源码失败。Windows没有Swift/Xcode工具链。
-- 当前定义数：FCore 164项、App UI 3项；本轮增加11项Shadow XCTest定义。当前本地提交尚无Apple执行结果（executed=0 / passed=0 / failed=0）；旧140/140等历史数字不适用。
+- 当前 `main` HEAD 为 `7094d74496f32fa78e69eeb0792e8ee26da48ca6`，已普通push到 `origin/main`，工作树干净。未使用强推。
+- 当前提交对应 Apple CI Run [40717961675](https://github.com/ggjj45828/guanpan-f/actions/runs/40717961675)，运行号60，head SHA与当前HEAD一致；最近真实状态仍为 `queued`，job尚未开始且无step结果。排队不代表编译通过或失败。Windows没有Swift/Xcode工具链。
+- 当前定义数：FCore 164项、App UI 3项；本轮增加11项Shadow XCTest定义。当前提交尚无Apple执行结果（executed=0 / passed=0 / failed=0）；旧140/140等历史数字不适用。
 - 新定稿见`F-DECISION-SYSTEM-FINAL-ARCHITECTURE.md`，覆盖冲突旧要求：NAS只是可选同步/归档/备份；Advisor不依赖NAS；核心决策为双速本地Quant/Guard/Trigger与DeepSeek慢通道。真实Ledger仍只由用户确认成交写入。
 - Shadow首段已编码、未编译：Candidate快照不可变；保存DeepSeek建议和最终Guard动作；记录可信报价及无未来数据的5/15/30/60分钟观察、MFE/MAE、真实Fill ID；用户未执行必须显式复核，缺关联仍为未知。无模拟账户、无Ledger写权限。
 - Shadow仍不完整：行情仅在App请求刷新时稀疏采样；无连续行情订阅、收盘评价、Hold/机会成本基准、结构化WAIT规则、真实Quant输出层拆分、策略/Regime分层评分；当前方向性计数不能称胜率或收益。NAS服务端未修改。
 - 本轮Shadow边界修正：只有实际触发后的价格变化才计入5/15/30/60分钟方向结果；Candidate有效期到期与触发后的观察窗口完成分开记录；无触发且到期的建议单独计数，不把未触发误认为成功。已有回归覆盖5分钟采样时间和“已过期、结果观察仍完成”的并存。
 - 本轮修改文件：`Sources/FAdvisor/CandidateShadowScorecard.swift`、`Tests/FCoreTests/CandidateShadowScorecardTests.swift`、`GuanpanFApp/Sources/GuanpanFApp.swift`、`GuanpanFApp/Sources/HomeExperience.swift`及架构/交接/矩阵/差距文档。当前FCore测试定义164、App UI定义3；当前工作树尚未编译或运行测试。
 - 静态核对：`git diff --check`通过；全仓测试定义总计167（FCore 164 + UI 3），不是执行结果。Windows无Swift/Xcode/XcodeGen；尚无本轮编译、XCTest、Simulator或IPA证据。
-- 下一步：已fetch确认远端仍为基线，下一步普通push，以当前新SHA重新跑FCore、XcodeGen、Device/Simulator Build、UI XCTest和IPA。CI通过不代表人工Simulator、iPhone Air或真实DeepSeek链路通过。
+- 下一步：等待Run 60获得macOS runner并执行FCore、XcodeGen、Device/Simulator Build、UI XCTest和IPA。若出现真实失败，按第一个根因修复并重新提交。CI通过不代表人工Simulator、iPhone Air或真实DeepSeek链路通过。
 
 
 > 当前状态以本节记录的工作树和CI为准。其后均为历史追溯，旧HEAD/测试数不得继承。
