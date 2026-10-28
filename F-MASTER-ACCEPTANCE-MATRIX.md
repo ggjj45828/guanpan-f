@@ -279,3 +279,5 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 | P2 行情页刷新 | 修复刷新集合：已持仓证券 + 当前合法六位输入代码，去重；空仓且未输入合法代码时才禁用 | `GuanpanFApp/Sources/HomeExperience.swift`，已编码未编译；FCore 140 defined/当前不变；App UI无新增测试/未执行 | CI通过后Simulator确认空仓搜索刷新和持仓刷新 |
 
 | P2 图表图层控件 | 图层切换文本与图标放大，最小触控高度44pt，横向滚动不变 | `GuanpanFApp/Sources/FUnifiedSecurityChart.swift` 已编码未编译；无新增测试定义/无执行证据 | 必须在Simulator/iPhone Air上验证控件可点、图表面积、横滑和手势冲突 |
+
+| Apple CI 2026-10-28 / `b882a580` | FCore 140/140 executed/pass；XcodeGen 成功；Device Release Build 在 `FNASConnection.swift:68` 因不存在的 `URLError.Code.localNetworkDenied` 失败；Simulator/UI/IPA skipped | 首个根因已在工作树修复，未编译；普通推送后重跑完整Apple CI | 修复后尚无结果 |

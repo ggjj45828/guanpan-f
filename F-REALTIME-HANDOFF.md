@@ -1182,3 +1182,12 @@ F_CURRENT_STATUS_END
 
 - 为回应用户“线太乱、MA/其他线需要可选隐藏”的实用反馈，`FUnifiedSecurityChart.layerButton` 的图层标签由 `caption2` 改为 `caption`，眼睛图标从8pt增至10pt，按钮最小高度44pt并扩大内边距，仍保留横向滚动。
 - 只改变触控目标/可读性，不改变任何序列、价格范围或图层状态语义。当前无Xcode；未编译、未运行UI/XCTest、未做Simulator截图/手势验收。
+
+## 2026-10-28 当前桌面编译闭环（实时工作树）
+
+- 当前已推送提交：`b882a580c327a6d873837f20f0be89007cdf2f2e`；普通 push 成功，推送前已 fetch/reconcile，未强推。
+- Apple CI 运行 `40660332204`（对应当前提交）已结束并失败。真实执行结果：FCore **140 executed / 140 passed / 0 failed**；XcodeGen 成功；Device Release Build 失败；Simulator Build、App UI XCTest、IPA 因 Device Build 失败被跳过。旧 SHA `f366542` 的结果不用于覆盖本次。
+- Device Build 首个真实根因：`FNASConnection.swift:68` 使用了不存在的 `URLError.Code.localNetworkDenied`。已在当前工作树移除此非法枚举分支，并把本地网络权限提示并入连接失败提示；此修复尚未编译，等待下一次 Apple CI。
+- 当前未提交修改：`GuanpanFApp/Sources/FNASConnection.swift` 编译修复，以及本段实时状态更新。修复前 HEAD 的测试证据保持 FCore 140/140；修复后结果尚无。
+- 当前没有 Simulator 实际运行、截图/人工视觉验收、真机、NAS历史分钟→iOS或DeepSeek真实E2E证据。
+- 下一步：普通提交并推送此编译修复，观察新的完整 CI；若出现新首错，按首个根因继续修复。不得把被跳过的 Simulator/UI/IPA 步骤写成成功。

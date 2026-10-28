@@ -65,12 +65,10 @@ enum FNASReadinessClient {
     static func connectionHint(for error: Error) -> String {
         guard let urlError = error as? URLError else { return error.localizedDescription }
         switch urlError.code {
-        case .localNetworkDenied:
-            return "iPhone 未允许观盘 F 访问本地网络。请在 iPhone 设置 → 隐私与安全性 → 本地网络中允许观盘 F。"
         case .cannotFindHost, .dnsLookupFailed:
             return "找不到 NAS 主机。请核对地址，并确认 iPhone 与 NAS 在同一局域网或已连接 VPN。"
         case .cannotConnectToHost, .timedOut, .networkConnectionLost:
-            return "无法连接 NAS 的 8788 端口。请核对 NAS 地址/端口、容器运行状态及路由器或防火墙；远程连接请使用可达的 HTTPS 地址。"
+            return "无法连接 NAS。请核对地址、8788 端口、容器状态及网络权限；iPhone 局域网访问请在设置 → 隐私与安全性 → 本地网络中允许观盘 F。远程连接请使用可达的 HTTPS 地址。"
         case .appTransportSecurityRequiresSecureConnection:
             return "iOS 阻止了不安全的远程 HTTP 连接。远程 NAS 请配置 HTTPS，或通过可信 VPN 连接。"
         default:
