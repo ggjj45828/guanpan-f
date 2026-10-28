@@ -223,12 +223,14 @@ class MinuteArchiveService:
         return tuple(sorted(sessions, key=lambda session: session.trading_date))
 
     def enqueue_backfill(self, security_code: str, market: str, start: date, end: date,
-                         priority: BackfillPriority) -> dict:
+                         priority: BackfillPriority, *, requeue_terminal: bool = True) -> dict:
         self._validate_identity(security_code, market)
         if type(start) is not date or type(end) is not date:
             raise ServiceError("backfill range must use calendar dates")
         if not isinstance(priority, BackfillPriority):
             raise ServiceError("backfill priority must be an explicit BackfillPriority")
+        if type(requeue_terminal) is not bool:
+            raise ServiceError("requeue_terminal must be boolean")
         if end < start:
             raise ServiceError("end date precedes start date")
         sessions = self._calendar_sessions(market, start, end)
@@ -242,6 +244,8 @@ class MinuteArchiveService:
         already_covered = requested_sessions - len(sessions)
         now = self._stamp(evaluated_at)
         inserted = 0
+        preserved_terminal = 0
+        terminal_states = {"partial", "missing", "out_of_provider_coverage", "permanent_unavailable"}
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             active = db.execute("SELECT COUNT(*) FROM backfill_task WHERE status IN ('queued','retryable','running')").fetchone()[0]
@@ -249,6 +253,9 @@ class MinuteArchiveService:
             for session in sessions:
                 found = db.execute("SELECT status FROM backfill_task WHERE security_code=? AND market=? AND trading_date=?",
                                    (security_code, market, session.trading_date.isoformat())).fetchone()
+                if found is not None and found["status"] in terminal_states and not requeue_terminal:
+                    preserved_terminal += 1
+                    continue
                 if found is None or found["status"] not in {"queued", "retryable", "running"}:
                     new_keys.append(session)
             if active + len(new_keys) > self.max_queued_sessions:
@@ -257,6 +264,8 @@ class MinuteArchiveService:
                 day = session.trading_date.isoformat()
                 existing = db.execute("SELECT status FROM backfill_task WHERE security_code=? AND market=? AND trading_date=?",
                                       (security_code, market, day)).fetchone()
+                if existing is not None and existing["status"] in terminal_states and not requeue_terminal:
+                    continue
                 db.execute("""INSERT INTO backfill_task
                     (security_code,market,trading_date,priority,status,attempts,next_attempt_at,lease_until,last_error,created_at,updated_at)
                     VALUES (?,?,?,?, 'queued',0,?,NULL,NULL,?,?)
@@ -268,17 +277,20 @@ class MinuteArchiveService:
                 inserted += 1
         return {"securityCode": security_code, "market": market,
                 "requestedSessions": requested_sessions, "alreadyCoveredSessions": already_covered,
-                "queuedOrRequeued": inserted,
+                "queuedOrRequeued": inserted, "preservedTerminalSessions": preserved_terminal,
                 "priority": priority.name.lower()}
 
     def enqueue_initial_history(self, security_code: str, market: str, *, through: date,
                                 sessions_back: int = DEFAULT_INITIAL_BACKFILL_SESSIONS,
-                                priority: BackfillPriority = BackfillPriority.WATCHLIST) -> dict:
+                                priority: BackfillPriority = BackfillPriority.WATCHLIST,
+                                requeue_terminal: bool = True) -> dict:
         self._validate_identity(security_code, market)
         if type(through) is not date:
             raise ServiceError("history cutoff must be a calendar date")
         if type(sessions_back) is not int or sessions_back < 1 or sessions_back > 500:
             raise ServiceError("sessions_back must be between 1 and 500")
+        if type(requeue_terminal) is not bool:
+            raise ServiceError("requeue_terminal must be boolean")
         if not isinstance(priority, BackfillPriority):
             raise ServiceError("backfill priority must be an explicit BackfillPriority")
         # Calendar supplies actual sessions, so using a bounded calendar-day lookback
@@ -289,10 +301,11 @@ class MinuteArchiveService:
         if not sessions:
             return {"securityCode": security_code, "market": market,
                     "requestedSessions": 0, "alreadyCoveredSessions": 0,
-                    "queuedOrRequeued": 0,
+                    "queuedOrRequeued": 0, "preservedTerminalSessions": 0,
                     "priority": priority.name.lower()}
         return self.enqueue_backfill(security_code, market, sessions[0].trading_date,
-                                     sessions[-1].trading_date, priority)
+                                     sessions[-1].trading_date, priority,
+                                     requeue_terminal=requeue_terminal)
 
     def on_instrument_added(self, security_code: str, market: str, *, added_to: str,
                             through: date,

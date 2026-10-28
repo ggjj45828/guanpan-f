@@ -112,7 +112,10 @@ class MinuteRuntimeWorker:
             try:
                 self.service.enqueue_initial_history(
                     code, "CN", through=now.astimezone(SHANGHAI).date(),
-                    priority=BackfillPriority.HOLDING)
+                    priority=BackfillPriority.HOLDING,
+                    # Restarting the worker is not an explicit request to retry
+                    # provider dates already classified as terminal.
+                    requeue_terminal=False)
             except Exception as exc:
                 startup_errors.append(type(exc).__name__)
         self.last_cycle = {"status": "degraded" if startup_errors else "starting",

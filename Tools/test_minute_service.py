@@ -239,6 +239,33 @@ class MinuteServiceTests(unittest.TestCase):
         self.assertEqual(requeued_task["status"], "queued")
         self.assertEqual(requeued_task["attempts"], 0)
 
+    def test_repeated_startup_plan_preserves_terminal_provider_failure_until_explicit_retry(self):
+        service = MinuteArchiveService(
+            self.archive, Path(self.temp.name) / "startup-terminal.sqlite",
+            {"CN": self.calendar}, {"CN": [EmptyProvider()]}, clock=self.clock,
+            max_backfill_attempts=1)
+        day = self.sessions[-1].trading_date
+        service.enqueue_initial_history("159352", "CN", through=day, sessions_back=1)
+        result = service.run_backfill_batch(limit=1)[0]
+        self.assertEqual(result["queueStatus"], "permanent_unavailable")
+        self.assertEqual(service.queue_count(), 0)
+
+        # Runtime startup calls the same bounded plan but must not reset a known
+        # terminal result on every container restart.
+        for _ in range(3):
+            planned = service.enqueue_initial_history(
+                "159352", "CN", through=day, sessions_back=1,
+                requeue_terminal=False)
+            self.assertEqual(planned["queuedOrRequeued"], 0)
+            self.assertEqual(planned["preservedTerminalSessions"], 1)
+            self.assertEqual(service.queue_count(), 0)
+
+        # An explicit user retry remains available and resets the bounded attempt count.
+        service.enqueue_initial_history("159352", "CN", through=day, sessions_back=1)
+        task = service.queue_snapshot()[0]
+        self.assertEqual(task["status"], "queued")
+        self.assertEqual(task["attempts"], 0)
+
     def test_diagnostics_report_coverage_sources_collection_times_and_database_size(self):
         complete, partial, missing = self.sessions
         self.archive.ingest(make_bars(complete, fetched_at=self.clock(), source="realtime-fixture"),
