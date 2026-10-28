@@ -153,3 +153,8 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 - 真实根因是PlistBuddy查询了根键`CFBundleIconName`，而iOS主图标名称采用嵌套键`CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName`。当前已修正CI校验命令，待重跑验证。
 - App目标配置显示名为`观盘max`，Asset Catalog含`AppIcon.png`；最终打入IPA的图标及手机桌面展示尚未由成功artifact/设备验证。
 - NAS连接当前仍未解决/未确认：需用户在iPhone上安装新IPA，经实际HTTPS穿透请求`/readyz`。无NAS端改动。
+
+### 第二次IPA检查结果
+
+- run `40677313197`：FCore、工程生成、设备构建、模拟器构建、UI XCTest与截图导出成功；IPA检查因Info.plist根本不含预期图标键再次失败。IPA未通过打包验收。
+- 当前已切换到检查编译的`Assets.car`中AppIcon rendition，并核对源manifest/PNG；此workflow修改未执行。

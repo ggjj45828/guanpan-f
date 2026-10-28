@@ -62,3 +62,7 @@
 
 - `project.yml`声明显示名`观盘max`、AppIcon资产名`AppIcon`；图标素材为无字母方案。run `40675520793` 的IPA步骤因验证脚本查询错误的plist路径失败，需修正后重跑CI，并检查实际IPA/安装结果。
 - NAS客户端仍未完成实机HTTPS穿透复测。健康检查使用只读`/readyz`，未请求额外token；不得把客户端错误提示/CI通过视为NAS连接通过。
+
+### AppIcon打包检查的二次修正
+
+- CI run `40677313197`证明本项目构建的Info.plist既无根`CFBundleIconName`，也无预期嵌套键。工作树改为验证Asset Catalog源清单/PNG及编译后`Assets.car`里的AppIcon rendition，等待Apple CI证明。

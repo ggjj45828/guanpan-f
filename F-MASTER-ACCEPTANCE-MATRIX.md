@@ -321,3 +321,8 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 - run `40675520793` 的核心测试、XcodeGen、Device Build、Simulator Build和UI XCTest均成功；IPA归档已产生。最终失败原因是CI读取了错误的Info.plist键层级，导致打包校验失败，不是编译/测试失败。
 - 当前工作树已把图标检查路径改为`CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName`，仍待下一次Apple CI验证。
 - NAS连接仍需用户iPhone安装新IPA并实际用HTTPS穿透验证；没有NAS后端改动，也没有实机确认。
+
+### CI重试后的图标验证修正
+
+- run `40677313197` 中FCore、XcodeGen、设备/模拟器构建和UI XCTest均成功，IPA阶段再次失败。真实原因：构建产品Info.plist没有`CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName`键。
+- 已改为校验图标源manifest/PNG，并用Xcode `assetutil`检查编译后的`Assets.car`包含AppIcon rendition。此检验尚未由CI执行。
