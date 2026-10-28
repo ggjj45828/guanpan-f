@@ -1,5 +1,16 @@
 # F 实时进度交接
 
+## 2026-10-28 当前实时状态校正（源码基线 6eede46）
+
+- 本轮检查开始时本地`main`与已确认远端`origin/main`同为`6eede46391fe336464dd7e129d0d5b7751bd47c3`；当前本地新增纯文档提交`0bf23f5`，远端仍在`6eede46`，故本地ahead 1、tracked工作树CLEAN。普通`git push`仍报`getaddrinfo() thread failed to start`；尚无证据表明`0bf23f5`已推送。此前通过GitHub Desktop推送`6eede46`后，GitHub API已读到远端撤销提交；未强推。
+- HEAD相对完整Apple CI通过提交`f366542242e995ec62b068273da65ab2f7f9f860`仅有交接/Master Matrix文档差异；Swift及测试源码完全相同。因此最近可适用的完整Apple证据仍是Actions run`40648658299`：FCore 139/139、XcodeGen成功、Device Build成功、Simulator Build成功、UI XCTest 3/3、截图导出及未签名IPA ZIP检查成功。该证据覆盖当前相同源码树，但没有在文档/撤销提交上重跑CI。
+- 推送过程中GitHub Desktop曾意外将临时`focused-tests.log`提交为`7504ac5`。未改写历史；随后普通提交`6eede46`已撤销该文件，GitHub API确认撤销提交在远端。当前仓库内没有该临时日志，工作树CLEAN。
+- 已编码且由上述CI源码覆盖：T Contribution的成交时间/顺序保护、逐笔手续费追加更正与历史重放、十套首页layout/共享role renderer。Apple Build/XCTest证据如上；十主题截图差异、真实账本App操作和人工图表手势仍未验收。
+- 尚未通过真实端到端：NAS历史分钟provider→SQLite→exact-date API→iOS历史分时→Research Evidence/DecisionContext；真实DeepSeek两种scope；Candidate→用户确认成交→Ledger→现金/成本/盈亏更新→Advisor复判。Simulator截图附件已由GitHub提供，但本轮尚未人工审阅图片；Windows无可交互Apple Simulator/真机。
+- NAS本轮定向Python用例：13/13通过（两批），覆盖exact-date历史查询、bounded backfill状态、单源quality/confidence分离、provider coverage终态不重试、Research Evidence as-of/no-lookahead、Eastmoney日期/成交量解析与exact-date请求、紧凑Evidence契约、禁止原始分钟/计划字段、digest质量元数据和时间戳稳定性。没有调用远程provider，也没有证明NAS部署端实际取得历史分钟。Windows默认临时目录导致SQLite无法打开；切换到F工作区独立临时目录后上述13项通过。更宽的provider套件首项日历存储测试在该环境挂起并已中断，不能计入通过。
+- 当前本轮代码改动仅为本交接/Master Matrix；未新增Swift。`git diff --check`通过；没有本机Apple编译或Simulator人工验证。
+- 下一步：先审阅run`40648658299`导出的有限截图附件；随后做静态/实网条件允许的NAS历史分钟消费链核验，并准备真实成交后Advisor复判验收。不要增加大模块或把NAS worker存活当历史分钟补采成功。
+
 ## 2026-10-28 设置页可发现性修正 CI 通过（最新）
 
 - 远端`main`和当前本地HEAD一致：`f366542242e995ec62b068273da65ab2f7f9f860`；对应Actions run `40648658299`，job `122683326661`，结论`success`。Git状态跟踪分支一致；唯一未跟踪项仍是受保护目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`，未纳入任何提交。
