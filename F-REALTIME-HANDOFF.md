@@ -2,7 +2,7 @@
 
 ## 2026-10-28 最新续作快照
 
-- 本轮复查GitHub时 `git fetch origin main` 仍因 `getaddrinfo() thread failed to start` 失败；最近可见跟踪点仍为 `7a2d63e`，本地已有两个交接文档提交以及本轮语义修正提交`a9527f4`领先该跟踪点，均未推送/未强推。跟踪引用不能证明远端实时状态，网络恢复后仍先fetch/reconcile。
+- 本轮复查GitHub时 `git fetch origin main` 仍因 `getaddrinfo() thread failed to start` 失败；最近可见跟踪点仍为 `7a2d63e`，本地`main`有尚未推送的交接文档与T计算改动提交。跟踪引用不能证明远端实时状态，网络恢复后仍先fetch/reconcile。
 - 复核成交盈亏投影后发现一个实际分类风险：`FTradeContributionCalculator`原先只要求同一T周期卖出数量与买回数量最终相等，没有要求买回时已有足量未买回的先前卖出。于是反序成交（先买回、后卖出）可能被误算成正向T贡献。
 - 已编码最小边界修正：按成交时间排序，同时间按账本sequence及ID稳定排序；仅当买回份额不超过此前尚未买回的T卖出份额且周期最终全部配平，才生成T Contribution。为反序成交补了回归断言；未放宽任何现有断言，也未改变fills/现金/持仓。
 - **验证状态：** FCore仍定义130个测试；本轮没有Apple/Xcode，也没有执行Swift测试，所以当前改动的 executed/pass/fail 均为0/0/0（这是本轮增量执行数）；最近历史CI run `40622847995`的130/130通过只覆盖旧代码提交`7a2d63e`，不能替代本轮验证。UI最近CI结果3/3成功，同样未包含本轮Swift修正。`git diff --check`通过，仅有Windows CRLF提示。
@@ -13,7 +13,7 @@ F_CURRENT_STATUS_BEGIN
 当前开发阶段：Apple CI暂停期间的小范围真实Ledger语义查漏
 当前正在开发：T Contribution必须按真实成交时间先卖后买，并逐笔配平
 刚刚完成：增加T周期时间顺序/未配对份额保护及一个反序成交回归断言；补记费用回算架构限制
-未推送提交：本轮T顺序修正及交接文档已本地提交`a9527f4`，此前还有两个交接文档提交；GitHub fetch未成功，尚不能安全推送。工作树tracked内容已提交；锁定临时目录保持原样
+未推送提交：本轮T顺序修正及交接文档已提交；此前Apple CI/费用重放记录也有本地交接提交。GitHub fetch未成功，尚不能安全推送。工作树tracked内容已提交；锁定临时目录保持原样
 iOS完成度：本轮Swift修正已编码但未编译；最近CI对旧源码130/130及UI 3/3通过
 AI顾问完成度：Advisor只读账本；真实DeepSeek与成交后复判E2E未验证；T贡献顺序误分类已静态修正待CI
 统一图表完成度：未改；CI build/UI通过，人工图表手势和横屏待Simulator验收
