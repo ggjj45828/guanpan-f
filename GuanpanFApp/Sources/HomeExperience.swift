@@ -888,8 +888,13 @@ struct RealAssetsOverview: View {
                 ForEach(model.cashFlow.reversed()) { entry in
                     VStack(alignment: .leading, spacing: 3) {
                         let isCashOnlyAdjustment = entry.reason.hasPrefix("其他费用/现金对账：")
+                        let isFeeAdjustment = entry.kind == .feeAdjustment
+                        let displayedFee = isFeeAdjustment ? entry.fee : (entry.effectiveFee ?? entry.fee)
+                        let feeLabel = isFeeAdjustment ? "手续费差额" :
+                            (entry.effectiveFee != nil && entry.effectiveFee != entry.fee
+                                ? "手续费（修正后）" : "手续费")
                         Text("\(isCashOnlyAdjustment ? "现金对账调整" : entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
-                        Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · 手续费 \(entry.fee.description)")
+                        Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · \(feeLabel) \(displayedFee.description)")
                             .font(.caption).foregroundStyle(.secondary)
                         if isCashOnlyAdjustment { Text(entry.reason).font(.caption2).foregroundStyle(.secondary) }
                         if let fillID = entry.sourceFillID, let effectiveFee = entry.effectiveFee {
@@ -945,6 +950,7 @@ struct SettingsOverview: View {
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
     @State private var deepSeekKeyDraft = ""
+    @State private var hasAutoCheckedNAS = false
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     var body: some View {
@@ -960,16 +966,6 @@ struct SettingsOverview: View {
                 }
                 .accessibilityIdentifier("settings.ai.saveKey")
                 LabeledContent("状态", value: model.aiKeyStatus)
-            }
-            Section("主题") {
-                ForEach(FHomeTheme.allCases) { item in
-                    Button { themeRaw = item.rawValue } label: {
-                        FThemeGalleryRow(theme: item, selected: theme == item)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("NAS 连接") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
@@ -989,12 +985,54 @@ struct SettingsOverview: View {
                 }
                 .disabled(model.checkingNASConnection)
                 .accessibilityIdentifier("settings.nas.test")
-                Text(model.nasConnectionStatus)
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("NAS API 不要求单独令牌。连接测试只读取 /readyz，不发送持仓。8788 端口对可达网络开放；远程访问请使用 HTTPS 并限制网络入口。")
+                if nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("尚未填写 NAS 地址，连接测试还没有开始。")
+                        .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
+                } else {
+                    Text(model.nasConnectionStatus)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("NAS API 不要求单独令牌。测试只读取 /readyz，不发送持仓。局域网 http://内网IP:8788 需要连接同一 Wi‑Fi 或 VPN；手机使用 5G 远程访问时需要可达的 HTTPS 地址。8788 对可达网络开放，请限制网络入口。")
                     .font(.footnote).foregroundStyle(.secondary)
-                LabeledContent("同步", value: "未连接")
+                LabeledContent("历史数据同步", value: "未接入")
                 LabeledContent("新闻", value: "未接入")
+            }
+            Section("主题") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(FHomeTheme.allCases) { item in
+                            Button { themeRaw = item.rawValue } label: {
+                                HStack(spacing: 5) {
+                                    if theme == item {
+                                        Image(systemName: "checkmark.circle.fill")
+                                    }
+                                    Text(item.manifest.name)
+                                }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme == item ? theme.accent : theme.ink)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(theme == item ? theme.accent.opacity(0.13) : theme.background.opacity(0.72),
+                                            in: Capsule())
+                                .overlay(Capsule().stroke(theme.accent.opacity(theme == item ? 0.55 : 0.16), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("theme.selector.\(item.rawValue)")
+                        }
+                    }
+                }
+                Text("当前：\(theme.manifest.name) · \(theme.manifest.layout.description)")
+                    .font(.footnote).foregroundStyle(.secondary)
+                DisclosureGroup("查看全部主题预览") {
+                    ForEach(FHomeTheme.allCases) { item in
+                        Button { themeRaw = item.rawValue } label: {
+                            FThemeGalleryRow(theme: item, selected: theme == item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("数据诊断") {
                 LabeledContent("真实账本", value: model.ledgerStatus)
@@ -1016,6 +1054,12 @@ struct SettingsOverview: View {
         .accessibilityIdentifier("settings.form")
         .navigationTitle("设置")
         .tint(theme.accent)
+        .task {
+            guard !hasAutoCheckedNAS else { return }
+            hasAutoCheckedNAS = true
+            guard !nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            await model.configureAndTestNAS(baseAddress: nasBaseAddress)
+        }
     }
 }
 

@@ -282,5 +282,12 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 
 | Apple CI 2026-10-28 / `b882a580` | FCore 140/140 executed/pass；XcodeGen 成功；Device Release Build 在 `FNASConnection.swift:68` 因不存在的 `URLError.Code.localNetworkDenied` 失败；Simulator/UI/IPA skipped | 首个根因已在工作树修复，未编译；普通推送后重跑完整Apple CI | 修复后尚无结果 |
 | Apple CI 2026-10-28 / `572cb5f` | FCore 140/140；XcodeGen、Device Release Build、Simulator Build 成功；App UI XCTest 3/3；IPA打包成功 | run `40661196596`，artifact `12804127584` | 自动化全绿；人工视觉/手势/iPhone Air真机仍待验收 |
-| P2 首页真实资产摘要 | 真实持仓行增加新鲜行情下的本轮持仓浮盈亏；今日证券盈亏缺少前收/日初持仓口径时显示 unavailable，不伪造 | `HomeExperience.swift`，当前已编码、未编译；无新增测试定义/执行 | CI后检查页面与行情新鲜度；人工真比例/iPhone Air仍待验收 |
+| P2 首页真实资产摘要（旧状态已被下行取代） | 真实持仓行增加新鲜行情下的本轮持仓浮盈亏；全天证券盈亏口径不可靠时显示 unavailable，不伪造 | 旧注记曾为“已编码未编译”；现状态见下方当前HEAD CI记录 | CI编译与自动化已通过；人工真比例/iPhone Air仍待验收 |
 | 2026-10-28 CI截图记录 | run `40661196596` 导出9张 iPhone 16 Pro UI XCTest截图，尺寸 960×1440 | 有CI附件；不是人工视觉验收。样张布局存在比例/裁切疑点 | 需真实 Simulator 比例截图后判断，当前不做全局布局重构 |
+
+| 2026-10-28 P2 首页盈亏语义 + 当前HEAD Apple CI | `HomeExperience.swift` 显示新鲜行情下的本轮持仓浮盈亏；全天证券盈亏缺少可靠前收/日初持仓事实时显示Unavailable原因 | 当前HEAD `6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87` 的CI run `40663328427`：FCore 140/140、XcodeGen、Device Release Build、Simulator Build、App UI 3/3、未签名IPA全部成功 | **当前SHA编译及CI测试通过**；非人工Simulator/iPhone Air验收。UI截图仍需真实交互设备核查 |
+| P2 资产流水手续费更正显示 | 更正后的成交行应显示有效手续费；调整事件显示费用差额，避免原始fee与effective fee误导 | `HomeExperience.swift` 已修正显示标签；不改fill、现金或费用投影 | **已编码，当前尚未编译/测试**；NAS没有修改，不需要部署 |
+| App Icon / IPA图标 | 桌面图标使用F专属图标，确认生成IPA的Asset Catalog确实包含该图标 | `Assets.xcassets/AppIcon.appiconset/AppIcon.png` + XcodeGen AppIcon配置存在；当前源码提交晚于图标资源引入提交 | CI Build成功但未解包检查IPA内部Asset Catalog；用户设备报告仍见旧B图标，最新artifact卸载重装验证待完成 |
+| App Icon 第二版 / Settings NAS可发现性 | 无文字字母、清晰金融意象；NAS入口不被主题预览埋住；健康检查和数据同步状态分别表达 | SVG/PNG已重做为无字母趋势柱线+信号点；NAS区移至在线AI之后；“历史数据同步未接入”取代静态“同步未连接” | 已编码，Apple CI与IPA内容核验待做；NAS连接本身需根据设备当前网络和真实测试错误E2E验证 |
+| iPhone手机布局黑边 | App正常启动时占据预期全屏，不呈上下黑边的居中2:3面板 | 用户IMG_6002截图显示中央圆角面板与大块黑边；FHomeRoot无显式固定高度/弹窗高度约束 | 根因未确定；须在真机确认启动模式/窗口形态后复测，禁止凭图盲加尺寸限制 |
+| IMG_6003 设置/NAS/主题入口 | NAS 地址未填写时要清楚提示“未配置”，不能伪装成连接错误；主题应以紧凑主题栏切换，完整预览默认收起 | 当前工作树已编码：NAS区前置、空地址文案区分“尚未测试”、保存地址时只读检查`/readyz`；主题以横向栏显示，完整预览放入折叠区；工程加入`UILaunchScreen`和根视图弹性填充 | 当前更改**尚未编译/CI/真机复验**。用户截图状态栏为5G；局域网地址需Wi-Fi/VPN，远程公网访问需可达HTTPS/VPN。服务端未修改、不需NAS部署 |

@@ -786,6 +786,8 @@ struct FHomeRoot: View {
                 .tabItem { Label("设置", systemImage: "slider.horizontal.3") }
                 .tag(FPrimaryTab.settings)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
         .alert("观盘 F", isPresented: Binding(
             get: { model.alertMessage != nil },

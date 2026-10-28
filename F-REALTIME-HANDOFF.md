@@ -202,6 +202,31 @@ Apple编译验证：本机工具缺失；最近成功run 40622847995不覆盖当
 下一步：fetch成功后先安全reconcile，再普通提交/推送并跑完整Apple CI；若网络持续不可用，继续有限范围静态查漏，不声称当前改动通过
 F_CURRENT_STATUS_END
 
+## 2026-10-28 Apple CI 与 P2 首页资产摘要（最新工作树）
+
+- 当前HEAD：`6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87`；本地 `main` 与已核对远端 `origin/main` 同步；代码提交后工作树干净。提交仅用于追溯，不定义功能完成度。
+- 本轮完成：`HomeExperience.swift` 首页真实资产摘要现在在行情有效且足够新鲜时显示每项持仓的本轮浮盈亏；今日证券盈亏缺少可靠前收/日初持仓口径时明确显示Unavailable原因。没有改Ledger、没有猜算全天盈亏，也没有把本轮浮盈亏叫做今日盈亏。
+- 当前HEAD Apple CI run `40663328427` 成功：FCore XCTest **140 executed / 140 passed / 0 failed**；XcodeGen成功；Device Release Build和Simulator Build成功；App UI XCTest **3 executed / 3 passed / 0 failed**；未签名IPA打包和证据上传成功。用例包含 Advisor unavailable、五主导航可发现性、真实资产/已清仓/现金分区。
+- 产物：workflow artifact `guanpan-f-ios-build-evidence`，ID `12805631254`，ZIP由GitHub Actions保存，可从run页下载。CI构建通过证明该SHA已编译并通过CI测试，不代表人工视觉验收。
+- 截图边界：之前CI XCTest导出的图像是自动化截图，尺寸960×1440且比例有疑点；不是人工Simulator验收，也不是iPhone Air截图。本机Windows没有Xcode/Simulator，当前没有人工手势检查或真机结果。不得据此宣称页面布局问题已经解决。
+- 当前类别：本轮首页改动已编码、已由当前HEAD Apple CI编译并通过自动化；未完成Simulator人工视觉、iPhone Air及真实设备验收。NAS历史分钟到iOS/Research Evidence、真实DeepSeek闭环仍未完成。
+- 下一步：在可交互Apple Simulator/iPhone Air环境检查首页显示密度和资产语义，再按B-vs-F整改清单连续检查行情、证券详情、图表、AI和资产，不扩大主题/页面范围。随后回到NAS历史分钟→Research Evidence→DecisionContext→DeepSeek真实链路。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：核心产品体验整改与可用性验收
+当前正在开发：根据B-vs-F审计收敛首页、行情、详情、图表、AI、资产体验
+刚刚完成：真实持仓行显示新鲜行情下的本轮浮盈亏；全天证券盈亏缺口明确Unavailable
+未提交工作：当前检查时无源码未提交修改；工作树CLEAN
+iOS完成度：当前HEAD XcodeGen、设备Release Build、Simulator Build通过；CI UI 3/3通过；人工Simulator/iPhone Air未验
+AI顾问完成度：Advisor不可用状态UI测试通过；真实NAS/DeepSeek/Candidate成交复判E2E未通过验收
+统一图表完成度：代码及CI编译通过；点击/十字/拖缩/历史日期/横屏/状态恢复仍待人工Simulator
+NAS历史数据完成度：历史provider覆盖和NAS→iOS→Research Evidence真实链路仍未验证
+Apple编译验证：CI run 40663328427，当前HEAD编译成功
+当前测试：FCore 140/140；App UI 3/3；均为本次CI实际执行。人工视觉/手势0；真机0
+最大缺口：iPhone Air真实布局验收；统一图表手势；NAS历史分钟消费链；DeepSeek成交闭环
+下一步：可交互Apple设备上做页面/图表验收；当前Windows环境不可用时继续有限范围的产品差距审计
+F_CURRENT_STATUS_END
+
 ## 2026-10-28 iPhone Air / 图表 / 图标 / NAS连接反馈（当前工作树）
 
 - 用户实际安装打开IPA后反馈“完全是一团糟”，并指出自己使用iPhone Air、整体布局不好。当前没有收到具体页面截图/录屏；因此该用户现场反馈优先于旧UI测试和XCResult导出截图，当前App可用性不能标记通过。
@@ -1200,6 +1225,45 @@ F_CURRENT_STATUS_END
 - 这轮没有人工 Simulator 操作/截图审查、iPhone Air或真机验收；也没有 NAS历史分钟、DeepSeek或成交后Advisor复判E2E。
 - 运行链接：`https://github.com/ggjj45830/guanpan-f/actions/runs/40661196596`；构建产物：`https://github.com/ggjj45830/guanpan-f/actions/runs/40661196596/artifacts/12804127584`。
 - 下一步：优先人工检查当前 Simulator 截图/真实交互条件，并继续核心页面 B vs F 整改；不把 UI XCTest 通过写成设备视觉验收通过。
+
+## 最新实时状态覆盖（2026-10-28；以此节为准）
+
+- 当前HEAD：`6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87`；已普通推送，远端同步；源码工作树CLEAN。下方较早的未编译状态为历史记录，已被本节和上方当前HEAD验证结果覆盖。
+- 本次P2首页资产摘要修复：行情有值且时间戳新鲜时展示真实持仓的本轮浮盈亏；缺可靠前收/日初持仓依据时全天证券盈亏明确Unavailable。当前HEAD Apple CI已编译该代码。
+- 最新Apple CI `40663328427`：FCore **140/140 passed**；XcodeGen、Device Release Build、Simulator Build均成功；App UI **3/3 passed**；未签名IPA打包及artifact上传成功。Artifact ID `12805631254`，名称 `guanpan-f-ios-build-evidence`。
+- CI成功不等于人工视觉、Simulator手势或真机通过。Windows没有本地Xcode/Simulator；目前没有新的人工作业截图、iPhone Air复验、真实NAS历史分钟→iOS→Research Evidence、DeepSeek成交闭环证据。
+- 当前工作树还包含本轮交接/矩阵/B-vs-F文档更新，未提交；Swift源码本身干净。未提交文档没有改变已测试源码。
+- 下一步：取得可交互Apple环境后检查首页、六个核心页面和图表手势/iPhone Air；否则继续有限范围静态产品差距整改，并保持NAS历史分钟与DeepSeek E2E为未完成。
+
+## 2026-10-28 资产流水静态查错（CI待验证）
+
+- NAS源码无未提交变化，本轮不需要部署NAS。
+- 静态查错发现手续费更正后，资产现金流水主行仍显示原始`entry.fee`，但更正按钮显示`effectiveFee`，会让用户看到互相矛盾的金额。
+- `HomeExperience.swift` 已改为：成交行显示有效手续费；更正后的成交明确标注“手续费（修正后）”；手续费调整事件显示“手续费差额”。账本现金事件和原始fill均未改动。
+- 该Swift UI修正尚未编译、未跑XCTest、未Simulator验收。最新成功CI `40663328427` 对应的源码提交不包含本次修正，不能继承其结果。
+- 本机`git fetch origin main`失败（DNS解析线程启动失败）；GitHub API读取确认远端main仍是`6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87`。当前本地有文档和该Swift UI修改，未提交/未推送。网络恢复后先fetch/reconcile，再普通提交推送触发Apple CI。
+
+## App Icon 实际状态核对（2026-10-28）
+
+- 当前仓库已有 F 专属 `GuanpanFApp/Assets.xcassets/AppIcon.appiconset/AppIcon.png`，是藏蓝底、F字母与行情柱线的1024×1024图标；Contents.json声明iOS universal AppIcon，XcodeGen `project.yml`将`ASSETCATALOG_COMPILER_APPICON_NAME`设为`AppIcon`，并把Assets.xcassets加入App target资源。
+- 图标资源在提交`b882a580`首次加入；成功CI构建的`572cb5f`及后续当前HEAD`6cde9d5`都晚于该资源提交，因此当前源码/最新CI产物的输入应包含该F图标。未直接解包验证IPA内最终`Assets.car`，不把配置存在当成IPA图标内容实物验证。
+- 应用桌面名称仍是`观盘 F`；IPA文件名为`观盘Max-unsigned.ipa`，二者目前不同。用户反馈实际安装后仍显示旧B图标；需确认安装的是最新run `40663328427` artifact并卸载旧App后重装。若最新artifact重装后仍旧，需解包IPA核验Asset Catalog/Info.plist并修复打包链。
+
+## 手机截图 / NAS连接 / 图标重做（2026-10-28；当前待Apple CI）
+
+- 用户手机截图显示状态栏为5G，未见Wi-Fi图标；如果NAS地址是`192.168.x.x:8788`等局域网地址，蜂窝网络不能直接路由到家中NAS，需连家中Wi-Fi或VPN。若使用极空间远程公网HTTP地址，iOS ATS会阻止非本地明文HTTP；需远程HTTPS或VPN。截图本身没有展示NAS输入框/地址/测试结果，连接失败的具体HTTP/URL错误仍未取得。
+- 原设置页把NAS放在十套主题预览之后，入口埋得很深；已将NAS连接区移到在线AI后面，并把静态“同步未连接”改为明确的“历史数据同步未接入”，避免将未实现同步误报成连接状态。此SwiftUI修复待编译。
+- 截图还显示App内容处于中央约2:3圆角面板，上下大块黑边；源码根部没有固定高度、sheet detent或窗口尺寸限制，无法单凭静态代码断言成因。需确认实际启动形态、iOS窗口/辅助显示环境并用真比例屏幕录制复核；不据此盲目加高度约束。
+- 图标按用户反馈二次重做：不含字母F、不含眼睛，改为深蓝底上升行情柱线与信号点；`Design/AppIcon.svg`为矢量源，已用其生成1024×1024 `AppIcon.png`。尚未进入新IPA，未编译/未设备验证。
+- NAS容器/服务端源代码没有修改；无需部署NAS。当前GitHub本机fetch此前遇到DNS错误，新图标及设置页调整均未送Apple CI。最新成功CI仍是旧图标/旧设置布局的HEAD，不能用于声称本轮修改已验证。
+
+## IMG_6003 新证据与手机/NAS修正（2026-10-28）
+
+- 新截图显示设置中的NAS状态为“未配置”，不是HTTP失败；页面没有已配置地址的证据。顶部状态栏为5G，且没有Wi-Fi图标。已在UI加入“未填写地址，连接测试还没有开始”的明确状态及局域网HTTP需Wi-Fi/VPN、5G远程需HTTPS说明。Settings访问时会对已保存地址自动做一次`/readyz`只读检查，用户仍可手动重试。
+- Themes页签改为一条水平可滑动的主题栏；全部主题预览收进默认折叠的DisclosureGroup，避免设置页被十张大预览卡占满。
+- IMG_6002/6003两张截图中的App内容呈经典2:3视口，四周黑边；工程过去没有`UILaunchScreen`，加入现代空启动屏声明和根容器填充后，需新IPA重装确认是否恢复全屏。Apple文档说明`UILaunchScreen`是现代启动屏配置，并用于支持系统多任务/动态尺寸；仍须实机验证。
+- 当前待CI Swift/工程变更：AppIcon SVG与1024 PNG、Settings NAS上移与状态提示、主题横向栏/折叠预览、NAS已保存地址自动检查、`UILaunchScreen`、根TabView全屏frame、手续费更正金额显示。均**未编译、未执行XCTest、未Simulator验收**。
+- NAS容器/服务端源代码无变化，无部署动作；本机`git fetch origin main`仍DNS失败。远端main API此前确认在`6cde9d5`；网络恢复后先fetch/reconcile，再普通push触发Apple CI。
 
 ## 2026-10-28 CI截图静态目视记录与首页摘要整改（当前未编译）
 
