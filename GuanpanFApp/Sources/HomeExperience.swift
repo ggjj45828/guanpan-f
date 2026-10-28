@@ -349,13 +349,13 @@ struct HomeDestination: View {
         let closedEpisodesRealized: String = history?.lifetimeHistoryIsComplete == true
             ? recordedClosedEpisodesRealized.description
             : "不可完整统计 · 导入前流水缺失"
-        let episodeUnrealized = if let holding, let freshPrice {
+        let episodeUnrealized: Decimal? = if let holding, let freshPrice {
             Decimal(holding.units) * freshPrice - holding.bookCost
         } else { nil }
-        let episodePnL = if let activeEpisode, let episodeUnrealized {
+        let episodePnL: Decimal? = if let activeEpisode, let episodeUnrealized {
             activeEpisode.netRealizedProfit + episodeUnrealized
         } else { nil }
-        let lifetimePnL = if let history, history.lifetimeHistoryIsComplete,
+        let lifetimePnL: Decimal? = if let history, history.lifetimeHistoryIsComplete,
                               history.activeUnits == 0 {
             history.lifetimeRealizedProfit
         } else if let history, history.lifetimeHistoryIsComplete, let episodeUnrealized {

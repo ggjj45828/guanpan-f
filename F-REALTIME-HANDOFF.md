@@ -262,6 +262,29 @@ Apple编译验证：run 40489587708针对commit 8c69211全部成功；本轮FCor
 
 F_CURRENT_STATUS_END
 
+## 2026-10-28 CI 继续结果：Ledger测试修正后进入iOS Device Build
+
+- 修正提交 `d306f016d4835acee540d87856d9980ce0990065` 已普通推送；新 GitHub Actions run：`40621314214`。
+- FCore `swift test` 步骤成功，XcodeGen成功；此前130项中的唯一失败断言已按证券级券商成本语义修正。
+- Device Build 失败，GitHub check 注释只显示 exit code 65，没有公开真实 `xcodebuild` 首错；Simulator Build、App UI XCTest、IPA打包被跳过。
+- CI job log 下载接口要求仓库管理员认证；当前只取得公开摘要和 annotations，不能据此猜编译错误。需从已登录 GitHub 页面下载该 run/job 的日志包后再修复。
+- 当前状态：FCore已过；XcodeGen已过；Device Build External Diagnostic Pending；Simulator/UI仍未验证。源码未根据exit code臆改。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：修复新的 iOS Device Build 根因，并重跑完整 Apple CI
+当前正在开发：排查 `Build unsigned iOS device app` 失败；等待该 job 的首个真实 xcodebuild 错误
+刚刚完成：Ledger成本语义回归断言修正；FCore步骤与XcodeGen步骤通过
+未提交工作：当前没有功能源码修改；若下载新CI日志后修复，将另行记录；锁定临时目录原样保留
+iOS完成度：FCore测试已通过；XcodeGen已通过；Device App Build失败(exit 65)；Simulator Build/UI Test跳过
+AI顾问完成度：本轮未变更；真实DeepSeek闭环仍未验证
+统一图表完成度：本轮未变更；Simulator交互仍未验收
+NAS历史数据完成度：此前定向Python 77/77通过；历史分钟进入iOS/研究链未验证
+Apple编译验证：FCore及XcodeGen通过；Device Build失败；需精确xcodebuild日志定位，未宣称App编译成功
+当前测试：FCore step成功（套件定义130项）；App UI本次executed 0；Python/NAS最近定向77 passed / 0 failed
+最大缺口：Device Build首错诊断；后续Simulator Build/UI Test；真实NAS历史分钟与DeepSeek端到端
+下一步：从 `40621314214` 下载job日志，修复第一个真实编译错误后普通推送并重跑CI
+F_CURRENT_STATUS_END
+
 ## 2026-10-28 Apple CI 失败诊断与修正
 
 - 提交 `6d1c68c5cf0c1add7c1c8148b423f6aafd174f2b` 已推送到转移后的 `ggjj45830/guanpan-f`；远端 `main` 与本地提交一致。
@@ -768,4 +791,25 @@ Apple编译验证：用户要求暂缓；本机无Xcode
 当前测试：FCore defined 130 / 本轮0 executed；App UI defined 3 / 本轮0 executed；Python/NAS 77 executed / 77 passed / 0 failed（定向）；另5项环境受限未执行
 最大缺口：事后费用差额对账与历史重放；当前Swift改动的Apple CI；NAS历史分钟进iOS；Simulator人工验收及DeepSeek真实成交后复判
 下一步：设计并实现追加式费用差额事件，费用关联fill且不可覆盖；验证原fill、现金、Episode成本和历史/今日PnL不会重复计费；本阶段不扩主题数量、不编译
+F_CURRENT_STATUS_END
+
+## 2026-10-28 Device Build 根因与最小修正
+
+- 最新 CI run `40621314214` 的上传日志已由用户提供并读取。FCore Swift tests 与 XcodeGen均通过；Device Build首个真实错误为`HomeExperience.swift:354`：`'nil' requires a contextual type`。
+- 根因是 Swift `if` expression 的 nil 分支缺少显式 Optional 目标类型。为`episodeUnrealized`、`episodePnL`、`lifetimePnL`补充`Decimal?`上下文，避免后续相同推断问题。该源码修改尚未由Apple CI验证。
+- 该 run 中 Simulator Build、App UI XCTest和IPA因Device Build失败而跳过。此修正应以新CI完整结果为准。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：修复首个App Swift编译根因后重跑完整Apple CI
+当前正在开发：为HomeDestination的三段可选P&L表达式增加显式Decimal?类型
+刚刚完成：FCore CI步骤通过；XcodeGen通过；从用户日志定位Device Build首错并做最小类型注解修正
+未提交工作：HomeExperience.swift类型注解与实时交接更新；锁定临时目录原样保留
+iOS完成度：FCore/项目生成已通过；Device Build首错已静态修正但未重编；Simulator/UI未执行
+AI顾问完成度：未变化，真实DeepSeek闭环仍未验证
+统一图表完成度：未变化，Simulator手势未验收
+NAS历史数据完成度：最近定向Python 77/77通过；历史分钟到iOS/研究链未验证
+Apple编译验证：最新失败run为Device Build exit 65；第一处根因已定位为nil缺显式Optional上下文；修复待CI
+当前测试：FCore CI步骤成功（130项套件）；App UI本次执行0；Python/NAS最近77 passed / 0 failed（定向）
+最大缺口：验证最小编译修正；之后Device/Simulator Build与UI XCTest；真实NAS分钟与DeepSeek闭环
+下一步：本地修复提交为`93bc5da`；GitHub连接恢复后普通推送，再检查新CI并继续处理真实编译错误
 F_CURRENT_STATUS_END
