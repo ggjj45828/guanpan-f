@@ -98,6 +98,7 @@ struct HomeLayout: View {
         }
     }
 
+
     private var inkEditorial: some View {
         VStack(alignment: .leading, spacing: 24) {
             HomeMasthead(model: model, theme: theme, eyebrow: "编辑部 · 观盘手记")
@@ -198,6 +199,7 @@ struct HomeLayout: View {
         NavigationLink(value: role.route) {
             VStack(spacing: 4) {
                 Image(systemName: role.symbol).foregroundStyle(theme.accent)
+
                 Text(shortTitle).font(.caption.weight(.semibold))
             }
             .frame(width: 98, height: 62)
@@ -298,6 +300,7 @@ private struct HomeAdvisorLead: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("home.advisor.portfolio-conclusion")
                 Text(result.narrative.basis)
+
                     .font(.subheadline).foregroundStyle(.secondary)
                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
@@ -499,6 +502,7 @@ private struct HomePortfolioLead: View {
            let pnl = try? FSecurityPnLCalculator.episodeUnrealizedPnL(
                 units: holding.units, bookCost: holding.bookCost, currentPrice: price
            ) {
+
             VStack(alignment: .trailing, spacing: 3) {
                 Text("¥\(NSDecimalNumber(decimal: price).stringValue)")
                     .font(.subheadline.monospacedDigit().weight(.semibold))
@@ -599,6 +603,7 @@ private struct AdvisorComposer: View {
             }
             TextField(instrumentCode.map { "例如：\($0) 现在需要操作吗？" } ??
                       "例如：今天我的持仓需要操作吗？", text: $model.question, axis: .vertical)
+
                 .lineLimit(2...4).textFieldStyle(.roundedBorder)
                 .focused($composerFocused)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -699,6 +704,7 @@ private struct PortfolioCard: View {
                 .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
+
             Text("等待真实行情 · 持仓浮盈亏暂不可用")
                 .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
                 .fixedSize(horizontal: false, vertical: true)
@@ -800,9 +806,6 @@ struct HomeDestination: View {
             case .crossMarket:
                 CrossMarketOverview()
 
-Warning: truncated output (original token count: 6172)
-Total output lines: 400
-
             case .advisor:
                 AdvisorOverview(model: model)
             case .portfolio:
@@ -903,6 +906,7 @@ Total output lines: 400
         let lifetimePnL: Decimal? = if let history, history.lifetimeHistoryIsComplete,
                               history.activeUnits == 0 {
             history.lifetimeRealizedProfit
+
         } else if let history, history.lifetimeHistoryIsComplete, let episodeUnrealized {
             history.lifetimeRealizedProfit + episodeUnrealized
         } else { nil }
@@ -963,7 +967,79 @@ Total output lines: 400
                         (history?.lifetimeHistoryIsComplete == false
                             ? "不可用 · 导入前历史流水未录入"
                             : "未实现部分不可用 · 行情缺失或已过期"))
-                    Text("今日证券总盈亏含全天市值变化；今日已实现仅统计卖出成交。做T需有明确成交标记，不能用普通…1172 tokens truncated…}
+                    Text("今日证券总盈亏含全天市值变化；今日已实现仅统计卖出成交。做T需有明确成交标记，不能用普通卖出代替。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                if let history {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("持仓周期历史").font(.headline)
+                        ForEach(history.episodes) { episode in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("第\(episode.episodeNumber)轮 · 建仓 \(episode.openedAt.formatted(date: .numeric, time: .omitted))")
+                                    .font(.subheadline.weight(.medium))
+                                Text(episode.closedAt.map { "清仓 \($0.formatted(date: .numeric, time: .omitted))" } ?? "当前持仓周期")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                Text("本轮已实现盈亏 \(episode.netRealizedProfit.description)")
+                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 5)
+                        }
+                    }
+                    .padding(14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+                let snapshot = quoteSnapshot
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "暂无有效行情")
+                            .font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .minimumScaleFactor(0.75)
+                            .lineLimit(1)
+                        Button {
+                            Task { await model.refreshMarketData(for: [code]) }
+                        } label: {
+                            if model.refreshingMarketCodes.contains(code) {
+                                Label("刷新中", systemImage: "hourglass")
+                            } else {
+                                Label("刷新实时分时", systemImage: "arrow.clockwise")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+
+                        .font(.subheadline)
+                        .disabled(model.refreshingMarketCodes.contains(code))
+                        .accessibilityIdentifier("market.refresh.\(code)")
+                    }
+                    FUnifiedSecurityChart(
+                        model: FChartPresentationBuilder.live(snapshot, holding: holding,
+                                                              candidate: model.advisorResult?.candidate,
+                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                        height: 330)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("日 K 与均线").font(.headline)
+                            Spacer()
+                            Button {
+                                Task { await model.refreshDailyKline(for: code) }
+                            } label: { Label("刷新日 K", systemImage: "arrow.clockwise") }
+                                .buttonStyle(.bordered).controlSize(.small)
+                        }
+                        if let daily = model.dailyKlineByCode[code] {
+                            FUnifiedSecurityChart(
+                                model: FChartPresentationBuilder.daily(daily, holding: holding,
+                                                                       candidate: model.advisorResult?.candidate,
+                                                                       ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                                height: 315)
+                        } else {
+                            Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 64)
+                        }
+                        Text(model.dailyKlineStateByCode[code] ?? "数据源：腾讯日 K · 未复权；等待请求")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
                     .padding(14)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                     Text(model.marketRefreshStateByCode[code] ?? "尚未取得实时行情")
@@ -1032,6 +1108,7 @@ Total output lines: 400
 
 struct AdvisorOverview: View {
     @ObservedObject var model: FHomeModel
+
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
@@ -1133,9 +1210,6 @@ struct RealAssetsOverview: View {
                                     Text("第\(episode.episodeNumber)轮：\(episode.openedAt.formatted(date: .numeric, time: .omitted)) 建仓 → \(episode.closedAt?.formatted(date: .numeric, time: .omitted) ?? "持有中") · 已实现 \(episode.netRealizedProfit.description)")
                                         .font(.caption2).foregroundStyle(.secondary)
 
-Warning: truncated output (original token count: 5048)
-Total output lines: 400
-
                                 }
                             }
                         }
@@ -1236,6 +1310,7 @@ struct SettingsOverview: View {
                     model.saveDeepSeekKey(deepSeekKeyDraft)
                     deepSeekKeyDraft = ""
                 }
+
                 .accessibilityIdentifier("settings.ai.saveKey")
                 LabeledContent("状态", value: model.aiKeyStatus)
             }
@@ -1316,7 +1391,10 @@ struct SettingsOverview: View {
             Section("数据诊断") {
                 LabeledContent("真实账本", value: model.ledgerStatus)
                 LabeledContent("交易日历", value: model.marketCalendarStatusText)
-                if model.marketRefreshStateByCode.isEm…48 tokens truncated… \.self) { code in
+                if model.marketRefreshStateByCode.isEmpty {
+                    Text("尚无行情请求记录").foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.marketRefreshStateByCode.keys.sorted(), id: \.self) { code in
                         LabeledContent(code, value: model.marketRefreshStateByCode[code] ?? "状态未知")
                     }
                 }
@@ -1333,6 +1411,7 @@ struct SettingsOverview: View {
         .tint(theme.accent)
         .scrollDismissesKeyboard(.interactively)
         .toolbar {
+
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("收起键盘") { settingsInputFocused = false }
@@ -1433,6 +1512,7 @@ private struct FThemeGalleryRow: View {
                     let role = manifest.layout.roleOrder[index]
                     RoundedRectangle(cornerRadius: isTerminal ? 1 : 4)
                         .fill(theme.accent.opacity(0.25 + Double(index) * 0.14))
+
                         .frame(width: previewWidth(for: role), height: previewHeight(for: role))
                 }
             }
@@ -1634,6 +1714,7 @@ private struct FAdvisorResultCard: View {
                     Text("• \(item.displayName)").font(.caption).foregroundStyle(.red)
                 }
             }
+
             Text("真实资产只能在用户确认真实成交后变化；此结果没有账本写入能力。")
                 .font(.caption2).foregroundStyle(.secondary)
         }
@@ -1734,6 +1815,7 @@ struct FLedgerFeeCorrectionSheet: View {
                               axis: .vertical)
                         .lineLimit(2...4)
                 }
+
                 if !model.ledgerWriteStatus.isEmpty {
                     Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
                 }
@@ -1834,6 +1916,7 @@ private extension FDecisionGuardFinding {
         switch self {
         case .invalidContext: return "DecisionContext 校验失败"
         case .accountChanged: return "真实账本状态不匹配"
+
         case .invalidCandidate: return "候选计划字段无效"
         case .missingFreshQuote(let code): return "\(code) 缺少可信新鲜行情"
         case .staleCitedEvidence(_): return "引用行情证据已过期"
