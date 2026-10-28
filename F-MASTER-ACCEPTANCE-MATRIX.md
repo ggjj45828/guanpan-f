@@ -1,12 +1,36 @@
 # F Master Acceptance Matrix
 
+## 2026-10-28 iPhone Air反馈与图表/图标/连接修复（当前工作树）
+
+| 范围 | 当前发现/修改 | 状态 |
+|---|---|---|
+| iPhone Air可用性 | 用户实际反馈IPA页面整体排版混乱；目前没有本轮iPhone Air截图或可交互Simulator证据，旧CI截图不能代替真机布局验收 | 明确未通过人工验收，需新IPA检查并根据具体页面问题继续修复 |
+| B/F图表交互 | 对照只读`GuanpanNext-work/ios/Sources/UnifiedChartView.swift`，B有可切换并保存的图层按钮；F旧版只有静态图例。当前F已编码MA5/10/20/60/250、成交量及真实叠加线显隐和可见序列定纵轴，并新增隐藏MA价格范围测试定义 | 未编译/未执行；旧CI不覆盖 |
+| F专属图标 | 增加1024×1024、无Alpha的F图标并接入XcodeGen Asset Catalog；不引用B版图标 | 已编码；需XcodeGen/Asset Catalog编译与新IPA确认 |
+| NAS连接诊断 | F连接页基于根URL检查`/readyz`，现也接受用户复制的`/readyz`完整地址并标准化；增加本地网络权限/DNS/端口/ATS提示 | 已编码；没有目标NAS地址与iPhone现场，本轮无法做真实连通测试 |
+
+FCore XCTest当前defined=140；新增隐藏MA轴范围测试0 executed。App UI XCTest=3 defined，本轮0 executed。完整Apple CI run `40648658299` 的139/139和UI 3/3是旧源码证据，不覆盖上述Swift/Asset Catalog修改。
+
+## 2026-10-28 当前工作树静态查错补充（暂停 NAS）
+
+| 范围 | 发现 | 证据/状态 |
+|---|---|---|
+| Git与CI | HEAD `676da3bd5d963900337cbcc970c083b110e4416c`，本地与`origin/main`对齐；仅两份状态文档未提交。成功Apple CI run `40648658299` 对应`f366542`，当前Swift源码与其无差异 | 可沿用为同源码构建证据；本轮没有新CI |
+| Advisor/Ledger边界 | 静态架构检查确认Advisor target不依赖Ledger writer；真实Advisor选择组合/证券范围和Candidate确认写入路径仍符合只读/用户确认边界 | `verify_architecture_boundaries.py`实际运行通过；真实在线闭环未执行 |
+| 主题布局 | Gallery读取manifest的roleOrder，真实HomeLayout另行硬编码布局顺序，部分manifest顺序与实际页面不同 | 已编码但尚未修；可能造成预览与实际结构不一致。待统一并Apple编译 |
+| 图表主题色 | Unified chart的MA/K柱/成本/Candidate颜色硬编码且未接主题tokens | 已编码但语义token尚未接通；待Apple编译与截图对比 |
+| IOPV renderer | 纵轴range已纳入可用IOPV值，但renderer既不画IOPV，也不把独立IOPV观察放入图例；当前无可靠来源所以保持Unavailable | 真实IOPV接入前需补齐render/legend并验证，不得仅把它纳入纵轴 |
+| 图表Unavailable文案 | 均价/前收/IOPV状态行是静态文本；当前确无可靠来源所以目前诚实，未来来源接入后会误报 | 当前非数据造假；记录为接入真实序列时必须修正 |
+| 本轮验证限制 | 结构测试因缺PyYAML未执行；本机Swift/Xcode不可用；未运行Swift测试、Simulator人工交互或实网服务 | 不计入通过，不把旧CI称为本轮执行 |
+
+
 ## 当前F工作树状态（2026-10-28；HEAD 6eede46）
 
 | 验收项 | 当前证据 | 状态 |
 |---|---|---|
 | 本地/远端同步 | GitHub API确认远端`main=94bdb8e0090e5c2b5be91cafeef8fb07d887ad8e`；本地正在其上追加纯文档状态校正，完成后ahead 1。命令行普通push报DNS线程启动失败，GitHub Desktop Fetch曾长时间挂起，本轮状态校正是否推送尚未确认。`7504ac5`误含临时诊断日志，已用普通撤销提交`6eede46`移除；未改写历史 | 撤销提交已同步；当前交接校正待推送；临时文件已从当前树移除 |
 | Apple CI | 当前源码树与CI通过HEAD`f366542242e995ec62b068273da65ab2f7f9f860`一致；run`40648658299`真实执行FCore 139/139、XcodeGen、Device Build、Simulator Build、UI XCTest 3/3、截图导出、未签名IPA检查均成功 | 源码已由完整CI验证；当前文档/撤销提交未单独重跑 |
-| NAS历史分钟定向逻辑 | 本轮两批Python共13/13通过：exact-date查询、有限补采状态、provider coverage终态、质量/置信度、Research Evidence时点门控/紧凑契约/摘要digest、Eastmoney日期/成交量解析与exact-date请求；本机SQLite测试需将临时目录放在F工作区。更宽provider suite因日历存储测试挂起而中断，未计通过；未访问真实provider/NAS | 定向代码测试通过；真实历史数据获取及NAS→iOS→Evidence E2E未验证 |
+| NAS→iOS静态契约与定向逻辑 | Python定向逻辑13/13通过：exact-date查询、有限补采状态、provider coverage终态、质量/置信度、Research Evidence时点门控/紧凑契约/digest、Eastmoney日期/成交量解析与请求构造。NAS API与iOS客户端路由/关键字段静态对齐；Advisor Research请求带asOf与90质量门。另有1项本地HTTP测试执行后因`WinError 10013`拒绝localhost socket报ERROR；宽provider suite因日历存储用例挂起而中断。未访问真实provider/NAS | 静态接线和定向逻辑通过；本地HTTP测试受环境限制；真实分钟获取、iOS图表展示及进入DecisionContext的E2E未验证 |
 | 手工Simulator/真机 | CI自动截图附件存在；本轮未人工逐图审阅。没有Windows本机Xcode/Simulator或真机证据 | External Pending |
 | NAS历史分钟/AI闭环 | 没有真实provider补采到iOS历史分时并进入Research Evidence/DecisionContext的端到端证据；没有真实DeepSeek→Candidate→用户确认成交→Ledger→Advisor复判证据 | 未完成 |
 | 十套主题 | 十套Home layout与共享role renderer已在当前CI源码树中Build/XCTest通过；十主题截图构图对比及切换状态保留未人工验证 | Swift已编译；视觉验收待做 |
@@ -214,13 +238,14 @@ FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表
 | F-38 | 原生主导航、只读真实资产、显著AI输入、设置和NAS连接 | defined | 五Tab/独立导航栈、AI上下文状态、只读账本页、主题设置、NAS URL与只读`/readyz`检查已编码；NAS token 配置已按用户明确授权移除。历史UI XCTest结果不代表本次改动已验证。 |
 | F-39 | NAS部署包在大小写敏感的Compose项目名校验下可解析 | defined | Compose固定`name: guanpan-f`；部署包显式包含Python package markers；修复entrypoint CRLF shebang，并在Dockerfile构建时校验`#!/bin/sh`；部署包测试7/7与shell语法检查通过。NAS挂载卷属主初始化后降权至UID 10001；Docker/NAS目标环境仍External Verification Pending |
 | F-40 | 真实持仓 Advisor：组合级 + 证券级 Ledger→行情/研究→DecisionContext→Risk/AI Guard→Candidate Plan | defined | App源码现按入口/问题区分组合与证券范围；真实账本空仓时组合Advisor仍可分析现金；明确六位代码/证券入口可分析尚未持有的证券；组合问题纳入全部真实持仓/现金、逐证券报价和 NAS Evidence/缺失状态。单笔买入/卖出 Candidate 现可由用户填写实际成交并显式确认后调用唯一 Ledger writer，成功后失效旧 Candidate、重读账本并重跑相同作用域 Advisor；做T/网格/回本不自动写入。ETF单笔0.10元及做T双边0.20元估费由iOS校验。基础做T不强制盘口，但要求连续时段可信新鲜行情及同标的合格vwapBreak研究。证券详情页接入NAS按日历史分钟；分钟折线支持长按/按钮十字光标、拖动选点/平移、提示和缩放。当前代码已通过Actions run 40298657796的XcodeGen、iOS Device/Simulator Build及3项UI XCTest；FCore 119/119通过。统一图表及历史详情已编码并编译，但交互/画面、清仓真实账本数据、成交后AI闭环和NAS/DeepSeek/行情生产联调仍待专项验收；均价/前收/IOPV无可靠源保持Unavailable，横屏仍未完成 |
+| F-41 | F拥有独立App图标；图表指标可逐项显示/隐藏并按可见序列定纵轴；iPhone Air页面布局与真实交互验收 | defined | 1024px独立F图标资产、MA/成交量/成本/券商成本/均价/前收/Candidate/IOPV开关及隐藏MA不再参与视区纵轴已编码；新增一个价格范围XCTest定义。此前F图例为静态文字，B版统一图表有可切换指标按钮。本轮Swift未编译；iPhone Air截图/人工验收、图标进入IPA均待新Apple CI与设备检查 |
 | EXT-1 | GitHub DNS / 远端可达性和跨机同步验证 | external pending | 私有 `ggjj45828/guanpan-f` 已通过GitHub API发布F源码；Actions run `40298657796` 成功。跨机克隆/恢复及持续同步仍待验证 |
 | EXT-2 | NAS 端口 8788 与部署/恢复链验证 | external pending | 旧部署 `/readyz` 返回过 unauthorized；当前源码改为无鉴权，需重建部署后验证 readiness、Provider/Calendar、历史数据和备份恢复。此改动让可达端口的客户端可访问所有API。 |
 | EXT-3 | macOS、Swift/Xcode 构建和模拟器测试 | external pending | GitHub macOS Actions run `40298657796` 用Xcode 16.4完成Swift编译、Device/Simulator Build、FCore 119/119及App UI 3/3；人工截图/交互、横屏/多尺寸和真机仍待验证 |
 | EXT-4 | iPhone 真机、横屏和推送通知验收 | external pending | 需设备环境 |
 | EXT-5 | 实际行情、新闻与在线 AI 服务接入验证 | external pending | 外部服务配置/联调待做 |
 
-当前矩阵为40项 `defined`、5项 `external pending`。FCore XCTest defined=119 / executed=119 / passed=119 / failed=0；App UI XCTest defined=3 / executed=3 / passed=3 / failed=0（run `40298657796`）。已清仓详情修改编译通过，但无真实清仓账本数据的UI专项验收。这不代表所有产品验收项已通过；Python结果和静态检查也不代表真机、生产NAS或在线服务通过。不得继承A/B状态。
+当前矩阵为41项 `defined`、5项 `external pending`。当前FCore XCTest defined=140；本轮新增测试未执行。App UI XCTest defined=3，本轮0 executed。最近完整Apple CI run `40648658299` 在源码`f366542`上FCore 139/139、App UI 3/3通过，不能继承为当前修改通过。这不代表所有产品验收项已通过；Python结果和静态检查也不代表真机、生产NAS或在线服务通过。不得继承A/B状态。
 
 
 
@@ -237,3 +262,20 @@ NAS SQLite 数据目录权限修复（2026-10-26）：用户日志显示`sqlite3
 
 
 NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/livez` 返回 alive，`/readyz` 返回 unauthorized；当前实现已按用户授权移除NAS API token鉴权，目标容器尚未重部署。生产就绪性未验证。
+
+## 当前产品级B vs F差距审计（2026-10-28，覆盖旧的UI完成度描述）
+
+| 审计项 | 当前工作树事实 | 当前结论/下一步 |
+|---|---|---|
+| B供体身份/视觉证据 | `GuanpanNext-work/ios` 有原生SwiftUI；无Git元数据无法证实为B Frozen；现有SVG自称手绘预览，无B真机截图 | 静态源码差距审计完成；设备级对照仍待用户真实B截图/或准确冻结源码 |
+| 用户实际体验 | 用户实际在iPhone Air打开F，明确反馈整体布局及图表远差于B | 当前用户体验 **B wins**；不能以F架构优势冲抵 |
+| 核心产品页面 | 新文档逐页对照首页、行情、详情、分钟/历史分钟、日K、AI、资产/持仓、设置、主题、NAS、搜索、通知、备份、收息及模拟方向 | 详见 `F-B-UI-PRODUCT-GAP-AUDIT.md` |
+| B不得退化 | 建立NRG-01～NRG-24非回归登记；恢复有价值体验仍使用F真实Ledger/Advisor模型 | 详见 `F-B-NON-REGRESSION.md`；“已编码”不等于已验收 |
+| 图层可选显隐 | 当前dirty源码已编码MA/成交量/有效overlay显隐与价格域过滤；B源码有逐层控件和持久状态；F当前未编译 | F为已编码未验证；需当前HEAD CI + 图表截图/手势验收 |
+| F当前编译/测试 | 最近旧CI为139/139与3个UI用例，SHA `f366542`；不覆盖当前HEAD | 当前HEAD测试状态保持最近真实执行证据，不能继承旧CI为当前PASS |
+| 主题完成度 | F源码含10 layout/manifest但Preview和实际硬编码layout存在差异，用户实装体验差 | 10套未完工；按用户要求先做3套标杆，待六核心页面体验达标后再扩展 |
+| P0/P1/P2顺序 | 用户定义P0现有Ledger/T/费用验证，P1产品差距审计（本轮文档已建），P2六页面体验整改 | 下一步先fetch/reconcile + 当前HEAD Apple CI；CI后进入首页/行情/详情/图表/AI/资产连续整改 |
+
+| P2 行情页刷新 | 修复刷新集合：已持仓证券 + 当前合法六位输入代码，去重；空仓且未输入合法代码时才禁用 | `GuanpanFApp/Sources/HomeExperience.swift`，已编码未编译；FCore 140 defined/当前不变；App UI无新增测试/未执行 | CI通过后Simulator确认空仓搜索刷新和持仓刷新 |
+
+| P2 图表图层控件 | 图层切换文本与图标放大，最小触控高度44pt，横向滚动不变 | `GuanpanFApp/Sources/FUnifiedSecurityChart.swift` 已编码未编译；无新增测试定义/无执行证据 | 必须在Simulator/iPhone Air上验证控件可点、图表面积、横滑和手势冲突 |

@@ -1,0 +1,44 @@
+# F-B-NON-REGRESSION
+
+目的：记录 B 中值得保留的实际产品能力，防止 F 重构期间让用户能看到、能使用的功能退化。此清单只确认 B 源码供体存在，不自动继承 B 的行为正确性或 F 的 PASS。
+
+状态定义：
+- `待实现`：F 当前 UI/产品体验缺失或明显弱于 B。
+- `部分`：F 有代码入口，但体验/完整链路尚未验证。
+- `已编码未验证`：源码已实现，当前 HEAD 编译、Simulator/实机未证实。
+- `已验证`：必须填写当前 SHA、实际执行平台和截图/测试证据后才能使用。
+- `不采用`：已由产品原则排除，不作为非回归要求。
+
+| ID | B 行为/体验 | F 目标行为（仍使用 F 权威业务模型） | F 源码位置/当前状态 | 编译/Simulator/截图 | 是否允许退化 |
+|---|---|---|---|---|---|
+| NRG-01 | 行情页显示指数条、代码搜索、全部/自选/持仓筛选与证券列表 | F 提供可发现的市场/自选列表、搜索筛选、来源/新鲜度，不将非持仓误作资产 | `F/GuanpanFApp/Sources/HomeExperience.swift` `MarketOverview`；持仓+输入代码已有，完整自选列表弱；待补核 | 未验证；无截图 | 否 |
+| NRG-02 | 列表行可进入详情、刷新/分析和快捷操作 | F保留单证券 route 与安全成交确认；不增加自动下单 | `HomeExperience.swift`、`FAdvisorVerticalSlice.swift`；部分 | 当前 dirty 未编译/未截图 | 否 |
+| NRG-03 | 详情顶部有代码、价格、涨跌、时间和来源/状态 | F同一屏明确显示报价新鲜度、来源和错误/缓存状态 | `HomeExperience.swift` `HomeDestination`；已编码，布局待验 | 未验证 | 否 |
+| NRG-04 | 统一图表支持分时/日K、显隐价格/IOPV/成本/均线/量能/成交点 | F单一 `FUnifiedSecurityChart`；图层可选隐藏且偏好保留，纵轴仅纳入当前可见有效曲线 | `FUnifiedSecurityChart.swift`、`Sources/FCore/ChartDataModel.swift`、`Tests/FCoreTests/MarketChartAcceptanceTests.swift`；当前图层修复 dirty | 未编译；测试新定义、未执行；无 Simulator 对比 | 否 |
+| NRG-05 | 图表选点、十字线、缩放/平移、历史日期与全屏入口 | F 保留一致操作并额外显示真实 Partial/Missing；专业页手势稳定 | `FUnifiedSecurityChart.swift`、`HomeExperience.swift`；部分/待手势验收 | 未人工验证 | 否 |
+| NRG-06 | MA250 不足时说明数据不足，不画假线 | F使用真实日K，长度不足时隐藏/标明不可用 | `FUnifiedSecurityChart.swift`；需当前 CI 与数据实测 | 未验证 | 否 |
+| NRG-07 | 资产总值/现金/持仓/当日盈亏的摘要与明细 | F保留明确的现金、估值完整度、Security Daily P&L、Current Episode P&L及生命周期语义 | `HomeExperience.swift` `RealAssetsOverview`；现金/持仓/历史周期已有，首页摘要/多盈亏层级不足 | 未验证 | 否 |
+| NRG-08 | 持仓明细可打开证券详情，查看成本与流水 | F使用 Episode Economic Cost、Broker Display Cost、费用审计与真实 fills，不混成单成本 | `HomeExperience.swift`、`Sources/FLedger/*`；底层语义优先，UI需分层改善 | 未验证/未截图 | 否 |
+| NRG-09 | 现金校准/现金流水入口 | F保留只追加的实际差额记录与原因，不回写历史 | `HomeExperience.swift` `FCashAdjustmentSheet`、Ledger writer；已编码，未本机验证 | 未验证 | 否 |
+| NRG-10 | 成交流水、审计记录、确认/可撤销处理 | F只能经确认真实成交写账本，审计/修正保留原 fill | `HomeExperience.swift`、`Sources/FLedger`；核心边界以当前 CI为准 | 当前树待 CI | 否 |
+| NRG-11 | AI 入口从证券详情携带指定代码，结论拆成证据/风险/等待条件 | F明确区分 Portfolio/Security scope；展示事实、推断、风险、等待和失效条件，缺数据明确说明 | `HomeExperience.swift` Advisor Composer/AdvisorOverview；有输入、快捷问题、scope说明，产品展示待验 | 未验证 | 否 |
+| NRG-12 | 主场景导航保留各自 navigation state | F保留首页/行情/顾问/真实资产/设置独立栈和当前实体状态 | `GuanpanFApp.swift` `FHomeRoot`；源码存在、未实机验证 | 未验证 | 否 |
+| NRG-13 | 全局搜索跨证券/持仓/决策/流水 | F提供只读跨域搜索并路由到真实 F 数据对象 | 当前五 Tab 未见等价全局入口；待实现 | 未验证 | 否 |
+| NRG-14 | 独立通知中心/价格与状态提醒 | F提醒真实行情/NAS/风险/Candidate 状态，不通知虚拟成交 | 当前主导航未见入口；待实现/待验证产品边界 | 未实现 | 否 |
+| NRG-15 | 设置支持字号/字体/配色/浅深护眼 | F至少提供正确 Dynamic Type 与三种清晰外观兼容；主题差异不限色板 | `HomeExperience.swift` Settings 当前只有主题选择；gallery说明深色/护眼/动态字体待验证 | 未验证/部分缺失 | 否 |
+| NRG-16 | NAS/API、DeepSeek Key、安全状态和测试入口 | F显示可操作连接状态、来源/最后成功与具体错误；Key安全保存；不宣称 readyz=数据链完成 | `HomeExperience.swift` `SettingsOverview`、`FNASConnection.swift`；有readyz/Key字段，用户反馈NAS连不上 | 端到端未通过 | 否 |
+| NRG-17 | 备份与恢复、审计版本及冲突确认 | F做 Ledger schema 对应的校验备份/恢复，冲突停止覆盖 | 当前 Settings 未见成熟备份恢复入口；待实现 | 未实现 | 否 |
+| NRG-18 | 独立收息/派息历史及证券上下文 | F只接可核实场内 ETF 分派，明确预测值/来源，不把估计当现金 | 当前 F UI未见等价独立入口；需 F-145 产品/真实源复核 | 未完成 | 否 |
+| NRG-19 | 主题可切换且字号/配色贯穿组件 | F先交付三套布局差异明显主题，共用业务模型与图表 | F `ThemeLayoutManifest.swift` / `HomeExperience.swift` 十套代码已存在，但当前用户评体验混乱，视觉未验；冻结扩主题 | 当前源未经编译/截图 | 不允许以换色冒充完成 |
+| NRG-20 | 收息/网格/数字孪生/策略模拟入口 | 按明确产品方向排除模拟账户、虚拟资金/盈亏、复杂数字孪生和自动真实交易 | 不迁移为 F 页面；做T/网格可作为 Advisor 只读研究能力 | 不适用 | **不采用** |
+| NRG-21 | 五档盘口、IOPV、前收、均价等行情辅助层 | 仅在供应源真实、质量合格时展示；否则说明 unavailable | F `FUnifiedSecurityChart.swift` 应以 overlay quality 决定可见性 | 需 provider 实测；不得造线 | 不允许假数据回归 |
+| NRG-22 | 错误/空/加载状态可见，用户可刷新/重试 | 所有页面对 Ledger/行情/NAS/AI明确显示加载、可用、Partial、Stale、Missing、Unavailable | 各 F 页面具备部分状态，但部分首页/详情需人工核验 | 当前树未验 | 否 |
+| NRG-23 | 全屏图表和返回/恢复 | F进入全屏/横屏后保留证券、周期、日期、缩放和选中点 | F需求/已有部分状态；横屏及状态恢复未实机验 | External Pending | 否 |
+| NRG-24 | 首页总览链接分别去市场、资产、AI、研究 | F首页角色路由必须分别到真实对应页面，卡片不共用无关目的地 | `HomeLayout` role renderer/routes；静态源码存在、整体布局反馈失败 | 未验证 | 否 |
+
+## 使用规则
+
+- 本表来自可用 B 参考源码，不是 B 冻结版本所有权/版本证明。若用户手机里的 B 与 `GuanpanNext-work` 不同，应补真实 B build、截图或精确源码后增补。
+- 代码存在、测试定义、旧 CI PASS、手绘 SVG 均不能填当前 F 的“已验证”。
+- 用户已明确排除的模拟/场外/自动交易方向不恢复，也不当作 F 落后。
+- 用户报告 F iPhone Air 布局和图表失败：NRG-01/04/05/07/19必须以真实 Simulator/真机截图和操作复测关闭；当前状态不能标PASS。

@@ -38,7 +38,7 @@ enum FNASReadinessClient {
               components.host?.isEmpty == false,
               components.user == nil, components.password == nil,
               components.query == nil, components.fragment == nil,
-              components.path.isEmpty || components.path == "/" else { return nil }
+              components.path.isEmpty || components.path == "/" || components.path == "/readyz" else { return nil }
         components.path = "/readyz"
         return components.url
     }
@@ -60,6 +60,22 @@ enum FNASReadinessClient {
             throw FNASConnectionError.notReady(body.status)
         }
         return "NAS 已就绪 · \(body.configuredMarkets.joined(separator: ", "))"
+    }
+
+    static func connectionHint(for error: Error) -> String {
+        guard let urlError = error as? URLError else { return error.localizedDescription }
+        switch urlError.code {
+        case .localNetworkDenied:
+            return "iPhone 未允许观盘 F 访问本地网络。请在 iPhone 设置 → 隐私与安全性 → 本地网络中允许观盘 F。"
+        case .cannotFindHost, .dnsLookupFailed:
+            return "找不到 NAS 主机。请核对地址，并确认 iPhone 与 NAS 在同一局域网或已连接 VPN。"
+        case .cannotConnectToHost, .timedOut, .networkConnectionLost:
+            return "无法连接 NAS 的 8788 端口。请核对 NAS 地址/端口、容器运行状态及路由器或防火墙；远程连接请使用可达的 HTTPS 地址。"
+        case .appTransportSecurityRequiresSecureConnection:
+            return "iOS 阻止了不安全的远程 HTTP 连接。远程 NAS 请配置 HTTPS，或通过可信 VPN 连接。"
+        default:
+            return "NAS 网络请求失败：\(urlError.localizedDescription)"
+        }
     }
 }
 

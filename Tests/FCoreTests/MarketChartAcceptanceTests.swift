@@ -154,6 +154,28 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertLessThan(range.lowerBound, 5) // visible MA250 is ~4.996; only the visible candle is near 1,000.
     }
 
+    func testHiddenMovingAveragesDoNotCompressVisiblePriceRange() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let start = fetchedAt.addingTimeInterval(-250 * 86_400)
+        let bars = (0..<250).map { index -> FDailyBar in
+            let close: Decimal = index >= 248 ? 100 + Decimal(index - 248) : 10
+            return FDailyBar(tradingDate: start.addingTimeInterval(Double(index) * 86_400),
+                open: close, close: close, high: close + 1, low: close - 1, volume: 100)
+        }
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "verified-daily-source", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352", window: .daily,
+            series: .daily(bars), quality: .complete, temporalMetadata: metadata)
+        let viewport = try FChartInteractionModel(visibleRange: 248..<250, selectedIndex: nil,
+            zoomScale: 12, crosshairEnabled: false, presentation: .inline, pointCount: 250)
+
+        let range = try XCTUnwrap(FChartOverlayModel(chart: chart).priceRange(
+            interaction: viewport, visibleMovingAveragePeriods: []))
+        XCTAssertGreaterThan(range.lowerBound, 90)
+        XCTAssertLessThan(range.upperBound, 120)
+    }
+
     func testHitTestingRejectsInvalidOrUnsortedCoordinates() {
         XCTAssertNil(FChartHitTesting.nearestPointIndex(tapX: .nan,
                                                         renderedCenters: [10, 20], hitRadius: 4))

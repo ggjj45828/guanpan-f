@@ -683,7 +683,7 @@ final class FHomeModel: ObservableObject {
         nasConnectionStatus = "正在检查 NAS 就绪状态…"
         defer { checkingNASConnection = false }
         do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress) }
-        catch { nasConnectionStatus = error.localizedDescription }
+        catch { nasConnectionStatus = FNASReadinessClient.connectionHint(for: error) }
     }
 
     func refreshMarketData(for requestedCodes: [String]? = nil) async {

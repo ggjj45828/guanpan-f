@@ -7,6 +7,7 @@ import FAdvisor
 struct FUnifiedSecurityChart: View {
     let model: FChartOverlayModel?
     let height: CGFloat
+    @AppStorage("guanpan.f.chart.visibleLayers") private var visibleLayerKeysRaw = "ma5,ma10,ma20,ma60,ma250,volume,cost,brokerCost,intradayAverage,previousClose,candidateBuy,candidateSell,iopv"
     @State private var zoomScale: CGFloat = 1
     @State private var windowEndOffset = 0
     @State private var dragOriginOffset: Int?
@@ -34,15 +35,19 @@ struct FUnifiedSecurityChart: View {
                     visibleRange: visibleRange, selectedIndex: selectedIndex,
                     zoomScale: Double(zoomScale), crosshairEnabled: crosshairEnabled,
                     presentation: .inline, pointCount: count)
-                let priceRange = model.priceRange(interaction: interaction)
+                let selectedAveragePeriods = Set(averagePeriods.filter { visibleLayerKeys.contains("ma\($0)") })
+                let displayModel = modelWithVisibleOverlays(model)
+                let priceRange = displayModel.priceRange(interaction: interaction,
+                                                         visibleMovingAveragePeriods: selectedAveragePeriods)
                 let averages = movingAverages(for: series)
 
                 VStack(alignment: .leading, spacing: 5) {
-                    legend(for: model, averages: averages, range: visibleRange)
+                    layerControls(for: model, averages: averages, range: visibleRange)
                     Canvas { context, size in
-                        draw(model: model, series: series, range: visibleRange,
+                        draw(model: displayModel, series: series, range: visibleRange,
                              visibleTimes: visibleTimes, averages: averages,
                              priceRange: priceRange, selectedIndex: selectedIndex,
+                             visibleLayers: visibleLayerKeys,
                              context: &context, size: size)
                     }
                     .contentShape(Rectangle())
@@ -93,7 +98,9 @@ struct FUnifiedSecurityChart: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     HStack {
-                        Text("均价线：Unavailable · 前收线：Unavailable · IOPV：Unavailable")
+                        Text(unavailableOverlaySummary(model))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Spacer()
                         Button(crosshairEnabled ? "退出十字" : "十字") {
                             crosshairEnabled.toggle()
@@ -120,26 +127,26 @@ struct FUnifiedSecurityChart: View {
     }
 
     @ViewBuilder
-    private func legend(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
+    private func layerControls(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 if case .daily = model.chart.window {
                     ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
                         let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
-                        Label("MA\(period)", systemImage: "line.diagonal")
-                            .foregroundStyle(ready ? averageColors[index] : Color.secondary.opacity(0.5))
+                        layerButton("MA\(period)", key: "ma\(period)", color: averageColors[index], available: ready)
                     }
-                    Label("成交量", systemImage: "chart.bar")
-                        .foregroundStyle(.secondary)
+                    layerButton("成交量", key: "volume", color: .secondary, available: true)
                 }
                 ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
-                    Label(overlayTitle(overlay.kind), systemImage: overlay.kind == .candidateBuy ? "arrowtriangle.up.fill" :
-                          overlay.kind == .candidateSell ? "arrowtriangle.down.fill" : "line.diagonal")
-                        .foregroundStyle(overlayColor(overlay.kind))
+                    layerButton(overlayTitle(overlay.kind), key: layerKey(overlay.kind),
+                                color: overlayColor(overlay.kind), available: !isUnavailable(overlay.quality))
                 }
-                if model.iopv == nil { Label("IOPV Unavailable", systemImage: "minus.circle").foregroundStyle(.secondary) }
+                if let iopv = model.iopv {
+                    layerButton("IOPV", key: "iopv", color: overlayColor(.iopv), available: !isUnavailable(iopv.quality))
+                } else {
+                    Text("IOPV 不可用").font(.caption2).foregroundStyle(.tertiary)
+                }
             }
-            .font(.caption2.monospaced())
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,11 +165,13 @@ struct FUnifiedSecurityChart: View {
 
     private func draw(model: FChartOverlayModel, series: FChartSeries, range: Range<Int>,
                       visibleTimes: Set<Date>, averages: [[Decimal?]], priceRange: ClosedRange<Decimal>?,
-                      selectedIndex: Int?, context: inout GraphicsContext, size: CGSize) {
+                      selectedIndex: Int?, visibleLayers: Set<String>,
+                      context: inout GraphicsContext, size: CGSize) {
         guard let priceRange, range.count > 0 else { return }
         let low = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
         let high = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
-        let priceHeight = isDaily(series) ? size.height * 0.74 : size.height
+        let showVolume = isDaily(series) && visibleLayers.contains("volume")
+        let priceHeight = showVolume ? size.height * 0.74 : size.height
         let volumeHeight = max(size.height - priceHeight, 0)
         let span = max(high - low, 0.000001)
         func y(_ value: Decimal) -> CGFloat {
@@ -196,13 +205,16 @@ struct FUnifiedSecurityChart: View {
                 let body = CGRect(x: x - max(stepX * 0.27, 0.6), y: top,
                                   width: max(stepX * 0.54, 1), height: max(abs(y(bar.open) - y(bar.close)), 1))
                 context.fill(Path(body), with: .color(color.opacity(0.85)))
-                let volume = NSDecimalNumber(decimal: bar.volume).doubleValue
-                let volumeBar = CGRect(x: x - max(stepX * 0.3, 0.6),
-                                       y: priceHeight + volumeHeight * (1 - CGFloat(volume / maxVolume)),
-                                       width: max(stepX * 0.6, 1), height: volumeHeight * CGFloat(volume / maxVolume))
-                context.fill(Path(volumeBar), with: .color(color.opacity(0.55)))
+                if showVolume {
+                    let volume = NSDecimalNumber(decimal: bar.volume).doubleValue
+                    let volumeBar = CGRect(x: x - max(stepX * 0.3, 0.6),
+                                           y: priceHeight + volumeHeight * (1 - CGFloat(volume / maxVolume)),
+                                           width: max(stepX * 0.6, 1), height: volumeHeight * CGFloat(volume / maxVolume))
+                    context.fill(Path(volumeBar), with: .color(color.opacity(0.55)))
+                }
             }
             for (seriesIndex, values) in averages.enumerated() {
+                guard visibleLayers.contains("ma\(averagePeriods[seriesIndex])") else { continue }
                 var path = Path(); var started = false
                 for index in range {
                     guard let value = values[index] else { started = false; continue }
@@ -288,6 +300,66 @@ struct FUnifiedSecurityChart: View {
         case .candidateBuy: return .green
         case .candidateSell: return .red
         }
+    }
+
+    private var visibleLayerKeys: Set<String> {
+        Set(visibleLayerKeysRaw.split(separator: ",").map(String.init))
+    }
+
+    private func toggleLayer(_ key: String) {
+        var updated = visibleLayerKeys
+        if updated.contains(key) { updated.remove(key) } else { updated.insert(key) }
+        visibleLayerKeysRaw = updated.sorted().joined(separator: ",")
+    }
+
+    private func layerButton(_ title: String, key: String, color: Color, available: Bool) -> some View {
+        let active = visibleLayerKeys.contains(key)
+        return Button { toggleLayer(key) } label: {
+            HStack(spacing: 4) {
+                Circle().fill(color).frame(width: 6, height: 6)
+                Text(title).font(.caption.monospaced().weight(.medium))
+                Image(systemName: active ? "eye" : "eye.slash")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(minHeight: 44)
+            .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .accessibilityLabel("\(title)\(!available ? "不可用" : active ? "已显示，点击隐藏" : "已隐藏，点击显示")")
+    }
+
+    private func layerKey(_ kind: FChartOverlayKind) -> String {
+        switch kind {
+        case .cost: return "cost"
+        case .brokerCost: return "brokerCost"
+        case .intradayAverage: return "intradayAverage"
+        case .previousClose: return "previousClose"
+        case .iopv: return "iopv"
+        case .candidateBuy: return "candidateBuy"
+        case .candidateSell: return "candidateSell"
+        }
+    }
+
+    private func modelWithVisibleOverlays(_ model: FChartOverlayModel) -> FChartOverlayModel {
+        let overlays = model.priceOverlays.filter { visibleLayerKeys.contains(layerKey($0.kind)) }
+        let iopv = visibleLayerKeys.contains("iopv") ? model.iopv : nil
+        return (try? FChartOverlayModel(chart: model.chart, priceOverlays: overlays, iopv: iopv)) ?? model
+    }
+
+    private func unavailableOverlaySummary(_ model: FChartOverlayModel) -> String {
+        var unavailable: [String] = []
+        if !model.priceOverlays.contains(where: { $0.kind == .intradayAverage && !isUnavailable($0.quality) }) {
+            unavailable.append("均价不可用")
+        }
+        if !model.priceOverlays.contains(where: { $0.kind == .previousClose && !isUnavailable($0.quality) }) {
+            unavailable.append("前收不可用")
+        }
+        if model.iopv.map({ isUnavailable($0.quality) }) != false { unavailable.append("IOPV不可用") }
+        return unavailable.joined(separator: " · ")
     }
 }
 

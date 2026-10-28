@@ -231,10 +231,11 @@ public struct FChartOverlayModel: Equatable, Sendable {
 
     /// Returns the price range for the current viewport.  Candle high/low,
     /// minute price, and every available overlay participate together, so a
-    /// real cost, average-price, previous-close or IOPV line cannot be pushed
-    /// outside the visible vertical range.  Unavailable data contributes no
-    /// synthetic value.
-    public func priceRange(interaction: FChartInteractionModel? = nil) -> ClosedRange<Decimal>? {
+    /// visible moving averages and available overlays share the visible
+    /// vertical range. Hidden indicators do not compress the chart; unavailable
+    /// data contributes no synthetic value.
+    public func priceRange(interaction: FChartInteractionModel? = nil,
+                           visibleMovingAveragePeriods: Set<Int> = [5, 10, 20, 60, 250]) -> ClosedRange<Decimal>? {
         let timestamps = chart.series?.timestamps ?? []
         let visibleIndices: Range<Int>
         if let range = interaction?.visibleRange, range.upperBound <= timestamps.count {
@@ -243,7 +244,8 @@ public struct FChartOverlayModel: Equatable, Sendable {
             visibleIndices = 0..<timestamps.count
         }
         let visibleTimes = Set(visibleIndices.compactMap { timestamps[safe: $0] })
-        var values = basePrices(indices: visibleIndices)
+        var values = basePrices(indices: visibleIndices,
+                                movingAveragePeriods: visibleMovingAveragePeriods)
         for overlay in priceOverlays {
             guard !overlay.isUnavailable else { continue }
             values += overlay.points
@@ -259,7 +261,7 @@ public struct FChartOverlayModel: Equatable, Sendable {
         return (low - padding)...(high + padding)
     }
 
-    private func basePrices(indices: Range<Int>) -> [Decimal] {
+    private func basePrices(indices: Range<Int>, movingAveragePeriods: Set<Int>) -> [Decimal] {
         guard let series = chart.series else { return [] }
         switch series {
         case let .minute(samples):
@@ -269,7 +271,7 @@ public struct FChartOverlayModel: Equatable, Sendable {
                 guard let bar = bars[safe: index] else { return [] }
                 return [bar.low, bar.high]
             }
-            let movingAverages = [5, 10, 20, 60, 250].flatMap { period in
+            let movingAverages = [5, 10, 20, 60, 250].filter { movingAveragePeriods.contains($0) }.flatMap { period in
                 indices.compactMap { index -> Decimal? in
                     guard index + 1 >= period else { return nil }
                     let window = bars[(index + 1 - period)...index]

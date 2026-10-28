@@ -1120,6 +1120,12 @@ struct MarketOverview: View {
         return bytes.count == 6 && bytes.allSatisfy { (48...57).contains($0) }
     }
 
+    private var refreshableSecurityCodes: [String] {
+        let heldCodes = model.holdings.map(\.instrumentCode)
+        let lookupCodes = isValidSecurityCode ? [securityLookupCode] : []
+        return Array(Set(heldCodes + lookupCodes)).sorted()
+    }
+
     var body: some View {
         List {
             Section {
@@ -1132,7 +1138,7 @@ struct MarketOverview: View {
                     }
                     Spacer()
                     Button {
-                        Task { await model.autoRefreshMarketData() }
+                        Task { await model.refreshMarketData(for: refreshableSecurityCodes) }
                     } label: {
                         if model.refreshingMarketCodes.isEmpty {
                             Label("刷新", systemImage: "arrow.clockwise")
@@ -1140,7 +1146,7 @@ struct MarketOverview: View {
                             HStack { ProgressView().controlSize(.small); Text("更新中") }
                         }
                     }
-                    .disabled(!model.refreshingMarketCodes.isEmpty || model.holdings.isEmpty)
+                    .disabled(!model.refreshingMarketCodes.isEmpty || refreshableSecurityCodes.isEmpty)
                     .accessibilityIdentifier("market.refresh.all")
                 }
             }
