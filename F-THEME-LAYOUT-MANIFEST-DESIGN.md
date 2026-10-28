@@ -1,8 +1,8 @@
 # F Theme / Layout Manifest 设计
 
-状态：**架构设计已记录；尚未实现Manifest注册表、尚未完成10套布局、尚未进行Simulator截图验收。**
+状态（2026-10-28）：**Manifest注册表和十种首页布局已进入Swift源码；共享Home Role Renderer、基础语义Token、Theme Gallery选择行已编码。尚未经过Apple编译/XCTest，也没有Simulator截图或人工对比。**
 
-本设计纳入F后续计划，但不改变当前开发优先级。Ledger与手续费回算、当前T Contribution Apple CI、NAS历史分钟进入iOS/Research Evidence、真实DeepSeek闭环仍在前；本阶段不新增10套Swift页面，不复制业务逻辑，不增加图表renderer。
+主题实现保持增量，不改变Ledger与手续费回算、NAS历史分钟进入iOS/Research Evidence、真实DeepSeek闭环等既定高优先级。现阶段只编码manifest/共享renderer/首页信息结构，不复制业务逻辑，不增加图表renderer；Apple CI仍优先于继续扩展主题细节。
 
 ## 目标与边界
 
@@ -71,7 +71,7 @@ Layout manifest以稳定role描述页面结构，不持有服务、Ledger或Advi
 
 ## 渲染与扩展约束
 
-当前`FHomeTheme` enum + `HomeLayout` switch是五个首页分支的现状，不是最终扩展机制。收口阶段应逐步把页面选项抽为Manifest注册表与共享的`HomeRoleRenderer`，避免新增第11套时扩大一个包含业务逻辑的switch。
+当前`FHomeTheme`保留稳定主题ID并映射到`FThemeLayoutRegistry`；注册表为十种主题提供Theme/Layout Manifest，`FHomeRoleRenderer`复用资产、市场、跨市场和顾问角色。新增第11套需要新增主题ID/manifest和纯展示布局family，不复制Ledger、Advisor或行情逻辑。当前Swift未经Apple编译，不能把源码存在视为架构验证通过。
 
 共享renderer按role读取已提供的presentation model：
 
@@ -95,8 +95,8 @@ renderer不得自行取行情、重算账本、推断成本、生成Research Evi
 
 ## 当前验收状态
 
-- 五种既有主题：首页布局分支已编码；全App Manifest、跨页面结构差异和本轮截图人工验收未完成。
-- 五种新增主题：本文件完成设计登记；未实现。
-- 新增Theme/Layout Manifest注册表：设计完成；未编码。
+- 五种既有主题：首页布局分支已编码；现已接入共享角色renderer及Manifest；Simulator结构/人工验收未完成。
+- 五种新增主题：五种首页结构与主题Manifest已编码；专业子页面的主题化、编译与截图人工验收未完成。
+- Theme/Layout Manifest注册表及Theme Gallery选择行：已编码，尚未Apple编译或Simulator运行。
 - 主题业务隔离、10主题Simulator截图对比、动态类型/无障碍/深色护眼验收：未完成。
-- 当前阶段不为主题新增Swift代码；待Ledger修正、Apple CI、NAS历史分钟→iOS及AI真实闭环稳定后再进入主题实现/验收阶段。
+- 深色/护眼主题Token、10主题截图对比、动态类型/无障碍与主题切换后的真实导航状态保持仍未完成。主题实现不得挤占Ledger、Apple CI、NAS历史分钟→iOS及AI真实闭环验证。

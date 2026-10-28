@@ -747,16 +747,8 @@ final class FHomeModel: ObservableObject {
 
 enum FHomeTheme: String, CaseIterable, Identifiable {
     case editorial, modern, dashboard, magazine, bento
+    case inkModern, minimalTerminal, fluidGlass, dataStarMap, adaptiveBento
     var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .editorial: return "东方编辑室"
-        case .modern: return "现代卡片"
-        case .dashboard: return "交易仪表盘"
-        case .magazine: return "杂志卡片"
-        case .bento: return "创意拼图"
-        }
-    }
 }
 enum FHomeRoute: Hashable {
     case market, crossMarket, advisor, portfolio

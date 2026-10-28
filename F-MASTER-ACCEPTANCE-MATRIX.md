@@ -1,6 +1,25 @@
 # F Master Acceptance Matrix
 
-## 当前工作树续更（2026-10-28；以本段为最新状态）
+## 当前主题/布局实现状态（2026-10-28）
+
+主题验收ID沿用F扩展项，不替代或重编号B-001～B-145。当前实现仅为未经Apple编译的源码状态：
+
+| F需求 | 当前实现证据 | 状态 | 外部验收 |
+|---|---|---|---|
+| F-THEME-01 Manifest注册与扩展性 | `ThemeLayoutManifest.swift`含十个theme ID、十个layout family、语义token、间距、材质/动效及呈现描述；Home结构仍含显式family分支，新增主题尚不能只注册Manifest完成 | 部分编码、未编译 | Apple编译/XCTest；后续验证是否能以纯展示注册扩展 |
+| F-THEME-02 共用业务role renderer | `FHomeRoleRenderer`复用资产、市场、跨市场、组合Advisor组件/唯一route；星图中心只显示Portfolio scope结果 | 已编码未编译 | 检查各布局role唯一与路由正确 |
+| F-THEME-03 五种新增首页结构 | ink editorial、minimal terminal、fluid glass、radial map、adaptive Bento分支已编码 | 已编码未编译 | 十主题截图灰度结构差异待验 |
+| F-THEME-04 原五布局接入共享roles | editorial/grid/dashboard/magazine/static Bento改用role renderer | 已编码未编译 | Simulator人工操作待验 |
+| F-THEME-05 可切换Theme Gallery | 十个选择行含小型结构预览/说明/密度/场景；仅更新theme AppStorage | 已编码未编译 | 导航状态、证券/图表状态保留待实测 |
+| F-THEME-06 专业详情页稳定 | 当前没有复制Security Detail/Chart renderer；episode/broker cost、MA、IOPV、Candidate、买卖点token虽登记，尚未接入统一图表 | 部分编码 | 图表/日期/缩放/横屏状态待Simulator验证 |
+| F-THEME-07 真实数据状态覆盖与可读性 | 未注入任何主题mock持仓；主题预览只显示结构示意 | 尚待验证 | 空仓/Unavailable/Partial/风险/Candidate等逐态截图 |
+| F-THEME-08 外观兼容 | Manifest诚实标注浅色基础token已接入，深色/护眼与Dynamic Type待完成 | 部分编码 | light/dark/eye-care、文字缩放和小屏待验 |
+
+本轮没有新Apple执行证据：FCore最近定义计数139仍是defined，不得改写为passed；本机无Xcode/Simulator。设计文档存在或Swift源码存在均不等同完成验收。
+
+## 当前工作树续更（2026-10-28；本段以本文开头主题表及实时交接的较新状态补正）
+
+- 本地HEAD仍为`4f8577b4c405001b6d982d3cd7d4bccc1e18c38e`（只作追溯）。当前工作树有主题/布局Swift及验收文档未提交改动；保护临时目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`原样未跟踪，未触碰。FCore静态定义计数139；当前未编译主题改动没有新增测试执行证据。当前HEAD没有Apple编译证据；远端实时状态未fetch确认，未推送。
 
 - 新增现金-only对账入口已编码：用户选择增加/减少方向，填写正数金额、原因和确认说明，经`FConfirmedLedgerWriter.confirmCashMovement`追加现金流水；证券成本、持仓数量及盈亏不受影响，更新后旧Candidate失效。当前仅为静态源码存在；未Apple编译、未执行UI/XCTest或人工操作验证。
 - 新增一项FCore回归定义`testCashOnlyReconciliationLeavesSecurityPositionsAndCostsUnchanged`，验证未归属现金费用只影响现金，不改变持仓、成本、成交及逐笔费用更正记录。FCore静态定义数为139；新增测试尚未编译/执行。
@@ -15,7 +34,7 @@
 
 - 本轮编码逐笔手续费事后更正：追加`FFillFeeAdjustment`、现金补录日结算、有效手续费与成本basis重放、只读历史/日汇总/realized/T投影、现金流水更正行、用户确认Writer入口与资产页简单更正表单；旧fill不改。新增6项Ledger回归测试定义（含旧周期清仓卖出补扣/退费、重开Episode隔离及Archive恢复）。全项仍未Apple编译/执行，详见实时交接和F-145。
 
-- 新增多主题/多布局架构设计：[F-THEME-LAYOUT-MANIFEST-DESIGN.md](F-THEME-LAYOUT-MANIFEST-DESIGN.md)。既有5套首页分支加上5个新增方向，共规划10套；Theme/Layout Manifest注册、共享role renderer及Simulator结构差异验收均尚未实现/验证。该事项排在当前Ledger、Apple CI、NAS历史分钟iOS链路和DeepSeek闭环之后，不新增主题Swift代码。
+- 多主题/多布局实现状态见本文件开头“当前主题/布局实现状态”：十个Manifest、十个Home layout family、共享Home role renderer与Theme Gallery已编码但未编译；Simulator布局、色彩/动态字体和交互验收仍待完成。
 
 - 手续费更正实现/测试已提交于`a84c41976ed094a5fe91b8d9185167b848a8a836`，同步验收文档也已提交。远端已指向转移后的`ggjj45830/guanpan-f`，最新fetch因DNS thread启动错误失败，远端实时状态未知；本地存在未推送提交，受保护临时目录未动。
 - T Contribution现按时间排序和FIFO批次只匹配先卖后买的实际配对份额；1000卖/500买回只计500及按比例卖出费；普通卖出/减仓不当作T；买回早于卖出或买回量超过此前剩余卖量保持Unavailable。源码/测试位置：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`。
@@ -118,17 +137,17 @@ FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表
 | F-19 | NAS 历史研究、跨市场和新闻与真实账本隔离 | defined | NAS v6已部署；2026-10-27 14:11:49实机六证券各归档191条当前日分钟、过滤13:00盘外行，真实实时采集/归档烟测通过；指定过往日期历史补采返回empty source response（当前配置未补齐），跨市场/新闻/iOS端到端和长期运行仍未验证。跨市场非对称条件概率与证券级映射仅登记于F-B-145-TRACEABILITY.md研究口径，尚无实现/合格样本，不能进入DecisionContext |
 | F-20 | 同步、离线冲突、通知与恢复状态可见且不丢账 | defined | 三通道策略已编码；传输、离线队列、通知 UI 和恢复体验未实现；FCore 119项全量已执行通过，但这不覆盖缺失的产品功能 |
 | F-21 | AI 聊天、导航、图表、横屏和设备布局可用 | defined | 原生五Tab与独立NavigationStack、真实账本/行情、AI顾问输入和结果页已接线；当前/历史分钟和日K已复用共享SwiftUI renderer。App UI XCTest 3/3通过（run 40298657796；覆盖导航、Advisor主要控件和资产页基础结构）；图表功能/视觉、横屏和设备布局验收仍未完成 |
-| F-22 | 五个独立主题的 token、页面一致性、可读性和设备截图验收 | defined | 五主题首页布局分支和基础颜色已编码；设计token完整性、主题差异质量、一致性与设备截图验收未完成；未继承 A/B 主题结论为通过 |
+| F-22 | 十个独立主题的 token、页面一致性、可读性和设备截图验收 | defined | 十个首页layout family、语义token与共享role renderer已编码但未Apple编译；跨页面一致性、主题差异截图、可读性和设备验收未完成；未继承 A/B 主题结论为通过 |
 | F-23 | 单一权威实现、模块边界、依赖和故障可诊断 | defined | FCore/FAdvisor/FLedgerWrite 依赖隔离；架构边界脚本当前通过；Actions run 40298657796 已完成 FCore 与 App Device/Simulator Build；后续修改仍需重跑 |
 | F-24 | 核心测试按模块执行，记录 defined/executed/passed/failed | defined | 账本 XCTest 已定义；FCore XCTest：119 executed / 119 passed / 0 failed（Actions run 40298657796）；各产品验收项仍按实际覆盖范围判定 |
 | F-25 | NAS历史分钟补采、实时归档、完整度、长期留存、查询、诊断和研究证据/no-lookahead | defined | 归档/补采/查询/研究链已编码；累计量差分来源必须保留累计量且差值匹配分钟量；归档启动/完整性/备份恢复校验、no-clobber备份、版本化队列和严格HTTP输入/授权边界已覆盖；交易日历、日期、时区、幂等、Partial门控、指定日期Missing/Partial逐日诊断和范围隔离有回归；无范围时列出已评估coverage日期并明确可能低估；分钟服务27/27、归档43/43、红利研究7/7、只读迁移dry-run6/6、Provider/Calendar/runtime10/10，合计93/93通过；腾讯当日接口已实网取样并写入F归档；东财历史接口本云端超时、生产交易日历与NAS部署仍待外部验证 |
 | F-26 | 指数卡区分行情时间、获取时间、来源、新鲜度和交易时段；闭市保留最后有效时间 | defined | Quote元数据与最大有效期校验已编码；首页有独立市场入口但当前行情明确 unavailable；现金状态文案区分读取中/未建立/不可读取/已读取；FCore整体119项CI通过，真实源/闭市行为与原生显示仍待验收 |
 | F-27 | 首页显著提供组合问答输入、发送、快捷问题和真实持仓上下文；详情入口绑定证券 | defined | 首页/Advisor页输入、发送和快捷问题已接入；默认聚焦首个真实持仓，详情绑定标的；发送时重读账本并构建请求。只读持仓会发送至用户配置的DeepSeek；实际可发现性待Simulator/真机验收 |
-| F-28 | 五主题统一普通文字/页面颜色；仅保留业务语义图表色 | defined | App已有主题选择器、五布局分支和基础颜色；统一设计token、业务图表色及视觉质量/设备验收未完成 |
+| F-28 | 十主题统一普通文字/页面颜色；仅保留业务语义图表色 | defined | Manifest语义token与Gallery已编码；部分首页组件消费主题表面token，图表/全部专业页主题token尚未接入；深色/护眼与设备验收未完成 |
 | F-29 | 分时/日K统一支持点击、长按十字光标、拖动、缩放、横屏与选中详情 | defined | hit-testing坐标验证与复用已编码；当前/历史分钟与日K已接入共享 renderer。基础图表模型回归包含于FCore 119/119通过；renderer内实际手势、横屏全屏及显示效果仍待Simulator专项/真机验收 |
 | F-30 | 红利研究采用多因素证据；4%仅为自动模式参考，显式高级设置才启用自定义最低值 | defined | NAS多因素证据整理器及版本化Research Evidence输出已编码；历史观测重复时按质量/抓取时点确定性去重并拒绝质量分越界，红利研究Python 7/7通过；真实基本面来源、Advisor/UI消费和高级自定义设置仍未接入，不能据此给出真实资产买卖结论 |
 | F-31 | 首次使用者可发现AI输入、历史分时、K线选择、数据时间/来源、AI依据和主操作 | defined | AI输入/快捷问题/真实账本状态和持仓证券详情入口已编码；历史分时、K线选择、行情来源新鲜度及依据展示仍待原生可发现性验收；Simulator/真机评估待外部验证 |
-| F-32 | B五种布局为F主要布局设计基线；首页每卡职责、信息和目标路由唯一；不同语义入口必须有独立页面 | defined | 五种首页布局保留；市场观察、跨市场脉搏、AI指导、真实资产各有独立route/page；每个主Tab有独立NavigationStack。源码检查通过，实际可发现性仍待设备验证 | |
+| F-32 | B五种布局为F主要布局设计基线；首页每卡职责、信息和目标路由唯一；不同语义入口必须有独立页面 | defined | 十种布局均复用市场观察、跨市场脉搏、AI指导、真实资产role及唯一route；五个新增布局、Gallery和共享renderer已编码未编译。独立NavigationStack保留；发现性/切换状态待设备验证 | |
 | F-33 | NAS Research Evidence版本化只读进入DecisionContext；只传紧凑统计/来源/时点，不传原始分钟/计划；过期、低质量、样本不足、未来时间fail-closed | defined | 紧凑证据与日期/质量校验已编码；有合格日必须有来源，零合格日可空来源；超大计数转换 fail-closed；evidenceId覆盖信任元数据并由iOS重算；FCore 119项整体CI通过，生产跨端服务联调和业务验收仍未完成 |
 | F-34 | B版145项需求逐项溯源、F需求处置与独立验收 | defined | [F-B-145-TRACEABILITY.md](F-B-145-TRACEABILITY.md)：保留 B-001…B-145 编号与验收输入，逐项给出 F 需求处置、供体裁决和 F 独立验收状态；B 状态不继承。编号连续性已静态核对，F 实现仍按各项验收。 |
 | F-35 | 行情按证券刷新并更新共享图表快照，显示来源/行情时间/获取时间 | defined | Swift数据绑定已编码；实时源、设备图表响应待验证 |

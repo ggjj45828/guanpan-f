@@ -3,25 +3,9 @@ import FCore
 import FAdvisor
 
 extension FHomeTheme {
-    var background: Color {
-        switch self {
-        case .editorial: return Color(red: 0.97, green: 0.94, blue: 0.87)
-        case .modern: return Color(red: 0.94, green: 0.96, blue: 0.99)
-        case .dashboard: return Color(red: 0.055, green: 0.075, blue: 0.12)
-        case .magazine: return Color(red: 0.97, green: 0.96, blue: 0.93)
-        case .bento: return Color(red: 0.94, green: 0.95, blue: 0.92)
-        }
-    }
-    var ink: Color { self == .dashboard ? .white : Color(red: 0.12, green: 0.15, blue: 0.19) }
-    var accent: Color {
-        switch self {
-        case .editorial: return Color(red: 0.69, green: 0.34, blue: 0.16)
-        case .modern: return Color(red: 0.18, green: 0.39, blue: 0.82)
-        case .dashboard: return Color(red: 0.26, green: 0.78, blue: 0.81)
-        case .magazine: return Color(red: 0.69, green: 0.27, blue: 0.19)
-        case .bento: return Color(red: 0.28, green: 0.49, blue: 0.35)
-        }
-    }
+    var background: Color { manifest.tokens.background }
+    var ink: Color { manifest.tokens.foreground }
+    var accent: Color { manifest.tokens.accent }
 }
 
 struct HomeLayout: View {
@@ -30,15 +14,20 @@ struct HomeLayout: View {
     var body: some View {
         ScrollView {
             Group {
-                switch theme {
+                switch theme.layoutFamily {
                 case .editorial: editorial
-                case .modern: modern
-                case .dashboard: dashboard
+                case .cardGrid: modern
+                case .terminalDashboard: dashboard
                 case .magazine: magazine
-                case .bento: bento
+                case .staticBento: bento
+                case .inkEditorial: inkEditorial
+                case .minimalTerminal: minimalTerminal
+                case .spatialGlass: fluidGlass
+                case .radialMap: dataStarMap
+                case .adaptiveBento: adaptiveBento
                 }
             }
-            .padding(18)
+            .padding(theme.manifest.tokens.spacing.standard)
         }
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
@@ -48,24 +37,21 @@ struct HomeLayout: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("把每次决定，放回你的长期计划里。")
                 .font(.system(size: 27, weight: .bold, design: .serif))
-            AdvisorComposer(model: model, theme: theme)
-            PortfolioCard(model: model)
-            route(.market, "今日市场观察", "行情时间、来源与市场状态", "sun.horizon")
-            route(.crossMarket, "跨市场脉搏", "独立的跨市场研究证据", "globe.asia.australia")
-            route(.advisor, "AI 今日指导", "组合决策依据与建议", "sparkles")
+            role(.advisorGuidance)
+            role(.portfolio)
+            role(.marketObservation)
+            role(.crossMarketPulse)
         }
     }
 
     private var modern: some View {
         VStack(spacing: 14) {
-            AdvisorComposer(model: model, theme: theme)
-            PortfolioCard(model: model)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                route(.market, "市场观察", "行情与时点", "chart.xyaxis.line")
-                route(.crossMarket, "跨市场", "研究脉搏", "globe")
-                route(.advisor, "AI 指导", "决策说明", "sparkles")
-                route(.portfolio, "我的持仓", "真实账本", "briefcase")
+                role(.marketObservation)
+                role(.crossMarketPulse)
+                role(.portfolio)
             }
+            role(.advisorGuidance)
         }
     }
 
@@ -81,13 +67,12 @@ struct HomeLayout: View {
                 Text("真实账本").font(.caption.weight(.semibold))
                     .padding(9).overlay(Capsule().stroke(theme.accent, lineWidth: 1))
             }
-            AdvisorComposer(model: model, theme: theme)
-            PortfolioCard(model: model)
+            role(.portfolio)
             HStack(spacing: 10) {
-                route(.market, "行情", "市场观察", "waveform.path")
-                route(.crossMarket, "跨市", "研究脉搏", "globe")
+                role(.marketObservation)
+                role(.crossMarketPulse)
             }
-            route(.advisor, "AI 决策台", "证据、风险和建议", "sparkles")
+            role(.advisorGuidance)
         }
     }
 
@@ -100,33 +85,174 @@ struct HomeLayout: View {
             Rectangle().fill(theme.accent).frame(width: 54, height: 4)
             Text("本期焦点 · 真实组合与长期研究")
                 .font(.subheadline).foregroundStyle(.secondary)
-            PortfolioCard(model: model)
-            AdvisorComposer(model: model, theme: theme)
-            route(.advisor, "顾问专栏", "AI 指导及理由", "text.book.closed")
-            route(.market, "今日市场观察", "报价来源、时点与质量", "newspaper")
-            route(.crossMarket, "跨市场脉搏", "研究关系与证据", "globe.americas")
+            role(.advisorGuidance)
+            role(.portfolio)
+            role(.marketObservation)
+            role(.crossMarketPulse)
         }
     }
 
     private var bento: some View {
         VStack(spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                PortfolioCard(model: model).frame(maxWidth: .infinity, minHeight: 210)
-                route(.market, "市场观察", "行情与质量", "chart.xyaxis.line")
+                role(.portfolio).frame(maxWidth: .infinity, minHeight: 210)
+                role(.marketObservation)
                     .frame(maxWidth: .infinity, minHeight: 210)
             }
-            AdvisorComposer(model: model, theme: theme)
             HStack(spacing: 12) {
-                route(.advisor, "AI 今日指导", "组合决策", "sparkles")
-                route(.crossMarket, "跨市场脉搏", "研究证据", "globe")
+                role(.crossMarketPulse)
             }
-            route(.portfolio, "真实持仓明细", "来自本机账本快照", "list.bullet.rectangle")
+            role(.advisorGuidance)
         }
     }
 
-    private func route(_ target: FHomeRoute, _ title: String, _ detail: String, _ icon: String) -> some View {
-        RouteCard(route: target, title: title, detail: detail, icon: icon, accent: theme.accent)
+    private var inkEditorial: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("观盘手记 · 今日主笔").font(.caption.weight(.semibold)).tracking(1.4)
+            Text("先看风险，\n再做决定。")
+                .font(.system(size: 38, weight: .regular, design: .serif))
+            Rectangle().fill(theme.accent).frame(width: 44, height: 3)
+            role(.advisorGuidance)
+            HStack(alignment: .firstTextBaseline) {
+                Text("资产与现金").font(.title3.weight(.semibold))
+                Spacer()
+                Text("真实账本").font(.caption).foregroundStyle(.secondary)
+            }
+            role(.portfolio)
+            role(.marketObservation)
+            role(.crossMarketPulse)
+        }
     }
+
+    private var minimalTerminal: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("F / PORTFOLIO").font(.caption.monospaced().weight(.semibold))
+                Spacer()
+                Text(model.cashText).font(.title3.monospacedDigit().weight(.bold))
+            }.padding(.vertical, 12)
+            Divider()
+            role(.marketObservation).padding(.vertical, 8)
+            Divider()
+            role(.portfolio).padding(.vertical, 8)
+            Divider()
+            Text("ADVISOR STREAM").font(.caption.monospaced().weight(.semibold)).padding(.top, 12)
+            role(.advisorGuidance).padding(.vertical, 8)
+            Divider()
+            role(.crossMarketPulse).padding(.vertical, 8)
+        }
+    }
+
+    private var fluidGlass: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("你的投资空间").font(.system(size: 30, weight: .semibold, design: .rounded))
+            role(.advisorGuidance)
+            HStack(alignment: .top, spacing: 12) {
+                role(.portfolio).frame(maxWidth: .infinity)
+                VStack(spacing: 12) {
+                    role(.marketObservation)
+                    role(.crossMarketPulse)
+                }.frame(maxWidth: .infinity)
+            }
+            Text("玻璃仅用于外围层次，行情与风险数字保持高对比。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var dataStarMap: some View {
+        VStack(spacing: 12) {
+            Text("组合关系星图").font(.title2.weight(.semibold))
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let height = proxy.size.height
+                ZStack {
+                    Circle().stroke(theme.accent.opacity(0.25), lineWidth: 1)
+                        .frame(width: min(width * 0.78, 300), height: min(width * 0.78, 300))
+                        .position(x: width / 2, y: height / 2)
+                    Path { path in
+                        let center = CGPoint(x: width / 2, y: height / 2)
+                        for point in [CGPoint(x: width / 2, y: 48), CGPoint(x: width - 68, y: height / 2),
+                                      CGPoint(x: width / 2, y: height - 48), CGPoint(x: 68, y: height / 2)] {
+                            path.move(to: center); path.addLine(to: point)
+                        }
+                    }.stroke(theme.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    centralStarSummary.frame(width: min(width * 0.52, 210), height: 150)
+                        .position(x: width / 2, y: height / 2)
+                    orbitNode(.marketObservation, shortTitle: "市场", x: width / 2, y: 48)
+                    orbitNode(.crossMarketPulse, shortTitle: "跨市场", x: width - 68, y: height / 2)
+                    orbitNode(.portfolio, shortTitle: "持仓", x: width / 2, y: height - 48)
+                    orbitNode(.advisorGuidance, shortTitle: "AI 决策", x: 68, y: height / 2)
+                }
+            }
+            .frame(height: 430)
+            Text("外围节点进入各自独立页面；证券详情与图表保持专业操作方式。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var centralStarSummary: some View {
+        VStack(spacing: 8) {
+            Text("真实组合中心").font(.headline)
+            Text(model.cashText).font(.title3.monospacedDigit().weight(.bold))
+            Text("\(model.holdings.count) 项真实持仓").font(.caption)
+            Text(portfolioConclusion)
+                .font(.caption).lineLimit(2).multilineTextAlignment(.center)
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.accent.opacity(0.6), lineWidth: 1))
+    }
+
+    private var portfolioConclusion: String {
+        guard let result = model.advisorResult, result.scope == .portfolio else {
+            return "组合级判断等待更新"
+        }
+        return result.narrative.conclusion
+    }
+
+    private func orbitNode(_ role: FHomeCardRole, shortTitle: String, x: CGFloat, y: CGFloat) -> some View {
+        NavigationLink(value: role.route) {
+            VStack(spacing: 4) {
+                Image(systemName: role.symbol).foregroundStyle(theme.accent)
+                Text(shortTitle).font(.caption.weight(.semibold))
+            }
+            .frame(width: 98, height: 62)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(theme.accent.opacity(0.55), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .position(x: x, y: y)
+        .accessibilityIdentifier("theme.starmap.\(role.rawValue)")
+    }
+
+    private var adaptiveBento: some View {
+        let attention = model.ledgerState != .available ||
+            (model.advisorResult.map { !$0.assessment.isEligibleForUserReview } ?? false)
+        return VStack(spacing: 12) {
+            if attention {
+                role(.advisorGuidance).frame(minHeight: 250)
+                role(.portfolio).frame(minHeight: 145)
+                HStack(spacing: 12) {
+                    role(.marketObservation)
+                    role(.crossMarketPulse)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    role(.portfolio).frame(maxWidth: .infinity, minHeight: 220)
+                    role(.marketObservation).frame(maxWidth: .infinity, minHeight: 220)
+                }
+                role(.crossMarketPulse).frame(minHeight: 100)
+                role(.advisorGuidance)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: attention)
+    }
+
+    @ViewBuilder
+    private func role(_ role: FHomeCardRole) -> some View {
+        FHomeRoleRenderer(role: role, model: model, theme: theme)
+    }
+
 }
 
 private struct AdvisorComposer: View {
@@ -182,12 +308,13 @@ private struct AdvisorComposer: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: 22))
     }
 }
 
 private struct PortfolioCard: View {
     @ObservedObject var model: FHomeModel
+    var theme: FHomeTheme = .editorial
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("真实组合").font(.headline)
@@ -215,7 +342,7 @@ private struct PortfolioCard: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: 20))
     }
 }
 
@@ -224,7 +351,8 @@ private struct RouteCard: View {
     let title: String
     let detail: String
     let icon: String
-    let accent: Color
+    let theme: FHomeTheme
+    private var accent: Color { theme.accent }
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 12) {
@@ -240,8 +368,61 @@ private struct RouteCard: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
         }.buttonStyle(.plain)
+    }
+}
+
+private struct FThemeSurfaceModifier: ViewModifier {
+    let theme: FHomeTheme
+    let radius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch theme.surfaceTreatment {
+        case .terminal, .minimal:
+            content.background(theme.manifest.tokens.background.opacity(0.96))
+                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.35)).frame(height: 0.5) }
+        case .glass, .orbit:
+            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius + 8))
+                .overlay(RoundedRectangle(cornerRadius: radius + 8).stroke(.white.opacity(0.28), lineWidth: 1))
+                .shadow(color: theme.accent.opacity(0.12), radius: 16, y: 8)
+        case .ink:
+            content.background(theme.manifest.tokens.background.opacity(0.78))
+                .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 2) }
+        case .magazine:
+            content.background(theme.manifest.tokens.background.opacity(0.9))
+                .overlay(alignment: .top) { Rectangle().fill(theme.accent.opacity(0.7)).frame(height: 1) }
+        case .bento, .adaptive:
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius + 4))
+                .overlay(RoundedRectangle(cornerRadius: radius + 4).stroke(theme.accent.opacity(0.18), lineWidth: 1))
+        case .editorial, .card:
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
+        }
+    }
+}
+
+private struct FHomeRoleRenderer: View {
+    let role: FHomeCardRole
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+
+    var body: some View {
+        Group {
+            if role == .portfolio {
+                PortfolioCard(model: model, theme: theme)
+            } else if role == .advisorGuidance {
+                VStack(spacing: 8) {
+                    RouteCard(route: role.route, title: role.title, detail: role.detail,
+                              icon: role.symbol, theme: theme)
+                    AdvisorComposer(model: model, theme: theme)
+                }
+            } else {
+                RouteCard(route: role.route, title: role.title, detail: role.detail,
+                          icon: role.symbol, theme: theme)
+            }
+        }
+        .accessibilityIdentifier("home.role.\(role.rawValue)")
     }
 }
 
@@ -741,12 +922,13 @@ struct SettingsOverview: View {
     var body: some View {
         Form {
             Section("主题") {
-                Picker("完整主题", selection: $themeRaw) {
-                    ForEach(FHomeTheme.allCases) { item in
-                        Text(item.title).tag(item.rawValue)
+                ForEach(FHomeTheme.allCases) { item in
+                    Button { themeRaw = item.rawValue } label: {
+                        FThemeGalleryRow(theme: item, selected: theme == item)
                     }
+                    .buttonStyle(.plain)
                 }
-                Text("主题统一控制页面布局、文字和卡片外观；这里不提供自由文字色盘。")
+                Text("主题切换只改变信息编排与呈现。浅色基础token已接入；深色/护眼、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("在线 AI") {
@@ -806,6 +988,126 @@ struct SettingsOverview: View {
         .accessibilityIdentifier("settings.form")
         .navigationTitle("设置")
         .tint(theme.accent)
+    }
+}
+
+private struct FThemeGalleryRow: View {
+    let theme: FHomeTheme
+    let selected: Bool
+    private var manifest: FThemeManifest { theme.manifest }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(manifest.name).font(.headline)
+                Spacer()
+                if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.accent) }
+            }
+            structuralPreview
+            Text(manifest.layout.description).font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Text("密度：\(manifest.layout.informationDensity)")
+                Spacer()
+                Text(manifest.useCase)
+            }
+            .font(.caption2).foregroundStyle(.secondary)
+            Text(manifest.appearanceCompatibility)
+                .font(.caption2).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("theme.gallery.\(theme.rawValue)")
+    }
+
+    private var isTerminal: Bool { theme.surfaceTreatment == .terminal || theme.surfaceTreatment == .minimal }
+
+    @ViewBuilder
+    private var structuralPreview: some View {
+        switch theme.layoutFamily {
+        case .radialMap:
+            GeometryReader { proxy in
+                ZStack {
+                    Circle().stroke(theme.accent.opacity(0.35), lineWidth: 1)
+                        .frame(width: 46, height: 46)
+                        .position(x: proxy.size.width / 2, y: 25)
+                    Circle().fill(theme.accent.opacity(0.55))
+                        .frame(width: 14, height: 14)
+                        .position(x: proxy.size.width / 2, y: 25)
+                    ForEach(0..<4, id: \.self) { index in
+                        Capsule().fill(theme.accent.opacity(0.35 + Double(index) * 0.12))
+                            .frame(width: 26, height: 7)
+                            .position(x: [proxy.size.width / 2, proxy.size.width - 24,
+                                          proxy.size.width / 2, 24][index],
+                                      y: [5, 25, 45, 25][index])
+                    }
+                }
+            }
+            .frame(height: 50)
+        case .staticBento, .adaptiveBento:
+            VStack(spacing: 3) {
+                HStack(spacing: 3) {
+                    previewBlock(height: theme.layoutFamily == .adaptiveBento ? 18 : 14)
+                    previewBlock(height: theme.layoutFamily == .adaptiveBento ? 18 : 14)
+                }
+                HStack(spacing: 3) {
+                    previewBlock(height: 7)
+                    previewBlock(height: 7)
+                    previewBlock(height: 7)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        case .minimalTerminal, .terminalDashboard:
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(0..<4, id: \.self) { index in
+                    Rectangle().fill(theme.accent.opacity(0.3 + Double(index) * 0.12))
+                        .frame(width: CGFloat(80 - index * 11), height: 1)
+                }
+            }
+            .frame(height: 40, alignment: .center)
+        case .inkEditorial, .magazine:
+            VStack(alignment: .leading, spacing: 4) {
+                Rectangle().fill(theme.accent.opacity(0.7)).frame(width: 42, height: 3)
+                Rectangle().fill(theme.accent.opacity(0.42)).frame(width: 96, height: 7)
+                Rectangle().fill(theme.accent.opacity(0.24)).frame(width: 70, height: 4)
+            }
+            .frame(height: 40, alignment: .center)
+        default:
+            HStack(spacing: 3) {
+                ForEach(manifest.layout.roleOrder.indices, id: \.self) { index in
+                    let role = manifest.layout.roleOrder[index]
+                    RoundedRectangle(cornerRadius: isTerminal ? 1 : 4)
+                        .fill(theme.accent.opacity(0.25 + Double(index) * 0.14))
+                        .frame(width: previewWidth(for: role), height: previewHeight(for: role))
+                }
+            }
+            .frame(height: 40)
+        }
+    }
+
+    private func previewBlock(height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(theme.accent.opacity(0.42))
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+    }
+
+    private func previewWidth(for role: FHomeCardRole) -> CGFloat {
+        switch theme.layoutFamily {
+        case .radialMap: return role == .advisorGuidance || role == .portfolio ? 34 : 18
+        case .minimalTerminal: return role == .portfolio ? 42 : 28
+        case .staticBento, .adaptiveBento: return role == .advisorGuidance || role == .portfolio ? 40 : 22
+        default: return 30
+        }
+    }
+
+    private func previewHeight(for role: FHomeCardRole) -> CGFloat {
+        switch theme.layoutFamily {
+        case .magazine, .inkEditorial: return role == .advisorGuidance ? 13 : 7
+        case .radialMap: return 10
+        case .minimalTerminal: return 4
+        case .staticBento, .adaptiveBento: return role == .advisorGuidance ? 15 : 8
+        default: return 9
+        }
     }
 }
 

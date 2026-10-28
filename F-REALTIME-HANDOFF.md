@@ -1,5 +1,26 @@
 # F 实时进度交接
 
+## 2026-10-28 多主题/首页布局首轮Swift落地（当前源码，未编译）
+
+- 新增`GuanpanFApp/Sources/ThemeLayoutManifest.swift`：十个主题ID映射十个layout family；Manifest包含布局描述/信息密度/角色顺序、字体与导航/Advisor/行情/资产/图表容器说明、语义颜色、间距、材质和动效字段。浅色基础token已接线；深色/护眼和Dynamic Type仍明确待实现/验收。
+- `HomeExperience.swift`新增五个方向的布局：东方墨韵、极简终端、流体玻璃、数据星图、动态Bento；原有五布局也开始使用共享`FHomeRoleRenderer`。统一role包括真实资产、市场观察、跨市场脉搏和AI指导。星图外围节点使用原有独立导航route；证券详情/图表业务renderer未复制。
+- Theme Gallery已编码十套选择行、结构预览、布局说明/信息密度/使用场景及外观状态说明。选主题只更新AppStorage主题ID；Root各Tab NavigationStack没有被换ID或重建。尚未Simulator实测导航/图表状态保持。
+- 后续静态复查已把星图中心的Advisor结论限定为`scope == portfolio`；若最近一次结果是Security Advisor，不会把单证券结论冒充组合判断。Gallery的星图/Bento/终端/编辑式预览也已改成不同结构示意。
+- 动态Bento只依据本地Ledger可用性和Guard是否允许用户审阅决定面积，不接受DeepSeek布局指令。成本、市场数据、Advisor、Ledger均未因主题切换分叉。
+- 当前已接入首页背景/前景/强调色、间距和组件表面差异；Episode/Broker成本、MA/IOPV、Candidate、买卖点语义token已在Manifest登记，但尚未统一接入FUnifiedSecurityChart等专业页面。
+- **验证边界：** 仅有静态源码与`git diff --check`检查；未运行Swift编译、XCTest、XcodeGen、App Build或Simulator，无主题截图/人工布局验收。主题源码是否编译通过未知。当前原本FCore 139项定义和旧CI证据不覆盖这些改动；测试实际执行数字不因主题改动增加。
+- 后续：先把本轮Swift纳入下一次完整Apple CI；通过后再逐屏处理布局/可访问性编译问题，继而在Simulator制作十主题灰度结构对照截图及light/dark/eye-care、Dynamic Type和iPhone Air验收。Ledger/NAS/DeepSeek主链最高优先级保持不变。
+
+### 本轮静态复审补记（2026-10-28）
+
+- 对照当前源码后发现，后文“多主题/布局计划增补”仍保留了已过时的“只有5个布局、Manifest尚未实现”描述；该段仅作历史设计记录，不代表当前工作树。当前实现证据以本节开头和`F-MASTER-ACCEPTANCE-MATRIX.md`的主题状态表为准。
+- `GuanpanFApp/project.yml`的App target以`Sources`目录为source，新增`ThemeLayoutManifest.swift`会进入XcodeGen生成输入；这只是工程配置静态检查，不代表XcodeGen或Swift已成功执行。
+- 同时收紧完成度表述：`FThemeLayoutRegistry`目前能提供十套Manifest元数据和Theme Gallery预览，但Home的十种实际结构仍由`HomeLayout`显式组合；Manifest里的`roleOrder`主要用于注册/预览，尚未完全驱动各布局Renderer。故“Manifest注册与首页结构已编码”成立，“新增主题只需注册、无需改布局选择器”尚未成立，仍需后续收敛为可扩展的展示注册接口。
+- 静态核对确认：真实业务角色统一经`FHomeRoleRenderer`分发；数据星图中心只显示Portfolio scope Advisor结果；动态Bento只依据本地账本可用性和本地Guard review eligibility调整布局；主题切换只改AppStorage主题ID。未发现主题分支复制Ledger/Advisor业务逻辑或注入主题预览持仓。
+- 当前本地HEAD仍为`4f8577b4c405001b6d982d3cd7d4bccc1e18c38e`；GitHub API只读核对到远端`main`仍为`7a2d63e98927f9cf16fd40a5597d618741df1640`，并未领先本地；本机`git fetch`仍因DNS线程启动错误失败，故本地对象和工作树尚未完成fetch/reconcile。工作树包含本节列出的主题Swift/文档改动；另有受保护未跟踪目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`，未读取或修改。没有push。
+- GitHub API显示远端run `40622847995`成功，但它验证的是`7a2d63e`，不覆盖当前本地dirty主题改动。当前Windows没有Swift/Xcode/XcodeGen/Simulator；本轮仅静态源码/文档审查与`git diff --check`，无新Swift编译、XCTest、App Build、Simulator或截图证据。
+- 下一步：网络恢复先fetch/reconcile，再普通push并跑完整Apple CI；在此之前控制Swift增量。CI通过后人工检查十主题首页的灰度结构差异、主题切换状态保留、长文本/动态字体/小屏。主题仍不取代Ledger对账、NAS历史分钟→iOS/Research Evidence及DeepSeek真实闭环的优先级。
+
 ## 2026-10-28 Advisor费用估算静态修正（最新工作树）
 
 - Advisor/App 代码审查发现，Candidate费用估算曾被额外硬拦截：普通交易至少`¥0.10`、做T至少`¥0.20`。这把可修改的参考费率误当作硬规则，会拒绝真实券商费率更低的候选。
@@ -30,12 +51,12 @@
 - 在已有132项静态定义的FCore测试中，补入累计买回量超过可配对卖出量的回归断言（卖出1000、先买回500、再多买回501应Unavailable）。仍是测试定义，没有Swift编译或执行证据。
 - 新增测试提交`2de6c85026b43a0ef80939462dc5600035cca5ab`；它建立在T FIFO部分配对提交及Manifest设计提交之后。当前本地分支比缓存远端ahead 10。最新fetch仍失败，未push；此commit ID仅追溯本地改动，不代表CI状态。
 
-## 2026-10-28 多主题/布局计划增补
+## 2026-10-28 多主题/布局原始设计快照（已由后续落地记录覆盖）
 
 - 用户新增“约10套可切换主题/布局”需求，不改变当前最高优先级。已创建`F-THEME-LAYOUT-MANIFEST-DESIGN.md`，登记现有5个首页方向与新增东方墨韵、极简终端、流体玻璃、数据星图、动态Bento五个方向。
 - 设计约定ThemeManifest承载字体、间距、卡片/表面、导航、AI/市场/资产呈现、图表容器、语义色、动效和light/dark/eye-care兼容；LayoutManifest按稳定`FHomeCardRole`配置模块顺序/面积/响应式规则/风险状态重排。registry只组合纯展示renderer；Ledger、行情来源、Research Evidence、DecisionContext、Advisor、Guard和route职责保持共用。
-- 目前`FHomeTheme` enum和`HomeLayout` switch仍是5套首页分支的实际实现。Manifest registry、其余跨页面主题renderer、新增5主题、10主题截图/人工结构验收均未实现。主题不增加Swift代码、不阻断Ledger/手续费修正、当前T Contribution CI、NAS历史分钟→iOS或DeepSeek真实闭环。
-- 验证：本轮只做代码/文档静态检查和设计记录，未运行Xcode/Simulator；无新截图。多主题验收仍未通过。
+- **仅代表最初设计阶段：** 当时`FHomeTheme`/`HomeLayout`还只有5套分支，Manifest和新增5套主题尚未实现。此状态已被本文件上方“多主题/首页布局首轮Swift落地”及后续静态复审补记覆盖；不得把这条历史描述当成当前状态。
+- 当时只做了设计记录，没有Xcode/Simulator或截图验收；后续虽已编码十套首页结构，仍未取得Apple编译或人工主题验收证据。
 
 ## 2026-10-28 当前工作树续更（覆盖下方较早快照）
 
@@ -1008,4 +1029,28 @@ Apple编译验证：本轮未执行；当前环境不提供本地Xcode
 当前测试：FCore最近历史CI 130/130（不代表本轮源码）；App UI最近历史CI 3/3（不代表人工验收）；Python/NAS runtime 5/5与queue定向4/4通过；全provider套件13通过/2失败/1错误，archive 42通过/2错误，service全套30通过/3错误（受限原因见上）
 最大缺口：provider历史覆盖实测；NAS SQLite指定日期归档到iOS/Research Evidence；当前Swift改动的Apple CI；人工Simulator验收和DeepSeek成交闭环
 下一步：继续审计NAS历史provider日期/交易时段能力与coverage终态；网络可用后先fetch/reconcile，再普通推送触发当前HEAD完整Apple CI
+F_CURRENT_STATUS_END
+
+## 2026-10-28 当前工作树状态更新（优先于上方历史快照）
+
+- 当前HEAD：`4f8577b4c405001b6d982d3cd7d4bccc1e18c38e`；最近本地阶段提交依次为现金only对账入口、表单状态提示保留、现金不污染证券账本回归定义。提交ID用于追溯，不代表外部验证通过。
+- 本次交接更新前，tracked源码/测试干净；交接更新后当前tracked仅`F-REALTIME-HANDOFF.md`和`F-MASTER-ACCEPTANCE-MATRIX.md`为未提交文档修改。另保留用户保护的未跟踪目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`，未读取/修改/删除。分支相对缓存`origin/main` ahead 22；本轮尚未成功fetch，真实远端HEAD未知，未推送或触发Apple CI。
+- 现金only对账：资产页入口、方向选择、原因/确认说明、确认现金Writer追加和独立结果状态已编码；一项FCore回归定义验证只改变现金。新UI/测试均未Swift编译、未执行、未Simulator验收。
+- 测试：FCore静态defined=139；最近历史Apple CI仍为旧源码130/130，不能套用到当前HEAD；本轮新增测试executed=0。App UI本轮未执行。Python/NAS近期runtime 5/5与队列4/4通过；provider/archive/service受限全套结果见前文。
+- External Pending：Apple编译/UI、Simulator人工交互、NAS真实历史provider覆盖与iOS消费链、DeepSeek成交闭环。
+- 下一步：GitHub恢复后先fetch/reconcile，普通push并将当前Swift修改送完整Apple CI；未恢复前不再扩写Swift，继续有限范围NAS/Ledger只读审计。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger现金/手续费对账入口收口；等待Apple编译通道验证当前Swift
+当前正在开发：将无法归属到具体成交的现金差额记为现金事件，不影响证券PnL
+刚刚完成：现金差额入口与状态反馈；现金only不变更证券数据回归定义；本地差异检查通过并提交
+未提交工作：仅F-REALTIME-HANDOFF.md与F-MASTER-ACCEPTANCE-MATRIX.md状态更新；源码/测试干净；受保护临时目录仍未跟踪且未触碰
+iOS完成度：现金对账功能已编码；未编译/未执行UI测试/未Simulator验收
+AI顾问完成度：现金变化会失效旧Candidate与结果；未做真实DeepSeek重判E2E
+统一图表完成度：本轮无变化；手势/横屏/状态恢复仍待Simulator人工验收
+NAS历史数据完成度：有限回补与session过滤9项定向测试通过；provider历史覆盖及NAS→iOS→Research Evidence未真实验证
+Apple编译验证：无当前HEAD证据；本机无Xcode，远端同步未成功
+当前测试：FCore 139 defined；新增现金only测试0 executed；App UI本轮0 executed；Python/NAS定向9 passed，宽套件仍存在Windows环境受限项
+最大缺口：当前Swift修改编译与测试；真实历史分钟iOS链；DeepSeek→Candidate→真实成交→Ledger→复判；人工Simulator交互验收
+下一步：先恢复GitHub fetch/reconcile并跑完整Apple CI；保持Candidate不可写Ledger及现金/费用审计事件可追溯
 F_CURRENT_STATUS_END
