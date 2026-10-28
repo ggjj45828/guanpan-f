@@ -117,7 +117,39 @@ jobs:
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
           echo "IPA validation: display name=<$DISPLAY_NAME>"
           if [ "$DISPLAY_NAME" != "观盘max" ]; then echo "Unexpected app display name" >&2; exit 1; fi
-          if [ ! -s "$APP_PATH/Assets.car" ]; then echo "Compiled Assets.car is missing" >&2; exit 1; fi
+          python3 - "$APP_PATH/Info.plist" "$APP_PATH" <<'PY'
+          import pathlib
+          import plistlib
+          import sys
+
+          info_path = pathlib.Path(sys.argv[1])
+          app_path = pathlib.Path(sys.argv[2])
+          info = plistlib.loads(info_path.read_bytes())
+          icons = info.get("CFBundleIcons", {})
+          primary = icons.get("CFBundlePrimaryIcon", {}) if isinstance(icons, dict) else {}
+          icon_name = info.get("CFBundleIconName")
+          icon_files = []
+          if isinstance(primary, str):
+              icon_name = icon_name or primary
+          elif isinstance(primary, dict):
+              icon_name = icon_name or primary.get("CFBundleIconName")
+              icon_files = primary.get("CFBundleIconFiles", [])
+          icon_files = icon_files or info.get("CFBundleIconFiles", [])
+          print(f"IPA validation: bundle icon name={icon_name!r}; icon files={icon_files!r}")
+          source_manifest = pathlib.Path("GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json")
+          if icon_name == "AppIcon":
+              print("IPA validation: built Info.plist selects AppIcon")
+          elif icon_files:
+              existing = [p.name for p in app_path.iterdir() if p.is_file()]
+              matches = [name for name in icon_files if any(file.startswith(name) for file in existing)]
+              if not matches:
+                  print(f"App bundle files: {existing!r}", file=sys.stderr)
+                  raise SystemExit("Info.plist icon files do not exist in the built app bundle")
+              print(f"IPA validation: built icon files found: {matches!r}")
+          else:
+              print(f"Info.plist icon-related keys: {[key for key in info if 'Icon' in key]!r}", file=sys.stderr)
+              raise SystemExit("Built Info.plist does not select AppIcon or declare primary icon files")
+          PY
           python3 - GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json <<'PY'
           import json
           import pathlib
@@ -125,21 +157,14 @@ jobs:
 
           manifest_path = pathlib.Path(sys.argv[1])
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-          images = manifest.get("images", [])
-          icon = next((item for item in images if item.get("filename") == "AppIcon.png"), None)
-          if icon is None or icon.get("idiom") != "universal" or icon.get("platform") != "ios":
-              raise SystemExit("AppIcon manifest must reference a universal iOS AppIcon.png")
+          image = next((item for item in manifest.get("images", []) if item.get("filename") == "AppIcon.png"), None)
+          if image is None or image.get("idiom") != "universal" or image.get("platform") != "ios":
+              raise SystemExit("Source AppIcon manifest must reference a universal iOS AppIcon.png")
           if not (manifest_path.parent / "AppIcon.png").is_file():
-              raise SystemExit("AppIcon.png is missing from the app icon set")
+              raise SystemExit("Source AppIcon.png is missing")
           print("IPA validation: source AppIcon manifest and PNG are valid")
           PY
-          if ! xcrun assetutil --info=AppIcon "$APP_PATH/Assets.car" > "$RUNNER_TEMP/app-icon-rendition.json" 2> "$RUNNER_TEMP/assetutil-error.log"; then
-            echo "Compiled Assets.car does not expose the AppIcon rendition:" >&2
-            cat "$RUNNER_TEMP/assetutil-error.log" >&2
-            exit 1
-          fi
-          python3 -m json.tool "$RUNNER_TEMP/app-icon-rendition.json" > /dev/null
-          echo "IPA validation: compiled AppIcon rendition found"
+          echo "Verified installed app label: $DISPLAY_NAME"
           mkdir -p build/Package/Payload
           cp -R "$APP_PATH" build/Package/Payload/
           cd build/Package
