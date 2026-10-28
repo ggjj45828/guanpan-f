@@ -1,5 +1,7 @@
 # F实时进度交接
 
+> 本文件顶部记录当前工作树快照；详细历史记录已原样保存在 [F-REALTIME-HANDOFF-HISTORY.md](F-REALTIME-HANDOFF-HISTORY.md)，只供追溯，不代表当前源码或验证状态。
+
 ## 2026-10-28 全面缺口盘点与本轮源码整改（当前真实工作树）
 
 - 当前实际HEAD仍为`e500fc84f6dd8acf93cc32305aefcff28e700f4e`；GitHub Desktop 已于本轮 Fetch，确认 `origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`，本地 `main` 相对远端 ahead 1 / behind 8，属于分叉，尚未合并/推送/提交。远端8个提交包含首页、IPA/AppIcon/CI修正；已检查提交摘要，合并前仍需解决首页源码交叉修改。禁止强推、回滚或直接Pull覆盖。工作树dirty，包括现存Ledger/Advisor/UI/CI修改及本轮图表语义token与文档整改。
