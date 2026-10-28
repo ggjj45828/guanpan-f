@@ -757,6 +757,14 @@ final class LedgerSchemaTests: XCTestCase {
                        Decimal(string: "999.85"),
                        "卖出1000份仅买回500份时，只计算500份并按成交比例分摊卖出费用")
 
+        let excessBuyback = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-20),
+                                           instrumentCode: "159866", side: .buy, units: 501, price: 10,
+                                           fee: Decimal(string: "0.10")!,
+                                           userConfirmation: confirmation(), tradeIntent: .tBuyback,
+                                           tCycleID: "cycle-1")
+        XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback, excessBuyback]),
+                     "累计买回超过此前尚可配对卖出量时，不能输出确定T贡献")
+
         let earlierBuyback = FConfirmedFill(sequence: 4, tradedAt: now.addingTimeInterval(-120),
                                             instrumentCode: "159866", side: .buy, units: 10, price: 10,
                                             fee: FETFTradeFeePolicy.defaultReferencePerFill,
