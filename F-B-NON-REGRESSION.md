@@ -1,5 +1,17 @@
 # F-B-NON-REGRESSION
 
+## 当前工作树补记（2026-10-28）
+
+- 已通过GitHub Desktop Fetch确认远端`main=9e575693de5400a154eafb16fcb08c003f9ce49e`；本地`main=e500fc84f6dd8acf93cc32305aefcff28e700f4e` ahead 1 / behind 8，当前源码尚未合并/提交/编译。
+- 本轮主题语义颜色改动仅为已编码未验证。B中成熟图表显隐、图表操作、账本语义等非回归项仍需当前源码CI和Simulator/真机实测后才能关闭；F整体产品体验仍不如B。
+
+## 当前源树总状态覆盖（2026-10-28）
+
+- 当前HEAD dirty、未编译；不得把下方旧CI、旧commit或过往截图沿用为当前通过证据。
+- NRG-04图层语义色本轮开始接入主题tokens，属于已编码未编译；当前真实体验仍被用户评为明显不如B，需Simulator/手机实际操作后才能关闭。
+- NRG-25等品牌/图标条目中的旧“已改/待打包”描述只记录历史尝试；最终是否显示“观盘max”及F独立图标必须以当前CI产物与iPhone桌面实测为准。当前工作树无此轮安装验证证据。
+- 完整未完成项以 `F-MASTER-ACCEPTANCE-MATRIX.md` 开头当前盘点为准；本表后续状态只作逐项追溯，冲突时更新对应行。
+
 目的：记录 B 中值得保留的实际产品能力，防止 F 重构期间让用户能看到、能使用的功能退化。此清单只确认 B 源码供体存在，不自动继承 B 的行为正确性或 F 的 PASS。
 
 状态定义：
@@ -57,6 +69,8 @@
 | B-NR 图表信息层级与输入键盘 | B的图表专业坐标/成交量/时间轴体验不得在F退化；AI及设置输入必须可明确收键盘 | F统一renderer开始补价格轴、午休压缩时间轴、日K成交量子图与选中OHLCV；Composer/Settings加键盘工具栏及提交后收起 | 已编码未编译；未执行CI/Simulator/真机；不得标记通过 | 当前统一图表仍是F权威数据实现，B仅作呈现参考 |
 
 | B-NR 当前验证门与NAS连接 | `FUnifiedSecurityChart`图表重排与多处键盘收起；NAS客户端20秒时限/错误分类 | HEAD `ecb220d` 已推送，Apple CI run `40675520793`正在执行：FCore步骤/XcodeGen已成功、Device Build进行中，UI/Simulator待执行 | 只表示CI中途状态，不得标记最终通过；NAS连接仍需手机安装新包实测 |
+
+| NRG-26 首页AI组合指导和资产层级 | 打开首页即可看到Portfolio级AI判断、真实现金/持仓、新鲜持仓行情及研究/市场入口；今日盈亏无可靠基准时明确Unavailable；Guard阻止结果不展示成交易建议；市场/研究入口分别路由 | `GuanpanFApp/Sources/HomeExperience.swift` 新增三个布局共用的 `HomeAdvisorLead`、`HomePortfolioLead`、`HomeMarketResearchStrip`；东方编辑/墨韵、Dashboard终端、流体玻璃改变信息编排但复用唯一model与业务数据 | Run 56/57 FCore各140/140、XcodeGen通过；Device Build因源码传输损坏失败，UI XCTest未执行。Run 58 `40693877430` queued，源码已小分段恢复并从GitHub回读核对一致；无新截图/人工视觉/真机证据 | 不得以旧Run 55结果、UI XCTest或主题配色冒充验证；B vs F仍判F体验不如B |
 
 ### 2026-10-28 App名称/图标与NAS确认门
 

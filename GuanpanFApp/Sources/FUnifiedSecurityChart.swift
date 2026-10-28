@@ -16,7 +16,7 @@ struct FUnifiedSecurityChart: View {
     @State private var crosshairEnabled = false
 
     private let averagePeriods = [5, 10, 20, 60, 250]
-    private let averageColors: [Color] = [.orange, .blue, .purple, .teal, .pink]
+    private var averageColors: [Color] { theme.manifest.tokens.movingAverages }
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     var body: some View {
@@ -163,10 +163,10 @@ struct FUnifiedSecurityChart: View {
         let quality = model.chart.quality
         let statusColor: Color = {
             switch quality {
-            case .complete: return .green
-            case .partial: return .orange
-            case .stale: return .red
-            case .unavailable: return .secondary
+            case .complete: return theme.manifest.tokens.accent
+            case .partial: return theme.manifest.tokens.partial
+            case .stale: return theme.manifest.tokens.risk
+            case .unavailable: return theme.manifest.tokens.unavailable
             }
         }()
         let activeIndex = selectedIndex ?? max(0, series.count - 1)
@@ -235,10 +235,10 @@ struct FUnifiedSecurityChart: View {
 
     private func qualityColor(_ quality: FChartDataQuality) -> Color {
         switch quality {
-        case .complete: return .green
-        case .partial(_): return .orange
-        case .stale(_): return .red
-        case .unavailable(_): return .secondary
+        case .complete: return theme.manifest.tokens.accent
+        case .partial(_): return theme.manifest.tokens.partial
+        case .stale(_): return theme.manifest.tokens.risk
+        case .unavailable(_): return theme.manifest.tokens.unavailable
         }
     }
 
@@ -341,7 +341,8 @@ struct FUnifiedSecurityChart: View {
                 let centerX = x(index)
                 let stepX = plotWidth / CGFloat(max(range.count, 1))
                 let rising = bar.close >= bar.open
-                let color: Color = rising ? .red : .green
+                let tokens = theme.manifest.tokens
+                let color: Color = rising ? tokens.positive : tokens.negative
                 var wick = Path(); wick.move(to: CGPoint(x: centerX, y: y(bar.high))); wick.addLine(to: CGPoint(x: centerX, y: y(bar.low)))
                 context.stroke(wick, with: .color(color), lineWidth: 1)
                 let top = min(y(bar.open), y(bar.close))
@@ -483,13 +484,13 @@ struct FUnifiedSecurityChart: View {
     }
     private func overlayColor(_ kind: FChartOverlayKind) -> Color {
         switch kind {
-        case .cost: return .orange
-        case .brokerCost: return .gray
-        case .intradayAverage: return .purple
-        case .previousClose: return .gray
-        case .iopv: return .cyan
-        case .candidateBuy: return .green
-        case .candidateSell: return .red
+        case .cost: return theme.manifest.tokens.episodeCost
+        case .brokerCost: return theme.manifest.tokens.brokerCost
+        case .intradayAverage: return theme.manifest.tokens.intradayAverage
+        case .previousClose: return theme.manifest.tokens.secondaryForeground
+        case .iopv: return theme.manifest.tokens.iopv
+        case .candidateBuy: return theme.manifest.tokens.buyPoint
+        case .candidateSell: return theme.manifest.tokens.sellPoint
         }
     }
 

@@ -1,5 +1,53 @@
 # F Master Acceptance Matrix
 
+## 当前Git/Apple验证增补（2026-10-28）
+
+- 已通过 GitHub Desktop 执行 Fetch：本地 HEAD `e500fc84f6dd8acf93cc32305aefcff28e700f4e`，`origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`；本地分支 ahead 1 / behind 8，尚未reconcile、提交或推送。远端包含首页和IPA流水线后续修改；需要先合并并解决可能的首页源码冲突，禁止强推。
+- 当前源码测试定义153 FCore / 3 UI；当前HEAD executed=0、passed=0、failed=0。当前Windows没有Swift/Xcode/XcodeGen/xcodebuild。旧HEAD测试不能继承。
+- 本地静态检查 `git diff --check`通过；这不代表编译。完成安全合并后，将当前全部待审修改普通推送，再执行FCore、XcodeGen、Device Build、Simulator Build、UI XCTest及IPA门。
+
+## 当前工作树补充（2026-10-28；覆盖下方旧的验证状态）
+
+## 已知未完成项完整盘点与本轮整改（2026-10-28；当前源树快照）
+
+以下是本轮对当前可读源码、已登记验收矩阵、产品差距审计和实时交接进行交叉核对后的**全部已知缺口**。它不是“全部完成”声明；代码库以外的实机、外部服务和Apple工具链项必须保留待验。下方旧日期段落仅供追溯，若数字或结论冲突，以本段和`F-REALTIME-HANDOFF.md`最新工作树快照为准。
+
+| 优先级/领域 | 当前发现的缺口 | 本轮修改/处置 | 当前真实状态 |
+|---|---|---|---|
+| P0 账本/安全 | T费用更正、Episode、双成本、T与总收益分离的先前实现尚未在当前dirty HEAD重新Apple执行；本轮没有可运行Swift/Xcode | 没有改写历史fills或Ledger规则；保留当前实现并记为当前HEAD待CI | 153 FCore defined；本HEAD executed=0 |
+| P0 本地实时决策 | 已有价格区间Trigger，不等于完整Quant；没有因子评分、Risk Guard接线、报价订阅/持久化、通知或Home/证券详情联动 | 维持fail-closed，不放行资产变化Candidate；架构说明列出缺口，不伪称引擎完成 | Trigger已编码未编译；其余未实现 |
+| P1 原生产品体验 | 用户实机反馈F布局/图表明显不如B；当前没有新Simulator/手机截图；B源码供体不是已确认的用户Frozen build | 本轮不宣称UI达标；保留差距审计和逐页非回归清单，外部验收列出待办 | 当前整体仍不如B；人工验收Pending |
+| P1 主题/图表 | MA、K线、均线和overlay颜色之前未统一跟随语义tokens；图表有IOPV渲染/图例代码，但可靠IOPV数据源仍无 | 本轮将颜色接入主题tokens；修正矩阵错误的“renderer不画IOPV”描述 | 已编码未编译；IOPV保持Unavailable |
+| P1 品牌/安装包 | 工程配置已写显示名“观盘max”、F自有AppIcon源资源存在；当前dirty HEAD尚未Apple构建及安装验证 | 保留现有名称和图标配置，不重复扩展打包链；在CI/实际安装后核对桌面名称与图标 | 源码资源存在；当前IPA/手机桌面未验证 |
+| P1 NAS客户端 | 用户报告手机HTTPS NAS未连接；本轮没有手机现场响应或NAS目标可访问证据 | NAS是可选增强；不猜测、不改NAS服务端；等待手机新错误证据 | 未解决/未验证，不阻断核心顾问 |
+| P2 顾问/成交 | 没有当前HEAD真实DeepSeek→Guard→Candidate→确认成交→Writer→现金/成本/盈亏/T事实→复判E2E | 保持Candidate只读、只有用户确认真实成交写账 | 未完成；需外部Key、服务和真实操作验收 |
+| P2 数据/市场 | 实时报价、跨市场实时数据、可靠新闻、均价/前收/IOPV的真实数据质量不能由静态代码证明 | 保持缺源Unavailable；NAS只作可选；不造研究证据 | 多项未接入或External Pending |
+| P2 恢复/提醒 | 通知中心、价格/计划提醒、跨设备同步恢复、完整备份恢复仍是B/F差距项 | 未新增大页面；保留在NRG清单 | 未完成 |
+| P3 兼容/交互 | 横屏全屏状态恢复、图表手势冲突、长文本/Dynamic Type、iPhone Air适配、10主题灰度构图对比没有本轮实测 | 不把CI自动截图或UI XCTest当人工视觉结果 | External Pending |
+| P4 发布 | 当前dirty Swift未编译，当前HEAD Apple CI未执行；当前Windows无Swift/XcodeGen/xcodebuild | 禁止继承旧CI结果；静态检查通过，架构边界脚本因Python启动器不可用未运行 | External Verification Pending |
+| P4 Git | GitHub Desktop Fetch确认本地HEAD相对真实origin/main ahead 1 / behind 8；存在分叉 | 尚未reconcile/push；先审查8个远端提交并保留本地工作树，再普通推送 | 同步处理中；禁止强推 |
+
+本轮完成的源码收口：图表MA、均价/成本/券商成本/IOPV/Candidate叠加、数据质量状态及K线上涨/下跌色改用`FThemeSemanticTokens`；CardGrid、Dashboard、FluidGlass的manifest roleOrder已对齐实际布局。仍未解决的已知源码结构问题：不同layout的几何结构由SwiftUI family renderer实现，Gallery预览只能展示简化role顺序；十主题尚不能纯靠注册manifest扩展。后续须CI与主题截图审阅，不能把Theme Manifest存在写成架构收口。
+
+| 验收项 | 当前工作树证据 | 状态 |
+|---|---|---|
+| NAS核心依赖移除 | Advisor无NAS配置时跳过请求；NAS Evidence只在上下文提供时可选引用。NAS不再是核心决策前置；历史矩阵中旧的“NAS是必需条件”只作历史追溯 | 已编码，当前Swift未编译；NAS服务端未改 |
+| Trigger状态机回归 | `Tests/FCoreTests/RealtimeQuantTriggerTests.swift`新增12项定义；涵盖等待、接近/触发、过期、stale/未验证/休市暂停、暂停恢复后错过价格区、证券/计划身份错配、显式失效、T信号和Filled边界 | FCore总计153 defined；当前HEAD 0 executed / 0 passed / 0 failed |
+| Apple CI/Simulator | 当前本机无Swift/Xcode/XcodeGen；最近Run 58为取消，不能为当前dirty工作树提供构建结果 | External Verification Pending；无当前树Simulator截图/人工验收 |
+| Git同步 | HEAD `e500fc84f6dd8acf93cc32305aefcff28e700f4e`；相对缓存origin/main ahead 1 / behind 8，远端实时状态未确认 | 未reconcile、未push；禁止强推 |
+
+当前实现仍缺完整Quant因子（MA/成交量/波动/真实Ledger上下文）、Risk Guard集成、实时行情订阅、状态持久化/通知和Home/Detail接线；资产变化Candidate仍fail-closed。`git diff --check`通过；架构边界脚本因Windows Python启动器不可用而未执行。NAS真实部署、历史分钟、DeepSeek E2E、真实成交闭环和Simulator人工验收仍未完成。不得把定义数或静态检查写成测试通过。
+
+## 2026-10-28 核心架构决策更新（覆盖旧的NAS必经表述）
+
+- 产品决策：NAS降为可选同步/备份/历史归档/扩展研究服务；核心为实时行情 + 真实Ledger + iPhone本地Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger。完整契约见 `F-LOCAL-QUANT-ARCHITECTURE.md`。
+- 旧行中将“NAS分钟研究”设为所有 Advisor/Candidate 的必经门槛，均被本次决策取代。NAS Evidence仍是可选增强；无NAS不可阻断基础Advisor。T/网格等受风险约束的动作不能简单移除原有保护，须由可验证的本地Quant条件替代并通过测试后才可调整。
+- 快通道不得等待DeepSeek；慢通道由DeepSeek读取真实账本、可靠行情、Quant状态和可选背景信息制定策略。Trigger只提示、不交易、不写Ledger；真实成交仍只由用户确认后经唯一Writer写入。
+- 当前实现状态：无NAS时跳过可选研究请求；资产变化Candidate仍以“Quant尚未接入”fail-closed。本地已新增纯价格区间Realtime Trigger评估器，但完整Quant、Guard接线和调用方仍未实现。`FAIGuard`仍保留dayTrade/vwapBreak和grid/gridSpacingReplay历史研究条件；在新的本地Quant安全条件未接好并验证前不移除。
+- 当前HEAD的CI Run 58 `40693877430`已取消；没有当前工作树编译、FCore/UI测试或IPA新通过证据。Windows无Swift/Xcode。旧Run结果不得继承到新dirty源码。
+- 当前本地FCore XCTest defined=153（包含新增12个Realtime Trigger定义），当前HEAD executed=0；App UI defined=3，当前HEAD executed=0。
+- 产品整改仍在进行：首页已编码、未编译；无本轮Simulator人工视觉或iPhone Air验收。NAS HTTPS等待用户新包实测，NAS服务器无修改。真实DeepSeek/Candidate成交闭环未端到端验证。
+
 ## 实时覆盖（2026-10-28；以当前工作树为准）
 
 | 验收项 | 当前证据 | 状态 |
@@ -29,9 +77,9 @@ FCore XCTest当前defined=140；新增隐藏MA轴范围测试0 executed。App UI
 |---|---|---|
 | Git与CI | HEAD `676da3bd5d963900337cbcc970c083b110e4416c`，本地与`origin/main`对齐；仅两份状态文档未提交。成功Apple CI run `旧执行编号省略` 对应`f366542`，当前Swift源码与其无差异 | 可沿用为同源码构建证据；本轮没有新CI |
 | Advisor/Ledger边界 | 静态架构检查确认Advisor target不依赖Ledger writer；真实Advisor选择组合/证券范围和Candidate确认写入路径仍符合只读/用户确认边界 | `verify_architecture_boundaries.py`实际运行通过；真实在线闭环未执行 |
-| 主题布局 | Gallery读取manifest的roleOrder，真实HomeLayout另行硬编码布局顺序，部分manifest顺序与实际页面不同 | 已编码但尚未修；可能造成预览与实际结构不一致。待统一并Apple编译 |
-| 图表主题色 | Unified chart的MA/K柱/成本/Candidate颜色硬编码且未接主题tokens | 已编码但语义token尚未接通；待Apple编译与截图对比 |
-| IOPV renderer | 纵轴range已纳入可用IOPV值，但renderer既不画IOPV，也不把独立IOPV观察放入图例；当前无可靠来源所以保持Unavailable | 真实IOPV接入前需补齐render/legend并验证，不得仅把它纳入纵轴 |
+| 主题布局 | Gallery读取manifest的roleOrder，真实HomeLayout使用family-specific布局；本轮已把CardGrid、Dashboard和FluidGlass顺序对齐实际编排；Bento/星图/动态Bento的几何结构不能由单一roleOrder完全表达 | 顺序不一致已编码修正、未编译；Gallery预览/实际结构仍需CI和主题截图核验 |
+| 图表主题色 | Unified chart的MA/K柱/成本/Candidate此前硬编码 | 本轮已接入`FThemeSemanticTokens`，已编码未编译，待主题截图对比 |
+| IOPV renderer | `FUnifiedSecurityChart.swift`已有可用IOPV观察的图例和水平线绘制，并纳入可见纵轴；目前无可靠真实来源，故实际状态仍应Unavailable | 渲染路径已编码；来源仍不可用；不得伪造数据；截图待验 |
 | 图表Unavailable文案 | 均价/前收/IOPV状态行是静态文本；当前确无可靠来源所以目前诚实，未来来源接入后会误报 | 当前非数据造假；记录为接入真实序列时必须修正 |
 | 本轮验证限制 | 结构测试因缺PyYAML未执行；本机Swift/Xcode不可用；未运行Swift测试、Simulator人工交互或实网服务 | 不计入通过，不把旧CI称为本轮执行 |
 
@@ -225,10 +273,10 @@ FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表
 | F-13 | Investor Profile 有来源、置信度、修订/撤销与学习边界 | defined | 来源/置信度/解释、显式值保护、临时属性过期、修订及受限投影已编码；App 请求现通过 assembler 读取既有 Profile 投影，但尚无原生编辑/撤销 UI；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
 | F-14 | DecisionContext 数据新鲜度、时点与来源可追溯 | defined | Observation、Quote、Research Evidence 来源/时间/质量门控已编码；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
 | F-15 | Risk Guard 与 AI Guard 可阻断不合规候选并说明原因 | defined | 现金、仓位、报价新鲜度、证据引用、上下文绑定及成本溢出 fail-closed 已编码；模型层约束未接入；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
-| F-16 | AI 最终建议串联真实持仓、行情、新闻、研究和风险证据 | defined | 原生App接入DeepSeek候选provider、NAS质量门控Evidence、实时分钟报价、只读Ledger快照、DecisionContext与Risk/AI Guard；组合意图优先纳入全持仓/现金/逐证券行情与研究，即使提及单只证券仍保持组合范围；无合格同标的NAS研究时阻断资产变更候选；新闻仍显式不可用；Swift/iOS/在线服务未验证 |
-| F-17 | T、网格、回本仅为 AI 可调用分析工具，不自动交易 | defined | NAS 历史分析函数和 Advisor 研究工具调用边界已编码；NAS Provider编排已绑定响应身份/范围/时点/质量；回本候选仅允许绑定真实持仓并以分析文本表达，拒绝下单字段；网格要求同标的合格gridSpacingReplay；做T因盘口/VWAP/双边费用上下文未齐而fail-closed；真实持仓策略适配未完成；FCore 119项全量已在Actions执行通过，但策略和真实服务适配仍待专项验收 |
-| F-18 | 行情、批量行情、分时、日 K、MA250、IOPV、盘口标注来源/新鲜度 | defined | Tencent实时分钟行情与NAS历史分钟已接入；新增Tencent未复权日K解析/蜡烛/MA5/10/20/60/250；FCore统一分时/日K、Unavailable/Partial/Stale、IOPV及价格叠加DTO已定义并约束状态一致性。统一`FChartOverlayModel`仅将有来源的成本/均价/前收/IOPV/Candidate叠加层纳入同一可视纵轴，Unavailable不生成伪线；FUnifiedSecurityChart已由当前/历史分钟和日K页面共用，并随App Device/Simulator Build编译（run 旧执行编号省略）；实线包含真实持仓成本和Candidate，MA/量柱编码完成；均价/前收/IOPV因无可靠源保持Unavailable，真实图表视觉/手势仍待专项验收 |
-| F-19 | NAS 历史研究、跨市场和新闻与真实账本隔离 | defined | NAS v6已部署；2026-10-27 14:11:49实机六证券各归档191条当前日分钟、过滤13:00盘外行，真实实时采集/归档烟测通过；指定过往日期历史补采返回empty source response（当前配置未补齐），跨市场/新闻/iOS端到端和长期运行仍未验证。跨市场非对称条件概率与证券级映射仅登记于F-B-145-TRACEABILITY.md研究口径，尚无实现/合格样本，不能进入DecisionContext |
+| F-16 | AI 最终建议读取真实持仓、行情、可选背景与风险证据 | defined | DeepSeek provider、只读账本快照、DecisionContext、Risk/AI Guard及组合/证券scope已编码；NAS现为可选增强，无NAS不得单独阻断基础顾问；本地Quant尚未接入，资产变化候选由“Quant未接入”fail-closed；新闻仍Unavailable；当前HEAD未编译/未联调 |
+| F-17 | T、网格、回本仅为 AI 可调用分析工具，不自动交易 | defined | NAS研究工具保留为可选能力；FAIGuard仍保留T/vwapBreak、网格/gridSpacingReplay条件，须待本地Quant安全条件替代并验证后才可改；策略和真实服务适配未完成。旧119项CI数字仅为历史，不代表当前HEAD |
+| F-18 | 行情、分时、日K、MA250、IOPV、盘口标注来源/新鲜度 | defined | 统一`FUnifiedSecurityChart`由当前/历史分钟和日K共用；MA/成交量/成本/券商成本/Candidate/IOPV按可见层参与价格范围。IOPV有值时存在绘制与图例路径，但没有可靠来源，保持Unavailable。图表语义色本轮改为主题tokens，未编译；视觉、手势和真机仍待验 |
+| F-19 | 可选NAS归档/研究、跨市场和新闻与真实账本隔离 | defined | NAS v6曾有用户提供的实时分钟归档烟测；NAS不再是Advisor核心前置。NAS历史补采曾返回empty source response；跨市场/新闻/iOS端到端和长期运行未验证。跨市场非对称关系与证券级映射没有合格样本，不进入DecisionContext |
 | F-20 | 同步、离线冲突、通知与恢复状态可见且不丢账 | defined | 三通道策略已编码；传输、离线队列、通知 UI 和恢复体验未实现；FCore 119项全量已执行通过，但这不覆盖缺失的产品功能 |
 | F-21 | AI 聊天、导航、图表、横屏和设备布局可用 | defined | 原生五Tab与独立NavigationStack、真实账本/行情、AI顾问输入和结果页已接线；当前/历史分钟和日K已复用共享SwiftUI renderer。App UI XCTest 3/3通过（run 旧执行编号省略；覆盖导航、Advisor主要控件和资产页基础结构）；图表功能/视觉、横屏和设备布局验收仍未完成 |
 | F-22 | 十个独立主题的 token、页面一致性、可读性和设备截图验收 | defined | 十个首页layout family、语义token与共享role renderer已编码但未Apple编译；跨页面一致性、主题差异截图、可读性和设备验收未完成；未继承 A/B 主题结论为通过 |
@@ -242,7 +290,7 @@ FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表
 | F-30 | 红利研究采用多因素证据；4%仅为自动模式参考，显式高级设置才启用自定义最低值 | defined | NAS多因素证据整理器及版本化Research Evidence输出已编码；历史观测重复时按质量/抓取时点确定性去重并拒绝质量分越界，红利研究Python 7/7通过；真实基本面来源、Advisor/UI消费和高级自定义设置仍未接入，不能据此给出真实资产买卖结论 |
 | F-31 | 首次使用者可发现AI输入、历史分时、K线选择、数据时间/来源、AI依据和主操作 | defined | AI输入/快捷问题/真实账本状态和持仓证券详情入口已编码；历史分时、K线选择、行情来源新鲜度及依据展示仍待原生可发现性验收；Simulator/真机评估待外部验证 |
 | F-32 | B五种布局为F主要布局设计基线；首页每卡职责、信息和目标路由唯一；不同语义入口必须有独立页面 | defined | 十种布局均复用市场观察、跨市场脉搏、AI指导、真实资产role及唯一route；五个新增布局、Gallery和共享renderer已编码未编译。独立NavigationStack保留；发现性/切换状态待设备验证 | |
-| F-33 | NAS Research Evidence版本化只读进入DecisionContext；只传紧凑统计/来源/时点，不传原始分钟/计划；过期、低质量、样本不足、未来时间fail-closed | defined | 紧凑证据与日期/质量校验已编码；有合格日必须有来源，零合格日可空来源；超大计数转换 fail-closed；evidenceId覆盖信任元数据并由iOS重算；FCore 119项整体CI通过，生产跨端服务联调和业务验收仍未完成 |
+| F-33 | NAS Research Evidence作为可选增强只读进入DecisionContext；不作核心顾问必经依赖 | defined | 紧凑证据与日期/质量校验已编码；无NAS时核心Advisor继续运行，只有证据可用才附加；跨端服务联调仍未完成。旧119项CI数字仅是历史证据，不覆盖当前HEAD |
 | F-34 | B版145项需求逐项溯源、F需求处置与独立验收 | defined | [F-B-145-TRACEABILITY.md](F-B-145-TRACEABILITY.md)：保留 B-001…B-145 编号与验收输入，逐项给出 F 需求处置、供体裁决和 F 独立验收状态；B 状态不继承。编号连续性已静态核对，F 实现仍按各项验收。 |
 | F-35 | 行情按证券刷新并更新共享图表快照，显示来源/行情时间/获取时间 | defined | Swift数据绑定已编码；实时源、设备图表响应待验证 |
 | F-36 | 未知年份交易日历 fail-closed，日历按正式来源审核 | defined | 仅当前配置年度启用；其他年份和实机行为待验收 |
@@ -281,6 +329,8 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 |---|---|---|
 | B供体身份/视觉证据 | `GuanpanNext-work/ios` 有原生SwiftUI；无Git元数据无法证实为B Frozen；现有SVG自称手绘预览，无B真机截图 | 静态源码差距审计完成；设备级对照仍待用户真实B截图/或准确冻结源码 |
 | 用户实际体验 | 用户实际在iPhone Air打开F，明确反馈整体布局及图表远差于B | 当前用户体验 **B wins**；不能以F架构优势冲抵 |
+
+| B→F首页体验整改（NRG-26） | B首页结构与当前F首页实机表现对照；当前用户判断F仍不如B | 首页共用Portfolio AI、真实资产摘要、市场/研究独立入口和新鲜度过滤。Run 56/57 FCore均140/140，XcodeGen通过；两次Device Build均因源文件上传内容损坏失败。完整文件已恢复并回读核对一致；Run 58 SHA `9e57569` queued | 已编码；Run 56/57 App Build失败、UI XCTest/Simulator截图未执行；Run 58结果待定；iPhone Air未验，不可标完成 |
 | 核心产品页面 | 新文档逐页对照首页、行情、详情、分钟/历史分钟、日K、AI、资产/持仓、设置、主题、NAS、搜索、通知、备份、收息及模拟方向 | 详见 `F-B-UI-PRODUCT-GAP-AUDIT.md` |
 | B不得退化 | 建立NRG-01～NRG-24非回归登记；恢复有价值体验仍使用F真实Ledger/Advisor模型 | 详见 `F-B-NON-REGRESSION.md`；“已编码”不等于已验收 |
 | 图层可选显隐 | 当前dirty源码已编码MA/成交量/有效overlay显隐与价格域过滤；B源码有逐层控件和持久状态；F当前未编译 | F为已编码未验证；需当前HEAD CI + 图表截图/手势验收 |

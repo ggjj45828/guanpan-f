@@ -470,8 +470,8 @@ final class FHomeModel: ObservableObject {
         isAskingAdvisor = true
         advisorResult = nil
         advisorStatus = focusCode == nil
-            ? "正在读取全部真实持仓，刷新组合行情并请求逐证券 NAS 研究…"
-            : "正在读取真实持仓、刷新目标证券行情并请求 NAS 研究…"
+            ? "正在读取全部真实持仓并刷新组合行情；NAS研究为可选增强…"
+            : "正在读取真实持仓并刷新目标证券行情；NAS研究为可选增强…"
         defer { isAskingAdvisor = false }
 
         do {
@@ -483,20 +483,28 @@ final class FHomeModel: ObservableObject {
             let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
             var researchByCode: [String: FDecisionResearchEvidence] = [:]
             var researchFailureByCode: [String: String] = [:]
-            await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
-                for code in targetCodes {
-                    group.addTask {
-                        do { return (code, try await FNASResearchClient.fetchEvidence(
-                            baseAddress: baseAddress, securityCode: code), nil) }
-                        catch { return (code, nil, error.localizedDescription) }
+            if FNASReadinessClient.validateAddress(baseAddress) != nil {
+                await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
+                    for code in targetCodes {
+                        group.addTask {
+                            do { return (code, try await FNASResearchClient.fetchEvidence(
+                                baseAddress: baseAddress, securityCode: code), nil) }
+                            catch { return (code, nil, error.localizedDescription) }
+                        }
+                    }
+                    for await (code, evidence, failure) in group {
+                        if let evidence { researchByCode[code] = evidence }
+                        else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
                     }
                 }
-                for await (code, evidence, failure) in group {
-                    if let evidence { researchByCode[code] = evidence }
-                    else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
+            } else {
+                for code in targetCodes {
+                    researchFailureByCode[code] = "NAS未配置（可选增强，本次核心顾问继续运行）"
                 }
             }
-            nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得 NAS 研究证据"
+            nasResearchStatus = FNASReadinessClient.validateAddress(baseAddress) == nil
+                ? "NAS 未配置 · 可选增强；核心顾问不受影响"
+                : "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得可选 NAS 研究证据"
 
             guard let ledgerStore else { throw FAdvisorLiveError.noRealLedger }
             let contextCaptureTime = Date()
@@ -583,13 +591,11 @@ final class FHomeModel: ObservableObject {
             let modelAssessment = try await FAdvisorDecisionPipeline(model: provider).assess(
                 request: request, context: context, now: contextCaptureTime)
             var guardFindings = modelAssessment.guardResult.findings
-            let changesAssets = [.buy, .sell, .dayTrade, .grid].contains(modelAssessment.candidate.action)
-            let candidateCode = modelAssessment.candidate.instrumentCode
-            let hasQualifiedInstrumentResearch = context.usableResearchEvidence(at: Date()).contains {
-                $0.envelope.securityCode == candidateCode && $0.envelope.market == "CN"
-            }
-            if changesAssets && !hasQualifiedInstrumentResearch {
-                guardFindings.append(.missingQualifiedResearch("NAS分钟研究:\(candidateCode ?? "未指定证券")"))
+            let requiresRealtimeQuant = [.buy, .sell, .dayTrade, .grid]
+                .contains(modelAssessment.candidate.action)
+            if requiresRealtimeQuant {
+                guardFindings.append(.incompleteTradingEvidence(
+                    "本地 Quant Engine 尚未接入；当前不会放行资产变化 Candidate"))
             }
             let uniqueGuardFindings = Array(Set(guardFindings)).sorted {
                 String(describing: $0) < String(describing: $1)

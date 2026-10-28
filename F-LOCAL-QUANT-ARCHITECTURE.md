@@ -1,0 +1,82 @@
+# 观盘max本地 Quant 与双速决策架构
+
+状态：产品架构已确定；实现分阶段推进。文档完成不代表功能实现或验证完成。
+
+## 产品决策
+
+NAS 不再是核心投资决策的必经依赖。NAS 保留为可选同步、历史归档、备份与扩展研究服务。没有配置、关机、网络或 HTTPS 穿透失败，都不得让本机真实资产、行情、Quant、Guard 或 Advisor 的基础流程不可用。已有 Research Evidence 仍可作为有来源、质量和时间信息的可选增强证据；不可用时应明确记录 unavailable，不得因此伪造证据或自动把计划升级为可执行交易。
+
+## 唯一业务事实源
+
+```text
+实时行情 ──→ iPhone 本地 Quant Engine ──→ Risk Guard ──→ Realtime Trigger ──→ 即时状态/本地提醒
+     │                   ↑                       ↑                    │
+     └──────┬────────────┘                       │                    │
+            │                                    │                    │
+真实 Ledger (只读) ──→ DeepSeek Advisor ──→ Candidate Plan ───────────┘
+                              ↑
+日线/近期分钟、市场背景/新闻、Quant 状态、可选 NAS 证据
+
+用户在券商手工成交 → 用户明确确认 → FConfirmedLedgerWriter → Ledger → Quant 重算 → Advisor按需复判
+```
+
+Ledger、行情、Episode/双成本/P&L/交易事实、Research Evidence、DecisionContext、Advisor、Candidate Plan 和确认成交写入口始终各自唯一。NAS 的 Research Evidence 是可选上下文；本地 Quant 是行情快速评估与计划触发器，不是第二个账本，也不拥有写账权限。DeepSeek 是较慢的组合/证券投资顾问，不是逐 tick 引擎。Realtime Trigger 只读可靠行情和用户可审阅的 Candidate Plan。
+
+## 快通道与慢通道
+
+### 快通道
+
+行情更新 → 确定性 Quant 计算 → Risk Guard → Trigger 状态迁移 → App 即时状态/提醒。
+
+- 不等待、不调用 DeepSeek。
+- 行情必须有来源、交易时间和新鲜度；Stale/Unavailable 时暂停实时指导并保留明确状态。
+- Quant 因子必须确定、可解释、可回测；证据不足时输出 WAIT/低置信度，不猜方向。
+- 状态至少覆盖 HOLD、WAIT、APPROACHING_BUY、BUY_CANDIDATE、APPROACHING_SELL、SELL_CANDIDATE、T_BUY_CANDIDATE、T_SELL_CANDIDATE、INVALIDATED；Candidate 生命周期覆盖 Waiting、Approaching、Triggered、LeftZone、Filled、Invalidated、Expired。
+- Trigger 到价只产生提示/候选状态，不自动下单，不写 Ledger。用户手工交易并确认后才写账。
+
+### 慢通道
+
+真实 Ledger + 现金/持仓/成本/当天成交事实 + 可靠行情/日线/近期分钟 + Quant 状态 + 可选新闻/市场背景/NAS 证据 → DeepSeek Advisor → Portfolio/Security 结论、Candidate Plan、依据、风险与失效条件。
+
+- DeepSeek 不负责逐 tick 监控，也不得重算 Ledger 数字、费用或 Quant 状态。
+- Advisor 可以建议 HOLD/WAIT；没有交易机会时“不交易”是完整结果。
+- Candidate Plan 是用户审阅对象；只有真实成交确认进入 `FConfirmedLedgerWriter`。
+
+## Quant v1 边界
+
+输入只接受真实来源数据：最新价/时间/新鲜度、有效分时与成交量、可用均价/前收/MA5/10/20/60/250、分钟波动/日内振幅/趋势特征、真实 Ledger 只读快照（持仓、现金、Episode Economic Cost、Broker Display Cost、当日 confirmed fills/T Contribution）、既有 Candidate Plan。IOPV/折溢价只在可靠来源存在时输入，否则 unavailable。
+
+输出包含状态、signalScore、confidence、reasonCodes、目标价格区间、建议数量、validUntil、invalidation、quoteTimestamp。Quant v1 不内置未经验证的 ML/LLM；不凭空产生目标价和数量。若没有经 Guard 校验的计划区间/数量依据、行情过期、信号冲突、样本不足或风险不满足，输出 WAIT/HOLD 并说明原因。后续回测统计需来自真实本地行情，不足样本显示“样本不足/低置信度”。
+
+## 状态迁移与迟到提醒
+
+Candidate Plan 从 Waiting 到 Approaching/Triggered；当价格已离开计划区间时显示 LeftZone，不追价；随后可由用户成交确认变为 Filled，或按 Guard/有效期转为 Invalidated/Expired。行情 Stale 时不得新触发，显示“行情已过期，实时计划暂停”。状态转换需使用前一状态和可靠 quote timestamp，不能只用当前价格推断先前是否触发。Filled 仅表示用户确认的真实成交事实，不能由触价推断。
+
+## 安全与财务语义
+
+- Quant/Advisor/Trigger 对 Ledger 全部只读。
+- 只有用户明确确认的真实成交可进入唯一写入口 `FConfirmedLedgerWriter`。
+- Episode Economic Cost、Broker Display Cost、Security Daily P&L、Current Episode P&L、Realized P&L、T Contribution、Lifetime P&L 继续分离；Quant 读取 Ledger 派生事实，不另算、不写回。
+- Candidate/Trigger 不自动调整现金、份额、成本、费用或成交历史。
+- 风险 Guard 不能因无 NAS 而拒绝整个基础 Advisor；危险动作仍须满足可核验的本地行情、现金/持仓约束和对应安全证据。任何放宽必须以本地 Quant 可复现条件替代并有回归测试，不能简单删除 Guard。
+
+## 当前落地进度（2026-10-28）
+
+- 已编码：`Sources/FCore/RealtimeQuantTrigger.swift` 提供纯确定性的 Candidate 价格区间监控：WAIT、Approaching、Triggered、LeftZone、Filled、Invalidated、Expired、Paused；只读取带来源/可信交易时间/会话状态的报价，不接触Ledger writer。
+- 当前输入边界：依赖的 `FCurrentIntradaySnapshot` 只接受六位数字CN代码；这一版触发器不是跨市场Quant。美股/日股/韩股接入前需要统一市场身份、时区/交易日历和真实报价契约，不能仅按代码匹配。
+- 已编码：暂停状态带 `resumeState`，允许调用端持久化并在行情恢复时恢复此前操作状态，避免 stale 期间穿过触发区后又被当成可新触发机会。调用方尚未接线，当前只是引擎契约。
+- 已定义未执行：`Tests/FCoreTests/RealtimeQuantTriggerTests.swift` 有12项状态机回归，覆盖无计划等待、接近/触发、过期/未生效、stale/未验证/非连续交易时段暂停、暂停恢复后错过区间、失效价、证券错配、计划更换时清除旧状态、Filled不能由触价推断、T买卖信号区分。
+- 不是完整Quant v1：还没有价格/MA/成交量/波动/持仓/现金因子评分，也没有Risk Guard接线、实时行情订阅、状态持久化/通知、首页/详情UI或历史回放。不得把当前价格区间监控称为“本地Quant已完成”。
+- 当前资产变化Candidate仍在App层被明确阻止，直到Quant/Guard/Trigger完整接线；本引擎本身也不写Ledger、不下单、不确认成交。
+
+## 分阶段实现与验收
+
+1. P0：保留 Ledger/T/手续费语义；确认当前首页 Swift 修改的 Apple CI 证据。Run 58 已取消，不能记作编译或测试结果。
+2. P1：继续首页及核心页面 B→F 体验整改；Simulator/真机视觉状态单独标记。
+3. P2：在 FCore 引入纯确定性 Quant 输入/输出与本地计算，先用真实 quote/ledger 事实和保守 WAIT 策略；单元测试覆盖新鲜/过期、信号冲突、成本口径、无持仓/低现金、IOPV unavailable、NO TRADE。当前仅开始了计划价格区间触发监控，尚非完整Quant评分。
+4. P3：先将当前纯状态评估器接入经Risk Guard批准的Candidate，再实现可持久化、幂等、可恢复的状态管理与本地提醒；迟到时LeftZone、不追价。当前没有实时订阅、持久化或提醒接线。
+5. P4：向首页、证券详情、Advisor 接入本地 Quant 状态；NAS 缺席不得阻断核心基础流程。
+6. P5-P6：DeepSeek 将 Quant 当作确定性只读事实；完成 Candidate→快通道触发→手工成交确认→Ledger→Quant 重算→Advisor 复判。
+7. NAS 作为可选同步/归档/历史研究扩展继续兼容，不再占核心开发队列。
+
+所有代码必须按 defined、compiled、executed、Simulator、实机分开报告。当前 Windows 环境没有 Swift/Xcode；新 Swift 修改只能在 Apple CI 真实执行后标记编译/测试通过。

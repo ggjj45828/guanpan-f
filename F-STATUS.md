@@ -1,3 +1,16 @@
+# F状态文档说明（2026-10-28）
+
+## 当前源树状态覆盖（2026-10-28；优先于下方历史记录）
+
+- 当前HEAD：`e500fc84f6dd8acf93cc32305aefcff28e700f4e`；GitHub Desktop Fetch确认 `origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`，当前分支ahead 1 / behind 8且工作树dirty。尚未合并、提交或推送；禁止强推。
+- 当前FCore测试定义153；当前HEAD executed=0 / passed=0 / failed=0；App UI定义3、当前HEAD未执行。Windows无Swift/Xcode/XcodeGen；Apple编译和测试External Verification Pending。
+- 当前产品架构：NAS为可选同步/备份/归档/扩展研究；本地Quant/Trigger是目标核心，但现在仅有未接线价格区间Trigger；完整Quant、Risk Guard接线、报价订阅、持久化、通知和UI均未完成。Candidate仍fail-closed。
+- 本轮图表语义色已接入Theme Manifest tokens，改动尚未编译。IOPV有值时的renderer/图例路径存在，但无可靠源时仍Unavailable。Simulator/截图人工审阅、iPhone Air、横屏交互、NAS/DeepSeek实网均未验证。
+- 已做真实远端Fetch但还未安全reconcile；远端首页/IPA后续提交需要先审阅合并冲突。当前改动不能触发Apple CI，直至正常提交并推送。
+- 用户实机反馈当前F整体体验明显不如B；B→F逐页整改尚未关闭。以下历史条目保留作追溯，不得视作当前源码、当前验证或当前需求，冲突时以 `F-REALTIME-HANDOFF.md` 最新快照和 `F-MASTER-ACCEPTANCE-MATRIX.md` 当前盘点为准。
+
+本文件下方旧记录中“无同标的合格NAS研究时阻断资产变化Candidate”等产品规则已被正式决策取代：NAS现为可选同步/备份/历史归档/扩展研究。核心方向改为本地Quant + Risk Guard + Realtime Trigger + DeepSeek慢速Advisor。迁移实施与Apple验证状态以`F-REALTIME-HANDOFF.md`及`F-LOCAL-QUANT-ARCHITECTURE.md`为准。保留以下旧内容仅作历史记录，不作为当前产品要求或验证证据。
+
 # F 云端开发状态
 
 ## 最新实时状态（2026-10-27 15:19 Asia/Shanghai）

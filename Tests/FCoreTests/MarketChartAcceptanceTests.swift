@@ -264,6 +264,24 @@ final class MarketChartAcceptanceTests: XCTestCase {
             .findings.contains(.invalidCandidate))
     }
 
+    func testRiskGuardCanValidateBuyWithoutOptionalNASResearch() throws {
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
+            fetchedAt: now, source: "live-provider", timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "live-provider",
+            observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
+            quoteTemporalMetadata: metadata)
+        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote])
+        XCTAssertTrue(context.researchEvidence.isEmpty)
+        let candidate = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 10, limitPrice: 1,
+            rationale: "只依据新鲜行情和真实账本形成的待审阅候选",
+            citedObservationIDs: [quote.id])
+
+        let result = FRiskGuard.evaluate(candidate, in: context, now: now)
+        XCTAssertTrue(result.allowedForReview, "NAS不属于行情/现金/持仓风险校验的必要输入：\(result.findings)")
+    }
+
     func testGridNeedsItsOwnQualifiedStudyAndConservativeDayTradeDoesNotRequireOrderBook() throws {
         let researchContext = try contextWithResearchEvidence(evidenceJSON(qualified: true))
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),

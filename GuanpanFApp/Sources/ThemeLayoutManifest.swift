@@ -34,7 +34,7 @@ enum FHomeCardRole: String, CaseIterable, Identifiable {
         switch self {
         case .portfolio: "本机 Ledger 的持仓与现金"
         case .marketObservation: "行情、时点、来源与质量"
-        case .crossMarketPulse: "NAS 跨市场研究证据"
+        case .crossMarketPulse: "跨市场行情与研究 · NAS 可选增强"
         case .advisorGuidance: "组合上下文、风险与建议"
         }
     }
@@ -76,7 +76,8 @@ struct FThemeSemanticTokens {
     let sellPoint: Color
     let episodeCost: Color
     let brokerCost: Color
-    let movingAverage: Color
+    let intradayAverage: Color
+    let movingAverages: [Color]
     let iopv: Color
     let surfaceTreatment: FThemeSurfaceTreatment
     let spacing: FThemeSpacingScale
@@ -131,9 +132,13 @@ enum FThemeLayoutRegistry {
         let value = descriptions[family] ?? ("均衡", "共享业务角色布局。", false)
         let order: [FHomeCardRole]
         switch family {
-        case .editorial, .inkEditorial, .magazine:
+        case .editorial, .inkEditorial, .magazine, .spatialGlass:
             order = [.advisorGuidance, .portfolio, .marketObservation, .crossMarketPulse]
-        case .terminalDashboard, .minimalTerminal:
+        case .cardGrid:
+            order = [.marketObservation, .crossMarketPulse, .portfolio, .advisorGuidance]
+        case .terminalDashboard:
+            order = [.portfolio, .marketObservation, .crossMarketPulse, .advisorGuidance]
+        case .minimalTerminal:
             order = [.marketObservation, .portfolio, .advisorGuidance, .crossMarketPulse]
         case .radialMap:
             order = [.portfolio, .advisorGuidance, .marketObservation, .crossMarketPulse]
@@ -216,7 +221,14 @@ enum FThemeLayoutRegistry {
             sellPoint: Color(red: 0.12, green: 0.55, blue: 0.30),
             episodeCost: Color(red: 0.10, green: 0.40, blue: 0.78),
             brokerCost: Color(red: 0.48, green: 0.32, blue: 0.68),
-            movingAverage: Color(red: 0.66, green: 0.48, blue: 0.08),
+            intradayAverage: Color(red: 0.52, green: 0.28, blue: 0.67),
+            movingAverages: [
+                Color(red: 0.82, green: 0.43, blue: 0.12),
+                Color(red: 0.16, green: 0.43, blue: 0.72),
+                Color(red: 0.46, green: 0.34, blue: 0.68),
+                Color(red: 0.10, green: 0.55, blue: 0.50),
+                Color(red: 0.72, green: 0.30, blue: 0.43)
+            ],
             iopv: Color(red: 0.08, green: 0.53, blue: 0.58), surfaceTreatment: style,
             spacing: spacing(for: family))
         return FThemeManifest(theme: theme, name: name, layout: layout(family), useCase: useCase,

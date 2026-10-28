@@ -12,7 +12,6 @@ targets:
     platform: iOS
     sources:
       - Sources
-    resources:
       - Assets.xcassets
     dependencies:
       - package: GuanpanFCore
@@ -25,7 +24,7 @@ targets:
       path: GuanpanF-Info.plist
       properties:
         UILaunchScreen: {}
-        NSLocalNetworkUsageDescription: "观盘max 用于连接您配置的 NAS 分钟历史与研究服务。"
+        NSLocalNetworkUsageDescription: "观盘max 可选连接您配置的 NAS 历史归档与研究服务；未连接 NAS 仍可使用本机账本、行情和顾问基础功能。"
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
     settings:
