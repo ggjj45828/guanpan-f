@@ -1,5 +1,42 @@
 # F 实时进度交接
 
+## 2026-10-28 当前工作树续更（覆盖下方较早快照）
+
+- 当前 `HEAD` 为 `5f2a1f7c61aec0c29ce4e11430f8b1e9aefcb45c`；`main` 相对缓存的 `origin/main` ahead 7。刚才再次尝试 `git fetch origin main`，仍因 `getaddrinfo() thread failed to start` 失败，因此缓存远端不代表实时远端；未push、未rebase、未强推。
+- 当前tracked dirty文件：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`、`F-B-145-TRACEABILITY.md`、`F-MASTER-ACCEPTANCE-MATRIX.md`、本文件。受保护未跟踪目录 `.task-python-temp-b252c94955274b7c90bce865b594fca4/` 未触碰。
+- **本轮T Contribution修改：** 从全周期数量强制相等改为按成交时间/sequence/ID稳定排序，逐笔FIFO配对；卖1000、只买回500时只计算500及按比例分配的卖出费，普通减仓不进入T，买回早于可配对卖出或超过剩余卖出量仍Unavailable。扩充交错成交与同日清仓重开回归场景；保留“T Contribution与Daily/Episode/Lifetime P&L分离”的既有方向性回归。
+- 当前FCore有132个`func test...`方法定义（由源文件静态计数；不是执行）。Windows未发现Swift/Xcode/XcodeGen，故当前HEAD的Swift compile=未执行、FCore executed/passed/failed增量=0/0/0；App Build/UI XCTest也未执行。最近旧CI run `40622847995` 的130/130及UI 3/3只覆盖旧源码`7a2d63e`，不可继承给本轮修改。
+- `git diff --check`通过（仅换行符提示）。没有本轮Simulator启动、人工视觉/手势、真机、NAS历史分钟iOS链路或DeepSeek真实E2E证据；这些仍分别External Pending/未实测。
+- **事后手续费差额：** 已进一步确认不能仅追加现金，也不能改写旧fill或旧卖出`costBasisRemoved`。本轮没有实现费用修正事件，避免在无Apple编译条件下半改余额校验、Archive digest、历史basis重算与Advisor投影。它仍是当前最高Ledger缺口之一，须以追加审计事件+补录日现金结算+原成交日确定性经济投影完整实现并测试。
+- **下一步：** 网络恢复后先fetch/reconcile，普通push并将当前132项FCore送Apple CI；CI前不可把130旧结果称为当前绿。随后完成可编译的费用差额完整重放设计/实现；再转NAS历史分钟真实进入iOS/Research Evidence、DeepSeek Candidate真实成交闭环。Simulator手工验收仍External Pending。
+
+## 2026-10-28 Tools全量Python回归
+
+- `python -m unittest discover -s Tools -p 'test_*.py' -q`实际发现112项：`105 passed / 2 failed / 5 errors`。这覆盖全部Tools测试模块；不是全项目Python总套件，也不是NAS容器E2E。
+- 2个失败与前述日历同步测试相同：Windows环境不能以POSIX方式`os.open(directory, O_RDONLY)`，`CalendarStore.publish`因此返回`not_updated`。3个错误为对应日历/归档目录fsync无法打开目录fd。另2个模块（NAS部署包、iOS app结构）因捆绑Python缺`yaml`/PyYAML而无法导入；未安装依赖。
+- 本轮可导入且不受环境限制的现有断言通过；localhost与硬链接在该次较宽权限执行中可通过。Python/NAS状态按真实总数保留：112 executed / 105 passed / 2 failed / 5 errors。
+- 临时目录已校验位置并清理；源码HEAD`5f2a1f7`未变。GitHub fetch的三次重试仍失败，Actions最新列表仍为#41，未推送或触发CI。矩阵/交接文档有未提交修改，Swift/NAS源码无未提交修改。
+
+## 2026-10-28 NAS分钟测试重试结果
+
+- 使用同一组现有测试模块再次执行97项：`92 passed / 2 failed / 3 errors`。相比受限环境下的首次运行，localhost API和硬链接用例均通过；剩余5项集中在Windows目录文件描述符同步：`os.open(directory, O_RDONLY)`收到`PermissionError`，使2个日历发布用例返回`not_updated`并使3个日历/备份目录同步用例报错。Linux NAS/CI仍需验证这些POSIX目录fsync路径；不以此改写产品行为，也不计为通过。
+- 本机DNS通道连续3次`git fetch origin main`仍返回`getaddrinfo() thread failed to start`。右侧Actions仍显示最新run #41（成功，commit`7a2d63e`）；没有更晚运行，本地T顺序Swift修正未进入CI。未推送、未启动远端workflow。
+- 临时测试目录已校验位于F工作区并清理；源码HEAD`5f2a1f7`未变，Swift/NAS源码无修改。本轮只更新状态文档并重跑既有测试。
+
+## 2026-10-28 NAS分钟定向测试实跑
+
+- 使用桌面捆绑Python运行现有分钟测试模块（runtime/service/providers/archive），共`97`项：`89 passed / 2 failed / 6 errors`。不能记为全通过，也不是NAS全套测试。
+- 失败/错误根因落在本地Windows沙箱能力：3个HTTP localhost用例收到`WinError 10013`；2个SQLite备份用例的`os.link`收到`WinError 5`；1个日历存储用例无法对目录执行`os.open`；另2个日历同步用例因此返回`not_updated`而旧断言期待`updated`。NAS实际容器为Linux，这些项目需要Linux CI或NAS环境验证；本轮不把它们冒充业务通过，也不据此调整日历/归档逻辑。
+- 非受限用例覆盖了有限回采窗口、终态coverage、exact-date查询、Partial/Complete门控、no-lookahead、午休/半日市、provider fallback等；这些在该定向运行中通过。没有进行真实公网provider、NAS部署或iOS历史分钟E2E。
+- 测试临时目录设在F内独立临时子目录，测试结束后已按绝对路径校验并清理；锁定临时目录未动。当前代码HEAD`5f2a1f7`未变，本次只有测试执行，没有源码修改；测试状态为Python/NAS定向97 executed / 89 passed / 2 failed / 6 errors。
+
+## 2026-10-28 矩阵同步续记
+
+- 通过右侧GitHub工作流列表再次核对：当前显示41次运行，最新为run `40622847995`（#41，成功，commit`7a2d63e`）；#40（`40621314214`）和#39（`40620645916`）失败。最新详情页未能再次展开，但run #41详情之前已确认FCore 130/130、XcodeGen/Device/Simulator Build及UI 3/3成功；这些都不覆盖本地T顺序改动。列表没有显示更晚运行。
+- 已在`F-MASTER-ACCEPTANCE-MATRIX.md`顶部增加当前工作树快照，保留原编号和下方历史快照；明确最近全绿CI只覆盖`7a2d63e`，本地T成交顺序保护仍未编译/执行，避免旧测试数字误标当前版本。
+- 当前源码HEAD仍为`5f2a1f7`，`origin/main`缓存点为`7a2d63e`，本地领先7个提交；fetch仍因DNS/网络线程错误失败。矩阵与本交接文档的当前快照修改尚未提交；Swift/NAS源码无未提交修改，受保护临时目录保持不动。
+- `git diff --check`通过（仅Windows换行符提示）。无本机Swift/Xcode工具链；本轮没有执行Apple、Simulator、Python/NAS测试。
+
 ## 2026-10-28 最新续作快照
 
 - **用户日志复核：** `logs_110101703179.zip`显示FCore 130项实际执行，其中1项失败：`LedgerSchemaTests.swift:414`断言“清仓后券商展示成本应为nil”，实际为`10.35`。这与券商展示成本作为证券级对账值、清仓/新Episode后仍保留的已确认语义冲突，失败是测试旧期望，不是清仓删除了真实持仓。后续日志`logs_110103476656.zip`显示FCore 130/130通过；随后Device Build首个根因是`HomeExperience.swift:354`的`nil requires a contextual type`，已由源码提交`7a2d63e`补足`Decimal?`上下文；更晚的完整CI run `40622847995`已全绿。新增的T顺序修复不在这些旧日志/CI覆盖范围内。

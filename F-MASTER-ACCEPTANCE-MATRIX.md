@@ -1,5 +1,26 @@
 # F Master Acceptance Matrix
 
+## 当前工作树续更（2026-10-28；以本段为最新状态）
+
+- HEAD `5f2a1f7c61aec0c29ce4e11430f8b1e9aefcb45c`，本地相对缓存`origin/main` ahead 7；最新fetch失败（DNS thread启动错误），远端实时状态未知。当前T实现/测试及交接矩阵有未提交变更；锁定临时目录未动。
+- T Contribution现按时间排序和FIFO批次只匹配先卖后买的实际配对份额；1000卖/500买回只计500及按比例卖出费；普通卖出/减仓不当作T；买回早于卖出或买回量超过此前剩余卖量保持Unavailable。源码/测试位置：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`。
+- FCore定义方法当前静态计数132。当前HEAD compile、XCTest执行、passed/failed均无执行证据；旧CI #41 `40622847995`（130/130）仅验证`7a2d63e`，不能覆盖本轮部分配对FIFO改动。App/UI旧CI数据同样不验证本轮Swift修改。本机无Swift/Xcode/XcodeGen。
+- 事后手续费修正仍未编码：原始fill和原始`costBasisRemoved`不可变；后续必须实现追加式费用调整事件、补录时现金结算、原成交日费用/成本/已实现盈亏确定性重放，并覆盖跨清仓/重建仓与恢复。不能只做cash movement。当前无新增费用调整测试定义。
+- NAS历史分钟进入iOS/Research Evidence、DeepSeek真实E2E、Candidate→确认成交→Ledger→Advisor复判、Simulator人工手势/视觉仍未通过真实端到端验收；人工Simulator为External Pending。
+
+## 当前工作树状态（2026-10-28；优先于下方历史快照）
+
+- Tools全量Python现有测试本轮实际执行112项：105 passed / 2 failed / 5 errors。失败/错误来自Windows POSIX目录fsync不兼容及运行时缺PyYAML；详见实时交接。此结果不能表述为全部通过。
+- NAS分钟定向测试最近一次真实执行97项：92 passed / 2 failed / 3 errors。localhost和硬链接限制在较宽权限重跑后解除；剩余均为Windows目录fd/fsync差异，Linux NAS/CI待验证。较早受限执行为89/2/6；均非全套NAS通过。
+- 当前F源码状态以本地工作树为准，HEAD为`5f2a1f7`；最近一次可成功读取的`origin/main`跟踪点为`7a2d63e`，本地领先7个提交。`git fetch origin main`本轮仍因`getaddrinfo() thread failed to start`失败，因此此跟踪点不是远端实时证明；没有推送/强推。Tracked Swift/NAS源码干净；本次矩阵与交接文档尚未提交。锁定临时目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`原样保留。
+- 最近可核实的旧代码CI run `40622847995`：FCore 130 defined / 130 executed / 130 passed / 0 failed；XcodeGen、Device Release Build、Simulator Build、App UI XCTest 3/3、截图导出及未签名IPA步骤成功。该CI验证源码提交`7a2d63e`，**不包含之后本地新增的T Contribution成交顺序保护**。
+- 当前FCore仍定义130个测试；相对该CI新增的T顺序实现尚未编译/执行，当前修订的验证状态为0 executed / 0 passed / 0 failed；不能把旧CI的130/130套用于当前HEAD。App UI定义3项，最近旧代码CI 3/3成功；这不等于本地后续FCore修改后的App重新Build/UI通过。
+- 用户日志`logs_110101703179.zip`：FCore 130项中1项失败，原因是旧断言错误期待清仓后Broker Display Cost变为nil，实际保留`10.35`符合证券级对账语义。后续`logs_110103476656.zip`中FCore 130/130通过，但Device Build首错是`HomeExperience.swift:354` Optional类型缺上下文；该项后来由`7a2d63e`修复，run `40622847995`提供后续全绿证据。
+- 本地Windows没有Swift/Xcode/XcodeGen/Simulator。无本轮人工Simulator/真机验收。Python/NAS最近可用证据为定向77/77 passed（非全套；环境受限项未计通过）；本轮未重跑。实时分钟有NAS部署归档证据，历史分钟provider空响应/断连，历史分钟NAS→iOS→Research Evidence仍未E2E；真实DeepSeek及成交后AI复判未E2E。
+- 已完成的当前源码审计：T Contribution原实现只核对周期总卖出/买回数量，未约束实际顺序；当前本地版本已按成交时间逐笔确认先卖后买、买回数量不超过尚未买回卖出量，并增加反序回归断言。该修正仅为已编码/未验证。Advisor与FLedgerWrite依赖隔离，Candidate不能直接写Ledger；真实fill仍要求用户填写实际成交和显式确认。
+- 费用差额对账的边界已登记：原fill不变，成交费用修正追加审计事件；现金差额在补录时结算，证券成本/损益按原成交事实确定性回算。当前只有成交时录入实际fee及券商显示成本纠正；事后fee adjustment模型/UI/测试尚未实现。安全重放设计需要处理历史卖出`costBasisRemoved`严格校验，不得只补现金流水。
+- 当前最高缺口：①把T顺序修正送Apple CI；②事后手续费差额与原成交日盈亏/剩余成本的一致回算；③NAS历史分钟进入iOS并供Research Evidence/DecisionContext使用；④Simulator人工交互/视觉验收；⑤真实DeepSeek Candidate→用户成交→Ledger→重新判断闭环。
+
 ## 最新实时CI与工作树状态（2026-10-27 15:19 Asia/Shanghai）
 
 ## Ledger盈亏口径增补（2026-10-27）

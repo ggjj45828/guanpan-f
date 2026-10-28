@@ -154,8 +154,8 @@ public struct FDailyTradeSummary: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// Calculates T contribution only when the user explicitly classified every fill
-/// in the requested period and every named sell/buyback cycle balances by quantity.
+/// Calculates only the quantity that can be paired in timestamp order from an explicit
+/// T sell to a later T buyback. Unmatched sells are reductions, not T contribution.
 public enum FTradeContributionCalculator {
     public static func contribution(from fills: [FConfirmedFill]) -> Decimal? {
         guard !fills.isEmpty, fills.allSatisfy({ $0.tradeIntent != nil }) else { return nil }
@@ -168,46 +168,69 @@ public enum FTradeContributionCalculator {
                   let cycle = fill.tCycleID else { return nil }
             cycles["\(fill.instrumentCode)@\(date)#\(cycle)", default: []].append(fill)
         }
+        struct SellLot {
+            var remainingUnits: Int64
+            let originalUnits: Int64
+            let price: Decimal
+            let fee: Decimal
+            var allocatedFee: Decimal
+        }
+
         var total = Decimal.zero
-        for cycleFills in cycles.values {
+        for cycleKey in cycles.keys.sorted() {
+            guard let cycleFills = cycles[cycleKey] else { return nil }
             let orderedCycleFills = cycleFills.sorted {
                 if $0.tradedAt != $1.tradedAt { return $0.tradedAt < $1.tradedAt }
                 if $0.sequence != $1.sequence { return $0.sequence < $1.sequence }
                 return $0.id.uuidString < $1.id.uuidString
             }
-            var sellUnits: Int64 = 0
-            var buybackUnits: Int64 = 0
-            var unmatchedSellUnits: Int64 = 0
-            var sellAmount = Decimal.zero
-            var buybackAmount = Decimal.zero
-            var fees = Decimal.zero
+            var sellLots: [SellLot] = []
+            var lotIndex = 0
+            var cycleContribution = Decimal.zero
+            var matchedUnits: Int64 = 0
             for fill in orderedCycleFills {
                 guard let intent = fill.tradeIntent,
                       let cycle = fill.tCycleID,
                       !cycle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
                 switch (intent, fill.side) {
                 case (.tSell, .sell):
-                    let (next, overflow) = sellUnits.addingReportingOverflow(fill.units)
-                    guard !overflow else { return nil }
-                    sellUnits = next
-                    let (unmatched, unmatchedOverflow) = unmatchedSellUnits.addingReportingOverflow(fill.units)
-                    guard !unmatchedOverflow else { return nil }
-                    unmatchedSellUnits = unmatched
-                    sellAmount += fill.price * Decimal(fill.units)
+                    sellLots.append(SellLot(remainingUnits: fill.units,
+                                            originalUnits: fill.units,
+                                            price: fill.price, fee: fill.fee, allocatedFee: 0))
                 case (.tBuyback, .buy):
-                    let (next, overflow) = buybackUnits.addingReportingOverflow(fill.units)
-                    guard !overflow else { return nil }
-                    buybackUnits = next
-                    guard fill.units <= unmatchedSellUnits else { return nil }
-                    unmatchedSellUnits -= fill.units
-                    buybackAmount += fill.price * Decimal(fill.units)
+                    var remainingBuyback = fill.units
+                    var allocatedBuybackFee = Decimal.zero
+                    while remainingBuyback > 0 {
+                        guard lotIndex < sellLots.count else { return nil }
+                        var lot = sellLots[lotIndex]
+                        let matched = min(remainingBuyback, lot.remainingUnits)
+                        let (nextMatched, overflow) = matchedUnits.addingReportingOverflow(matched)
+                        guard !overflow else { return nil }
+                        matchedUnits = nextMatched
+                        let allocatedSellFee = matched == lot.remainingUnits
+                            ? lot.fee - lot.allocatedFee
+                            : lot.fee * Decimal(matched) / Decimal(lot.originalUnits)
+                        cycleContribution += (lot.price - fill.price) * Decimal(matched) - allocatedSellFee
+                        lot.allocatedFee += allocatedSellFee
+                        lot.remainingUnits -= matched
+                        remainingBuyback -= matched
+                        if lot.remainingUnits == 0 {
+                            sellLots[lotIndex] = lot
+                            lotIndex += 1
+                        } else {
+                            sellLots[lotIndex] = lot
+                        }
+                        let allocatedBuyFee = remainingBuyback == 0
+                            ? fill.fee - allocatedBuybackFee
+                            : fill.fee * Decimal(matched) / Decimal(fill.units)
+                        allocatedBuybackFee += allocatedBuyFee
+                    }
+                    cycleContribution -= allocatedBuybackFee
                 default: return nil
                 }
-                fees += fill.fee
             }
-            guard sellUnits > 0, sellUnits == buybackUnits, unmatchedSellUnits == 0,
-                  !sellAmount.isNaN, !buybackAmount.isNaN, !fees.isNaN else { return nil }
-            total += sellAmount - buybackAmount - fees
+            guard !cycleContribution.isNaN else { return nil }
+            total += cycleContribution
         }
         return total.isNaN ? nil : total
     }

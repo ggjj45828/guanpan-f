@@ -742,19 +742,20 @@ final class LedgerSchemaTests: XCTestCase {
                        "T贡献为负时，证券历史总体仍可盈利")
     }
 
-    func testTContributionIsUnavailableForLegacyOrUnbalancedCycles() throws {
+    func testTContributionMatchesOnlyTheBuybackQuantityAndRejectsBuybackBeforeSell() throws {
         let tSell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
-                                   instrumentCode: "159866", side: .sell, units: 10, price: 12,
-                                   fee: FETFTradeFeePolicy.defaultReferencePerFill,
-                                   costBasisRemoved: 100, userConfirmation: confirmation(),
+                                   instrumentCode: "159866", side: .sell, units: 1_000, price: 12,
+                                   fee: Decimal(string: "0.10")!,
+                                   costBasisRemoved: 10_000, userConfirmation: confirmation(),
                                    tradeIntent: .tSell, tCycleID: "cycle-1")
         let partialBuyback = FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-30),
-                                            instrumentCode: "159866", side: .buy, units: 9, price: 10,
-                                            fee: FETFTradeFeePolicy.defaultReferencePerFill,
+                                            instrumentCode: "159866", side: .buy, units: 500, price: 10,
+                                            fee: Decimal(string: "0.10")!,
                                             userConfirmation: confirmation(), tradeIntent: .tBuyback,
                                             tCycleID: "cycle-1")
-        XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
-                     "未完全配对的T数量不应伪装成精确贡献")
+        XCTAssertEqual(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
+                       Decimal(string: "999.85"),
+                       "卖出1000份仅买回500份时，只计算500份并按成交比例分摊卖出费用")
 
         let earlierBuyback = FConfirmedFill(sequence: 4, tradedAt: now.addingTimeInterval(-120),
                                             instrumentCode: "159866", side: .buy, units: 10, price: 10,
@@ -775,6 +776,51 @@ final class LedgerSchemaTests: XCTestCase {
                                         userConfirmation: confirmation(), tradeIntent: nil)
         XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback, legacyFill]),
                      "存在未分类旧成交时，累计T贡献保持Unavailable")
+    }
+
+    func testTContributionPairsInterleavedFillsByTimestampAndIgnoresOrdinaryReduction() {
+        let code = "159866"
+        let cycle = "interleaved"
+        func fill(_ sequence: UInt64, _ seconds: TimeInterval, _ side: FTradeSide,
+                  _ units: Int64, _ price: Decimal, _ intent: FTradeIntent,
+                  _ cycleID: String? = cycle) -> FConfirmedFill {
+            FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(seconds),
+                           instrumentCode: code, side: side, units: units, price: price,
+                           fee: Decimal(string: "0.10")!,
+                           costBasisRemoved: side == .sell ? Decimal(units) : nil,
+                           userConfirmation: confirmation(), tradeIntent: intent, tCycleID: cycleID)
+        }
+
+        let interleaved = [
+            fill(1, -60, .sell, 1_000, 12, .tSell),
+            fill(2, -50, .sell, 500, 11, .tSell),
+            fill(3, -40, .buy, 800, 10, .tBuyback),
+            fill(4, -30, .buy, 700, Decimal(string: "10.50")!, .tBuyback)
+        ]
+        XCTAssertEqual(FTradeContributionCalculator.contribution(from: interleaved),
+                       Decimal(string: "2149.60"),
+                       "FIFO逐笔匹配应按实际成交时间跨多个卖出批次，费用不重复扣除")
+
+        let ordinaryReduction = fill(5, -20, .sell, 100, 12, .ordinary, nil)
+        XCTAssertEqual(FTradeContributionCalculator.contribution(from: [ordinaryReduction]), .zero,
+                       "普通减仓没有明确T标记和买回，不计入T贡献")
+    }
+
+    func testTContributionUsesTimestampOrderRatherThanInputOrSequenceOrder() {
+        let cycle = "same-day-close-reopen"
+        let sell = FConfirmedFill(sequence: 8, tradedAt: now.addingTimeInterval(-30),
+                                  instrumentCode: "159866", side: .sell, units: 500,
+                                  price: 12, fee: Decimal(string: "0.10")!,
+                                  costBasisRemoved: 5_000, userConfirmation: confirmation(),
+                                  tradeIntent: .tSell, tCycleID: cycle)
+        let buyback = FConfirmedFill(sequence: 9, tradedAt: now.addingTimeInterval(-10),
+                                     instrumentCode: "159866", side: .buy, units: 500,
+                                     price: 10, fee: Decimal(string: "0.10")!,
+                                     userConfirmation: confirmation(),
+                                     tradeIntent: .tBuyback, tCycleID: cycle)
+        XCTAssertEqual(FTradeContributionCalculator.contribution(from: [buyback, sell]),
+                       Decimal(string: "999.80"),
+                       "同日清仓后重新买入，输入数组顺序不影响基于成交时间的配对")
     }
 
     func testBuyWithInsufficientCashDoesNotReturnChangedBook() {
