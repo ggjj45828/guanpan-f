@@ -5,7 +5,7 @@
 - 用户提供的日志包对应 Actions run `40646378647`、job `122676045830`、HEAD `476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`。GitHub job steps API与日志包一致：FCore 139/139通过；XcodeGen、Device Build、Simulator Build成功；UI XCTest 3项中2通过、1失败；截图附件导出成功（43项UI附件）；IPA步骤因前序UI失败而跳过。Simulator确实被CI启动执行自动UI测试，但这不是人工交互/视觉验收。
 - 首个且唯一UI断言失败是`GuanpanFApp/UITests/PrimaryNavigationUITests.swift:53`：`XCTAssertTrue(app.secureTextFields["settings.ai.deepseekKey"].exists)`。测试日志显示已到“设置”导航栏，但还未滚动设置表单。根因是主题Gallery整段排在在线AI设置前；主题条目超出首屏后，SwiftUI Form尚未将下方SecureField暴露到XCTest accessibility tree。DeepSeek字段仍在设置Form中，失败表示它首屏不可发现。
 - 最小产品修正：将“在线 AI”设置段移到“主题”段之前；保留原有SecureField可发现性断言，不删除/放宽测试。修正刚写入当前工作树，尚未Apple编译或重新运行。
-- 修正已在本地提交`5eeee5d57b4957927598a985a74883af278ebcd8`；tracked工作树干净。GitHub API读取确认远端`main`仍为父提交`476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`，因此没有远端新提交；命令行`git fetch`和随后普通`git push origin main`均因`getaddrinfo() thread failed to start`失败，当前本地领先1个提交，修正尚未推送/触发CI。GitHub Desktop显示两个同名仓库且当前变更列表仍是提交前的旧状态，未从界面推送，避免误推到另一副本。受保护目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`未触碰。
+- 修正已在本地提交`5eeee5d57b4957927598a985a74883af278ebcd8`，状态记录为`3f5e045`；tracked工作树干净。本地`main`相对缓存远端领先2个提交。GitHub API读取确认远端`main`仍为父提交`476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`，因此没有远端新提交；命令行`git fetch`和随后普通`git push origin main`均因`getaddrinfo() thread failed to start`失败，修正尚未推送/触发CI。GitHub Desktop显示两个同名仓库；“Show in Explorer”打开的仓库面包屑为`文档 > GitHub > guanpan-f`，不是当前 F 工作区路径，且列表仍显示提交前旧状态，因此未从该副本推送。受保护目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`未触碰。
 - 下一步：网络恢复后先fetch/reconcile，确认远端仍是`476e429`的后代，再普通push `5eeee5d`；以新HEAD确认139项FCore、XcodeGen、Device/Simulator Build、3项UI XCTest和截图导出。只有重跑通过后才能记UI绿；手工Simulator视觉/交互、真机、NAS/DeepSeek E2E仍分别待验。
 
 ## 2026-10-28 修正提交推送补记
