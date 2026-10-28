@@ -1,5 +1,30 @@
 # F 实时进度交接
 
+## 2026-10-28 最新实时状态（当前工作树优先）
+
+- **当前工作区：** 本地 `main` 为 `86a673af008da0a6dc7bdb36af3a66d3bee55d84`，它是记录Apple CI成功结果的交接文档提交；代码提交 `7a2d63e98927f9cf16fd40a5597d618741df1640` 位于其父链且已推送。最近一次本地状态为 `main...origin/main [ahead 1]`，只有受保护的 `.task-python-temp-b252c94955274b7c90bce865b594fca4/` 未跟踪目录；没有未提交的tracked Swift/NAS源码修改。此刻 `git fetch origin main` 因 `getaddrinfo() thread failed to start` 失败，故远端实时同步状态尚未刷新；未推送、未强推、未覆盖远端。
+- **Apple CI：** 最近可直接核实的完整CI run `40622847995` 对源码提交 `7a2d63e` 全绿：FCore 130 defined / 130 executed / 130 passed / 0 failed；XcodeGen、Device Release Build、Simulator Build、UI XCTest 3/3、截图导出、未签名IPA打包及artifact上传成功。该结果验证的是该代码提交，不包含本轮新改文档；没有新的CI运行。
+- **Simulator/视觉：** CI启动模拟器并跑UI Test、导出截图；本机无 `swift`、`xcodebuild`、`xcodegen` 或可交互Simulator命令。没有人工逐页/手势检查、没有本轮新增截图人工验收、没有真机验收。这些仍为External Pending。
+- **本轮静态查漏：** 检查 `FAccountBook`、Confirmed Fill Writer、余额/成本重放、cash-flow投影及测试。确认事后手续费调整必须同时正确处理现金补录日和原成交日的历史盈亏/持仓成本；现有卖出fill的 `costBasisRemoved` 会按事件顺序重放并严格校验。仅增加普通现金movement不能满足已确认的回算要求。该发现已记入 `F-B-145-TRACEABILITY.md`；本轮没有改Swift或测试，因此不增加未编译Swift，也不声称对账已实现。
+- **费用与Ledger状态：** 成交时实际fee输入已有源码并包含测试定义；最近CI通过的是130个FCore用例，但事后费用差额追加事件、历史回算与对账UI尚未实现/验证。旧fill必须保持不可变；实现需要独立、确定性的调整投影及一次性现金结算。
+- **NAS/真实数据：** 归档服务连接关闭修复相关的最近定向测试证据为77 executed / 77 passed / 0 failed（其中2项硬链接用例跳过、3项localhost用例及其他2项环境受限未执行）。真实分钟实时归档有用户部署v6运行结果；历史日期provider实测仍有空响应/断连，历史分钟NAS→iOS→Research Evidence及跨市场研究未E2E。DeepSeek真实调用和Candidate→成交确认→Ledger→AI复判未验证。
+- **下一步：** 先恢复fetch并核对远端，再普通推送本地交接文档提交（不强推）；继续完成费用调整的双投影方案审查和最小回归设计，随后以NAS真实provider覆盖测量/既有真实Advisor链路收口为主。人工Simulator和真机验收保持External Pending；Apple CI重新可提交时先验证所有新增Swift。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Apple CI源码链最近已全绿；转入可用性外部验收与真实Ledger/NAS/Advisor缺口收口
+当前正在开发：手续费差额对账的安全重放设计审计；不新增未编译Swift
+刚刚完成：确认费用差额必须同时处理现金补录日和原成交日损益/成本；已记录现有重放校验约束
+未提交工作：本次追溯文档更新；本地仍有一个仅更新交接的提交领先最近origin/main跟踪引用；锁定临时目录保持原样
+iOS完成度：最近源码提交已由CI编译；人工Simulator视觉/手势和真机未验收
+AI顾问完成度：Portfolio/Security及Ledger只读语义已有实现；真实DeepSeek服务及确认成交后复判未E2E
+统一图表完成度：共享renderer与主要功能源码已编译；人工点击/十字/拖缩/横屏/状态恢复仍外部待验
+NAS历史数据完成度：实时归档有部署证据；历史provider指定日期仍有空响应/断连；NAS→iOS→Research Evidence未打通验证
+Apple编译验证：CI run 40622847995成功验证代码提交7a2d63e；本地无Apple工具
+当前测试：FCore最近CI 130/130 executed/pass/0 fail；App UI 3/3 executed/pass/0 fail；Python/NAS最近定向77/77 pass/0 fail（环境受限项另列，非全套）
+最大缺口：事后fee调整模型与回算；NAS历史分钟消费链；人工Simulator；真实DeepSeek闭环；真机验收
+下一步：fetch/reconcile后普通push交接更新；继续审查费用调整的不可变事件/双投影与回归设计
+F_CURRENT_STATUS_END
+
 ## 2026-10-27 19:14 Asia/Shanghai 实时状态（优先读取）
 
 - **当前工作区：** 本轮从 `8c6921123c7e888ad8601186bae459ac090b7b1c` 继续；当前源码和测试有未提交修改，尚未fetch、commit或送Apple CI。HEAD仅供追溯，当前状态以这份dirty工作树为准。
