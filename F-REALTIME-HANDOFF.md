@@ -1,5 +1,14 @@
 # F 实时进度交接
 
+## 2026-10-28 设置页可发现性修正 CI 通过（最新）
+
+- 远端`main`和当前本地HEAD一致：`f366542242e995ec62b068273da65ab2f7f9f860`；对应Actions run `40648658299`，job `122683326661`，结论`success`。Git状态跟踪分支一致；唯一未跟踪项仍是受保护目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`，未纳入任何提交。
+- FCore XCTest：139 defined / 139 executed / 139 passed / 0 failed。XcodeGen成功；iOS Device Build和Simulator Build成功。
+- App UI XCTest：3 defined / 3 executed / 3 passed / 0 failed。此前失败的`testFivePrimaryDestinationsAreDistinctAndDiscoverable`在设置页前移“在线 AI”后通过（105.322秒）；另两项也通过。
+- Simulator已在CI中启动并执行UI测试；截图附件导出步骤成功（该run有8项导航截图附件、1项资产截图附件）。这仍不是人工视觉/图表手势验收或真机验收。未签名IPA已打包且`unzip -t`检查通过，不代表已签名或安装到真机。
+- 修正代码提交`5eeee5d`在上述HEAD中；未改动测试断言。GitHub Actions当前HEAD的完整流水线通过。Windows本机无Xcode，因此编译证据来自该macOS CI。
+- 下一步回到既定收口：取得CI截图附件做有限人工画面检查；之后继续NAS历史分钟→iOS/Research Evidence、真实DeepSeek及Candidate→真实成交→Ledger→AI复判。手工Simulator交互、真实服务E2E、真机仍待验证。
+
 ## 2026-10-28 Actions run 40646378647 结果与设置页修正
 
 - 用户提供的日志包对应 Actions run `40646378647`、job `122676045830`、HEAD `476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`。GitHub job steps API与日志包一致：FCore 139/139通过；XcodeGen、Device Build、Simulator Build成功；UI XCTest 3项中2通过、1失败；截图附件导出成功（43项UI附件）；IPA步骤因前序UI失败而跳过。Simulator确实被CI启动执行自动UI测试，但这不是人工交互/视觉验收。

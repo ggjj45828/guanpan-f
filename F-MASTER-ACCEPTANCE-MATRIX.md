@@ -1,5 +1,17 @@
 # F Master Acceptance Matrix
 
+## 2026-10-28 最新 Apple CI 通过（run 40648658299）
+
+| 验收项 | 当前HEAD实际结果 | 说明 |
+|---|---|---|
+| FCore XCTest | 139 / 139 executed / passed / 0 failed | run `40648658299`，HEAD `f366542242e995ec62b068273da65ab2f7f9f860` |
+| XcodeGen / Device / Simulator Build | 全部成功 | macOS 15.7.9 / Xcode CI runner |
+| App UI XCTest | 3 / 3 executed / passed / 0 failed | 设置页DeepSeek SecureField首屏可发现性修正通过；原断言未移除或放宽 |
+| Simulator截图导出 | 成功 | 导出导航截图8项、资产截图1项；自动截图不等于人工视觉或交互验收 |
+| 未签名IPA | 打包成功，ZIP完整性检查通过 | 未签名，不代表真机安装/运行 |
+
+远端`main`已包含当前HEAD`f366542`。当前提交CI全绿；人工Simulator手势/视觉、真实NAS/行情/DeepSeek端到端、真机仍为外部待验证。源码修正是设置页section顺序调整，没有更改UI断言。
+
 ## 2026-10-28 最新 Apple CI 证据（run 40646378647）
 
 | 验收项 | 实际结果 | 当前处置 |
