@@ -2,6 +2,8 @@
 
 ## 当前工作树续更（2026-10-28；以本段为最新状态）
 
+- 新增多主题/多布局架构设计：[F-THEME-LAYOUT-MANIFEST-DESIGN.md](F-THEME-LAYOUT-MANIFEST-DESIGN.md)。既有5套首页分支加上5个新增方向，共规划10套；Theme/Layout Manifest注册、共享role renderer及Simulator结构差异验收均尚未实现/验证。该事项排在当前Ledger、Apple CI、NAS历史分钟iOS链路和DeepSeek闭环之后，不新增主题Swift代码。
+
 - HEAD `5f2a1f7c61aec0c29ce4e11430f8b1e9aefcb45c`，本地相对缓存`origin/main` ahead 7；最新fetch失败（DNS thread启动错误），远端实时状态未知。当前T实现/测试及交接矩阵有未提交变更；锁定临时目录未动。
 - T Contribution现按时间排序和FIFO批次只匹配先卖后买的实际配对份额；1000卖/500买回只计500及按比例卖出费；普通卖出/减仓不当作T；买回早于卖出或买回量超过此前剩余卖量保持Unavailable。源码/测试位置：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`。
 - FCore定义方法当前静态计数132。当前HEAD compile、XCTest执行、passed/failed均无执行证据；旧CI #41 `40622847995`（130/130）仅验证`7a2d63e`，不能覆盖本轮部分配对FIFO改动。App/UI旧CI数据同样不验证本轮Swift修改。本机无Swift/Xcode/XcodeGen。

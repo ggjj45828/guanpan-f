@@ -39,3 +39,5 @@ Current stage defines quote metadata, chart hit-testing geometry, advisor entry 
 ## B 主布局基线与首页卡片责任
 
 F 采用 B 的东方编辑室、现代卡片、交易仪表盘、杂志卡片和 Bento 五种首页布局作为主要布局基线。F 重建卡片职责、数据和导航，不把 B 源码视为视觉或可发现性验收通过。不同卡片若执行同一动作，必须合并或携带明确不同上下文；不得用不同标题制造多个入口。职责与路由细节见 `F-HOME-CARD-ROUTE-ACCEPTANCE.md`。
+
+后续多主题目标、Theme/Layout Manifest字段、10套结构差异与截图验收标准见 `F-THEME-LAYOUT-MANIFEST-DESIGN.md`。这项设计不代表额外五套主题已编码，也不改变当前Ledger、Apple CI、NAS历史分钟进入iOS和DeepSeek闭环优先级。

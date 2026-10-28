@@ -1,5 +1,12 @@
 # F 实时进度交接
 
+## 2026-10-28 多主题/布局计划增补
+
+- 用户新增“约10套可切换主题/布局”需求，不改变当前最高优先级。已创建`F-THEME-LAYOUT-MANIFEST-DESIGN.md`，登记现有5个首页方向与新增东方墨韵、极简终端、流体玻璃、数据星图、动态Bento五个方向。
+- 设计约定ThemeManifest承载字体、间距、卡片/表面、导航、AI/市场/资产呈现、图表容器、语义色、动效和light/dark/eye-care兼容；LayoutManifest按稳定`FHomeCardRole`配置模块顺序/面积/响应式规则/风险状态重排。registry只组合纯展示renderer；Ledger、行情来源、Research Evidence、DecisionContext、Advisor、Guard和route职责保持共用。
+- 目前`FHomeTheme` enum和`HomeLayout` switch仍是5套首页分支的实际实现。Manifest registry、其余跨页面主题renderer、新增5主题、10主题截图/人工结构验收均未实现。主题不增加Swift代码、不阻断Ledger/手续费修正、当前T Contribution CI、NAS历史分钟→iOS或DeepSeek真实闭环。
+- 验证：本轮只做代码/文档静态检查和设计记录，未运行Xcode/Simulator；无新截图。多主题验收仍未通过。
+
 ## 2026-10-28 当前工作树续更（覆盖下方较早快照）
 
 - 当前 `HEAD` 为 `5f2a1f7c61aec0c29ce4e11430f8b1e9aefcb45c`；`main` 相对缓存的 `origin/main` ahead 7。刚才再次尝试 `git fetch origin main`，仍因 `getaddrinfo() thread failed to start` 失败，因此缓存远端不代表实时远端；未push、未rebase、未强推。
