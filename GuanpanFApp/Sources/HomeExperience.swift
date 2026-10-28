@@ -665,12 +665,21 @@ struct RealAssetsOverview: View {
                 }
             }
             Section("现金与成交流水") {
+                Button("录入其他费用 / 现金对账差额") {
+                    model.beginCashAdjustment()
+                }
+                .sheet(isPresented: $model.showingCashAdjustment) {
+                    FCashAdjustmentSheet(model: model)
+                }
+                .accessibilityIdentifier("ledger.cash-adjustment.begin")
                 if model.cashFlow.isEmpty { Text("暂无可读取的现金流水").foregroundStyle(.secondary) }
                 ForEach(model.cashFlow.reversed()) { entry in
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("\(entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
+                        let isCashOnlyAdjustment = entry.reason.hasPrefix("其他费用/现金对账：")
+                        Text("\(isCashOnlyAdjustment ? "现金对账调整" : entry.kind.label)\(entry.instrumentName.map { " · \($0)" } ?? "")")
                         Text("\(entry.occurredAt.formatted(date: .numeric, time: .shortened)) · 变动 \(entry.cashDelta.description) · 余额 \(entry.resultingCashBalance.description) · 手续费 \(entry.fee.description)")
                             .font(.caption).foregroundStyle(.secondary)
+                        if isCashOnlyAdjustment { Text(entry.reason).font(.caption2).foregroundStyle(.secondary) }
                         if let fillID = entry.sourceFillID, let effectiveFee = entry.effectiveFee {
                             Button("对账 / 更正此笔手续费（当前 \(effectiveFee.description)）") {
                                 model.beginFeeCorrection(for: entry)
@@ -1064,6 +1073,53 @@ struct FLedgerFeeCorrectionSheet: View {
                     .disabled(model.writingFeeCorrection ||
                               model.feeCorrectionReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                               model.feeCorrectionConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+struct FCashAdjustmentSheet: View {
+    @ObservedObject var model: FHomeModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("僅調整現金") {
+                    Picker("现金方向", selection: $model.cashAdjustmentAddsCash) {
+                        Text("减少现金 / 记其他费用").tag(false)
+                        Text("增加现金 / 余额补差").tag(true)
+                    }
+                    TextField("金额（正数）", text: $model.cashAdjustmentAmountText)
+                        .keyboardType(.decimalPad)
+                    TextField("费用或对账原因", text: $model.cashAdjustmentReason,
+                              axis: .vertical)
+                        .lineLimit(2...3)
+                    Text("无法归属到具体成交的费用只记入现金；不会改变任何证券成本、已实现盈亏或持仓数量。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("确认更正") {
+                    TextField("确认说明（必填）", text: $model.cashAdjustmentConfirmationNote,
+                              axis: .vertical)
+                        .lineLimit(2...4)
+                }
+                if !model.ledgerWriteStatus.isEmpty {
+                    Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
+                }
+            }
+            .navigationTitle("现金对账差额")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }.disabled(model.writingCashAdjustment)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.writingCashAdjustment ? "保存中" : "确认调整") {
+                        model.confirmCashAdjustment()
+                    }
+                    .disabled(model.writingCashAdjustment ||
+                              model.cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                              model.cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }

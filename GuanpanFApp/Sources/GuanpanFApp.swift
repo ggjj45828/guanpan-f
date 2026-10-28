@@ -69,11 +69,17 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
     @Published var showingLedgerConfirmation = false
     @Published var showingFeeCorrection = false
+    @Published var showingCashAdjustment = false
     @Published var feeCorrectionFillID: UUID?
     @Published var correctedFeeText = ""
     @Published var feeCorrectionReason = ""
     @Published var feeCorrectionConfirmationNote = ""
     @Published private(set) var writingFeeCorrection = false
+    @Published var cashAdjustmentAmountText = ""
+    @Published var cashAdjustmentAddsCash = false
+    @Published var cashAdjustmentReason = ""
+    @Published var cashAdjustmentConfirmationNote = ""
+    @Published private(set) var writingCashAdjustment = false
     @Published var actualFillUnitsText = ""
     @Published var actualFillPriceText = ""
     @Published var actualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
@@ -227,6 +233,63 @@ final class FHomeModel: ObservableObject {
     func confirmFeeCorrection() {
         guard !writingFeeCorrection else { return }
         Task { await writeFeeCorrection() }
+    }
+
+    func beginCashAdjustment() {
+        cashAdjustmentAmountText = ""
+        cashAdjustmentAddsCash = false
+        cashAdjustmentReason = ""
+        cashAdjustmentConfirmationNote = ""
+        ledgerWriteStatus = "现金对账差额只改变现金余额，不归属到任何证券成本或盈亏。"
+        showingCashAdjustment = true
+    }
+
+    func confirmCashAdjustment() {
+        guard !writingCashAdjustment else { return }
+        Task { await writeCashAdjustment() }
+    }
+
+    private func writeCashAdjustment() async {
+        guard let store = ledgerStore,
+              let enteredAmount = Decimal(string: cashAdjustmentAmountText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                           locale: Locale(identifier: "en_US_POSIX")),
+              !enteredAmount.isNaN, enteredAmount > 0,
+              !cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请填写正数金额、原因和确认说明。增加或减少方向由选择器指定。"
+            return
+        }
+        let amount = cashAdjustmentAddsCash ? enteredAmount : -enteredAmount
+        writingCashAdjustment = true
+        defer { writingCashAdjustment = false }
+        do {
+            let now = Date()
+            guard let book = try await store.load(now: now) else {
+                throw FLedgerPersistenceError.primaryFileMissing
+            }
+            let lastSequence = (book.fills.map(\.sequence) + book.cashMovements.map(\.sequence) +
+                                (book.feeAdjustments ?? []).map(\.sequence)).max() ?? 0
+            guard lastSequence < UInt64.max else {
+                throw FAdvisorLiveError.ledgerChangedDuringAnalysis
+            }
+            let confirmation = FUserLedgerConfirmation(
+                confirmedAt: now,
+                confirmationNote: cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines))
+            let movement = FCashMovement(
+                sequence: lastSequence + 1, occurredAt: now, amount: amount,
+                reason: "其他费用/现金对账：\(cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines))",
+                userConfirmation: confirmation)
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmCashMovement(movement, now: now)
+            await loadLedger(from: store)
+            pendingCandidate = nil
+            pendingCandidateScope = nil
+            advisorResult = nil
+            showingCashAdjustment = false
+            ledgerWriteStatus = "现金对账差额已追加；证券持仓、成本及盈亏未改变。旧AI候选已失效。"
+        } catch {
+            ledgerWriteStatus = "现金对账差额未保存：\(error.localizedDescription)"
+        }
     }
 
     private func writeFeeCorrection() async {

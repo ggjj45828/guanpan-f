@@ -960,3 +960,50 @@ Apple编译验证：run 40622847995全部步骤成功，含Device、Simulator、
 最大缺口：人工Simulator截图/手势验收；真实NAS历史分钟进入iOS研究链；真实DeepSeek Portfolio/Security→Candidate→用户成交→Ledger→复判
 下一步：获取并人工检查CI截图；继续检查页面入口、图表交互、资产Episode/现金流程；随后按顺序做NAS/行情和DeepSeek实网联调
 F_CURRENT_STATUS_END
+
+## 2026-10-28 NAS实时盘外分钟过滤回归复核
+
+- 复核当前 `nas/fminute/runtime.py`：实时worker按交易日官方session的 `expected_timestamps` 过滤盘外行，并把被过滤的时间戳作为诊断信息；证券代码、市场或交易日期不匹配仍会报错，不会被静默过滤。
+- 实际执行 `Tools/test_minute_runtime.py` 定向套件：5 executed / 5 passed / 0 failed。覆盖盘外分钟过滤与报告、provider身份不匹配拒绝、backfill周期汇总。
+- 为避开本机明确受限的localhost/目录句柄/硬链接用例，另定向实际执行四项backfill服务测试：4/4通过，覆盖有限次数空响应→永久不可用、自动启动保留终态、明确超出provider覆盖→无重试、初始回补窗口上限。与runtime套件合计9项定向回归通过（runtime 5项 + queue 4项）；这不等于provider覆盖已实测或真实NAS端到端通过。
+- 继续执行 provider/归档/service 套件：provider 16项中13通过、2失败、1错误（官方日历同步在该环境返回`not_updated`，目录句柄操作出现`PermissionError`）；archive 44项中42通过、2错误（Windows环境拒绝`os.link`硬链接）；service 33项中30通过、3错误（localhost socket 被系统`WinError 10013`拒绝）。这些是本次测试执行的失败/错误，不能记为全套通过；受限项需要在具备目录句柄、硬链接和本机socket能力的环境重新验证。
+- 本轮没有修改Swift、NAS产品逻辑或测试定义；未执行Apple CI、Xcode编译、Simulator人工验收，也没有连接真实NAS做端到端检查。此前的NAS运行状态/Worker存活不能替代数据库归档证据。
+- 当前工作树：HEAD `a5a8557c64f7cc43e09a38d570c752e4d915d058`；跟踪分支状态显示本地 `main` 相对缓存的 `origin/main` ahead 19；唯一未跟踪项为受保护临时目录 `.task-python-temp-b252c94955274b7c90bce865b594fca4/`，保持原样。该远端状态未经过本轮成功fetch核实。
+- 本轮尝试 `git fetch origin main`，因运行环境 `getaddrinfo() thread failed to start` 失败；没有fetch/reconcile/push，也没有触发Apple CI。远端HEAD仍未知。
+- 随后又进行两次带等待的 fetch 重试（间隔15秒），错误相同；浏览器读取 Actions 页面也返回 `Cache miss`。截至本次记录，GitHub/Apple CI通道仍不可用，未推送或强推。
+- 再等待30秒并重试一次 `git fetch --verbose origin main`，仍因 `getaddrinfo() thread failed to start` 失败；本次继续不推送、不reconcile、不触发CI。远端同步状态仍未知。
+- 继续静态走查事后手续费修正UI→唯一写入链：现金流水中每笔真实成交提供按`fillID`发起更正入口，表单要求修正后总手续费、差额原因和用户确认说明；提交经`FConfirmedLedgerWriter.confirmFillFeeCorrection`追加事件，成功后重新载入Ledger并清除旧Candidate/Advisor结果。尚无对应App UI自动/人工操作验收，Swift仍未Apple编译；不把代码路径存在记作交互完成。
+- T Contribution与证券生命周期PnL静态复核：T计算按证券/交易日/配对ID分组，并按成交时间、sequence、ID稳定排序；只把先卖后买回的匹配份额和按比例真实费用计入T贡献。普通成交不会作为T贡献；`FSecurityPnLCalculator.dailySecurityPnL`按日初份额、前收、全天真实买卖额/费用和日末份额计算，不依赖Episode是否盘中关闭重建。相关回归定义存在，但此轮未执行Swift/XCTest，未发现新的静态偏差。
+- 本次继续重试 `git fetch origin main` 仍因`getaddrinfo() thread failed to start`失败；无远端新证据。
+- Advisor/Ledger写入静态边界复核：SwiftPM依赖图仅让`FAdvisor`依赖`FCore`，`FLedgerWrite`独立依赖`FCore`；Candidate创建回归检查账本digest不变；App中fill和手续费更正都显式进入`FConfirmedLedgerWriter`。本轮未发现Advisor/Candidate写账本旁路；此为源码/测试定义审查，未运行XCTest或Apple编译。
+- 新增现金only对账入口：资产流水按钮可录入未归属到单笔成交的现金差额，明确选择增加/减少方向、输入正数金额、原因与确认说明；写入使用已有确认现金流水Writer，不修改证券成本、数量或盈亏，并在成功后失效旧Candidate/Advisor结果。该Swift UI修改尚未Apple编译或运行；Linux/真实设备行为未验证。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Ledger费用对账收口；Apple CI同步仍因网络错误不可用
+当前正在开发：逐笔手续费更正之外，补齐无法归属到成交的现金only差额录入入口
+刚刚完成：资产页现金流水新增增加/减少现金对账表单，经唯一确认Writer追加现金事件并清除旧AI候选；`git diff --check`通过
+未提交工作：现金对账Swift UI/model及F-REALTIME-HANDOFF.md、F-MASTER-ACCEPTANCE-MATRIX.md；受保护临时目录保持原样
+iOS完成度：新增表单已编码、未编译；没有新的XCTest/UI Test/Screenshot证据
+AI顾问完成度：现金变化会让旧Candidate/Advisor结果失效；真实DeepSeek与现金调整后重新判断未验证
+统一图表完成度：无本轮变化；Simulator交互仍External Pending
+NAS历史数据完成度：实时边界与回补队列定向9项通过；provider真实历史覆盖、NAS到iOS/Research Evidence端到端仍未验证
+Apple编译验证：本轮未执行；本地无Xcode，GitHub fetch仍失败
+当前测试：FCore新增定义0 executed；App UI未执行；Python/NAS本轮9项定向回归通过，provider/archive/service宽套件仍有Windows环境限制项
+最大缺口：验证现金对账新Swift入口；当前全部Swift修改Apple编译与CI；NAS历史分钟消费链；DeepSeek成交闭环
+下一步：GitHub恢复后先fetch/reconcile再普通push并跑Apple CI；在此之前不扩大Swift范围，继续做有限静态查漏和NAS可执行回归
+F_CURRENT_STATUS_END
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：NAS实时采集边界复核；Apple/Simulator及真实服务E2E仍待外部验证
+当前正在开发：核实实时盘外过滤诊断与历史回补的session边界，避免盘外数据进入有效分钟序列
+刚刚完成：当前runtime实现与5项定向Python回归实际通过；没有新增产品代码
+未提交工作：F-REALTIME-HANDOFF.md本次更新；受保护未跟踪临时目录原样保留
+iOS完成度：当前无新增编译或运行证据；历史Apple CI结果不代表后续Swift改动
+AI顾问完成度：真实DeepSeek Portfolio/Security与成交后复判仍未验证
+统一图表完成度：本轮未做Simulator交互验收
+NAS历史数据完成度：实时边界定向测试5/5通过；provider 13/16、archive 42/44、service 30/33在当前Windows环境实际完成，其余失败/错误如上；真实provider覆盖、实NAS指定日期归档及iOS消费链未验证
+Apple编译验证：本轮未执行；当前环境不提供本地Xcode
+当前测试：FCore最近历史CI 130/130（不代表本轮源码）；App UI最近历史CI 3/3（不代表人工验收）；Python/NAS runtime 5/5与queue定向4/4通过；全provider套件13通过/2失败/1错误，archive 42通过/2错误，service全套30通过/3错误（受限原因见上）
+最大缺口：provider历史覆盖实测；NAS SQLite指定日期归档到iOS/Research Evidence；当前Swift改动的Apple CI；人工Simulator验收和DeepSeek成交闭环
+下一步：继续审计NAS历史provider日期/交易时段能力与coverage终态；网络可用后先fetch/reconcile，再普通推送触发当前HEAD完整Apple CI
+F_CURRENT_STATUS_END
