@@ -3,6 +3,7 @@
 ## 2026-10-28 最新续作快照
 
 - **用户日志复核：** `logs_110101703179.zip`显示FCore 130项实际执行，其中1项失败：`LedgerSchemaTests.swift:414`断言“清仓后券商展示成本应为nil”，实际为`10.35`。这与券商展示成本作为证券级对账值、清仓/新Episode后仍保留的已确认语义冲突，失败是测试旧期望，不是清仓删除了真实持仓。后续日志`logs_110103476656.zip`显示FCore 130/130通过；随后Device Build首个根因是`HomeExperience.swift:354`的`nil requires a contextual type`，已由源码提交`7a2d63e`补足`Decimal?`上下文；更晚的完整CI run `40622847995`已全绿。新增的T顺序修复不在这些旧日志/CI覆盖范围内。
+- **Ledger写入边界静态复核：** `FAdvisor` target没有`FLedgerWrite`依赖；Advisor只返回Candidate。App只有在候选仍可审阅、账本摘要未变化且用户填写实际成交数量/价格/手续费/证券名/确认说明后，才调用`FConfirmedLedgerWriter.confirmFill`；写入后重新读取真实账本并再次运行Advisor。候选估算费用与用户录入实际fill费用分开。此为源码静态核验，本轮未编译或执行UI/服务E2E，没有发现Candidate绕过确认直接改Ledger的路径。
 - 本轮复查GitHub时 `git fetch origin main` 仍因 `getaddrinfo() thread failed to start` 失败；最近可见跟踪点仍为 `7a2d63e`，本地`main`有尚未推送的交接文档与T计算改动提交。跟踪引用不能证明远端实时状态，网络恢复后仍先fetch/reconcile。
 - 复核成交盈亏投影后发现一个实际分类风险：`FTradeContributionCalculator`原先只要求同一T周期卖出数量与买回数量最终相等，没有要求买回时已有足量未买回的先前卖出。于是反序成交（先买回、后卖出）可能被误算成正向T贡献。
 - 已编码最小边界修正：按成交时间排序，同时间按账本sequence及ID稳定排序；仅当买回份额不超过此前尚未买回的T卖出份额且周期最终全部配平，才生成T Contribution。为反序成交补了回归断言；未放宽任何现有断言，也未改变fills/现金/持仓。
