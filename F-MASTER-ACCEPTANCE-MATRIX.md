@@ -3,7 +3,7 @@
 ## 2026-10-28 当前工作树权威补记（覆盖下方旧验证快照）
 
 - 当前 `main` HEAD `7094d74496f32fa78e69eeb0792e8ee26da48ca6` 已普通push到`origin/main`，工作树干净。
-- 当前HEAD对应Run `40717961675`（运行号60），最新状态`queued`、job未开始，无当前提交编译/测试证据；不得把排队写成通过或失败。
+- 当前代码HEAD对应Run `40717961675`（运行号60）；原始attempt及重跑attempt 2均被GitHub取消，job无执行步骤；当前无运行中CI，无当前提交编译/测试证据。不得把取消当成源码失败或通过。
 - 当前定义：FCore 164，UI XCTest 3；本轮新增的11个Shadow测试只定义，当前HEAD executed=0 / passed=0 / failed=0。旧CI PASS不继承。
 - 新增架构验收：AI建议、Quant信号、市场结果、用户确认成交四者必须分离；Candidate快照不可变；Shadow只存市场事实和成交ID，不可写Ledger；没有Fill关联时Execution=Unknown；明确复核后才可记未执行。NAS为可选能力，不是Advisor依赖。
 - 已编码未编译：本地Candidate Shadow日志、Guard前/最终Advisor动作来源字段、报价事件、生命周期到期与市场观察窗口分别计数、仅触发后计算5/15/30/60分钟方向变化与MFE/MAE、Fill ID链接、每证券描述性计数和AI页展示。
