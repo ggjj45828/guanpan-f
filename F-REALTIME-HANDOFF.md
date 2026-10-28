@@ -6,7 +6,7 @@
 - **已编码（未验证）：** 新增追加式`FFillFeeAdjustment`；费用delta在更正sequence作为现金结算，原`FConfirmedFill`及旧`costBasisRemoved`保持不变；校验、序列、ledger digest、后续fill sequence和archive字段接入。费用投影用修正后fee重算原交易经济basis与Episode/realized/daily/T摘要；现金流水保留原始fill现金事件并独立列出更正日差额。资产页增加逐笔手续费更正表单，经用户确认后只调用`FConfirmedLedgerWriter.confirmFillFeeCorrection`；表单sheet附着在真实资产页面，避免和根页面的成交确认sheet争抢展示。
 - 新增6项测试定义：买入费用补录/部分卖出basis重算/冲回及archive恢复；卖出费用补录；旧Episode补录不得污染重开Episode成本；旧Episode清仓卖出费用补扣及退回不能影响重开成本；通过唯一确认Writer保存并重载；补费导致负现金时原子拒绝。FCore当前静态`func test...`计数138。当前HEAD源码没有Swift/Xcode/XcodeGen，本轮compile/test executed均为0；Apple CI仍未运行。多次历史修正的服务端实际重放、UI操作和Apple运行验证仍未完成。
 - **T Contribution：** 之前提交的FIFO部分配对实现和超额买回测试也仍未Apple CI验证。旧run 130/130不能覆盖当前F源代码。
-- 静态检查：`git diff --check`通过（Windows仅提示CRLF转换）；静态测试定义计数138。此次检查不代表Swift编译或测试执行。手续费更正Swift/UI及测试已提交在`a84c419`；当前文档修改用于同步该提交后的真实状态。当前相对缓存`origin/main` ahead 12；fetch因DNS线程启动错误失败，缓存不能视为实时远端状态。
+- 静态检查：`git diff --check`通过（Windows仅提示CRLF转换）；静态测试定义计数138。此次检查不代表Swift编译或测试执行。手续费更正Swift/UI及测试已提交在`a84c419`；同步文档也已提交。Tracked工作树干净，只有受保护临时目录未跟踪且未触碰。远端fetch因DNS线程启动错误失败，本地分支包含未推送提交；缓存`origin/main`不能视为实时远端状态。
 - 下步保持范围：先审查费用事件重放和兼容性，补Ledger边界用例，随后网络可用先fetch/reconcile、普通push并运行Apple CI；若CI失败按首个根因修。Simulator手续费对账表单/图表人工操作仍External Pending。NAS历史分钟→iOS/Research Evidence及DeepSeek真实闭环仍未E2E。
 
 ## 2026-10-28 T配对超额边界补充
