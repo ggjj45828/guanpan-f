@@ -69,7 +69,7 @@ enum FNASReadinessClient {
         case .cannotFindHost, .dnsLookupFailed:
             return "找不到 NAS 主机。请核对地址，并确认 iPhone 与 NAS 在同一局域网或已连接 VPN。"
         case .cannotConnectToHost:
-            return "无法建立到 NAS 的连接。请核对穿透域名和 8788 端口映射；如果是局域网地址，请确认观盘 F 已获本地网络权限。"
+            return "无法建立到 NAS 的连接。请核对穿透域名和 8788 端口映射；如果是局域网地址，请确认观盘max 已获本地网络权限。"
         case .timedOut:
             return "连接 NAS 超时（等待 20 秒仍未收到响应）。请检查穿透链路或 NAS 容器响应。"
         case .networkConnectionLost:
