@@ -320,6 +320,7 @@ private struct PortfolioCard: View {
             Text("真实组合").font(.headline)
             LabeledContent("现金", value: model.cashText)
             LabeledContent("持仓", value: "\(model.holdings.count) 项")
+            LabeledContent("今日证券盈亏", value: "不可用 · 缺可靠前收与日初持仓口径")
             if model.ledgerState == .available && model.holdings.isEmpty {
                 Text("账本已读取，当前没有真实持仓").font(.subheadline).foregroundStyle(.secondary)
             } else if model.ledgerState != .available {
@@ -332,6 +333,7 @@ private struct PortfolioCard: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(item.name).font(.subheadline.weight(.medium))
                                 Text(item.instrumentCode).font(.caption).foregroundStyle(.secondary)
+                                holdingMark(item)
                             }
                             Spacer()
                             Text("\(item.units) 份").monospacedDigit()
@@ -343,6 +345,32 @@ private struct PortfolioCard: View {
         }
         .padding(16)
         .modifier(FThemeSurfaceModifier(theme: theme, radius: 20))
+    }
+
+    @ViewBuilder
+    private func holdingMark(_ holding: FHomeHolding) -> some View {
+        let now = Date()
+        if let snapshot = model.marketDataByCode[holding.instrumentCode],
+           let price = snapshot.latestPrice,
+           snapshot.quoteTimestamp <= now,
+           now.timeIntervalSince(snapshot.quoteTimestamp) <= 120,
+           let unrealized = try? FSecurityPnLCalculator.episodeUnrealizedPnL(
+                units: holding.units, bookCost: holding.bookCost, currentPrice: price
+           ) {
+            Text("现价 ¥\(NSDecimalNumber(decimal: price).stringValue) · 本轮持仓浮盈亏 ¥\(NSDecimalNumber(decimal: unrealized).stringValue)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(unrealized >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if model.marketDataByCode[holding.instrumentCode] != nil {
+            Text("行情已过时或无有效价格 · 暂不计算持仓浮盈亏")
+                .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            Text("等待真实行情 · 持仓浮盈亏暂不可用")
+                .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

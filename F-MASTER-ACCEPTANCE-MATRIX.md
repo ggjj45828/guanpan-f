@@ -281,3 +281,6 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 | P2 图表图层控件 | 图层切换文本与图标放大，最小触控高度44pt，横向滚动不变 | `GuanpanFApp/Sources/FUnifiedSecurityChart.swift` 已编码未编译；无新增测试定义/无执行证据 | 必须在Simulator/iPhone Air上验证控件可点、图表面积、横滑和手势冲突 |
 
 | Apple CI 2026-10-28 / `b882a580` | FCore 140/140 executed/pass；XcodeGen 成功；Device Release Build 在 `FNASConnection.swift:68` 因不存在的 `URLError.Code.localNetworkDenied` 失败；Simulator/UI/IPA skipped | 首个根因已在工作树修复，未编译；普通推送后重跑完整Apple CI | 修复后尚无结果 |
+| Apple CI 2026-10-28 / `572cb5f` | FCore 140/140；XcodeGen、Device Release Build、Simulator Build 成功；App UI XCTest 3/3；IPA打包成功 | run `40661196596`，artifact `12804127584` | 自动化全绿；人工视觉/手势/iPhone Air真机仍待验收 |
+| P2 首页真实资产摘要 | 真实持仓行增加新鲜行情下的本轮持仓浮盈亏；今日证券盈亏缺少前收/日初持仓口径时显示 unavailable，不伪造 | `HomeExperience.swift`，当前已编码、未编译；无新增测试定义/执行 | CI后检查页面与行情新鲜度；人工真比例/iPhone Air仍待验收 |
+| 2026-10-28 CI截图记录 | run `40661196596` 导出9张 iPhone 16 Pro UI XCTest截图，尺寸 960×1440 | 有CI附件；不是人工视觉验收。样张布局存在比例/裁切疑点 | 需真实 Simulator 比例截图后判断，当前不做全局布局重构 |

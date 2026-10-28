@@ -1191,3 +1191,20 @@ F_CURRENT_STATUS_END
 - 当前未提交修改：`GuanpanFApp/Sources/FNASConnection.swift` 编译修复，以及本段实时状态更新。修复前 HEAD 的测试证据保持 FCore 140/140；修复后结果尚无。
 - 当前没有 Simulator 实际运行、截图/人工视觉验收、真机、NAS历史分钟→iOS或DeepSeek真实E2E证据。
 - 下一步：普通提交并推送此编译修复，观察新的完整 CI；若出现新首错，按首个根因继续修复。不得把被跳过的 Simulator/UI/IPA 步骤写成成功。
+
+## 2026-10-28 编译修复复验结果（当前主线）
+
+- 修复提交 `572cb5f8ba403316377f1bd98260582dad0303bb` 已普通推送。Apple CI run `40661196596` 完成，结论 success。
+- 本次实际证据：FCore **140 executed / 140 passed / 0 failed**；XcodeGen 成功；iOS Device Release Build 成功；iOS Simulator Build 成功；App UI XCTest **3 executed / 3 passed / 0 failed**；未签名 IPA 打包成功，artifact `guanpan-f-ios-build-evidence`（有效期至 2026-11-11）。
+- UI 用例覆盖了 Advisor unavailable 状态、五个主导航目的地可发现性、真实资产当前/已清仓/现金区块；它们不是人工视觉或手势验收。
+- 这轮没有人工 Simulator 操作/截图审查、iPhone Air或真机验收；也没有 NAS历史分钟、DeepSeek或成交后Advisor复判E2E。
+- 运行链接：`https://github.com/ggjj45830/guanpan-f/actions/runs/40661196596`；构建产物：`https://github.com/ggjj45830/guanpan-f/actions/runs/40661196596/artifacts/12804127584`。
+- 下一步：优先人工检查当前 Simulator 截图/真实交互条件，并继续核心页面 B vs F 整改；不把 UI XCTest 通过写成设备视觉验收通过。
+
+## 2026-10-28 CI截图静态目视记录与首页摘要整改（当前未编译）
+
+- CI run `40661196596` 导出了9张自动化截图，测试设备标记为 iPhone 16 Pro，文件尺寸均为 960×1440。它们来自导航 UI XCTest，不是人工 Simulator 验收，也不是 iPhone Air/真机证据。
+- 静态查看样张时，画面出现顶部大块黑色区域、部分长文本靠近截图右缘；由于导出比例不是该设备完整屏幕比例，无法据此确认真实布局越界。按用户要求，不进行全局 SwiftUI 重构；保留为待 Simulator 真机比例核验的问题。
+- P2 首页缺口：真实组合卡片原先只有现金和持仓数量，没有说明今日证券盈亏的可用性，也没有显示行情新鲜时的本轮浮动盈亏。
+- 当前工作树已编码：每只真实持仓在行情时间不超过120秒且价格有效时，展示“现价 + 本轮持仓浮盈亏”；行情缺失、未来时间或过期时不计算并标注不可用。首页“今日证券盈亏”明确标成不可用，原因是缺可靠前收和日初持仓口径。未改动Ledger或行情源；不把当前浮盈亏称作今日盈亏。
+- 此新增Swift修改目前**未编译、未测试、未Simulator视觉验收**；下一步普通提交推送，跑完整Apple CI。CI通过后仍需以真比例截图和操作检查确认页面，不把导出的 XCTest 截图当人工验收。
