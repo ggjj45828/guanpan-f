@@ -115,7 +115,7 @@ jobs:
             exit 1
           fi
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP_PATH/Info.plist")"
+          ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "观盘max"
           test "$ICON_NAME" = "AppIcon"
           test -s "$APP_PATH/Assets.car"

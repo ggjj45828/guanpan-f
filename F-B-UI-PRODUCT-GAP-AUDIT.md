@@ -77,6 +77,12 @@
 - NAS 入口存在但用户手机连接失败，用户看到的是不可用体验。readyz代码不等于端到端连接。
 - 用户报告 iPhone Air 版本布局差、图表差，且 IPA 图标/产品细节有问题；当前未取得对应画面和日志，不能在此断言具体安全区/截断原因。
 
+### 2026-10-28 安装品牌整改补充
+
+- 实际检查XcodeGen配置：`AppIcon`资源已由`Assets.xcassets`引用，1024×1024 PNG文件存在；图案为行情柱线，不含“F”字母。仅凭源文件存在仍不能证明最终IPA携带了图标。
+- 查明桌面名称问题：`CFBundleDisplayName`当时仍为“观盘 F”，因此旧IPA不会显示“观盘max”。现已把桌面名称和IPA文件名统一为“观盘max”，并在CI打包阶段校验`CFBundleDisplayName`、`CFBundleIconName`和编译后的`Assets.car`。
+- 以上新改动尚未送CI；在CI断言通过、实际安装新IPA并查看桌面图标前，不将品牌问题标记为完成。
+
 ## 下一步整改顺序（先审后改）
 
 1. **P0**：把当前 dirty chart visibility、隐藏 MA 纵轴、NAS 错误提示、App Icon 和 Ledger/T/费用等已有修改按普通 fetch/reconcile 后推入 Apple CI；不强推。当前旧 CI 139/139、3 UI test 的通过只适用于旧 SHA `f366542`，不覆盖此树。
@@ -113,12 +119,12 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 
 ### 2026-10-28 CI自动截图和首页资产摘要跟进
 
-- `40661196596` 的 iPhone 16 Pro 自动截图可用于查看测试路径到达的页面；其导出尺寸 960×1440，画面里的顶部留空/右缘长文本疑点不足以证明 iPhone Air 真机布局缺陷，故不据此做全局重构。
+- `旧执行编号省略` 的 iPhone 16 Pro 自动截图可用于查看测试路径到达的页面；其导出尺寸 960×1440，画面里的顶部留空/右缘长文本疑点不足以证明 iPhone Air 真机布局缺陷，故不据此做全局重构。
 - P2 首页针对性整改：在行情新鲜且时间有效时显示每项真实持仓的“本轮持仓浮盈亏”；不新鲜/缺价格时明确 unavailable。今日证券盈亏因可靠前收和日初持仓事实缺失，显示不可用原因。该段原始状态曾为编码未验证，现由下方当前HEAD CI记录更新为CI编译/自动测试通过。
 
 ### 2026-10-28 当前HEAD验证跟进
 
-- 上述首页摘要修正在 `6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87` 的 Apple CI run `40663328427` 实际编译通过；FCore 140/140、App UI 3/3、设备与Simulator Build、未签名IPA均成功。
+- 上述首页摘要修正在 `6cde9d5e5964b8f67e4cfe54d0a9f918a1deba87` 的 Apple CI run `旧执行编号省略` 实际编译通过；FCore 140/140、App UI 3/3、设备与Simulator Build、未签名IPA均成功。
 - 这只证明编码、构建和自动化测试通过；CI导出图像不是人工视觉验收。Windows主机没有交互式Simulator，iPhone Air布局、长文本和真实行情加载后的视觉状态仍 External Pending。
 - 首页产品行为现在明确区分“本轮持仓浮盈亏”和“今日证券盈亏”；缺少可靠全天口径时不显示推算值。用户仍需通过真实设备确认页面层级与信息是否易读。
 
@@ -129,3 +135,21 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 - 十套主题从十张纵向大预览改为横向主题选择栏，完整预览放入默认折叠区。主题实际布局差异仍未完成Simulator截图对比。
 - iPhone上下黑边：加入空`UILaunchScreen`配置与Tab根视图弹性占满可用尺寸；这是针对性尝试，不是已证实修复。必须用新构建安装到用户的iPhone Air后确认全屏比例。
 - 本节所有设置/启动屏修改当前均待Apple CI与设备复验；Windows没有本地Simulator。不得将代码变化标记为已修复。
+
+## 2026-10-28 图表/键盘产品整改状态
+
+- 已针对用户反馈在唯一F图表renderer加入价格轴、时间刻度、独立成交量区、选中日K详情和详情页高度调整；未创建B renderer副本。
+- AI、DeepSeek Key和NAS地址输入可显式收键盘，发送/保存时收起。
+- 所有改动尚未编译或在Simulator/真机验证；B vs F整体体验状态仍为“F明显更差/整改中”，不因局部代码新增改判。截图与实机交互证据缺失。
+
+## 最新审核补充（2026-10-28）
+
+- F图表与键盘整改已推送到规范仓库，当前Apple CI进行中；图表本机仍无可视截图，不能宣称外观优于B。
+- NAS客户端不改变URL契约或鉴权：只请求配置地址的`/readyz`，不带token，不发送持仓；连接问题是否解决必须由用户iPhone安装新IPA、用实际HTTPS穿透复测确认。当前状态仍待验证。
+
+### 2026-10-28 当前Apple CI打包失败根因
+
+- run `40675520793`：FCore、XcodeGen、Device Release Build、Simulator Build、App UI XCTest和截图导出步骤成功；IPA创建完成，但打包步骤最后失败。
+- 真实根因是PlistBuddy查询了根键`CFBundleIconName`，而iOS主图标名称采用嵌套键`CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName`。当前已修正CI校验命令，待重跑验证。
+- App目标配置显示名为`观盘max`，Asset Catalog含`AppIcon.png`；最终打入IPA的图标及手机桌面展示尚未由成功artifact/设备验证。
+- NAS连接当前仍未解决/未确认：需用户在iPhone上安装新IPA，经实际HTTPS穿透请求`/readyz`。无NAS端改动。

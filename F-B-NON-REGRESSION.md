@@ -35,6 +35,7 @@
 | NRG-22 | 错误/空/加载状态可见，用户可刷新/重试 | 所有页面对 Ledger/行情/NAS/AI明确显示加载、可用、Partial、Stale、Missing、Unavailable | 各 F 页面具备部分状态，但部分首页/详情需人工核验 | 当前树未验 | 否 |
 | NRG-23 | 全屏图表和返回/恢复 | F进入全屏/横屏后保留证券、周期、日期、缩放和选中点 | F需求/已有部分状态；横屏及状态恢复未实机验 | External Pending | 否 |
 | NRG-24 | 首页总览链接分别去市场、资产、AI、研究 | F首页角色路由必须分别到真实对应页面，卡片不共用无关目的地 | `HomeLayout` role renderer/routes；静态源码存在、整体布局反馈失败 | 未验证 | 否 |
+| NRG-25 | 安装后的产品名称和独立App图标 | 桌面名称显示“观盘max”；使用F自己的无字母图标，并确认图标资源实际进入安装包 | AppIcon 1024×1024资源已在 `Assets.xcassets/AppIcon.appiconset` 且XcodeGen配置引用；原显示名仍为“观盘 F”。现已改为“观盘max”，CI新增Info.plist/AppIcon/Assets.car打包断言 | 新改动未CI；旧IPA不能证明名称/图标 | 否 |
 
 ## 使用规则
 
@@ -52,3 +53,12 @@
 
 - 十套主题的大预览不得全部纵向铺开；主题选择应紧凑、完整预览默认收起。当前工作树已编码为横向主题栏+折叠预览，需Apple CI和iPhone Air截图确认可用性。
 - NAS连接状态必须区分未填地址、正在测试、服务可用和具体失败；“历史数据同步未接入”不能展示成已连接。当前设置页已编码此区分和保存地址只读检查，待设备真实连接验证。
+
+| B-NR 图表信息层级与输入键盘 | B的图表专业坐标/成交量/时间轴体验不得在F退化；AI及设置输入必须可明确收键盘 | F统一renderer开始补价格轴、午休压缩时间轴、日K成交量子图与选中OHLCV；Composer/Settings加键盘工具栏及提交后收起 | 已编码未编译；未执行CI/Simulator/真机；不得标记通过 | 当前统一图表仍是F权威数据实现，B仅作呈现参考 |
+
+| B-NR 当前验证门与NAS连接 | `FUnifiedSecurityChart`图表重排与多处键盘收起；NAS客户端20秒时限/错误分类 | HEAD `ecb220d` 已推送，Apple CI run `40675520793`正在执行：FCore步骤/XcodeGen已成功、Device Build进行中，UI/Simulator待执行 | 只表示CI中途状态，不得标记最终通过；NAS连接仍需手机安装新包实测 |
+
+### 2026-10-28 App名称/图标与NAS确认门
+
+- `project.yml`声明显示名`观盘max`、AppIcon资产名`AppIcon`；图标素材为无字母方案。run `40675520793` 的IPA步骤因验证脚本查询错误的plist路径失败，需修正后重跑CI，并检查实际IPA/安装结果。
+- NAS客户端仍未完成实机HTTPS穿透复测。健康检查使用只读`/readyz`，未请求额外token；不得把客户端错误提示/CI通过视为NAS连接通过。
