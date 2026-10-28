@@ -1216,6 +1216,7 @@ private struct FThemeGalleryRow: View {
 struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
     @State private var securityLookupCode = ""
+    @FocusState private var securityLookupFocused: Bool
 
     private var isValidSecurityCode: Bool {
         let bytes = securityLookupCode.utf8
@@ -1256,6 +1257,7 @@ struct MarketOverview: View {
                 TextField("输入6位证券代码", text: $securityLookupCode)
                     .keyboardType(.numberPad)
                     .textInputAutocapitalization(.never)
+                    .focused($securityLookupFocused)
                     .accessibilityIdentifier("market.security-code")
                     .onChange(of: securityLookupCode) { value in
                         let digits = String(value.unicodeScalars
@@ -1305,6 +1307,13 @@ struct MarketOverview: View {
             }
         }
         .navigationTitle("今日市场观察")
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("收起键盘") { securityLookupFocused = false }
+            }
+        }
         .refreshable { await model.autoRefreshMarketData() }
     }
 }
