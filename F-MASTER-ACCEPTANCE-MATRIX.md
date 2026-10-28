@@ -10,7 +10,7 @@
 | Simulator截图导出 | CI执行成功，导出43项UI附件 | 自动截图已导出；没有人工视觉/手势验收证据 |
 | 未签名IPA | 步骤跳过 | UI Test步骤失败后未打包 |
 
-本轮工作树Swift修改仅为`SettingsOverview`设置段排序，未Apple编译；fetch因本机`getaddrinfo() thread failed to start`失败，未能核实远端实时状态或触发新CI。旧run的139/139不能继承给此工作树改动。
+产品修正已本地提交`5eeee5d57b4957927598a985a74883af278ebcd8`，只调整`SettingsOverview`设置段排序并保留UI断言；未Apple编译。GitHub API读取确认`main`仍是父提交`476e429e12ad131a4f0ccbc2c5c4fddf5948f80b`，但本地fetch与普通push均因`getaddrinfo() thread failed to start`失败，因此新CI未触发。旧run的139/139不能继承给`5eeee5d`。
 
 ## 2026-10-28 远端同步补记
 
