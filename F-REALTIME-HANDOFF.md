@@ -4,7 +4,7 @@
 
 - Advisor/App 代码审查发现，Candidate费用估算曾被额外硬拦截：普通交易至少`¥0.10`、做T至少`¥0.20`。这把可修改的参考费率误当作硬规则，会拒绝真实券商费率更低的候选。
 - 已移除该固定下限拦截。Candidate `estimatedFee`仍受既有非负/有效性校验；它只是估算。用户确认真实成交时仍必须录入真实fee，事后差额仍走追加式Ledger费用更正事件。未改Ledger语义，也未开放Candidate写账。
-- 该Swift修改尚未编译、未执行App/XCTest；本机无Swift/Xcode/XcodeGen。FCore测试定义仍138，App UI定义仍3；当前代码修改没有新Apple执行证据。CI恢复后需与手续费更正一起跑完整Apple链。
+- 该Swift修改已本地提交`9c641da`，尚未编译、未执行App/XCTest；本机无Swift/Xcode/XcodeGen。FCore测试定义仍138，App UI定义仍3；当前代码修改没有新Apple执行证据。CI恢复后需与手续费更正一起跑完整Apple链。
 
 ## 2026-10-28 NAS补采队列重启收敛修复（最新工作树）
 
@@ -18,7 +18,7 @@
 
 ## 2026-10-28 手续费事后更正实现快照（最新工作树）
 
-- 手续费差额更正源码与回归定义已记录在本地提交`a84c41976ed094a5fe91b8d9185167b848a8a836`（提交仅供恢复追溯，不代表功能验证）；当前代码HEAD为该提交，Swift/UI源码与测试已提交。最新实时状态文档正在同步；受保护临时目录未动。远端已指向转移后的`ggjj45830/guanpan-f`，刚才fetch仍因`getaddrinfo() thread failed to start`失败；缓存origin未刷新，不能push。
+- 手续费差额更正源码与回归定义已记录在本地提交`a84c41976ed094a5fe91b8d9185167b848a8a836`（提交仅供恢复追溯，不代表功能验证）；该代码与Swift/UI测试已提交，Advisor估算费修正另见上方最新状态。受保护临时目录未动。远端已指向转移后的`ggjj45830/guanpan-f`，最近fetch因`getaddrinfo() thread failed to start`失败；缓存origin未刷新，不能push。
 - **已编码（未验证）：** 新增追加式`FFillFeeAdjustment`；费用delta在更正sequence作为现金结算，原`FConfirmedFill`及旧`costBasisRemoved`保持不变；校验、序列、ledger digest、后续fill sequence和archive字段接入。费用投影用修正后fee重算原交易经济basis与Episode/realized/daily/T摘要；现金流水保留原始fill现金事件并独立列出更正日差额。资产页增加逐笔手续费更正表单，经用户确认后只调用`FConfirmedLedgerWriter.confirmFillFeeCorrection`；表单sheet附着在真实资产页面，避免和根页面的成交确认sheet争抢展示。
 - 新增6项测试定义：买入费用补录/部分卖出basis重算/冲回及archive恢复；卖出费用补录；旧Episode补录不得污染重开Episode成本；旧Episode清仓卖出费用补扣及退回不能影响重开成本；通过唯一确认Writer保存并重载；补费导致负现金时原子拒绝。FCore当前静态`func test...`计数138。当前HEAD源码没有Swift/Xcode/XcodeGen，本轮compile/test executed均为0；Apple CI仍未运行。多次历史修正的服务端实际重放、UI操作和Apple运行验证仍未完成。
 - **T Contribution：** 之前提交的FIFO部分配对实现和超额买回测试也仍未Apple CI验证。旧run 130/130不能覆盖当前F源代码。

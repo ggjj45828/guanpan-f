@@ -2,7 +2,7 @@
 
 ## 当前工作树续更（2026-10-28；以本段为最新状态）
 
-- Advisor静态查漏已移除Candidate估算费必须≥¥0.10/做T≥¥0.20的硬拦截；实际成交费仍以用户确认的真实金额为准。该Swift修改尚未Apple编译/UI验收，需随手续费更正送CI。
+- Advisor静态查漏已移除Candidate估算费必须≥¥0.10/做T≥¥0.20的硬拦截，本地提交`9c641da`；实际成交费仍以用户确认的真实金额为准。该Swift修改尚未Apple编译/UI验收，需随手续费更正送CI。
 
 - NAS队列静态查漏发现容器重启会重排`permanent_unavailable`/`out_of_provider_coverage`终态。当前已修正为自动启动保留终态，显式补采仍可重试；Python定向用例2/2通过。未做真实NAS部署验证，历史provider覆盖没有变化。
 - 已生成`../F-NAS-QUEUE-RETRY-FIX.zip`（20文件、56,680字节；ZIP完整性及关键NAS源码存在检查通过），供用户部署修复；未构建Docker镜像、未部署NAS。
