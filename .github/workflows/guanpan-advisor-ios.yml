@@ -115,10 +115,30 @@ jobs:
             exit 1
           fi
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$APP_PATH/Info.plist")"
           test "$DISPLAY_NAME" = "观盘max"
-          test "$ICON_NAME" = "AppIcon"
           test -s "$APP_PATH/Assets.car"
+          python3 - GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          manifest_path = pathlib.Path(sys.argv[1])
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          images = manifest.get("images", [])
+          icon = next((item for item in images if item.get("filename") == "AppIcon.png"), None)
+          assert icon is not None, "AppIcon.appiconset must reference AppIcon.png"
+          assert icon.get("idiom") == "universal" and icon.get("platform") == "ios", "AppIcon must target universal iOS"
+          assert (manifest_path.parent / "AppIcon.png").is_file(), "AppIcon.png is missing"
+          PY
+          xcrun assetutil --info "$APP_PATH/Assets.car" > "$RUNNER_TEMP/app-assets.json"
+          python3 - "$RUNNER_TEMP/app-assets.json" <<'PY'
+          import json
+          import sys
+
+          renditions = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert any(item.get("Name") == "AppIcon" or item.get("RenditionName") == "AppIcon" for item in renditions), \
+              "Compiled Assets.car does not contain the AppIcon rendition"
+          PY
           echo "Verified installed app label: $DISPLAY_NAME"
           echo "Verified compiled app icon set: $ICON_NAME (Assets.car present)"
           mkdir -p build/Package/Payload
