@@ -262,6 +262,30 @@ Apple编译验证：run 40489587708针对commit 8c69211全部成功；本轮FCor
 
 F_CURRENT_STATUS_END
 
+## 2026-10-28 Apple CI 失败诊断与修正
+
+- 提交 `6d1c68c5cf0c1add7c1c8148b423f6aafd174f2b` 已推送到转移后的 `ggjj45830/guanpan-f`；远端 `main` 与本地提交一致。
+- GitHub Actions run `40620645916` 在 macOS runner 上成功编译并执行 FCore Swift Package tests：130项 executed，129 passed，1 failed。失败为 `LedgerSchemaTests.testSameDaySellBuySellFullCloseAndReopenKeepsBrokerAndEpisodeCostsSeparate`，源码行414：`XCTAssertNil` 收到券商展示成本 `10.35`。
+- 根因是测试断言与正式Ledger语义冲突：Broker Display Cost 是证券级外部对账值，清仓/重建Episode不能自动抹除；新的Episode Economic Cost必须独立从本轮成交计算。实现返回保留值符合用户已确认规则，错误在测试期望。
+- 已将该断言改为验证券商展示成本仍为`10.35`，同时既有断言继续验证新Episode真实成本为`275.10`、旧Episode已实现利润独立保留。此修正尚未由Apple CI重跑验证。
+- 本次run在FCore测试失败后跳过XcodeGen、Device Build、Simulator Build、App UI XCTest及IPA打包；因此App Build/UI Test状态没有新证据。
+- 下一步：提交并普通推送该测试修正，重新跑完整Apple CI。不得把本次129/130写作通过；不得触碰锁定临时目录。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：修正CI中与双成本语义冲突的单个Ledger回归断言，然后重跑Apple CI
+当前正在开发：验证证券级Broker Display Cost跨Episode保留，同时Episode Economic Cost按新成交独立重算
+刚刚完成：从日志确认唯一失败测试、源码行414及实际值10.35；区分测试缺陷与Ledger实现
+未提交工作：Ledger XCTest断言修正和本交接记录；锁定临时目录保持原样
+iOS完成度：Swift Package在macOS CI已编译并运行FCore测试；App target尚未Build
+AI顾问完成度：本轮未变更；真实DeepSeek闭环仍未验证
+统一图表完成度：本轮未变更；Simulator交互未验收
+NAS历史数据完成度：此前定向Python 77/77通过；真实历史分钟到iOS研究链未验证
+Apple编译验证：FCore Swift Package编译成功；130 executed / 129 passed / 1 failed；失败只在上述错误断言；XcodeGen及后续App步骤被跳过
+当前测试：FCore defined 130 / executed 130 / passed 129 / failed 1；App UI defined 3 / 本次执行 0；Python/NAS最近定向结果 77/77通过
+最大缺口：修正后Apple CI重跑；Device/Simulator App Build与UI XCTest；真实NAS历史分钟和DeepSeek端到端
+下一步：推送断言修正并重新运行FCore → XcodeGen → Device Build → Simulator Build → UI XCTest
+F_CURRENT_STATUS_END
+
 
 ## 2026-10-27 21:08 补齐T成交标记与券商成本跨清仓保留
 

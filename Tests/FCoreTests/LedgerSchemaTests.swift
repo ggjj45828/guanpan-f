@@ -411,7 +411,8 @@ final class LedgerSchemaTests: XCTestCase {
         let position = try XCTUnwrap(snapshot.positions.first)
         XCTAssertEqual(position.units, 25)
         XCTAssertEqual(position.bookCost, Decimal(string: "275.10"))
-        XCTAssertNil(position.brokerDisplayCostPerUnit, "新 Episode 不继承上一轮券商成本录入")
+        XCTAssertEqual(position.brokerDisplayCostPerUnit, Decimal(string: "10.35"),
+                       "券商展示成本属于证券级对账口径，可跨 Episode 保留；不得混入本轮经济成本")
         XCTAssertEqual(snapshot.instrumentHistories.first?.episodes.count, 2)
         XCTAssertEqual(snapshot.instrumentHistories.first?.episodes[1].currentBookCost,
                        Decimal(string: "275.10"))
