@@ -3,7 +3,7 @@
 ## 权威当前状态覆盖（2026-10-28，本节优先于下方旧快照）
 
 - 当前 `main` HEAD 为 `7094d74496f32fa78e69eeb0792e8ee26da48ca6`，已普通push到 `origin/main`，工作树干净。未使用强推。
-- 当前提交对应 Apple CI Run [40717961675](https://github.com/ggjj45828/guanpan-f/actions/runs/40717961675)，运行号60，head SHA与当前HEAD一致；最近真实状态仍为 `queued`，job尚未开始且无step结果。排队不代表编译通过或失败。Windows没有Swift/Xcode工具链。
+- 当前代码提交对应 Apple CI Run [40717961675](https://github.com/ggjj45828/guanpan-f/actions/runs/40717961675)，运行号60，head SHA `7094d74496f32fa78e69eeb0792e8ee26da48ca6`。Attempt 1被GitHub以job cancelled结束且无step结果；已通过GitHub Actions接口重跑完整唯一job，Attempt 2仍为`queued`、尚未开始且无step结果。排队/取消均不代表源码编译结果。Windows没有Swift/Xcode工具链。
 - 当前定义数：FCore 164项、App UI 3项；本轮增加11项Shadow XCTest定义。当前提交尚无Apple执行结果（executed=0 / passed=0 / failed=0）；旧140/140等历史数字不适用。
 - 新定稿见`F-DECISION-SYSTEM-FINAL-ARCHITECTURE.md`，覆盖冲突旧要求：NAS只是可选同步/归档/备份；Advisor不依赖NAS；核心决策为双速本地Quant/Guard/Trigger与DeepSeek慢通道。真实Ledger仍只由用户确认成交写入。
 - Shadow首段已编码、未编译：Candidate快照不可变；保存DeepSeek建议和最终Guard动作；记录可信报价及无未来数据的5/15/30/60分钟观察、MFE/MAE、真实Fill ID；用户未执行必须显式复核，缺关联仍为未知。无模拟账户、无Ledger写权限。
