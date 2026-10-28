@@ -2,7 +2,7 @@
 
 ## 2026-10-28 当前实时状态校正（源码基线 6eede46）
 
-- 本轮检查开始时本地`main`与已确认远端`origin/main`同为`6eede46391fe336464dd7e129d0d5b7751bd47c3`；当前本地新增纯文档提交`0bf23f5`，远端仍在`6eede46`，故本地ahead 1、tracked工作树CLEAN。普通`git push`仍报`getaddrinfo() thread failed to start`；尚无证据表明`0bf23f5`已推送。此前通过GitHub Desktop推送`6eede46`后，GitHub API已读到远端撤销提交；未强推。
+- GitHub API确认远端`main=94bdb8e0090e5c2b5be91cafeef8fb07d887ad8e`，其父提交是已验证的撤销提交`6eede46`。本地正在追加一条纯文档状态校正；校正提交后将本地ahead 1，Swift源码不变。普通`git push`报`getaddrinfo() thread failed to start`；GitHub Desktop的Fetch曾显示“Fetching origin”且长时间未结束，尚未确认本轮状态校正已推送。未强推。
 - HEAD相对完整Apple CI通过提交`f366542242e995ec62b068273da65ab2f7f9f860`仅有交接/Master Matrix文档差异；Swift及测试源码完全相同。因此最近可适用的完整Apple证据仍是Actions run`40648658299`：FCore 139/139、XcodeGen成功、Device Build成功、Simulator Build成功、UI XCTest 3/3、截图导出及未签名IPA ZIP检查成功。该证据覆盖当前相同源码树，但没有在文档/撤销提交上重跑CI。
 - 推送过程中GitHub Desktop曾意外将临时`focused-tests.log`提交为`7504ac5`。未改写历史；随后普通提交`6eede46`已撤销该文件，GitHub API确认撤销提交在远端。当前仓库内没有该临时日志，工作树CLEAN。
 - 已编码且由上述CI源码覆盖：T Contribution的成交时间/顺序保护、逐笔手续费追加更正与历史重放、十套首页layout/共享role renderer。Apple Build/XCTest证据如上；十主题截图差异、真实账本App操作和人工图表手势仍未验收。

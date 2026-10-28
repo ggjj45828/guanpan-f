@@ -4,7 +4,7 @@
 
 | 验收项 | 当前证据 | 状态 |
 |---|---|---|
-| 本地/远端同步 | 远端`main=6eede46391fe336464dd7e129d0d5b7751bd47c3`；本地HEAD=`0bf23f5`，仅增加交接/矩阵的NAS定向测试记录，当前ahead 1且tracked工作树CLEAN。命令行普通push仍报DNS线程启动失败，尚未确认新文档提交已推送。`7504ac5`误含临时诊断日志，已用普通撤销提交`6eede46`移除；未改写历史 | 修复提交已同步；本轮交接更新待推送；临时文件已从当前树移除 |
+| 本地/远端同步 | GitHub API确认远端`main=94bdb8e0090e5c2b5be91cafeef8fb07d887ad8e`；本地正在其上追加纯文档状态校正，完成后ahead 1。命令行普通push报DNS线程启动失败，GitHub Desktop Fetch曾长时间挂起，本轮状态校正是否推送尚未确认。`7504ac5`误含临时诊断日志，已用普通撤销提交`6eede46`移除；未改写历史 | 撤销提交已同步；当前交接校正待推送；临时文件已从当前树移除 |
 | Apple CI | 当前源码树与CI通过HEAD`f366542242e995ec62b068273da65ab2f7f9f860`一致；run`40648658299`真实执行FCore 139/139、XcodeGen、Device Build、Simulator Build、UI XCTest 3/3、截图导出、未签名IPA检查均成功 | 源码已由完整CI验证；当前文档/撤销提交未单独重跑 |
 | NAS历史分钟定向逻辑 | 本轮两批Python共13/13通过：exact-date查询、有限补采状态、provider coverage终态、质量/置信度、Research Evidence时点门控/紧凑契约/摘要digest、Eastmoney日期/成交量解析与exact-date请求；本机SQLite测试需将临时目录放在F工作区。更宽provider suite因日历存储测试挂起而中断，未计通过；未访问真实provider/NAS | 定向代码测试通过；真实历史数据获取及NAS→iOS→Evidence E2E未验证 |
 | 手工Simulator/真机 | CI自动截图附件存在；本轮未人工逐图审阅。没有Windows本机Xcode/Simulator或真机证据 | External Pending |
