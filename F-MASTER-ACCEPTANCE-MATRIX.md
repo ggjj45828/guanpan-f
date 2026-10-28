@@ -6,7 +6,7 @@
 
 - 新增多主题/多布局架构设计：[F-THEME-LAYOUT-MANIFEST-DESIGN.md](F-THEME-LAYOUT-MANIFEST-DESIGN.md)。既有5套首页分支加上5个新增方向，共规划10套；Theme/Layout Manifest注册、共享role renderer及Simulator结构差异验收均尚未实现/验证。该事项排在当前Ledger、Apple CI、NAS历史分钟iOS链路和DeepSeek闭环之后，不新增主题Swift代码。
 
-- 本轮新增代码以HEAD `72593282cf403840b06a337b934fde9ee8b9d48a`为基准；本地相对缓存`origin/main` ahead 11，fetch失败（DNS thread启动错误），远端实时状态未知。T与手续费修正Swift/测试及验收文档在当前工作树未提交；锁定临时目录未动。
+- 手续费更正实现/测试已提交于`a84c41976ed094a5fe91b8d9185167b848a8a836`；当前相对缓存`origin/main` ahead 12。远端已指向转移后的`ggjj45830/guanpan-f`，最新fetch因DNS thread启动错误失败，远端实时状态未知；本轮之后仅同步验收文档，受保护临时目录未动。
 - T Contribution现按时间排序和FIFO批次只匹配先卖后买的实际配对份额；1000卖/500买回只计500及按比例卖出费；普通卖出/减仓不当作T；买回早于卖出或买回量超过此前剩余卖量保持Unavailable。源码/测试位置：`Sources/FCore/DailyTradeSummary.swift`、`Tests/FCoreTests/LedgerSchemaTests.swift`。
 - FCore测试定义方法当前静态计数138。当前工作树compile、XCTest执行、passed/failed均无执行证据；旧CI #41 `40622847995`（130/130）仅验证`7a2d63e`，不能覆盖T FIFO或手续费修正。App/UI旧CI数据同样不验证本轮Swift修改。本机无Swift/Xcode/XcodeGen。
 - 事后手续费修正已编码，仍未编译/执行：原始fill和原始`costBasisRemoved`保持不变；追加事件负责补录时现金结算，经济投影按有效费用回算basis/已实现和Episode结果。新增6项测试定义，覆盖买入费用补录/冲回、部分卖出basis、卖出手续费、跨Episode隔离、清仓卖出手续费补扣/退回、Writer/Archive恢复和负现金原子拒绝。UI XCTest/Simulator验证仍缺。
