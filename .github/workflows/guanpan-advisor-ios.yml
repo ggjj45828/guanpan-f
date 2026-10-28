@@ -136,7 +136,6 @@ jobs:
               icon_files = primary.get("CFBundleIconFiles", [])
           icon_files = icon_files or info.get("CFBundleIconFiles", [])
           print(f"IPA validation: bundle icon name={icon_name!r}; icon files={icon_files!r}")
-          source_manifest = pathlib.Path("GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json")
           if icon_name == "AppIcon":
               print("IPA validation: built Info.plist selects AppIcon")
           elif icon_files:
@@ -150,7 +149,7 @@ jobs:
               print(f"Info.plist icon-related keys: {[key for key in info if 'Icon' in key]!r}", file=sys.stderr)
               raise SystemExit("Built Info.plist does not select AppIcon or declare primary icon files")
           PY
-          python3 - GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json <<'PY'
+          python3 - Assets.xcassets/AppIcon.appiconset/Contents.json <<'PY'
           import json
           import pathlib
           import sys
@@ -165,11 +164,6 @@ jobs:
           print("IPA validation: source AppIcon manifest and PNG are valid")
           PY
           echo "Verified installed app label: $DISPLAY_NAME"
-          mkdir -p build/Package/Payload
-          cp -R "$APP_PATH" build/Package/Payload/
-          cd build/Package
-          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
-          unzip -t ../观盘max.ipa
           mkdir -p build/Package/Payload
           cp -R "$APP_PATH" build/Package/Payload/
           cd build/Package
