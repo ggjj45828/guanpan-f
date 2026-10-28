@@ -12,7 +12,6 @@ targets:
     platform: iOS
     sources:
       - Sources
-    resources:
       - Assets.xcassets
     dependencies:
       - package: GuanpanFCore
