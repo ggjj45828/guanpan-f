@@ -115,8 +115,9 @@ jobs:
             exit 1
           fi
           DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
-          test "$DISPLAY_NAME" = "观盘max"
-          test -s "$APP_PATH/Assets.car"
+          echo "IPA validation: display name=<$DISPLAY_NAME>"
+          if [ "$DISPLAY_NAME" != "观盘max" ]; then echo "Unexpected app display name" >&2; exit 1; fi
+          if [ ! -s "$APP_PATH/Assets.car" ]; then echo "Compiled Assets.car is missing" >&2; exit 1; fi
           python3 - GuanpanFApp/Assets.xcassets/AppIcon.appiconset/Contents.json <<'PY'
           import json
           import pathlib
@@ -126,21 +127,24 @@ jobs:
           manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
           images = manifest.get("images", [])
           icon = next((item for item in images if item.get("filename") == "AppIcon.png"), None)
-          assert icon is not None, "AppIcon.appiconset must reference AppIcon.png"
-          assert icon.get("idiom") == "universal" and icon.get("platform") == "ios", "AppIcon must target universal iOS"
-          assert (manifest_path.parent / "AppIcon.png").is_file(), "AppIcon.png is missing"
+          if icon is None or icon.get("idiom") != "universal" or icon.get("platform") != "ios":
+              raise SystemExit("AppIcon manifest must reference a universal iOS AppIcon.png")
+          if not (manifest_path.parent / "AppIcon.png").is_file():
+              raise SystemExit("AppIcon.png is missing from the app icon set")
+          print("IPA validation: source AppIcon manifest and PNG are valid")
           PY
-          xcrun assetutil --info "$APP_PATH/Assets.car" > "$RUNNER_TEMP/app-assets.json"
-          python3 - "$RUNNER_TEMP/app-assets.json" <<'PY'
-          import json
-          import sys
-
-          renditions = json.load(open(sys.argv[1], encoding="utf-8"))
-          assert any(item.get("Name") == "AppIcon" or item.get("RenditionName") == "AppIcon" for item in renditions), \
-              "Compiled Assets.car does not contain the AppIcon rendition"
-          PY
-          echo "Verified installed app label: $DISPLAY_NAME"
-          echo "Verified compiled app icon set: $ICON_NAME (Assets.car present)"
+          if ! xcrun assetutil --info=AppIcon "$APP_PATH/Assets.car" > "$RUNNER_TEMP/app-icon-rendition.json" 2> "$RUNNER_TEMP/assetutil-error.log"; then
+            echo "Compiled Assets.car does not expose the AppIcon rendition:" >&2
+            cat "$RUNNER_TEMP/assetutil-error.log" >&2
+            exit 1
+          fi
+          python3 -m json.tool "$RUNNER_TEMP/app-icon-rendition.json" > /dev/null
+          echo "IPA validation: compiled AppIcon rendition found"
+          mkdir -p build/Package/Payload
+          cp -R "$APP_PATH" build/Package/Payload/
+          cd build/Package
+          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
+          unzip -t ../观盘max.ipa
           mkdir -p build/Package/Payload
           cp -R "$APP_PATH" build/Package/Payload/
           cd build/Package
