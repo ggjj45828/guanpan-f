@@ -811,5 +811,27 @@ NAS历史数据完成度：最近定向Python 77/77通过；历史分钟到iOS/�
 Apple编译验证：最新失败run为Device Build exit 65；第一处根因已定位为nil缺显式Optional上下文；修复待CI
 当前测试：FCore CI步骤成功（130项套件）；App UI本次执行0；Python/NAS最近77 passed / 0 failed（定向）
 最大缺口：验证最小编译修正；之后Device/Simulator Build与UI XCTest；真实NAS分钟与DeepSeek闭环
-下一步：本地修复提交为`93bc5da`；GitHub连接恢复后普通推送，再检查新CI并继续处理真实编译错误
+下一步：修复提交`7a2d63e`已普通推送并通过完整Apple CI；继续Simulator人工验收及真实服务E2E
+F_CURRENT_STATUS_END
+
+## 2026-10-28 Apple CI 全链路通过
+
+- 修复提交 `7a2d63e98927f9cf16fd40a5597d618741df1640` 已推送并与远端`main`一致；GitHub Actions run `40622847995` 全部成功。
+- FCore：130 defined / 130 executed / 130 passed / 0 failed。XcodeGen成功。
+- Device Release Build成功；Simulator Build成功；App navigation UI XCTest 3 defined / 3执行成功 / 0失败；Simulator截图导出成功；未签名IPA打包成功；CI证据artifact上传成功。
+- 这是自动CI/Simulator验证，不等于人工截图审查、手势人工验收或真机验收。真实NAS历史分钟、腾讯实时行情、DeepSeek E2E仍未验证。
+
+F_CURRENT_STATUS_BEGIN
+当前开发阶段：Apple自动验证链全绿；转入Simulator截图/交互验收与真实服务联调
+当前正在开发：读取CI截图证据并准备人工可用性验收；随后继续NAS历史分钟与DeepSeek真实闭环
+刚刚完成：修复HomeDestination P&L Optional类型推断；Apple CI全链路通过
+未提交工作：实时交接更新；锁定临时目录保持原样
+iOS完成度：FCore 130/130通过；XcodeGen通过；Device Release Build通过；Simulator Build通过；UI XCTest 3/3通过；未签名IPA打包通过
+AI顾问完成度：本轮未改Advisor；真实DeepSeek与成交后重新判断未验证
+统一图表完成度：代码继续共享renderer；CI UI通过不代表K柱手势/缩放/横屏已人工验收
+NAS历史数据完成度：定向Python最近77/77通过；真实NAS历史分钟iOS查询及Research Evidence链未验证
+Apple编译验证：run 40622847995全部步骤成功，含Device、Simulator、UI Test和IPA
+当前测试：FCore 130 defined / 130 executed / 130 passed / 0 failed；App UI 3 defined / 3 executed成功 / 3 passed / 0 failed；Python/NAS最近77 executed / 77 passed / 0 failed（定向）
+最大缺口：人工Simulator截图/手势验收；真实NAS历史分钟进入iOS研究链；真实DeepSeek Portfolio/Security→Candidate→用户成交→Ledger→复判
+下一步：获取并人工检查CI截图；继续检查页面入口、图表交互、资产Episode/现金流程；随后按顺序做NAS/行情和DeepSeek实网联调
 F_CURRENT_STATUS_END
