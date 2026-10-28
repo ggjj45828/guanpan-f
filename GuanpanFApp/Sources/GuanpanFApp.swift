@@ -521,12 +521,6 @@ final class FHomeModel: ObservableObject {
             var guardFindings = modelAssessment.guardResult.findings
             let changesAssets = [.buy, .sell, .dayTrade, .grid].contains(modelAssessment.candidate.action)
             let candidateCode = modelAssessment.candidate.instrumentCode
-            if changesAssets {
-                let minimumEstimatedFee: Decimal = modelAssessment.candidate.action == .dayTrade ? 0.20 : 0.10
-                if modelAssessment.candidate.estimatedFee < minimumEstimatedFee {
-                    guardFindings.append(.invalidCandidate)
-                }
-            }
             let hasQualifiedInstrumentResearch = context.usableResearchEvidence(at: Date()).contains {
                 $0.envelope.securityCode == candidateCode && $0.envelope.market == "CN"
             }

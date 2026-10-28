@@ -1,5 +1,11 @@
 # F 实时进度交接
 
+## 2026-10-28 Advisor费用估算静态修正（最新工作树）
+
+- Advisor/App 代码审查发现，Candidate费用估算曾被额外硬拦截：普通交易至少`¥0.10`、做T至少`¥0.20`。这把可修改的参考费率误当作硬规则，会拒绝真实券商费率更低的候选。
+- 已移除该固定下限拦截。Candidate `estimatedFee`仍受既有非负/有效性校验；它只是估算。用户确认真实成交时仍必须录入真实fee，事后差额仍走追加式Ledger费用更正事件。未改Ledger语义，也未开放Candidate写账。
+- 该Swift修改尚未编译、未执行App/XCTest；本机无Swift/Xcode/XcodeGen。FCore测试定义仍138，App UI定义仍3；当前代码修改没有新Apple执行证据。CI恢复后需与手续费更正一起跑完整Apple链。
+
 ## 2026-10-28 NAS补采队列重启收敛修复（最新工作树）
 
 - 静态审查发现：worker启动会重新调用`enqueue_initial_history`；该UPSERT会把`out_of_provider_coverage`、`permanent_unavailable`、`partial`等终态重新置为queued。容器每次重启都可能重新尝试同一批已知空响应日期，削弱此前的有限重试收敛。

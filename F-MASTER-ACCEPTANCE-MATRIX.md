@@ -2,6 +2,8 @@
 
 ## 当前工作树续更（2026-10-28；以本段为最新状态）
 
+- Advisor静态查漏已移除Candidate估算费必须≥¥0.10/做T≥¥0.20的硬拦截；实际成交费仍以用户确认的真实金额为准。该Swift修改尚未Apple编译/UI验收，需随手续费更正送CI。
+
 - NAS队列静态查漏发现容器重启会重排`permanent_unavailable`/`out_of_provider_coverage`终态。当前已修正为自动启动保留终态，显式补采仍可重试；Python定向用例2/2通过。未做真实NAS部署验证，历史provider覆盖没有变化。
 - 已生成`../F-NAS-QUEUE-RETRY-FIX.zip`（20文件、56,680字节；ZIP完整性及关键NAS源码存在检查通过），供用户部署修复；未构建Docker镜像、未部署NAS。
 
@@ -15,7 +17,7 @@
 - 事后手续费修正已编码，仍未编译/执行：原始fill和原始`costBasisRemoved`保持不变；追加事件负责补录时现金结算，经济投影按有效费用回算basis/已实现和Episode结果。新增6项测试定义，覆盖买入费用补录/冲回、部分卖出basis、卖出手续费、跨Episode隔离、清仓卖出手续费补扣/退回、Writer/Archive恢复和负现金原子拒绝。UI XCTest/Simulator验证仍缺。
 - NAS历史分钟进入iOS/Research Evidence、DeepSeek真实E2E、Candidate→确认成交→Ledger→Advisor复判、Simulator人工手势/视觉仍未通过真实端到端验收；人工Simulator为External Pending。
 
-## 当前工作树状态（2026-10-28；优先于下方历史快照）
+## 较早工作树快照（2026-10-28；已由上方续更覆盖，保留供追溯）
 
 - Tools全量Python现有测试本轮实际执行112项：105 passed / 2 failed / 5 errors。失败/错误来自Windows POSIX目录fsync不兼容及运行时缺PyYAML；详见实时交接。此结果不能表述为全部通过。
 - NAS分钟定向测试最近一次真实执行97项：92 passed / 2 failed / 3 errors。localhost和硬链接限制在较宽权限重跑后解除；剩余均为Windows目录fd/fsync差异，Linux NAS/CI待验证。较早受限执行为89/2/6；均非全套NAS通过。
@@ -25,7 +27,7 @@
 - 用户日志`logs_110101703179.zip`：FCore 130项中1项失败，原因是旧断言错误期待清仓后Broker Display Cost变为nil，实际保留`10.35`符合证券级对账语义。后续`logs_110103476656.zip`中FCore 130/130通过，但Device Build首错是`HomeExperience.swift:354` Optional类型缺上下文；该项后来由`7a2d63e`修复，run `40622847995`提供后续全绿证据。
 - 本地Windows没有Swift/Xcode/XcodeGen/Simulator。无本轮人工Simulator/真机验收。Python/NAS最近可用证据为定向77/77 passed（非全套；环境受限项未计通过）；本轮未重跑。实时分钟有NAS部署归档证据，历史分钟provider空响应/断连，历史分钟NAS→iOS→Research Evidence仍未E2E；真实DeepSeek及成交后AI复判未E2E。
 - 已完成的当前源码审计：T Contribution原实现只核对周期总卖出/买回数量，未约束实际顺序；当前本地版本已按成交时间逐笔确认先卖后买、买回数量不超过尚未买回卖出量，并增加反序回归断言。该修正仅为已编码/未验证。Advisor与FLedgerWrite依赖隔离，Candidate不能直接写Ledger；真实fill仍要求用户填写实际成交和显式确认。
-- 费用差额对账的边界已登记：原fill不变，成交费用修正追加审计事件；现金差额在补录时结算，证券成本/损益按原成交事实确定性回算。当前只有成交时录入实际fee及券商显示成本纠正；事后fee adjustment模型/UI/测试尚未实现。安全重放设计需要处理历史卖出`costBasisRemoved`严格校验，不得只补现金流水。
+- 当时对费用差额对账的静态设计发现仍未实现；该历史状态已由上方当前续更覆盖：事后fee adjustment模型、资产页UI与6项回归测试已编码，并记录在提交`a84c419`，仍待Apple编译/执行。
 - 当前最高缺口：①把T顺序修正送Apple CI；②事后手续费差额与原成交日盈亏/剩余成本的一致回算；③NAS历史分钟进入iOS并供Research Evidence/DecisionContext使用；④Simulator人工交互/视觉验收；⑤真实DeepSeek Candidate→用户成交→Ledger→重新判断闭环。
 
 ## 最新实时CI与工作树状态（2026-10-27 15:19 Asia/Shanghai）
