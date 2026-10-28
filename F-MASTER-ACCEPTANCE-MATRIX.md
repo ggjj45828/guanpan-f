@@ -3,6 +3,7 @@
 ## 当前工作树续更（2026-10-28；以本段为最新状态）
 
 - 新增现金-only对账入口已编码：用户选择增加/减少方向，填写正数金额、原因和确认说明，经`FConfirmedLedgerWriter.confirmCashMovement`追加现金流水；证券成本、持仓数量及盈亏不受影响，更新后旧Candidate失效。当前仅为静态源码存在；未Apple编译、未执行UI/XCTest或人工操作验证。
+- 新增一项FCore回归定义`testCashOnlyReconciliationLeavesSecurityPositionsAndCostsUnchanged`，验证未归属现金费用只影响现金，不改变持仓、成本、成交及逐笔费用更正记录。FCore静态定义数为139；新增测试尚未编译/执行。
 
 - 本轮NAS回补队列与实时session边界回归实际执行9项通过：runtime 5/5；队列终态/有限重试/显式重试/近期窗口4/4。provider全套16项为13通过、2失败、1错误；archive 44项为42通过、2错误；service 33项为30通过、3错误，失败/错误受当前Windows环境的目录句柄、硬链接和localhost socket能力限制，详见`F-REALTIME-HANDOFF.md`。不将这些受限套件记作全绿，也不据此声称NAS真实历史数据端到端完成。
 - GitHub同步再次失败：本地HEAD仍为`a5a8557c64f7cc43e09a38d570c752e4d915d058`，`origin/main`仅为缓存跟踪点且本地ahead 19；多次fetch均报`getaddrinfo() thread failed to start`，远端HEAD未知，未reconcile/未push/未触发Apple CI。

@@ -978,6 +978,7 @@ F_CURRENT_STATUS_END
 - Advisor/Ledger写入静态边界复核：SwiftPM依赖图仅让`FAdvisor`依赖`FCore`，`FLedgerWrite`独立依赖`FCore`；Candidate创建回归检查账本digest不变；App中fill和手续费更正都显式进入`FConfirmedLedgerWriter`。本轮未发现Advisor/Candidate写账本旁路；此为源码/测试定义审查，未运行XCTest或Apple编译。
 - 新增现金only对账入口：资产流水按钮可录入未归属到单笔成交的现金差额，明确选择增加/减少方向、输入正数金额、原因与确认说明；写入使用已有确认现金流水Writer，不修改证券成本、数量或盈亏，并在成功后失效旧Candidate/Advisor结果。该Swift UI修改尚未Apple编译或运行；Linux/真实设备行为未验证。
 - 随后修正现金对账的状态反馈：成功/失败状态使用独立`cashAdjustmentStatus`，表单关闭后仍显示在资产流水区域；费用更正和成交确认各自继续使用原有状态字段。仅做静态差异检查，未运行Swift编译或UI测试。
+- 新增FCore XCTest定义`testCashOnlyReconciliationLeavesSecurityPositionsAndCostsUnchanged`，验证现金only费用差额只改现金、保留持仓/成本/ fills/费用修正事件；静态测试定义总数从138增至139。新测试未编译/未执行，当前Apple环境仍不可用。
 
 F_CURRENT_STATUS_BEGIN
 当前开发阶段：Ledger费用对账收口；Apple CI同步仍因网络错误不可用

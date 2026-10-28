@@ -144,6 +144,24 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNoThrow(try book.validate(now: now))
     }
 
+    func testCashOnlyReconciliationLeavesSecurityPositionsAndCostsUnchanged() throws {
+        let position = FPosition(instrumentCode: "510300", name: "沪深300ETF", units: 100,
+                                 bookCost: Decimal(string: "385.25")!)
+        let source = FAccountBook(openingSnapshot: opening(cash: 1000, positions: [position]),
+                                  cashBalance: 1000, positions: [position], updatedAt: now.addingTimeInterval(-60))
+        let movement = FCashMovement(sequence: 1, occurredAt: now, amount: -2.35,
+                                     reason: "其他费用/现金对账：无法归属到单笔成交的账户费用",
+                                     userConfirmation: confirmation())
+
+        let updated = try source.applyingUserConfirmedCashMovement(movement, now: now)
+
+        XCTAssertEqual(updated.cashBalance, Decimal(string: "997.65")!)
+        XCTAssertEqual(updated.positions, source.positions)
+        XCTAssertEqual(updated.fills, source.fills)
+        XCTAssertEqual(updated.feeAdjustments, source.feeAdjustments)
+        XCTAssertEqual(updated.cashMovements, [movement])
+    }
+
     func testEventSequenceControlsSameTimestampCashAndFillOrder() throws {
         let timestamp = now.addingTimeInterval(-30)
         let fill = FConfirmedFill(sequence: 2, tradedAt: timestamp, instrumentCode: "510300",
