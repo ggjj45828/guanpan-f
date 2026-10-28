@@ -13,9 +13,9 @@ final class CandidateShadowScorecardTests: XCTestCase {
             advisorConclusion: "等待回落到计划买入区", targetPriceZone: zone,
             invalidationPrice: 1.08, validUntil: base.addingTimeInterval(3_600))
         var record = FCandidateShadowRecord(snapshot: snapshot)
-        try record.appendMarketObservation(quote("1.104", at: base.addingTimeInterval(60)))
-        try record.appendMarketObservation(quote("1.110", at: base.addingTimeInterval(360)))
-        try record.appendMarketObservation(quote("1.115", at: base.addingTimeInterval(900)))
+        try record.appendMarketObservation(quote("1.104", at: 60))
+        try record.appendMarketObservation(quote("1.110", at: 360))
+        try record.appendMarketObservation(quote("1.115", at: 900))
 
         let result = record.evaluation(asOf: base.addingTimeInterval(901))
         XCTAssertEqual(result.status, .triggered)
@@ -36,7 +36,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
             advisorConclusion: "等待", targetPriceZone: zone,
             validUntil: base.addingTimeInterval(3_600))
         var record = FCandidateShadowRecord(snapshot: snapshot)
-        try record.appendMarketObservation(quote("1.104", at: base.addingTimeInterval(600)))
+        try record.appendMarketObservation(quote("1.104", at: 600))
 
         let asOfBeforeQuote = record.evaluation(asOf: base.addingTimeInterval(300))
         XCTAssertEqual(asOfBeforeQuote.freshObservationCount, 0)
@@ -72,7 +72,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let snapshot = try FCandidateShadowSnapshot(candidate: candidate, context: context,
             advisorConclusion: "今天不交易", validUntil: base.addingTimeInterval(1_800))
         var record = FCandidateShadowRecord(snapshot: snapshot)
-        try record.appendMarketObservation(quote("1.20", at: base.addingTimeInterval(300)))
+        try record.appendMarketObservation(quote("1.20", at: 300))
 
         let result = record.evaluation(asOf: base.addingTimeInterval(1_801))
         XCTAssertEqual(result.status, .insufficientData,
@@ -152,7 +152,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
             validUntil: base.addingTimeInterval(600))
         var archive = FCandidateShadowArchive()
         try archive.append(snapshot)
-        try archive.appendMarketObservation(quote("1.120", at: base.addingTimeInterval(120)))
+        try archive.appendMarketObservation(quote("1.120", at: 120))
 
         let evaluation = archive.records[0].evaluation(asOf: base.addingTimeInterval(601))
         let summary = archive.scorecard(since: base, asOf: base.addingTimeInterval(601))
@@ -168,7 +168,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let snapshot = try FCandidateShadowSnapshot(candidate: candidate, context: context,
             advisorConclusion: "限价观察", validUntil: base.addingTimeInterval(3_600))
         var record = FCandidateShadowRecord(snapshot: snapshot)
-        try record.appendMarketObservation(quote("1.103", at: base.addingTimeInterval(60)))
+        try record.appendMarketObservation(quote("1.103", at: 60))
 
         let result = record.evaluation(asOf: base.addingTimeInterval(61))
         XCTAssertEqual(result.status, .triggered)
@@ -185,9 +185,9 @@ final class CandidateShadowScorecardTests: XCTestCase {
             validUntil: base.addingTimeInterval(120))
         var archive = FCandidateShadowArchive()
         try archive.append(snapshot)
-        try archive.appendMarketObservation(quote("1.104", at: base.addingTimeInterval(60)))
-        try archive.appendMarketObservation(quote("1.108", at: base.addingTimeInterval(360)))
-        try archive.appendMarketObservation(quote("1.115", at: base.addingTimeInterval(3_660)))
+        try archive.appendMarketObservation(quote("1.104", at: 60))
+        try archive.appendMarketObservation(quote("1.108", at: 360))
+        try archive.appendMarketObservation(quote("1.115", at: 3_660))
 
         let evaluation = archive.records[0].evaluation(asOf: base.addingTimeInterval(3_661))
         let summary = archive.scorecard(since: base, asOf: base.addingTimeInterval(3_661))
