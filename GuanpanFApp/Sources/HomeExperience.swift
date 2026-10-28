@@ -1115,6 +1115,7 @@ struct AdvisorOverview: View {
                     Text("本次可用上下文").font(.headline)
                     LabeledContent("真实账本", value: model.ledgerStatus)
                     LabeledContent("持仓行情", value: model.holdings.isEmpty ? "暂无证券行情请求" : "按持仓证券逐项获取")
+                    LabeledContent("建议成绩单", value: model.candidateShadowJournalStatus)
                     LabeledContent("NAS 历史研究", value: model.nasResearchStatus)
                     LabeledContent("新闻", value: "新闻源尚未接入")
                     HStack {
@@ -1128,6 +1129,31 @@ struct AdvisorOverview: View {
                 .font(.subheadline)
                 .padding(16)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("决策成绩单 · 最近30天").font(.headline)
+                    if let summary = model.candidateShadowSummary {
+                        LabeledContent("建议记录", value: "\(summary.candidateCount) 条 · WAIT \(summary.waitCount)")
+                        LabeledContent("触发 / WAIT机会 / 未触发", value: "\(summary.triggeredCount) / \(summary.opportunityObservedCount) / \(summary.notTriggeredCount)")
+                        LabeledContent("已过期 / 观察完成", value: "\(summary.expiredCount) / \(summary.observationWindowCompleteCount)")
+                        LabeledContent("真实执行", value: "已关联 \(summary.executedCount) · 已复核未执行 \(summary.unexecutedCount) · 尚未核实 \(summary.executionUnknownCount)")
+                        LabeledContent("Advisor原始方向可评价样本", value: "\(summary.evaluableDirectionalCount) · 正向 \(summary.favorableDirectionalCount)")
+                        Text("当前仅评价DeepSeek原始建议的方向性市场结果，不是最终Guard建议胜率或账户收益；没有成交关联不代表确认未执行。")
+                            .font(.caption).foregroundStyle(.secondary)
+                        let perSecurity = summary.bySecurity.keys.sorted().map { code in
+                            let value = summary.bySecurity[code]!
+                            return "\(code) · \(value.candidateCount) 条 · 触发 \(value.triggeredCount) · WAIT机会 \(value.opportunityObservedCount) · 可评价 \(value.evaluableDirectionalCount)"
+                        }.joined(separator: "\n")
+                        if !perSecurity.isEmpty {
+                            Text(perSecurity).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text(model.candidateShadowJournalStatus).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Text("AI建议、市场走势和用户真实成交分别记录。影子成绩单只跟踪真实行情与成交编号，不生成模拟现金、持仓或收益，也不修改Ledger。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
                 Text("发送时重新读取本机真实账本和标的行情，再构建 DecisionContext 并运行 Risk Guard / AI Guard；NAS 研究仅在配置且可用时附加。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -1135,6 +1161,7 @@ struct AdvisorOverview: View {
         }
         .navigationTitle("AI 私人投资顾问")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await model.refreshCandidateShadowSummary() }
     }
 }
 

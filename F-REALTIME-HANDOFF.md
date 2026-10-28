@@ -1,19 +1,39 @@
 # F实时进度交接
 
-> 本文件顶部记录当前工作树快照；详细历史记录已原样保存在 [F-REALTIME-HANDOFF-HISTORY.md](F-REALTIME-HANDOFF-HISTORY.md)，只供追溯，不代表当前源码或验证状态。
+## 权威当前状态覆盖（2026-10-28，本节优先于下方旧快照）
 
-## 2026-10-28 全面缺口盘点与本轮源码整改（当前真实工作树）
+- 本地分支 `main` 包含本轮完整实现提交，工作树干净、尚未push。已fetch确认 `origin/main=b099c9d0d9c703f56540b6fa4d3d30cfbb3ddefe`，本地分支ahead 1 / behind 0；接下来普通push即可，不需要强推。
+- Run [40710039609](https://github.com/ggjj45828/guanpan-f/actions/runs/40710039609)指向基线SHA；run结论failure但唯一job结论为cancelled、没有执行步骤。它没有编译/测试当前本地提交，也不能称为源码失败。Windows没有Swift/Xcode工具链。
+- 当前定义数：FCore 164项、App UI 3项；本轮增加11项Shadow XCTest定义。当前本地提交尚无Apple执行结果（executed=0 / passed=0 / failed=0）；旧140/140等历史数字不适用。
+- 新定稿见`F-DECISION-SYSTEM-FINAL-ARCHITECTURE.md`，覆盖冲突旧要求：NAS只是可选同步/归档/备份；Advisor不依赖NAS；核心决策为双速本地Quant/Guard/Trigger与DeepSeek慢通道。真实Ledger仍只由用户确认成交写入。
+- Shadow首段已编码、未编译：Candidate快照不可变；保存DeepSeek建议和最终Guard动作；记录可信报价及无未来数据的5/15/30/60分钟观察、MFE/MAE、真实Fill ID；用户未执行必须显式复核，缺关联仍为未知。无模拟账户、无Ledger写权限。
+- Shadow仍不完整：行情仅在App请求刷新时稀疏采样；无连续行情订阅、收盘评价、Hold/机会成本基准、结构化WAIT规则、真实Quant输出层拆分、策略/Regime分层评分；当前方向性计数不能称胜率或收益。NAS服务端未修改。
+- 本轮Shadow边界修正：只有实际触发后的价格变化才计入5/15/30/60分钟方向结果；Candidate有效期到期与触发后的观察窗口完成分开记录；无触发且到期的建议单独计数，不把未触发误认为成功。已有回归覆盖5分钟采样时间和“已过期、结果观察仍完成”的并存。
+- 本轮修改文件：`Sources/FAdvisor/CandidateShadowScorecard.swift`、`Tests/FCoreTests/CandidateShadowScorecardTests.swift`、`GuanpanFApp/Sources/GuanpanFApp.swift`、`GuanpanFApp/Sources/HomeExperience.swift`及架构/交接/矩阵/差距文档。当前FCore测试定义164、App UI定义3；当前工作树尚未编译或运行测试。
+- 静态核对：`git diff --check`通过；全仓测试定义总计167（FCore 164 + UI 3），不是执行结果。Windows无Swift/Xcode/XcodeGen；尚无本轮编译、XCTest、Simulator或IPA证据。
+- 下一步：已fetch确认远端仍为基线，下一步普通push，以当前新SHA重新跑FCore、XcodeGen、Device/Simulator Build、UI XCTest和IPA。CI通过不代表人工Simulator、iPhone Air或真实DeepSeek链路通过。
 
-- 当前实际HEAD仍为`e500fc84f6dd8acf93cc32305aefcff28e700f4e`；GitHub Desktop 已于本轮 Fetch，确认 `origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`，本地 `main` 相对远端 ahead 1 / behind 8，属于分叉，尚未合并/推送/提交。远端8个提交包含首页、IPA/AppIcon/CI修正；已检查提交摘要，合并前仍需解决首页源码交叉修改。禁止强推、回滚或直接Pull覆盖。工作树dirty，包括现存Ledger/Advisor/UI/CI修改及本轮图表语义token与文档整改。
-- 当前定义数FCore=153（其中Realtime Trigger 12项）；当前HEAD executed=0 / passed=0 / failed=0。App UI defined=3，当前HEAD未执行。旧140/140、3/3不能继承到dirty HEAD。Windows无Swift/XcodeGen/xcodebuild；Apple CI未验证当前树。
-- 本轮核查并修正统一图表：MA序列、K线上涨/下跌、完整/部分/过期/不可用质量色，以及本轮成本/券商成本/均价/前收/IOPV/Candidate买卖线改用`FThemeSemanticTokens`。此前矩阵关于“IOPV renderer不绘制/没有图例”的结论不准确：当前代码具备有值时的水平线和图例路径；IOPV真实源仍不可用，所以不得画出假线。
-- App工程源码已配置显示名“观盘max”和F自有AppIcon资源；本HEAD未编译、未打包、未安装，不能确认iPhone桌面已更新。
-- NAS继续是可选同步/归档/扩展研究服务。当前iOS手机HTTPS连接仍由用户报告失败，但本轮没有新的手机错误响应/目标环境复测；不猜原因、不改NAS服务端。NAS故障不得阻断无NAS的基础Advisor。
-- 全面源码/矩阵盘点发现的核心未完成项：完整本地Quant及Risk Guard接线、行情订阅和触发持久化/通知/UI；当前HEAD Apple编译测试；B→F六页体验整改（真实用户结论仍为F明显不如B）；图表横屏/手势/状态恢复人工验收；真实DeepSeek→Candidate→确认成交→Ledger→Advisor复判；可靠新闻/跨市场行情/IOPV等数据源；通知、提醒、备份恢复/跨设备同步；10主题灰度构图与iPhone Air实机验收。具体分类和本轮处置见`F-MASTER-ACCEPTANCE-MATRIX.md`、`F-B-UI-PRODUCT-GAP-AUDIT.md`、`F-B-NON-REGRESSION.md`。
-- 本轮低风险布局/语义整改：CardGrid、Dashboard、FluidGlass的manifest roleOrder已对齐真实布局；Bento/星图/动态Bento本来就是几何/状态条件布局，单一roleOrder无法完全表达。跨市场首页入口不再把NAS状态冒充实时跨市场市场状态。Theme registry尚非纯manifest注册即可扩展；本轮均未编译。
-- `git diff --check`通过。架构边界Python脚本未能启动；不记为通过。未启动Simulator、未人工看截图、未实测iPhone Air、NAS、行情或DeepSeek。源码修改状态为“已编码未编译”。本机无Swift/Xcode/XcodeGen/xcodebuild；只有在安全合并并普通推送到远端后才能得到当前树Apple编译证据。
-- 下一步：Apple CI/远端通道恢复后先安全fetch/reconcile，再普通push；执行当前HEAD FCore → XcodeGen → Device/Simulator Build → UI XCTest。CI恢复前不继续堆大块Swift；优先完成静态差距/文档准确性和可低风险修正项。
 
+> 当前状态以本节记录的工作树和CI为准。其后均为历史追溯，旧HEAD/测试数不得继承。
+
+## 历史状态快照（已由上方当前状态覆盖）
+
+- 历史工作树HEAD为`b099c9d0`；当前本地提交见上方权威状态。
+- 当前Apple CI：Run [40710039609](https://github.com/ggjj45830/guanpan-f/actions/runs/40710039609)，head SHA为基线`b099c9d`，run结论`failure`但唯一job为`cancelled`且无步骤；不构成编译/测试结果。Windows本机没有Xcode/xcodebuild/Swift工具链。
+- 测试定义：FCore XCTest 164项；App UI XCTest 3项。当前HEAD在CI实际执行数、通过数、失败数均尚未产生；旧140/140或其他提交的结果不适用。
+- 前一轮真实Apple CI失败根因为 `HomeExperience.swift` 文件内容被截断/污染并产生连锁编译错误；远端已存在修复提交，现由本Run验证合并后的完整文件。不能在CI启动之前宣称该问题已通过。
+- 本地Quant当前仅有价格区间Trigger状态评估器和12个测试定义；完整因子评分、Risk Guard接线、实时行情订阅、Trigger状态持久化/通知、首页/证券详情接线均未实现。因此资产变化Candidate继续fail-closed。NAS已正式降级为可选同步/归档/增强研究，不是核心顾问前置。
+- 本轮静态缺口：产品完成度仍低于B（用户真实反馈）；六核心页面无新人工截图验收；3套标杆主题未完成视觉验证；真实DeepSeek到真实成交闭环未E2E；NAS手机HTTPS连接仍无新现场结果；Simulator人工交互、iPhone Air、横屏/状态恢复均未验证。
+- 品牌/打包：观盘max显示名、F自有AppIcon与IPA命名已进入当前合并源码；当前HEAD新IPA尚未由CI产出/安装核验，不能当作设备已更新。
+- 正在做：等待Run 40710039609启动；同时按最新Quant可选NAS架构复核未完成项，收敛交接/矩阵中的过期快照。CI恢复后先按实际根因修复并重新跑，不以排队当通过。
+
+## 当前最高未完成项
+
+1. 当前HEAD Apple CI：FCore → XcodeGen → Device Build → Simulator Build → UI XCTest → IPA。
+2. 本地确定性Quant v1及Guard/Trigger/实时行情接线；候选计划要保持无自动下单、无Ledger写权限。
+3. B→F六核心页面体验整改与截图视觉验收：首页、AI、证券详情、图表、资产、行情；当前结论仍是不如B。
+4. 真实DeepSeek + Candidate + 用户确认成交 + Ledger/现金/成本/P&L/T事实更新 + Advisor复判E2E。
+5. iPhone Air/Simulator人工图表手势、横屏/状态恢复及NAS HTTPS实机结果；NAS只作为可选增强。
 ## 2026-10-28 本地Quant触发器第一阶段（本节为当前工作树快照）
 
 - 当前HEAD：`e500fc84f6dd8acf93cc32305aefcff28e700f4e`。分支 `main` 相对本机缓存 `origin/main` 为 ahead 1 / behind 8；该跟踪点未证明是GitHub实时状态。工作树有Swift、测试和文档修改。没有fetch/reconcile或push；不强推、不回滚。

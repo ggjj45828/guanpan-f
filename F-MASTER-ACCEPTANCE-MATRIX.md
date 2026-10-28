@@ -1,13 +1,33 @@
 # F Master Acceptance Matrix
 
-## 当前Git/Apple验证增补（2026-10-28）
+## 2026-10-28 当前工作树权威补记（覆盖下方旧验证快照）
 
-- 已通过 GitHub Desktop 执行 Fetch：本地 HEAD `e500fc84f6dd8acf93cc32305aefcff28e700f4e`，`origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`；本地分支 ahead 1 / behind 8，尚未reconcile、提交或推送。远端包含首页和IPA流水线后续修改；需要先合并并解决可能的首页源码冲突，禁止强推。
-- 当前源码测试定义153 FCore / 3 UI；当前HEAD executed=0、passed=0、failed=0。当前Windows没有Swift/Xcode/XcodeGen/xcodebuild。旧HEAD测试不能继承。
-- 本地静态检查 `git diff --check`通过；这不代表编译。完成安全合并后，将当前全部待审修改普通推送，再执行FCore、XcodeGen、Device Build、Simulator Build、UI XCTest及IPA门。
+- 本地 `main` 已提交本轮代码/文档，工作树干净、尚未push；已fetch确认`origin/main=b099c9d0d9c703f56540b6fa4d3d30cfbb3ddefe`，本地ahead 1 / behind 0。
+- Run `40710039609`的head是上述基线，run conclusion=failure但job实际cancelled、无步骤执行；不能用于当前本地提交验证。
+- 当前定义：FCore 164，UI XCTest 3；本轮新增的11个Shadow测试只定义，当前HEAD执行数/通过数/失败数无结果。旧CI PASS不继承。
+- 新增架构验收：AI建议、Quant信号、市场结果、用户确认成交四者必须分离；Candidate快照不可变；Shadow只存市场事实和成交ID，不可写Ledger；没有Fill关联时Execution=Unknown；明确复核后才可记未执行。NAS为可选能力，不是Advisor依赖。
+- 已编码未编译：本地Candidate Shadow日志、Guard前/最终Advisor动作来源字段、报价事件、生命周期到期与市场观察窗口分别计数、仅触发后计算5/15/30/60分钟方向变化与MFE/MAE、Fill ID链接、每证券描述性计数和AI页展示。
+- 当前方向性评价明确标记为DeepSeek原始Advisor层；没有对Quant Only、Guard后Final Advice、Advisor Override分别形成可解释成绩，也没有Hold基准。
+- 尚未完成：持续行情采样、收盘表现、Candidate基准/Hold与机会成本、策略/Regime成绩分层、真实Quant层输出、结构化WAIT机会规则、显式取消/忽略/部分成交时间线、足量样本和样本外校准。不得称胜率或绩效已验证。
+- 正式架构与优先级详见`F-DECISION-SYSTEM-FINAL-ARCHITECTURE.md`；与旧“NAS Research为Advisor必经”行冲突者均为Superseded。
 
-## 当前工作树补充（2026-10-28；覆盖下方旧的验证状态）
+| 新/合并验收要求 | 源码 / 测试 | 当前状态 | 关闭条件 |
+|---|---|---|---|
+| Advice/Quant/Market/User Execution分离；只有确认Fill进入Ledger | `Sources/FAdvisor/CandidateShadowScorecard.swift`; `GuanpanFApp/Sources/GuanpanFApp.swift`; `Tests/FCoreTests/CandidateShadowScorecardTests.swift` | 已编码未编译；11项定义未执行 | 当前SHA完整Apple CI通过；App层验证无Candidate/Shadow账本副作用 |
+| Candidate原始建议不可变，后续事件追加并防止未来数据泄漏 | 同上 | 已编码未编译；有快照重复拒绝及asOf边界测试 | 增加持久化恢复/数据迁移与事件顺序回归；当前SHA XCTest通过 |
+| 可信报价触发、Stale不触发、计划到期与结果观察窗口分离 | `FCandidateShadowRecord.evaluation(asOf:)` | 已编码未编译；触发/陈旧/过期/触发后5分钟观察测试已定义 | Apple XCTest通过；真实行情采样覆盖和跨市场时区另验 |
+| 成绩单分策略/Regime、Hold基准、收盘机会成本、Advice层对照 | 新架构文档第Shadow章节 | 尚未实现；明确不显示胜率 | 先形成完整数据契约、市场基准与可审计评分实现，再以真实历史/Out-of-Sample验收 |
+| WAIT/NO_TRADE成绩 | 当前无区间规则时保存Candidate但显示不可评分 | 部分编码；无结构化WAIT机会规则不能声称有效 | 结构化机会/失效条件、未触发/机会结果和数据质量规则及回归测试 |
+| 本地Quant/Regime、Risk Guard、Trigger完整快通道 | `F-LOCAL-QUANT-ARCHITECTURE.md` | 只有旧价格区间Trigger；完整Quant/Guard/订阅与通知未完成 | 对照新定稿从最小可解释因子开始，当前处于fail-closed |
+| NAS可选，不再阻断Advisor | `GuanpanFApp/Sources/GuanpanFApp.swift`及NAS客户端 | 既有基础接线；服务E2E仍未验证 | NAS关机/未配置时验证本地核心链正常；不再要求NAS历史分钟作为必经条件 |
 
+## 历史HEAD与验证快照（已由上方当前工作树补记覆盖）
+
+- HEAD `b099c9d0d9c703f56540b6fa4d3d30cfbb3ddefe`，`main`与`origin/main`同步，工作树干净；合并后通过普通push更新远端，没有强推。
+- 历史Apple CI Run `40710039609`指向`b099c9d`；其最终run结论为failure，但唯一job取消且无步骤。它不验证本工作树。
+- 当前定义：FCore XCTest 153；App UI XCTest 3。旧提交140/140及3/3不可继承。
+- NAS降级为可选同步/备份/归档/研究增强；核心链改为实时行情 + 真实Ledger + 本地确定性Quant + Risk Guard + Realtime Trigger + DeepSeek Advisor。当前Quant仅价格区间触发评估器；完整Quant因子、Risk/行情/持久化/UI接线未完成，资产变化Candidate保持fail-closed。
+- 已知主要未完成：当前HEAD Apple CI；Quant/Trigger真实接线；B→F六页体验整改；真实DeepSeek成交闭环；Simulator/iPhone Air手势与视觉验收；NASDAQ/NAS不作为核心前置。细节见下方逐项缺口盘点。
 ## 已知未完成项完整盘点与本轮整改（2026-10-28；当前源树快照）
 
 以下是本轮对当前可读源码、已登记验收矩阵、产品差距审计和实时交接进行交叉核对后的**全部已知缺口**。它不是“全部完成”声明；代码库以外的实机、外部服务和Apple工具链项必须保留待验。下方旧日期段落仅供追溯，若数字或结论冲突，以本段和`F-REALTIME-HANDOFF.md`最新工作树快照为准。

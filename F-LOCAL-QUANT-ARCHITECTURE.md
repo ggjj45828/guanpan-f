@@ -1,5 +1,7 @@
 # 观盘max本地 Quant 与双速决策架构
 
+> 本文件保留本地Quant/双速链路的实现细节。完整的最终投资决策、Candidate、Shadow Score、策略验证与优先级以`F-DECISION-SYSTEM-FINAL-ARCHITECTURE.md`为准；后者取代冲突旧要求。
+
 状态：产品架构已确定；实现分阶段推进。文档完成不代表功能实现或验证完成。
 
 ## 产品决策

@@ -65,6 +65,8 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var nasResearchStatus = "尚未请求"
     @Published private(set) var aiKeyStatus = "未配置 DeepSeek API Key"
     @Published private(set) var advisorStatus = "尚未开始分析"
+    @Published private(set) var candidateShadowJournalStatus = "建议成绩单尚未记录"
+    @Published private(set) var candidateShadowSummary: FCandidateShadowSummary?
     @Published private(set) var isAskingAdvisor = false
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
     @Published var showingLedgerConfirmation = false
@@ -96,6 +98,7 @@ final class FHomeModel: ObservableObject {
     private var decisionMemoryStore: FDecisionMemoryStore?
     private var investorProfileStore: FInvestorProfileStore?
     private var decisionContextStore: FDecisionContextStore?
+    private var candidateShadowJournalStore: FCandidateShadowJournalStore?
     var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
 
     init() {
@@ -111,9 +114,22 @@ final class FHomeModel: ObservableObject {
         decisionMemoryStore = FDecisionMemoryStore(directory: advisorDirectory)
         investorProfileStore = FInvestorProfileStore(directory: advisorDirectory)
         decisionContextStore = FDecisionContextStore(directory: advisorDirectory)
+        candidateShadowJournalStore = FCandidateShadowJournalStore(directory: advisorDirectory)
         aiKeyStatus = (try? FAdvisorAIKeychain.read()) == nil
             ? "未配置 DeepSeek API Key" : "DeepSeek Key 已保存在本机 Keychain"
         Task { await loadLedger(from: store) }
+        Task { await refreshCandidateShadowSummary() }
+    }
+
+    func refreshCandidateShadowSummary(now: Date = Date()) async {
+        guard let candidateShadowJournalStore else { return }
+        do {
+            let archive = try await candidateShadowJournalStore.load()
+            candidateShadowSummary = archive.scorecard(
+                since: now.addingTimeInterval(-30 * 24 * 60 * 60), asOf: now)
+        } catch {
+            candidateShadowJournalStatus = "建议成绩单暂不可读取 · \(error.localizedDescription)"
+        }
     }
 
     private func loadLedger(from store: FAccountBookStore) async {
@@ -397,6 +413,17 @@ final class FHomeModel: ObservableObject {
             let writer = FConfirmedLedgerWriter(store: store)
             _ = try await writer.confirmFill(fill, instrumentName: actualFillInstrumentName,
                                              now: now)
+            if let candidateShadowJournalStore {
+                do {
+                    let link = try FCandidateShadowFillLink(confirmedFillID: fill.id,
+                                                            linkedAt: now, units: units)
+                    try await candidateShadowJournalStore.appendConfirmedExecution(
+                        candidateID: candidate.id, link: link)
+                    await refreshCandidateShadowSummary(now: now)
+                } catch {
+                    candidateShadowJournalStatus = "真实成交已入账；成绩单未能关联成交编号 · \(error.localizedDescription)"
+                }
+            }
             await loadLedger(from: store)
             pendingCandidate = nil
             pendingCandidateScope = nil
@@ -620,6 +647,23 @@ final class FHomeModel: ObservableObject {
                                               rationale: narrative.basis,
                                               conditions: narrative.invalidationConditions,
                                               advisorRequest: request)
+            if let candidateShadowJournalStore {
+                do {
+                    let shadowSnapshot = try FCandidateShadowSnapshot(
+                        candidate: assessment.candidate, context: context,
+                        advisorConclusion: narrative.conclusion,
+                        invalidationConditions: narrative.invalidationConditions,
+                        reasonCodes: uniqueGuardFindings.map { String(describing: $0) },
+                        finalAction: assessment.guardResult.allowedForReview
+                            ? assessment.candidate.action : .wait,
+                        guardAllowed: assessment.guardResult.allowedForReview)
+                    try await candidateShadowJournalStore.append(shadowSnapshot)
+                    candidateShadowJournalStatus = "建议影子记录已保存 · 不影响真实账本"
+                    await refreshCandidateShadowSummary(now: completedAt)
+                } catch {
+                    candidateShadowJournalStatus = "建议已生成，但影子成绩单保存失败 · \(error.localizedDescription)"
+                }
+            }
             let memoryDigest = try await decisionMemoryStore.currentDigest(now: completedAt)
             _ = try await decisionMemoryStore.append(memory, expectedPriorDigest: memoryDigest,
                                                       now: completedAt)
@@ -718,6 +762,19 @@ final class FHomeModel: ObservableObject {
                     } else {
                         marketDataByCode[code] = snapshot
                         marketRefreshStateByCode[code] = "已更新 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
+                    }
+                    if let candidateShadowJournalStore,
+                       let price = snapshot.latestPrice, price > 0 {
+                        do {
+                            let observation = try FCandidateShadowMarketObservation(
+                                securityCode: code, price: price,
+                                quoteTimestamp: snapshot.quoteTimestamp, capturedAt: snapshot.fetchedAt,
+                                source: snapshot.source, timestampTrust: .verifiedExchangeTimestamp,
+                                sessionStatus: FMainlandTradingCalendar.status(at: snapshot.fetchedAt))
+                            try await candidateShadowJournalStore.appendMarketObservation(observation)
+                        } catch {
+                            candidateShadowJournalStatus = "行情更新成功；建议影子行情未记录 · \(error.localizedDescription)"
+                        }
                     }
                 } else {
                     marketRefreshStateByCode[code] = "更新失败 · \(error ?? "来源没有返回数据")"
