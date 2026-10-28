@@ -1,5 +1,12 @@
 # F 实时进度交接
 
+## 2026-10-28 推送尝试最新状态
+
+- 当前本地HEAD为`8dfb656`（`Implement ten home theme layouts`），父链保留此前22个本地提交；当前跟踪点远端`main`为`7a2d63e`，GitHub插件只读确认远端仍以该提交为HEAD，且它是本地提交链祖先。
+- 已提交本轮十主题Manifest/Home布局与交接/矩阵校正。`git fetch origin main`与普通`git push origin main`都因本机`getaddrinfo() thread failed to start`失败；没有强推，也没有通过GitHub内容API压缩/改写提交历史。远端尚未收到`8dfb656`，Apple CI没有因本次提交启动。
+- 工作树已提交文件保持干净；受保护未跟踪目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`仍在且未触碰。由于fetch失败，远端在插件最近一次只读核对之后若有新提交，普通push会由Git服务器拒绝，届时需先重新核对再处理。
+- 主题Swift仍为已编码、未Apple编译；Windows无Swift/Xcode/XcodeGen/Simulator。本地`git diff --cached --check`通过；该检查不是Swift验证。主题截图/人工验收未进行。
+
 ## 2026-10-28 多主题/首页布局首轮Swift落地（当前源码，未编译）
 
 - 新增`GuanpanFApp/Sources/ThemeLayoutManifest.swift`：十个主题ID映射十个layout family；Manifest包含布局描述/信息密度/角色顺序、字体与导航/Advisor/行情/资产/图表容器说明、语义颜色、间距、材质和动效字段。浅色基础token已接线；深色/护眼和Dynamic Type仍明确待实现/验收。

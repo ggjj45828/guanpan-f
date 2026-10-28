@@ -17,6 +17,8 @@
 
 本轮没有新Apple执行证据：FCore最近定义计数139仍是defined，不得改写为passed；本机无Xcode/Simulator。设计文档存在或Swift源码存在均不等同完成验收。
 
+同步补记：主题实现提交为本地`8dfb656`；GitHub API最近核对远端`main=7a2d63e`且为其祖先，但本机fetch/push均因DNS线程启动失败而未完成，故主题改动尚未触发Apple CI。
+
 ## 当前工作树续更（2026-10-28；本段以本文开头主题表及实时交接的较新状态补正）
 
 - 本地HEAD仍为`4f8577b4c405001b6d982d3cd7d4bccc1e18c38e`（只作追溯）。当前工作树有主题/布局Swift及验收文档未提交改动；保护临时目录`.task-python-temp-b252c94955274b7c90bce865b594fca4/`原样未跟踪，未触碰。FCore静态定义计数139；当前未编译主题改动没有新增测试执行证据。当前HEAD没有Apple编译证据；远端实时状态未fetch确认，未推送。
