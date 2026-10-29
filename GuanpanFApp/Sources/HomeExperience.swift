@@ -1419,7 +1419,7 @@ struct RealAssetsOverview: View {
                 assetSummaryRow("真实持仓", value: "\(model.holdings.count) 项")
                 if model.ledgerState == .notEstablished {
                     Button {
-                        model.ledgerWriteStatus = ""
+                        model.clearLedgerWriteStatus()
                         model.showingInitialLedgerSetup = true
                     } label: {
                         Label("录入现有持仓", systemImage: "plus.circle.fill")

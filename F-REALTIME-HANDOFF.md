@@ -566,3 +566,9 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 根因：解析器按provider返回顺序计算累计成交量差，而fixture/provider行顺序不保证按时间排列。已在本地修改解析器：先按交易时间排序（同时间保持源顺序），再计算正规分钟量差；09:30竞价点仍排除且不参与分钟量基线，首个正规观察点的增量继续保持未知。该修改目前仅编码，Windows本机无Swift/Xcode，尚未编译或执行。
 - 本地 HEAD/远端 `main` 仍为 `2f7fb7b…`；工作树仅 `Sources/FCore/MarketMinuteData.swift` 有上述未提交修复。下一步提交此首错修复并正常Push，触发新Apple CI，确认FCore及后续全链；如果再失败，继续取第一个真实失败定位。
 - 产品整改状态不因Run 80失败而改变：NAS历史分钟真实指定日期读链、Tencent前收/均价/IOPV真实设备字段、新闻可靠来源、DeepSeek端到端、Simulator人工截图审阅和iPhone Air实机仍无当前证据。Run 80未生成UI结果包；当前没有新的Simulator截图或人工视觉验收。
+
+## Run 81 首个 Device Build 错误修复（2026-10-29）
+
+- 修复前提交 `297ca05a2a65893a504dacbae5966c960978148e` 已推送并触发 Apple CI Run 81 [40841943569](https://github.com/ggjj45830/guanpan-f/actions/runs/40841943569)。实际执行：FCore **165/165通过**、XcodeGen成功；Device Build失败，Simulator Build/UI XCTest/IPA因前序失败跳过。
+- 首个且唯一报告的Swift编译根因：`HomeExperience.swift:1422` 从资产页按钮直接写 `FHomeModel.ledgerWriteStatus`，但该属性声明为`private(set)`。现已添加模型方法`clearLedgerWriteStatus()`并让按钮调用它，保留私有写入边界与既有流程。
+- 这个修复目前仅编码在工作树，尚无当前修复SHA的编译或测试结果。下一步提交、正常推送并重跑Apple完整CI；只有通过后更新该SHA的FCore、构建、UI测试和IPA状态。

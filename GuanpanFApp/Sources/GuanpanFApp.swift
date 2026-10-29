@@ -373,6 +373,10 @@ final class FHomeModel: ObservableObject {
         Task { await writePendingConfirmedFill() }
     }
 
+    func clearLedgerWriteStatus() {
+        ledgerWriteStatus = ""
+    }
+
     func establishInitialLedger(cashText: String, positions: [FInitialLedgerPositionInput],
                                 note: String) async -> Bool {
         guard ledgerState == .notEstablished, let store = ledgerStore else {
