@@ -75,6 +75,7 @@ final class FHomeModel: ObservableObject {
     @Published var alertMessage: String?
     @Published private(set) var marketDataByCode: [String: FCurrentIntradaySnapshot] = [:]
     @Published private(set) var marketReferenceByCode: [String: FTencentMarketReference] = [:]
+    @Published private(set) var marketReferenceStateByCode: [String: String] = [:]
     private var refreshingReferenceCodes: Set<String> = []
     @Published private(set) var marketRefreshStateByCode: [String: String] = [:]
     @Published private(set) var archivedIntradayByCode: [String: FNASArchivedIntraday] = [:]
@@ -972,8 +973,15 @@ final class FHomeModel: ObservableObject {
             refreshingReferenceCodes.insert(code)
             Task {
                 defer { refreshingReferenceCodes.remove(code) }
-                if let reference = try? await FQuoteHTTPClient.fetchMarketReference(code: code) {
+                do {
+                    let reference = try await FQuoteHTTPClient.fetchMarketReference(code: code)
                     marketReferenceByCode[code] = reference
+                    marketReferenceStateByCode[code] = "Tencent 实时参考行情已更新"
+                } catch {
+                    // A failed auxiliary quote must not leave an older close/IOPV
+                    // looking current. Keep the failure visible beside the chart.
+                    marketReferenceByCode.removeValue(forKey: code)
+                    marketReferenceStateByCode[code] = error.localizedDescription
                 }
             }
         }
