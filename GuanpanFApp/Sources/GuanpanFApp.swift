@@ -695,34 +695,31 @@ final class FHomeModel: ObservableObject {
             })
             var newsByCode: [String: FNewsFeed] = [:]
             var newsFailureByCode: [String: String] = [:]
-            newsStatus = "正在按证券名称与代码查询近24小时新闻…"
-            let searchNames = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code -> (String, String)? in
-                let name = initial.positions.first(where: { $0.instrumentCode == code })?.name ??
-                    initial.instrumentHistories.first(where: { $0.instrumentCode == code })?.instrumentName
-                return name.map { (code, $0) }
-            })
-            await withTaskGroup(of: (String, FNewsFeed?, String?).self) { group in
+            var marketNewsFeed: FNewsFeed?
+            newsStatus = "正在读取同花顺财经近24小时快讯…"
+            do {
+                let feed = try await FNewsClient.fetchLatest()
+                marketNewsFeed = feed
                 for code in targetCodes {
-                    let searchName = searchNames[code]
-                    group.addTask {
-                        do {
-                            return (code, try await FNewsRSSClient.fetch(
-                                securityCode: code, searchName: searchName), nil)
-                        } catch {
-                            return (code, nil, error.localizedDescription)
-                        }
+                    let matched = feed.articlesAssociated(with: code)
+                    if !matched.isEmpty {
+                        newsByCode[code] = FNewsFeed(provider: feed.provider,
+                                                     fetchedAt: feed.fetchedAt,
+                                                     articles: matched)
+                    } else {
+                        newsFailureByCode[code] = feed.articles.isEmpty
+                            ? "最近24小时没有通过校验的市场快讯"
+                            : "取得市场快讯，但来源未提供与该证券代码的直接关联"
                     }
                 }
-                for await (code, feed, failure) in group {
-                    if let feed, !feed.articles.isEmpty { newsByCode[code] = feed }
-                    else if let feed { newsFailureByCode[code] = "最近24小时没有匹配新闻（\(feed.provider)）" }
-                    else { newsFailureByCode[code] = failure ?? "新闻源未返回结果" }
-                }
+                newsStatus = feed.articles.isEmpty
+                    ? "同花顺新闻暂不可用 · 最近24小时无可验证快讯"
+                    : "\(FNewsClient.providerName) · \(feed.articles.count) 条市场快讯 · \(newsByCode.count)/\(targetCodes.count) 个标的有直接关联 · 不关联的标的不作个股归因"
+            } catch {
+                let failure = error.localizedDescription
+                for code in targetCodes { newsFailureByCode[code] = failure }
+                newsStatus = "新闻暂不可用 · \(failure)"
             }
-            let headlineCount = newsByCode.values.reduce(0) { $0 + $1.articles.count }
-            newsStatus = headlineCount > 0
-                ? "\(FNewsRSSClient.providerName) · \(newsByCode.count)/\(targetCodes.count) 个标的 · \(headlineCount) 条近24小时标题"
-                : "新闻暂不可用 · \(newsFailureByCode.values.first ?? "没有可用的近期标题")"
             let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
             var researchByCode: [String: FDecisionResearchEvidence] = [:]
             var researchFailureByCode: [String: String] = [:]
@@ -771,6 +768,22 @@ final class FHomeModel: ObservableObject {
             var evidence: [FDecisionResearchEvidence] = []
             var quoteStatuses: [String] = []
             var researchStatuses: [String] = []
+            if let feed = marketNewsFeed, !feed.articles.isEmpty,
+               let latestPublishedAt = feed.articles.map(\.publishedAt).max() {
+                let payload = FNewsEvidencePayload(
+                    note: "同花顺财经7×24市场快讯公开网页接口；这是市场背景标题/摘要，不代表已核实完整正文。只有条目明确列出证券代码时才视为证券直接关联。不得仅凭市场标题推断某只证券的因果影响；引用时给出媒体、时间与原文链接。",
+                    fetchedAt: feed.fetchedAt, articles: feed.articles)
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                let payloadReference = (try? encoder.encode(payload)).flatMap {
+                    String(data: $0, encoding: .utf8)
+                }
+                observations.append(FContextObservation(
+                    dataClass: .news, subject: "CN/global market headlines", source: feed.provider,
+                    reference: payloadReference, observedAt: latestPublishedAt,
+                    capturedAt: min(contextCaptureTime, feed.fetchedAt),
+                    decimalValue: Decimal(feed.articles.count)))
+            }
             for code in targetCodes {
                 if let quote = quotes[code], let price = quote.latestPrice {
                     observations.append(FContextObservation(
@@ -794,7 +807,7 @@ final class FHomeModel: ObservableObject {
                 }
                 if let feed = newsByCode[code], let latestPublishedAt = feed.articles.map(\.publishedAt).max() {
                     let payload = FNewsEvidencePayload(
-                        note: "Google News RSS 搜索聚合；仅含标题，不代表已核实正文或事实。逐条保留媒体、发布时间和Google News链接；链接可能跳转，不保证是媒体原文直链。",
+                        note: "同花顺财经7×24市场快讯；该条明确关联此证券代码。只提供标题/摘要，不代表已核实完整正文；引用时给出媒体、时间和原文链接。",
                         fetchedAt: feed.fetchedAt, articles: feed.articles)
                     let encoder = JSONEncoder()
                     encoder.dateEncodingStrategy = .iso8601
@@ -808,9 +821,9 @@ final class FHomeModel: ObservableObject {
                         decimalValue: Decimal(feed.articles.count)))
                 } else {
                     observations.append(FContextObservation(
-                        dataClass: .news, subject: code, source: FNewsRSSClient.providerName,
+                        dataClass: .news, subject: code, source: FNewsClient.providerName,
                         observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
-                        unavailableReason: newsFailureByCode[code] ?? "没有可用的近期新闻"))
+                        unavailableReason: newsFailureByCode[code] ?? "没有可用的证券相关新闻"))
                 }
                 if let research = researchByCode[code] {
                     try research.validate(contextCreatedAt: contextCaptureTime)

@@ -1642,8 +1642,8 @@ struct SettingsOverview: View {
                     LabeledContent("实时分钟 / 日 K", value: "腾讯公开行情接口")
                     LabeledContent("历史分钟", value: nasBaseAddress.isEmpty ? "需配置 NAS；实际覆盖待验证" : "NAS 按日期查询；实际覆盖待验证")
                     LabeledContent("自动历史同步", value: "未接入")
-                    LabeledContent("新闻来源", value: "Google News RSS 搜索聚合 · 标题级")
-                    Text("顾问提问时按证券名称和代码查询近24小时标题。搜索词会发送给 Google，不发送账本；标题附媒体、发布时间和 Google News 跳转链接，正文未经核实，也不保证有稳定服务承诺。NAS Ready 只表示服务在线，不代表指定日期已有完整分钟归档。缺失数据不会补造。")
+                    LabeledContent("新闻来源", value: "同花顺财经 7×24 · 公开网页接口")
+                    Text("顾问请求同花顺财经近24小时7×24市场快讯，不发送持仓或账本。只有来源明确标注证券代码的快讯才作为个股直接关联；其余仅作市场背景。该公开网页接口并非签约数据服务，标题/摘要不等于已核实全文。NAS Ready只表示服务在线，不代表指定日期已有完整分钟归档。缺失数据不会补造。")
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

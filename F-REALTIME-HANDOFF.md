@@ -734,3 +734,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 当前状态：新闻RSS客户端、Advisor注入与提示词规则**已编码，尚未编译/执行**。本地Windows没有Swift/Xcode；当前执行环境对`news.google.com` DNS请求失败，故不能报告真实RSS成功。Google News RSS为无稳定服务承诺的搜索聚合来源，不等同媒体正文或已核实事实；RSS连通和顾问引用仍需设备/Apple CI验证。
 - 本轮未验证：Apple CI、iPhone端RSS可达性、真实标题/来源/日期有效性、顾问实际引用新闻、Simulator画面。不得把代码存在写成真实新闻E2E通过。
 - 下一步：完成当前差异检查；以远端`a39ce045...`为基线普通快进提交并触发完整Apple CI。CI通过后，在真实iPhone网络中验证Google RSS请求、DecisionContext新闻Observation和DeepSeek引用；若RSS不可达，改用有稳定官方接口的替代源再做实测，不伪称完成。
+
+
+## 2026-10-29 全盘静态扫描与新闻源切换（当前远端代码待CI）
+
+- Google News RSS因用户所在网络不可达，已从当前实现替换为同花顺财经7×24公开网页接口。市场快讯仅作宽泛背景；只有来源显式列出同一证券代码才建立个股关联。接口非签约稳定API，真实可达性和字段须由iPhone实网确认。
+- 客户端解析限制响应大小、近24小时、过去时间戳、HTTPS链接、去重、标题长度和证券代码；错误/无结果明确降级，不让模型记忆补造新闻。
+- 静态扫描GuanpanFApp/Sources中的Swift文件未发现fatalError、preconditionFailure、try!或强制类型转换。新闻/DeepSeek固定URL的强制解包均改为安全失败分支。
+- Ledger writer调用人工抽查集中在明确的用户确认成本/费用/现金修正、初始真实账户录入和成交确认流程；Candidate与真实Ledger仍分开。该项仅为静态源码审阅，自动测试与真实成交E2E仍待当前SHA验证。
+- 当前开发Windows环境没有Swift/Xcode；本地到新闻端点网络测试被127.0.0.1:7890代理拒绝，不能据此声称端点坏或好。远端最新代码与本地源文件存在差异，已选择在远端当前树上做段落级更新，不以本地整文件覆盖。
+- 当前状态：实现已编码，Apple编译/测试待当前提交执行；同花顺真实HTTP与iPhone实网E2E、NAS链路、视觉验收均未由此静态扫描证明。

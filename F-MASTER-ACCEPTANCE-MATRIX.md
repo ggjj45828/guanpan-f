@@ -680,3 +680,13 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 新闻可信度与隐私 | Google News RSS是搜索聚合，不是媒体正文/事实核验；链接可能跳转且无稳定服务承诺；只发送证券查询词，不发送Ledger | 已编码并记入AI约束/设置说明 | 设备实网/AI输出实测；失败明确Unavailable；不得以HTTP 200或CI Build替代 |
 | 新闻真实E2E | 当前环境DNS无法解析`news.google.com`，Apple CI仅编译和测试，不做RSS外网请求 | External Pending | 设备网络确认可达、标题相关、来源可追溯、AI引用行为正确 |
 
+
+
+## 2026-10-29 静态缺陷检查与新闻源变更
+
+| 检查项 | 实际检查 | 结果/状态 | 后续验证 |
+|---|---|---|---|
+| App源码崩溃型写法 | 扫描App Swift Sources中的fatalError、preconditionFailure、try!、as! | 未发现；固定新闻及DeepSeek URL的强制解包改为安全失败路径 | 当前HEAD Apple Compile + XCTest |
+| Ledger写入边界 | 搜索并检查FConfirmedLedgerWriter调用上下文 | 调用集中在明确用户确认的账户/成本/成交/费用修正；Candidate关联在成交后；仅静态结论 | 当前HEAD测试和真实成交E2E |
+| 新闻实网 | 真实HTTP尝试 | 本环境本机代理127.0.0.1:7890拒绝连接；端点实测失败于本地代理层，不能判断服务器可达性 | Apple CI后用iPhone网络实测Tonghuashun JSON与新闻关联 |
+| 新闻证据边界 | 源码/提示词审阅 | 市场标题仅背景，只有明确证券代码匹配才作为个股新闻；缺失不由模型补造 | DeepSeek引用Observation实测 |
