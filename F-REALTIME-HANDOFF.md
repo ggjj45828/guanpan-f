@@ -510,10 +510,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Apple CI Run 77 [40831405937](https://github.com/ggjj45830/guanpan-f/actions/runs/40831405937) 已实际成功：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和artifact上传全部成功。artifact `12878739682`。
 - 自动截图仍未人工审阅，没有iPhone Air实测或真机手势验收。CI成功仅证明源码编译与自动测试通过，不证明主题视觉完成。后续仍需按主题人工检查页面表面和整体布局。
 
-## Run 78候选：图表拖缩流畅度与日K横轴边缘修正（已编码，待CI）
+## Run 78：图表拖缩流畅度与日K横轴边缘修正（2026-10-29）
 
 - 静态性能检查发现统一图表绘制成本线等逐点overlay时，每个点都线性扫描整段时间戳，点数为N时会形成O(N²)查找；捏合/拖动重绘会重复付出该开销。现改为每次绘制先建立时间戳索引，再常数时间定位overlay点。
 - 日K日期轴原来最多固定画5个居中标签，小屏/窄绘图区会边缘截断或互相挤压；现按绘图区宽度减少刻度数，并让首尾标签贴边对齐。
-- 本地`git diff --check`通过后将随本轮送Apple CI；当前Windows无Swift/Xcode，Run 77结果不能覆盖本次修改。截图/人工手势及iPhone Air体验仍待验证。
+- 修改提交 `0ff77a6f51b9cf0b9854f7a3130b134384c189d5` 已由Apple CI Run 78 [40833407806](https://github.com/ggjj45830/guanpan-f/actions/runs/40833407806) 实际验证通过：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和artifact上传均成功。artifact `12879444294`。
+- CI通过只确认修改可编译且自动测试通过。模拟器截图未人工审阅，没有iPhone Air触控测试；拖缩是否达到用户要求的“顺滑自由”仍需实际设备手势验收。
 
 
