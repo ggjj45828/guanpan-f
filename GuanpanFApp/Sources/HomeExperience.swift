@@ -1428,6 +1428,14 @@ struct RealAssetsOverview: View {
                     Text("按券商当前真实现金和持仓建立本机账本起点；这不会伪造成买入成交。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
+                if model.ledgerState == .available {
+                    Button { model.prepareManualLedgerFill() } label: {
+                        Label("记录已完成的真实成交", systemImage: "arrow.left.arrow.right.circle")
+                    }
+                    .accessibilityIdentifier("ledger.manual-fill.begin")
+                    Text("登记券商已经成交的买入或卖出；确认后才更新账本，不会发起下单。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Picker("资产视图", selection: $selectedView) {
                     Text("当前持仓").tag(0)
                     Text("已清仓").tag(1)
@@ -1516,6 +1524,9 @@ struct RealAssetsOverview: View {
         .scrollContentBackground(.hidden)
         .sheet(isPresented: $model.showingInitialLedgerSetup) {
             FInitialLedgerSetupSheet(model: model)
+        }
+        .sheet(isPresented: $model.showingManualLedgerFill) {
+            FManualLedgerFillSheet(model: model)
         }
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
@@ -2420,3 +2431,56 @@ private extension FDecisionGuardFinding {
     }
 }
 
+
+
+struct FManualLedgerFillSheet: View {
+    @ObservedObject var model: FHomeModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("已完成的券商成交") {
+                    TextField("证券代码（6位）", text: $model.manualFillInstrumentCode).keyboardType(.numberPad)
+                    TextField("证券名称", text: $model.manualFillInstrumentName)
+                    Picker("方向", selection: $model.manualFillSide) {
+                        Text("买入").tag(FTradeSide.buy)
+                        Text("卖出").tag(FTradeSide.sell)
+                    }
+                    DatePicker("实际成交时间", selection: $model.manualFillTradeAt, in: ...Date(), displayedComponents: [.date, .hourAndMinute])
+                    TextField("真实成交份额", text: $model.manualFillUnitsText).keyboardType(.numberPad)
+                    TextField("真实成交价格", text: $model.manualFillPriceText).keyboardType(.decimalPad)
+                    TextField("实际手续费", text: $model.manualFillFeeText).keyboardType(.decimalPad)
+                    Text("手续费按券商实际金额填写；默认值只作起填参考，可修改。此操作不向券商下单。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("成交用途与审计") {
+                    Picker("用途", selection: $model.manualFillTradeIntent) {
+                        ForEach(FTradeIntent.allCases, id: \.self) { intent in Text(intent.displayName).tag(intent) }
+                    }
+                    if model.manualFillTradeIntent != .ordinary {
+                        TextField("T配对编号", text: $model.manualFillTCycleID)
+                    }
+                    TextField("确认说明（必填）", text: $model.manualFillConfirmationNote, axis: .vertical).lineLimit(2...4)
+                }
+                Section("账本边界") {
+                    Text("保存会追加真实成交记录并按账本规则重算现金、成本和盈亏。初始持仓快照只能在账本未建立时录入；本入口不会改写历史快照。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    if !model.ledgerWriteStatus.isEmpty { Text(model.ledgerWriteStatus).font(.footnote) }
+                }
+            }
+            .navigationTitle("记录真实成交")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(model.writingManualFill) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(model.writingManualFill ? "写入中" : "继续确认") { model.requestManualLedgerFillConfirmation() }
+                        .disabled(model.writingManualFill)
+                }
+            }
+            .confirmationDialog("确认这笔交易已经在券商实际成交？", isPresented: $model.manualFillNeedsFinalConfirmation, titleVisibility: .visible) {
+                Button("确认真实成交并更新账本", role: .destructive) { model.confirmManualLedgerFill() }
+                Button("返回检查", role: .cancel) { }
+            } message: { Text("只登记你填写的成交事实，不会下单。确认后现金、持仓、成本、盈亏和成交流水将更新。") }
+        }
+    }
+}

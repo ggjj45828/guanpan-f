@@ -95,6 +95,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
     @Published var showingLedgerConfirmation = false
     @Published var showingInitialLedgerSetup = false
+    @Published var showingManualLedgerFill = false
     @Published private(set) var writingInitialLedger = false
     @Published var showingFeeCorrection = false
     @Published var showingCashAdjustment = false
@@ -118,6 +119,18 @@ final class FHomeModel: ObservableObject {
     @Published var ledgerConfirmationNote = ""
     @Published private(set) var writingConfirmedFill = false
     @Published private(set) var ledgerWriteStatus = ""
+    @Published var manualFillInstrumentCode = ""
+    @Published var manualFillInstrumentName = ""
+    @Published var manualFillSide: FTradeSide = .buy
+    @Published var manualFillTradeAt = Date()
+    @Published var manualFillUnitsText = ""
+    @Published var manualFillPriceText = ""
+    @Published var manualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
+    @Published var manualFillTradeIntent: FTradeIntent = .ordinary
+    @Published var manualFillTCycleID = ""
+    @Published var manualFillConfirmationNote = ""
+    @Published private(set) var writingManualFill = false
+    @Published var manualFillNeedsFinalConfirmation = false
     private var pendingCandidate: FCandidateRecommendation?
     private var pendingCandidateScope: FAdvisorEntryScope?
     private var ledgerStore: FAccountBookStore?
@@ -516,6 +529,98 @@ final class FHomeModel: ObservableObject {
             await runAdvisorQuestion(instrumentCode: target)
         } catch {
             ledgerWriteStatus = "真实账本未更新：\(error.localizedDescription)"
+        }
+    }
+
+    func prepareManualLedgerFill() {
+        guard ledgerState == .available else {
+            ledgerWriteStatus = "请先建立或读取真实账本，再登记已完成的成交。"
+            return
+        }
+        manualFillInstrumentCode = ""
+        manualFillInstrumentName = ""
+        manualFillSide = .buy
+        manualFillTradeAt = Date()
+        manualFillUnitsText = ""
+        manualFillPriceText = ""
+        manualFillFeeText = NSDecimalNumber(decimal: FETFTradeFeePolicy.defaultReferencePerFill).stringValue
+        manualFillTradeIntent = .ordinary
+        manualFillTCycleID = ""
+        manualFillConfirmationNote = ""
+        manualFillNeedsFinalConfirmation = false
+        ledgerWriteStatus = ""
+        showingManualLedgerFill = true
+    }
+
+    func requestManualLedgerFillConfirmation() {
+        guard !writingManualFill else { return }
+        manualFillNeedsFinalConfirmation = true
+    }
+
+    func confirmManualLedgerFill() {
+        guard !writingManualFill else { return }
+        manualFillNeedsFinalConfirmation = false
+        Task { await writeManualLedgerFill() }
+    }
+
+    private func writeManualLedgerFill() async {
+        guard ledgerState == .available, let store = ledgerStore,
+              manualFillInstrumentCode.utf8.count == 6,
+              manualFillInstrumentCode.utf8.allSatisfy({ (48...57).contains($0) }),
+              !manualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let units = Int64(manualFillUnitsText.trimmingCharacters(in: .whitespacesAndNewlines)), units > 0,
+              let price = Decimal(string: manualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), price > 0,
+              let fee = Decimal(string: manualFillFeeText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), fee >= 0,
+              !manualFillConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请填写六位证券代码、名称、正份额、真实成交价、实际费用和确认说明。"
+            return
+        }
+        if (manualFillTradeIntent == .tSell && manualFillSide != .sell) ||
+            (manualFillTradeIntent == .tBuyback && manualFillSide != .buy) ||
+            (manualFillTradeIntent != .ordinary && manualFillTCycleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+            ledgerWriteStatus = "做T成交请匹配正确的买卖方向，并填写配对编号。"
+            return
+        }
+        writingManualFill = true
+        defer { writingManualFill = false }
+        do {
+            let now = Date()
+            guard manualFillTradeAt <= now,
+                  let book = try await store.load(now: now),
+                  manualFillTradeAt >= book.updatedAt else {
+                ledgerWriteStatus = "成交时间不能早于账本最近事件，也不能晚于现在；请核对录入顺序。"
+                return
+            }
+            let lastSequence = (book.fills.map(\.sequence) + book.cashMovements.map(\.sequence) +
+                                (book.feeAdjustments ?? []).map(\.sequence)).max() ?? 0
+            guard lastSequence < UInt64.max else { throw FAdvisorLiveError.ledgerChangedDuringAnalysis }
+            let removedCost: Decimal?
+            if manualFillSide == .sell {
+                guard let position = book.positions.first(where: { $0.instrumentCode == manualFillInstrumentCode }) else {
+                    throw FLedgerMutationError.missingPosition(manualFillInstrumentCode)
+                }
+                removedCost = try FAccountingPolicy.costBasisRemoved(unitsSold: units, totalUnits: position.units,
+                                                                      totalBookCost: position.bookCost)
+            } else { removedCost = nil }
+            let note = manualFillConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            let confirmation = FUserLedgerConfirmation(confirmedAt: now,
+                confirmationNote: "用户手动登记已完成的真实成交：" + note)
+            let fill = FConfirmedFill(sequence: lastSequence + 1, tradedAt: manualFillTradeAt,
+                instrumentCode: manualFillInstrumentCode, side: manualFillSide, units: units, price: price,
+                fee: fee, costBasisRemoved: removedCost, userConfirmation: confirmation,
+                instrumentName: manualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines),
+                tradeIntent: manualFillTradeIntent,
+                tCycleID: manualFillTradeIntent == .ordinary ? nil : manualFillTCycleID.trimmingCharacters(in: .whitespacesAndNewlines))
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmFill(fill, instrumentName: manualFillInstrumentName, now: now)
+            await loadLedger(from: store)
+            showingManualLedgerFill = false
+            advisorResult = nil
+            ledgerWriteStatus = "已按用户确认的真实成交更新账本；现金、持仓、Episode和成交流水已重算。"
+            advisorStatus = ledgerWriteStatus
+            await runAdvisorQuestion(instrumentCode: nil)
+        } catch {
+            ledgerWriteStatus = "真实成交未写入：\(error.localizedDescription)"
         }
     }
 
