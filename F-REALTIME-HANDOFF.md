@@ -1,3 +1,14 @@
+## 2026-10-29 当前工作快照：图表控制与主题语义色
+
+- 远端 `main` 当前快照基线：`b410ef69b5eed880171012b85181607af651caff`；父提交 `900400328fd92a5ce0ce6d5f9123685dd8c393b9` 已将图表次图选择器（VOL/MACD）移到图层栏首位并将控制高度缩至24pt；本快照又把首页账本状态点与Advisor Guard风险文案接到主题语义tokens，避免主题切换后仍显示固定绿/橙/红。
+- Apple验证：Run 87 [40858623219](https://github.com/ggjj45830/guanpan-f/actions/runs/40858623219) 对提交 `9004003...`：截至本记录时FCore、XcodeGen、Device Build、Simulator Build均成功，UI XCTest正在执行；截图导出、IPA尚未执行。Run 88 [40859682193](https://github.com/ggjj45830/guanpan-f/actions/runs/40859682193) 对当前主题颜色提交 `b410ef6...`：FCore正在执行，其后构建/测试步骤尚未完成。以上均不是全绿结论。
+- 编码状态：图表VOL/MACD入口顺序/尺寸已提交；首页状态与Guard风险色已改用各主题语义token。尚未获得当前提交完整CI结果。Run 85的165/165、4/4及IPA只适用于旧SHA `31c2010...`，不能继承。
+- 视觉/设备：没有本轮人工查看的Simulator截图；没有iPhone Air或真机操作验收。CI截图导出即使成功也只算导出证据，不等于人工视觉通过。F整体产品体验按用户反馈仍不如B。
+- 仍未解决：NASDAQ历史分钟契约/覆盖与HTTPS需以手机实际服务端响应判定；新闻可靠来源未接入；均价/IOPV仅能在可靠字段存在时显示；真实持仓初始快照入口只在账本未建立状态出现，账本已建但空仓的直达录入路径仍需产品/账本边界整改；首页、行情、证券详情与跨主题统一性仍需真实视觉验收。
+- 当前工作区在Windows，本地Git引用落后且fetch此前受DNS线程错误影响；本记录不声称本地HEAD等于远端SHA。后续必须先正常fetch/reconcile再做本地提交；远端已通过普通快进提交更新，没有强推。
+
+---
+
 ## 2026-10-29 最新工作状态（以本节为准）
 
 - 远端 `main` 当前为 `84cf7510a0a0d5314e78ea62f85b99ba14660b97`。对应 Apple CI Run 86 [40857240283](https://github.com/ggjj45830/guanpan-f/actions/runs/40857240283) 已建立，当前状态 queued；尚无 FCore、构建、UI XCTest 或 IPA 结果。Windows本机无Xcode，`git fetch` 仍报DNS线程启动失败，不能把旧本地HEAD视为远端HEAD，也没有从本地旧引用推送。
