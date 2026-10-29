@@ -507,5 +507,5 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 |---|---|---|---|
 | NAS历史分钟响应诊断与B Frozen兼容 | `GuanpanFApp/Sources/FNASConnection.swift`：区分有效HTTP 200 + Missing与格式/路由失败；F格式失败时只读尝试B `/v1/market/minute/{code}?day=...`；旧格式只标legacy-unassessed/Partial | Swift dirty、尚未编译/CI/手机实测；NAS历史真实覆盖未知 | 当前SHA Apple CI通过；HTTPS手机查询同证券/日期；页面显示真实Complete/Partial/Missing；有分钟时曲线来自实际返回bar，无数据则不画假线 |
 | 市场图可读性与主题作用范围 | `HomeExperience.swift`、`FUnifiedSecurityChart.swift`、`GuanpanFApp.swift`、`ThemeLayoutManifest.swift` | 全宽ScrollView、360pt图表、较小图层控件、连续缩放、日线VOL/MACD、导航/设置/图表主题token，以及证券详情/Advisor面板主题surface与间距均已由Run 75/76编译；Run 76 `40829925945` 成功 | Run 76 SHA `bbba0e60832b5f5c39663f1489f26cf0f3601d21`：FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、IPA校验/打包与artifact上传均成功。自动截图未人工审阅、iPhone Air未实测；均价/前收/IOPV真实来源仍未接入；十主题逐页视觉一致性仍待截图验收 |
-| 数据星图表面主题一致性 | `GuanpanFApp/Sources/HomeExperience.swift`：中心摘要、外围导航节点 | 已编码：系统默认材质改由当前主题surface renderer统一处理；保持原星图布局/路由 | Run 76后新增Swift修改，待Run 77 CI；未编译前不得标通过。仍需按主题Simulator截图检查构图与表面一致性 |
+| 数据星图表面主题一致性 | `GuanpanFApp/Sources/HomeExperience.swift`：中心摘要、外围导航节点 | Run 77 `40831405937` 对SHA `84a191b94e79e0f5d943cf2ba495beda7ccfb3cf` 实际通过编译与自动测试 | FCore 164/164、UI XCTest 3/3、Device/Simulator Build、截图导出和IPA打包/校验通过；截图未人工审阅、iPhone Air未实测，整体主题视觉统一仍待人工截图验收 |
 

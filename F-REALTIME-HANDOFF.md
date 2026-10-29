@@ -503,10 +503,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 当前远端源码SHA为 `bbba0e60832b5f5c39663f1489f26cf0f3601d21`。本机本地Git历史仍因网络fetch/push限制未与远端对齐；源码补丁以该远端CI提交为已验证事实。
 - 后续继续逐页检查其余页面的硬编码表面/颜色/间距；先人工查看Run 76截图，主题统一仍需截图对比。均价、前收、IOPV/溢价与新闻真实来源没有新证据，NAS实机连接、DeepSeek真实E2E及iPhone Air验收也未完成。
 
-## Run 77候选：数据星图表面接入主题渲染器（已编码，待CI）
+## Run 77：数据星图表面接入主题渲染器（2026-10-29）
 
 - Run 76静态逐主题检查发现，数据星图首页中心摘要与外围节点仍直接使用系统`regularMaterial`，会在非玻璃主题中绕开主题 surface treatment。
-- 已将这两个区域改为`FThemeSurfaceModifier`，保留其星图布局和节点路由，只统一视觉表面。`git diff --check`待本地提交前执行；Windows无Swift/Xcode，当前还未编译/测试。
-- 下一步：将该Swift修改和本节文档送Apple CI；CI实际通过后再更新状态。Run 76不能覆盖这项新增修改。主题截图人工审阅仍未完成。
+- 已将这两个区域改为`FThemeSurfaceModifier`，保留其星图布局和节点路由，只统一视觉表面。修改进入远端提交 `84a191b94e79e0f5d943cf2ba495beda7ccfb3cf`。
+- Apple CI Run 77 [40831405937](https://github.com/ggjj45830/guanpan-f/actions/runs/40831405937) 已实际成功：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和artifact上传全部成功。artifact `12878739682`。
+- 自动截图仍未人工审阅，没有iPhone Air实测或真机手势验收。CI成功仅证明源码编译与自动测试通过，不证明主题视觉完成。后续仍需按主题人工检查页面表面和整体布局。
 
 
