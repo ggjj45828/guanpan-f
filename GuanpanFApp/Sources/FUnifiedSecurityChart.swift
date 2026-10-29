@@ -145,6 +145,9 @@ struct FUnifiedSecurityChart: View {
     private func layerControls(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 5) {
+                // Keep VOL/MACD visible first on phone widths; the prior order
+                // placed it after every MA and hid the indicator selector off-screen.
+                subchartPicker(for: model.chart.series)
                 if case .daily = model.chart.window {
                     ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
                         let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
@@ -152,7 +155,6 @@ struct FUnifiedSecurityChart: View {
                     }
                     layerButton("成交量", key: "volume", color: .secondary, available: true)
                 }
-                subchartPicker(for: model.chart.series)
                 ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
                     layerButton(overlayTitle(overlay.kind), key: layerKey(overlay.kind),
                                 color: overlayColor(overlay.kind), available: !isUnavailable(overlay.quality))
@@ -179,7 +181,7 @@ struct FUnifiedSecurityChart: View {
         }
         .padding(2)
         .background(theme.manifest.tokens.secondaryForeground.opacity(0.08), in: Capsule())
-        .frame(minHeight: 30)
+        .frame(minHeight: 24)
     }
 
     private func subchartButton(_ title: String, mode: String) -> some View {
@@ -693,7 +695,7 @@ struct FUnifiedSecurityChart: View {
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
             .padding(.horizontal, 5).padding(.vertical, 1)
             .background(active ? color.opacity(0.07) : Color.clear, in: Capsule())
-            .frame(minHeight: 30)
+            .frame(minHeight: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

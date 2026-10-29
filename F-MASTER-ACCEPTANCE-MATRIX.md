@@ -1,3 +1,17 @@
+## 2026-10-29 当前验收状态（Run 86）
+
+| 范围 | 当前证据 | 状态 |
+| --- | --- | --- |
+| Run 86 / SHA `84cf7510a0a0d5314e78ea62f85b99ba14660b97` | GitHub Actions [40857240283](https://github.com/ggjj45830/guanpan-f/actions/runs/40857240283) job queued；无实际执行结果 | Apple CI等待中 |
+| FCore / XcodeGen / Device / Simulator / UI XCTest / IPA | Run 85 [40854072875]仅对SHA `31c2010...` 成功：FCore 165/165、UI XCTest 4/4及构建链通过 | 旧SHA证据，不继承 |
+| 统一图表指标控件 | `VOL/MACD`移到第一可见位置，控件高度30→24，修改已提交待编译 | 已编码，未编译，未Simulator人工验收 |
+| NAS历史分钟 / 新闻 | NAS实际HTTP 200 payload仍未能解析并取得指定日期bar；新闻真实源、自动历史同步未接入 | 未完成/外部实测待证 |
+| 图表操作、主题一致性、iPhone Air | 当前无本轮人工截图审阅、真机手势结果 | External Pending |
+
+> Build、XCTest、Simulator截图导出、人工视觉审阅、真实NAS E2E及真机验收分别记录，不相互替代。
+
+---
+
 # F Master Acceptance Matrix
 
 ## 2026-10-29 最新本地改动（待Apple CI）

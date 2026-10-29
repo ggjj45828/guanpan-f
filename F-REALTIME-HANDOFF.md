@@ -1,3 +1,14 @@
+## 2026-10-29 最新工作状态（以本节为准）
+
+- 远端 `main` 当前为 `84cf7510a0a0d5314e78ea62f85b99ba14660b97`。对应 Apple CI Run 86 [40857240283](https://github.com/ggjj45830/guanpan-f/actions/runs/40857240283) 已建立，当前状态 queued；尚无 FCore、构建、UI XCTest 或 IPA 结果。Windows本机无Xcode，`git fetch` 仍报DNS线程启动失败，不能把旧本地HEAD视为远端HEAD，也没有从本地旧引用推送。
+- 本次远端新提交增量：统一图表在窄屏上优先展示 `VOL/MACD` 选择器，避免被五条MA和叠加层推到横向列表外；图层控件最小高度由30缩至24，减少占用。它是已编码、待Apple CI；并未经Simulator或iPhone Air人工查看。
+- Run 85 [40854072875](https://github.com/ggjj45830/guanpan-f/actions/runs/40854072875) 的165/165 FCore、4/4 UI和构建/IPA结果只适用于其SHA `31c2010...`，不继承给Run 86或本次后续SHA。
+- NAS页面截图曾报告HTTP 200但历史分钟schema不匹配/旧兼容路由404；服务端具体payload仍未取得。Ready或HTTP 200不等于指定日历史分钟成功。新闻源与自动历史同步仍未接入；均价/前收/IOPV无可靠来源时仍应Unavailable。此轮未改NAS服务端、未宣称真实历史数据可用。
+- 持仓初始录入入口仅在空Ledger出现；是否已建真实账本需要在设备上实际验收。主题系统的布局差异及跨页一致性、图表手势和iPhone Air视觉仍无本轮人工验收证据。
+- 下一步：跟踪Run 86首个真实job结果；随后将这次指标控件修改与当前远端状态核对后送完整Apple CI。失败按首错修复。CI成功仍需查看Simulator截图并与用户设备验收分开记录。
+
+---
+
 # F实时进度交接
 
 ## 2026-10-29 当前UI集中修正（等待Apple CI）
