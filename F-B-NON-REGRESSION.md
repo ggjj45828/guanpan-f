@@ -5,6 +5,14 @@
 - NAS为可选服务；无NAS时当前Advisor基础上下文不得被阻断。完整本地Quant接线仍未完成，资产变化Candidate保持fail-closed。
 # F-B-NON-REGRESSION
 
+## 2026-10-29 B donor 来源核验补记
+
+- 当前可直接读取的 B 候选源码为 ../GuanpanNext-work/ios/Sources；完整页面/组件映射见 B-UI-SOURCE-MAP.md。
+- 【已由后续实物核验取代】在收到ZIP前曾记录“B-LATEST.zip未找到”；用户随后提供 `B-LATEST..zip`，142项SHA256全部通过，冻结候选HEAD为 `9ddfe32b787ad9e522a48eb55ff8231227d79599`。Frozen源码地图以 `B-UI-SOURCE-MAP.md` 为准；仍不能证明它与手机安装包完全同版。
+- 新核对确认的非退化行为：行情代码查询与自选/持仓筛选、真实持仓补录与单独成交录入入口、统一图表的固定分时坐标/周期和图层操作、缩放与全屏交互、账户摘要/现金流水、统一设计Token/键盘收起入口。
+- 只迁移展示和操作经验。所有买卖写入继续通过FConfirmedLedgerWriter；F的Episode与双成本、Daily/Episode/Lifetime/T盈亏口径不采用B算法。B旧网格/模拟账户/虚拟撮合/自动交易不恢复。
+- 没有B Frozen运行截图/用户手机同版证明；因此不能把“视觉接近B”标为完成，当前产品结论仍为F不如B。
+
 ## Run 72 当前校正（2026-10-29）
 
 - Run 71确认10秒行情/当前分时刷新改动通过Apple CI；Run 72确认图表轴标签间距改动通过Apple CI（两轮均FCore 164/164、UI XCTest 3/3、Device/Simulator Build及IPA步骤成功）。这些只验证构建和自动化测试，不关闭B→F视觉/交互非回归项。
@@ -125,3 +133,10 @@
 - 新架构不允许牺牲B已有的真实投资有用体验。视觉改动必须以真实截图/Simulator或实机审阅验证；旧UI XCTest通过不能替代视觉验收。
 - 当前HEAD `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`工作树干净；该SHA Apple CI未核实，当前截图/人工视觉也未验收。近期Swift改动只能记为已编码，不能记为已编译或已验收。
 
+## B-NR：首页信息层级首轮迁移（2026-10-29）
+
+- B Frozen Editorial 首页的问候/日期、市场先览、AI主判断、跨市场、机会和持仓摘要顺序作为F首页非退化基线。
+- F保留相同信息阅读节奏，但所有证券行情/账本/AI/状态均读取F当前数据模型，目标路由仍进入F页面；不能用B旧行情模型、虚拟策略或旧成本语义。
+- 行情不足必须显示真实不可用/等待状态；“账本读取中/未建立/不可用”不得显示成0持仓。
+- 当前F首轮编码已加入编辑页眉、真实持仓/自选报价条、Portfolio Advisor主区、NAS可选弱提示和真实资产摘要；布局Manifest同步其实际模块顺序。
+- 状态：已编码；当前HEAD未编译、未运行自动UI测试、无Simulator/实机截图；此项仍待视觉验收，禁止标成已修复。

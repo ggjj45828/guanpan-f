@@ -14,7 +14,40 @@
 - 页面裁决（当前证据）：首页=不如B；行情=不如B；证券详情=不如B；图表=不如B；AI产品体验=不如B（底层边界更严格不抵消体验差距）；真实资产页面=不如B。六项均未有本轮人工截图验收。
 # F-B-UI-PRODUCT-GAP-AUDIT
 
+## B 首页供体首轮落地（2026-10-29）
+
+- 已直接读取 Frozen ZIP 的 `ThemeHome.swift`：B 的 `EditorialHome` 使用问候/日期、简短市场区、AI判断、跨市场脉搏、机会和持仓摘要的编辑式节奏；并非简单套色卡片。
+- F 默认 Editorial 首页已编码首轮结构迁移：中文时段问候和日期、真实账本状态、只从F持仓/自选行情快照构建的横向行情条、保留F组合Advisor结论/Guard/风险/失效条件、独立跨市场状态行、保留F真实资产摘要。NAS显示为可选增强，不作为顾问前置依赖。
+- 本轮没有迁入B的行情或账本数据模型，没有创建第二个业务路径；点击行情条仍进入F证券详情，研究行进入F跨市场页，资产/Advisor控件仍沿用F导航。
+- 视觉实现把Editorial首页重点surface改为清晰纸面底色、细边线和轻阴影，减少Material叠层造成的泛白感。
+- 状态：已编码；未编译/未执行当前HEAD自动测试；没有当前版Simulator截图或人工审阅；iPhone Air未验。因此首页仍按用户实机反馈记为**不如B**，不以源码结构变化降低差距结论。
+
+## 2026-10-29 远端 B Frozen Candidate 已定位
+
+- 用户提供的仓库 [ggjj45828/guanpan-pro-native](https://github.com/ggjj45828/guanpan-pro-native) 可公开读取。B donor 基线暂定为 `b-latest` HEAD `caaa398eb267566db3c5764b6a146fab6d6e0ccf`；仓库状态文档明确写的是 **Frozen Candidate**，不是对用户手机最终安装版的身份校验。
+- 仓库包含完整原生 SwiftUI 目录、39 个 Swift 文件、`Assets.xcassets`、单元/UI 测试源码和 GitHub workflow；没有 `B-LATEST.zip`、截图或 `.xcresult`。Build IPA #193 对该 HEAD 成功，但这不等于 UI 测试或人工视觉验证通过。
+- 此前审计的本地 `GuanpanNext-work/ios` 是无 Git 元数据的 18-file 副本，不能代表远端 `b-latest`；原先基于“没有 Frozen B 源码”的判断由本次发现修正。页面差距结论需要以远端分支逐页复核，用户对 F 不如 B 的实机反馈仍然有效。
+- 当前状态：已定位真实远端 B 源码；远端核心文件地图已加入 `B-UI-SOURCE-MAP.md`。仍待完成的是远端页面层级与 F 源码逐页对读，以及有 B/F 实际运行截图的视觉对比；不得将静态源码或 Build 成功写成视觉胜出。
+
+## 2026-10-29 用户提供 Frozen ZIP 后的版本校正
+
+- 用户附件 `C:\Users\Administrator\Downloads\B-LATEST..zip` 已实读：2,028,932 bytes、143 entries；包内 `B-FROZEN-HEAD.txt` 指向 `9ddfe32b787ad9e522a48eb55ff8231227d79599`，GitHub 对应提交标题为 `Freeze B as an acceptance candidate`。
+- 包内 SHA256SUMS 的 142 项逐一核对全部通过（0 hash mismatch、0 missing）。因此冻结候选快照来源比当前 `b-latest` tip 更明确。当前 `b-latest` 是后续修复分支，不覆盖 ZIP 的冻结身份。
+- ZIP 源码地图已写入 `B-UI-SOURCE-MAP.md`；实际可读到五套首页 Renderer、五个主 Tab、统一 `UnifiedChartView` 及 AI/资产/设置模块。该静态证据足以进行 donor 对照，仍不等于 Frozen Candidate 已通过真机/视觉验收。
+- 页面逐项视觉裁决仍暂按用户实机反馈：F首页、行情、证券详情、图表、AI、资产不如 B。尚未获得 B/F 对照运行截图或 ZIP 指定 SHA 的完整 UI/XCTest结果。
+
 ## 用户最新视觉验收（2026-10-29）
+
+## 2026-10-29 直接读取旧 B 副本的历史记录（已由Frozen ZIP校正）
+
+- 这段记录早于用户提供 Frozen ZIP；“没有找到 B-LATEST.zip”现已过时。当前B供体基线以本文件上方记录的 ZIP SHA `9ddfe32b787ad9e522a48eb55ff8231227d79599` 为准。`../GuanpanNext-work/ios/Sources` 仍只是无Git元数据的旧副本。
+- project.yml 配置为 3.6.0 / build 25；SOURCE_STATUS.txt 日期为 2026-10-20，明确写着当时仍在集中开发、尚未完成交付，也没有原生构建或实机验证。无法证实它与用户手机上的最终 Frozen B 完全同版。
+- 此次直接核对了 GuanpanNextApp.swift、UnifiedChartView.swift、DesignSystem.swift、LocalRuleViews.swift、PortfolioSummaryViews.swift、NativeNavigationTests.swift。B 候选包含18个Swift源码文件，核心原生页面可定位；只有AppIcon资源，没有自定义字体资源，也没有已生成的截图/xcresult/ipa。测试源码会创建运行时截图附件，但当前没有测试运行产物。
+- 重要源码更正：候选 B 的 RootView 实际构造六个主入口（行情、持仓、网格、收息、AI引擎、我的），没有独立“总览”页；GPMainTab 的 overview 枚举像是遗留声明，UITest 却断言“总览”Tab，README仍称五个主页面。这是源快照内部不一致。此前本审计里“B有总览首页”的表述不能作为该候选源码证据，应撤回。
+- B候选为什么更有秩序（源码证据 + 用户真实评价）：根层统一注入 GPPalette，内容页复用 GPPageBackground、EditorialSection、DataPanel、GPDataRow、GPStatus、GPActionButton；页面底色、纸面层、raised、文本、分割线和语义色各自有独立Token；字号有 Dynamic Type 缩放、系统/圆体/衬线/等宽选择；导航和键盘收起有共享实现。B也不是全卡片：普通内容使用编辑式区段和细分隔线，重点数据面板才使用圆角渐变面板。F当前专业页面仍分别采用 SwiftUI Form/List、Material卡片和主题Role卡片，统一调色板与组件的贯穿程度较弱；详情又把多个大区块纵向堆叠，图表周边控制项占高。这能解释用户实际感受，但源码分析不能替代B/F同设备截图。
+- B候选的图表源码确有更成熟的操作供体：一个 UnifiedChartView 覆盖分时/日K周期，分时固定整日坐标，日K可缩放；图层可单独显隐，有成交量/成交额/MACD副图选项、日期/复权、十字、拖动和横屏全屏入口。F应迁移这些交互组织经验，继续用 F 图表数据、Ledger和质量语义。B中的IOPV、盘口、历史数据等字段是否真实有效必须单独核实。
+- B候选保留的旧功能不能整体照搬：根导航的网格/收息，以及模拟策略内容与 F 当前产品边界冲突；行情筛选、证券上下文、真实持仓入口、共享设计组件和图表操作则值得重构到 F。
+- 版本结论：**目前能读到完整度较高的 B UI donor 候选源码，但不能证明它是最终 Frozen B。** 对确切冻结版本的对照需要用户提供 B-LATEST.zip，或给出最终 B 的 commit/tag/安装包与截图。
 
 - 用户判断F不如B，且部分主题仅换色、交易仪表盘呈现生硬黑白块。接受该结论；F目前整体仍不如B。代码结构或CI绿不能反驳用户在iPhone Air上的实际体验。
 - B供体的可见优势包括分层调色板（canvas/paper/raised/ink/muted/line）、按场景组织的编辑式区块，以及清晰的强调色语义；F当前十主题虽有不同layout名称，但通用角色卡片和专业页容器仍高度复用，Gallery预览也不足以证明成品布局差异。
@@ -83,7 +116,7 @@
 
 | 页面/能力 | B 版证据 | 当前 F 源码/真实反馈 | 裁决 | F 缺口与处理方式 |
 |---|---|---|---|---|
-| 首页 / 总览 | B 有总览信息卡与市场/资产/研究入口；可读预览展示多区块组合，但预览不是运行截图 | `HomeExperience.swift:11-220` 为十个布局分支；大部分实际是 AI/资产/市场/跨市场四个 role 的重排。用户实装体验评为混乱，当前没有新截图佐证 | **B wins（实际使用）** | 先拆清一级 AI/资产主次，补齐今日盈亏、现金、持仓异动、研究质量/更新时间、风险；减少同级通用 RouteCard。先整改一个标杆首页，在 Simulator 截图前不扩十套主题 |
+| 首页 / 总览 | Frozen ZIP 的 `ThemeHome.swift` 包含五套首页Renderer，共用 `HomeSnapshot`；编辑室首页以问候/日期、市场速览、AI指导、跨市场、机会、持仓构成阅读顺序 | F有独立首页和十个布局分支；已开始把B的信息层级重构到F真实Advisor/行情/资产模型中，不迁入B旧业务 | **体验结论：用户实际认为B整体更成熟；F尚未由截图证明追平** | 默认Editorial首页首轮结构已编码，当前待编译及Simulator截图；必须由真实行情/账本/Advisor数据驱动 |
 | 今日市场 / 行情列表 | B `MarketScreen` 有指数条、代码查询、全部/自选/持仓筛选、列表与多种快捷操作、连接状态与重试 | F `MarketOverview` 有当前分时概览、交易日历、六位代码入口、仅真实持仓列表与行情/来源/刷新；无完整自选市场列表、筛选、搜索/快捷交易分析入口 | **B wins（信息与可发现性）** | 恢复非模拟的证券搜索/自选列表/筛选与行情刷新状态；买卖只能记录成交事实或进入确认流程，保留 F 只读 Ledger 边界；无数据时清晰空状态 |
 | 证券详情 | B `InstrumentDetailScreen` 将报价/源时间、图表、详情分析、持仓、研究入口组织在单证券上下文，并能从列表快速分析 | F `HomeDestination` 已有真实份额、双成本/盈亏/episode、行情时间/来源、日K、历史分钟、Candidate/Advisor 入口；模块纵向堆叠且信息架构复杂，用户认为实际布局差 | **底层 F 更强；体验 B wins** | 保持 F 字段语义，重排为价格/当日与本轮持仓摘要 → 图表 → 研究/AI → 交易事实；数据来源/时间和不可用态靠近相应数据 |
 | 当前分时 | B 统一图表支持分时、显隐图层与十字交互（静态代码） | F `FUnifiedSecurityChart` 共用 renderer；有当前分时输入、时间戳、图层显隐（本轮 dirty 修改）及点按/拖动/缩放代码，未当前版本编译/操作验证 | **体验待实测；F 不得宣称胜** | CI 后真机/Simulator逐项手势验收；对比 B 图表高度、时间轴、图例、主图密度；保持缺数据真实缺失 |

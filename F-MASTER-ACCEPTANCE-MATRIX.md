@@ -492,3 +492,11 @@ Run 69通过的源码SHA是0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后生�
 
 Git命令直推失败后，已通过GitHub Desktop对正确F仓库推送成功，本地main与origin/main同步。文档提交只有Markdown文件，workflow的push paths不会因此触发Apple CI。Swift SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a的Run69已真实验证FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、IPA校验和artifact上传成功。
 
+## B Frozen 首页供体迁移（编码状态）
+
+| 验收项 | F实现 | 状态 |
+| --- | --- | --- |
+| Editorial首页采用B式编辑层级 | 中文问候/日期、真实行情横条、F组合Advisor、跨市场弱层级、真实资产摘要；仅显示F实际持仓/自选快照与来源时间 | 已编码；未编译/未测试/未Simulator验收 |
+| 空行情或过期报价 | 显示等待/状态，不推算指数或涨跌 | 源码静态确认；运行未验证 |
+| 主题纸面层级 | Editorial surface使用不透明纸面、细边和轻阴影 | 已编码；截图未验 |
+| B视觉胜出声明 | 当前仍依据用户实机反馈：F不如B | 未关闭 |

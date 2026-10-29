@@ -29,8 +29,8 @@ struct FUnifiedSecurityChart: View {
                 let end = count - min(windowEndOffset, maxOffset)
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
-                let minuteDomain = minuteDisplayDomain(series: series, window: model.chart.window,
-                                                       range: visibleRange, zoomScale: zoomScale)
+                let minuteDomain = minuteDisplayDomain(series: series, range: visibleRange,
+                                                       zoomScale: zoomScale)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
@@ -117,8 +117,9 @@ struct FUnifiedSecurityChart: View {
             }
         }
         .frame(height: height)
-        .padding(10)
-        .modifier(FChartSurfaceModifier(theme: theme))
+        // Give the plot the full width available from the detail page. The old
+        // nested card and 10pt inset consumed space without adding chart meaning.
+        .padding(.vertical, 3)
         .accessibilityLabel("统一证券图表")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }
@@ -278,14 +279,15 @@ struct FUnifiedSecurityChart: View {
         return 252
     }
 
-    private func minuteDisplayDomain(series: FChartSeries, window: FChartWindow,
-                                     range: Range<Int>, zoomScale: CGFloat) -> ClosedRange<Double> {
+    private func minuteDisplayDomain(series: FChartSeries, range: Range<Int>,
+                                     zoomScale: CGFloat) -> ClosedRange<Double> {
         guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
         let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
         let first = visibleMinutes.min() ?? 0
         let last = visibleMinutes.max() ?? 1
         if zoomScale > 1.01 { return first...(max(first + 1, last)) }
-        if case .liveIntraday = window { return 0...(max(1, last)) }
+        // Keep live and archived intraday data on the same full-session clock.
+        // At lunch or before the close, the blank afternoon is intentional.
         return 0...252
     }
 
@@ -561,17 +563,19 @@ struct FUnifiedSecurityChart: View {
     private func layerButton(_ title: String, key: String, color: Color, available: Bool) -> some View {
         let active = visibleLayerKeys.contains(key)
         return Button { toggleLayer(key) } label: {
-            HStack(spacing: 4) {
-                Circle().fill(color).frame(width: 6, height: 6)
-                Text(title).font(.system(size: 11, weight: .medium, design: .monospaced))
+            HStack(spacing: 3) {
+                Circle().fill(color).frame(width: 4, height: 4)
+                Text(title).font(.system(size: 9, weight: .medium, design: .monospaced))
                 Image(systemName: active ? "eye" : "eye.slash")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 8, weight: .semibold))
             }
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .frame(minHeight: 32)
+            .padding(.horizontal, 5).padding(.vertical, 2)
             .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
-            .contentShape(Capsule())
+            // Keep the visible chip compact while preserving a comfortable
+            // 44pt touch target for the horizontally scrolling control row.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!available)

@@ -1,7 +1,6 @@
 # F实时进度交接
 
 ## 2026-10-29 图表横轴标签修复：Run 72 已通过
-
 - 提交 `70105ce992dafbbdcd6dee4608b66201a94c79e0`（`Prevent intraday chart axis label collisions`）由远端main触发 Run 72 [40812245517](https://github.com/ggjj45830/guanpan-f/actions/runs/40812245517)，job `123245046482` 最终success。
 - 实际结果：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和Artifact上传均成功。Artifact `12870733069`，SHA-256 `f456b5ab749f5cafc837e4d4763a593225d16fcac091c6bf526795a1d869320d`。
 - 本次源码只调整统一图表时间轴标签挑选：根据实际绘图宽度和最小间隔筛选，避免窄屏右侧相邻标签重叠；没有改价格数据、横向坐标映射或Ledger/行情语义。
@@ -430,3 +429,14 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 文档提交仅更新Markdown；Apple workflow的push paths限定在Package.swift、Sources、Tests、GuanpanFApp和workflow文件，因此文档提交本身不会触发新Apple CI。
 - 最近Swift提交仍为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a，其Run 69实测全绿：FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、未签名IPA校验及artifact上传成功。
 
+## 2026-10-29 B Frozen ZIP 与首页供体状态
+
+- 用户提供的 `B-LATEST..zip` 已核验：冻结候选 SHA `9ddfe32b787ad9e522a48eb55ff8231227d79599`；142项 SHA-256 全部匹配。ZIP无运行截图/构建产物，且不能证明与手机已安装版完全同版。页面源码地图见 `B-UI-SOURCE-MAP.md`，迁移清单见 `B-TO-F-UI-MIGRATION-MATRIX.md`。
+- B `ThemeHome.swift` 的 EditorialHome 组织为问候/日期、市场速览、AI指导、跨市场、机会、持仓。F首轮已把该阅读节奏编码到默认 Editorial 布局；真实数据、AI与目标路由继续来自F，NAS状态作为可选弱提示。
+- 图表胶囊视觉尺寸已缩小，透明命中区保留44pt；分钟坐标固定为全交易日，时间刻度按绘图宽度避让。这些均为当前工作树编码状态，尚未由Apple CI编译或Simulator/实机检查。
+- 首页体验仍不能判为达到B：没有新Simulator截图或人工视觉审阅。B ZIP作为Frozen UI donor，具体逐页迁移仍在进行。
+
+## 2026-10-29 远端同步与本地恢复
+
+- GitHub Desktop Fetch 已成功。已确认本地原HEAD `fd68bc3` 的唯一提交与远端 `94266a3` 补丁完全相同；因此本地分支安全rebase到最新 `origin/main`，Git自动跳过重复提交。创建了本地备份分支 `backup/pre-b-ui-sync` 保留原HEAD。
+- 暂存区备份并恢复了全部已有改动及两个新审计文件；远端改动已保留。文档冲突已按新状态合并；本地工作仍未推送。Apple CI尚未包含这些本地未提交Swift修改。

@@ -34,11 +34,12 @@ struct HomeLayout: View {
     }
 
     private var editorial: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HomeMasthead(model: model, theme: theme, eyebrow: "观盘手记 · 今日组合")
+        VStack(alignment: .leading, spacing: 14) {
+            FEditorialMasthead(model: model, theme: theme)
+            FEditorialMarketRibbon(model: model, theme: theme)
             HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
+            FEditorialResearchLine(model: model, theme: theme)
             HomePortfolioLead(model: model, theme: theme, treatment: .editorial)
-            HomeMarketResearchStrip(model: model, theme: theme)
         }
     }
 
@@ -241,6 +242,186 @@ struct HomeLayout: View {
 
 private enum HomeLeadTreatment: Equatable {
     case editorial, terminal, glass
+}
+
+/// Editorial home donor adaptation: the arrangement follows B's compact masthead
+/// and market-first rhythm while every value and destination comes from F models.
+private struct FEditorialMasthead: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: return "早上好"
+        case 12..<18: return "下午好"
+        default: return "晚上好"
+        }
+    }
+
+    private var dateText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 EEEE"
+        return formatter.string(from: Date())
+    }
+
+    private var portfolioCountText: String {
+        switch model.ledgerState {
+        case .available: return "\(model.holdings.count) 只持仓"
+        case .loading: return "账本读取中"
+        case .notEstablished: return "尚未建立账本"
+        case .unavailable: return "持仓状态不可用"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                Text("观盘 MAX  ·  今日组合")
+                    .font(.caption.weight(.semibold)).tracking(0.8)
+                    .foregroundStyle(theme.accent)
+                Spacer()
+                NavigationLink(value: FHomeRoute.market) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(theme.ink)
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("查看行情")
+            }
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(greeting)，")
+                        .font(.system(size: 30, weight: .bold, design: .serif))
+                        .foregroundStyle(theme.ink)
+                    Text(dateText)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text("先看真实组合，再判断今天。")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(theme.ink.opacity(0.82))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 23, weight: .regular))
+                    .foregroundStyle(theme.accent)
+                    .frame(width: 52, height: 52)
+                    .background(theme.accent.opacity(0.10), in: Circle())
+                    .accessibilityHidden(true)
+            }
+            HStack(spacing: 7) {
+                Circle().fill(model.ledgerState == .available ? theme.manifest.tokens.positive : theme.manifest.tokens.warning)
+                    .frame(width: 7, height: 7)
+                Text(model.ledgerState == .available ? "本机真实账本已读取" : model.ledgerStatus)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                Text(portfolioCountText)
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.bottom, 2)
+    }
+}
+
+private struct FEditorialMarketRibbon: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+
+    private var codes: [String] {
+        Array(Set(model.holdings.map(\.instrumentCode) + model.watchlistCodes)).sorted()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("市场速览").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(model.marketCalendarStatusText)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if codes.isEmpty {
+                NavigationLink(value: FHomeRoute.market) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.xyaxis.line").foregroundStyle(theme.accent)
+                        Text("添加自选证券后，在这里查看真实行情")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.plain)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 9) {
+                        ForEach(codes.prefix(6), id: \.self) { code in
+                            quoteChip(code)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Rectangle().fill(theme.ink.opacity(0.10)).frame(height: 0.7) }
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.ink.opacity(0.10)).frame(height: 0.7) }
+    }
+
+    private func quoteChip(_ code: String) -> some View {
+        let snapshot = model.marketDataByCode[code]
+        let now = Date()
+        let isFresh = snapshot.map {
+            $0.latestPrice != nil && $0.quoteTimestamp <= now && now.timeIntervalSince($0.quoteTimestamp) <= 120
+        } ?? false
+        let name = model.holdings.first(where: { $0.instrumentCode == code })?.name ?? code
+        let quoteStatus = snapshot.map {
+            "\(isFresh ? "行情时间" : "旧行情") · \($0.quoteTimestamp.formatted(date: .omitted, time: .shortened))"
+        } ?? model.marketRefreshStateByCode[code] ?? "等待真实报价"
+        return NavigationLink(value: FHomeRoute.instrument(code)) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Text(name).font(.caption.weight(.semibold)).lineLimit(1)
+                    Circle().fill(isFresh ? theme.manifest.tokens.positive : theme.manifest.tokens.unavailable)
+                        .frame(width: 5, height: 5)
+                }
+                Text(snapshot?.latestPrice.map { "¥\(NSDecimalNumber(decimal: $0).stringValue)" } ?? "行情待更新")
+                    .font(.system(size: 16, weight: .bold, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(isFresh ? theme.ink : theme.manifest.tokens.unavailable)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Text("\(code) · \(quoteStatus)")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(width: 142, alignment: .leading)
+            .padding(.horizontal, 11).padding(.vertical, 9)
+            .background(theme.manifest.tokens.surface.opacity(0.76), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(theme.ink.opacity(0.08), lineWidth: 0.7))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FEditorialResearchLine: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+
+    var body: some View {
+        NavigationLink(value: FHomeRoute.crossMarket) {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "globe.asia.australia").foregroundStyle(theme.accent).frame(width: 20)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("跨市场与研究").font(.caption.weight(.semibold)).foregroundStyle(theme.ink)
+                    Text("跨市场实时联动尚未接入 · NAS 为可选归档增强（\(model.nasConnectionStatus)）")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private struct HomeMasthead: View {
@@ -769,7 +950,12 @@ private struct FThemeSurfaceModifier: ViewModifier {
         case .bento, .adaptive:
             content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius + 4))
                 .overlay(RoundedRectangle(cornerRadius: radius + 4).stroke(theme.accent.opacity(0.18), lineWidth: 1))
-        case .editorial, .card:
+        case .editorial:
+            content.background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(theme.ink.opacity(0.09), lineWidth: 0.8))
+                .shadow(color: theme.ink.opacity(0.035), radius: 8, y: 3)
+        case .card:
             content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
         }
     }
@@ -1028,7 +1214,7 @@ struct HomeDestination: View {
                         model: FChartPresentationBuilder.live(snapshot, holding: holding,
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                        height: 430)
+                        height: 510)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("日 K 与均线").font(.headline)
@@ -1043,7 +1229,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 400)
+                                height: 500)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -1052,8 +1238,7 @@ struct HomeDestination: View {
                         Text(model.dailyKlineStateByCode[code] ?? "数据源：腾讯日 K · 未复权；等待请求")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.vertical, 8)
                     Text(model.marketRefreshStateByCode[code] ?? "尚未取得实时行情")
                         .font(.caption).foregroundStyle(.secondary)
                     Text(snapshot.map { "\($0.source) · 行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard))" }
@@ -1063,7 +1248,7 @@ struct HomeDestination: View {
                         Text(Self.quoteFreshnessText(snapshot, now: Date()))
                             .font(.caption2).foregroundStyle(.secondary)
                     }
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("NAS 历史分时").font(.headline)
                         DatePicker("历史交易日", selection: $model.selectedHistoryDate,
                                    in: ...Date(), displayedComponents: .date)
@@ -1080,13 +1265,12 @@ struct HomeDestination: View {
                             FUnifiedSecurityChart(
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 430)
+                                height: 510)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.vertical, 8)
                 AdvisorComposer(model: model, theme: .editorial, instrumentCode: code)
             }
             .padding(18)
@@ -1384,8 +1568,12 @@ struct SettingsOverview: View {
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                LabeledContent("历史数据同步", value: "未接入")
-                LabeledContent("新闻", value: "未接入")
+                LabeledContent("历史分钟查询", value: nasBaseAddress.isEmpty ? "需配置 NAS；覆盖待验证" : "查询接口已编码；真实覆盖待验证")
+                LabeledContent("自动历史同步", value: "未接入")
+                LabeledContent("新闻来源", value: "未接入真实来源")
+                Text("实时分钟与日K使用腾讯公开行情接口。历史分钟通过可选 NAS 按日期查询；NAS Ready 只代表服务在线，不代表指定日期已有完整分钟归档。当前历史来源覆盖未通过实测，缺失日期不会补造。新闻目前没有接入供应商或真实新闻接口。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("主题") {
                 ScrollView(.horizontal, showsIndicators: false) {

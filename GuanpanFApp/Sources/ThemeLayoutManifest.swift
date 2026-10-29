@@ -119,7 +119,7 @@ enum FThemeLayoutRegistry {
 
     static func layout(_ family: FHomeLayoutFamily) -> FLayoutManifest {
         let descriptions: [FHomeLayoutFamily: (String, String, Bool)] = [
-            .editorial: ("舒展", "章节式纵向编排，资产与顾问形成叙事主线。", false),
+            .editorial: ("舒展", "问候与市场先览开篇，随后呈现组合顾问、跨市场观察和真实持仓。", false),
             .cardGrid: ("均衡", "两列卡片网格并列展示市场、研究、顾问与资产入口。", false),
             .terminalDashboard: ("紧凑", "现金、行情和决策入口采用紧凑终端层级。", false),
             .magazine: ("舒展", "日期与专题标题先行，随后以长篇章节呈现组合和研究。", false),
@@ -133,7 +133,9 @@ enum FThemeLayoutRegistry {
         let value = descriptions[family] ?? ("均衡", "共享业务角色布局。", false)
         let order: [FHomeCardRole]
         switch family {
-        case .editorial, .inkEditorial, .magazine, .spatialGlass:
+        case .editorial:
+            order = [.marketObservation, .advisorGuidance, .crossMarketPulse, .portfolio]
+        case .inkEditorial, .magazine, .spatialGlass:
             order = [.advisorGuidance, .portfolio, .marketObservation, .crossMarketPulse]
         case .cardGrid:
             order = [.marketObservation, .crossMarketPulse, .portfolio, .advisorGuidance]
