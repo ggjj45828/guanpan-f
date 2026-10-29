@@ -24,7 +24,7 @@ struct FUnifiedSecurityChart: View {
     @State private var crosshairEnabled = false
 
     private let averagePeriods = [5, 10, 20, 60, 250]
-    private let plotLeftInset: CGFloat = 44
+    private let plotLeftInset: CGFloat = 38
     private let plotRightInset: CGFloat = 8
     private var averageColors: [Color] { theme.manifest.tokens.movingAverages }
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
@@ -133,7 +133,7 @@ struct FUnifiedSecurityChart: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: height)
+        .frame(height: height >= 600 ? height + 80 : height)
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
         .padding(.vertical, 2)
