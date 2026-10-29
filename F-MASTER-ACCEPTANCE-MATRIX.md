@@ -510,7 +510,8 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 数据星图表面主题一致性 | `GuanpanFApp/Sources/HomeExperience.swift`：中心摘要、外围导航节点 | Run 77 `40831405937` 对SHA `84a191b94e79e0f5d943cf2ba495beda7ccfb3cf` 实际通过编译与自动测试 | FCore 164/164、UI XCTest 3/3、Device/Simulator Build、截图导出和IPA打包/校验通过；截图未人工审阅、iPhone Air未实测，整体主题视觉统一仍待人工截图验收 |
 | 图表交互性能与日K日期轴 | `GuanpanFApp/Sources/FUnifiedSecurityChart.swift`：overlay时间索引避免逐点全表扫描；日K横轴按宽度布局并对齐首尾 | Run 78 `40833407806` 对SHA `0ff77a6f51b9cf0b9854f7a3130b134384c189d5` 编译与自动测试通过 | FCore 164/164、UI XCTest 3/3、Device/Simulator Build、截图导出与IPA打包/校验成功；人工触控流畅度及iPhone Air显示仍未验收 |
 | 证券图表面积、图例密度与跨页面主题一致性 | `GuanpanFApp/Sources/HomeExperience.swift`、`GuanpanFApp/Sources/FUnifiedSecurityChart.swift`：详情分时/日K/历史图扩大、列表迷你图增高、MA控件缩小、资产页和导航目的页统一主题背景/语义强调 | 已编码；Apple CI未执行；截图未人工检查 | 新SHA Apple CI成功后记为已编译/自动化通过；仍需iPhone Air截图和真实触控检查，不能以CI截图导出替代人工验收 |
-| 真实资产初始持仓录入入口 | `RealAssetsOverview`在账本未建立时提供“录入现有持仓”；由`FHomeModel.establishInitialLedger`汇总账户现金与当前持仓，交给`FConfirmedLedgerWriter.confirmInitialLedger`建立开账快照并写入确认审计；没有历史confirmed fills，历史完整性仍按不完整处理 | 已编码；加入Boundary审计回归及空账本UI可发现性测试；本轮尚未编译/执行 | 当前图表主题Swift正在Run 79；初始持仓表单及测试需独立后续SHA Apple CI。还需Simulator手工填写/保存/关闭重开验收；既有账本不得覆盖 |
+| 真实资产初始持仓录入入口 | `RealAssetsOverview`目前无开账/录入现有真实持仓入口；唯一初始账本写入口是`FConfirmedLedgerWriter.confirmInitialLedger`，需显式确认真实账户快照 | 缺失，待实现；本轮仅审计确认 | 需提供可撤销/审计明确的初始账户快照UI；不能把既有持仓伪造成confirmed fill。功能开发与CI均未完成 |
+
 | 集中修复（2026-10-29，当前工作树） | F源码/真实来源边界 | 状态 | 完成证据/剩余关闭条件 |
 |---|---|---|---|
 | NAS HTTP 200历史响应兼容 | `GuanpanFApp/Sources/FNASConnection.swift` 容忍可选coverage/source/fetchedAt，校验声明的证券/市场/日期，元数据缺失只降级Partial | 已编码；未编译、未实机联调 | 当前合并SHA Apple CI通过；用手机请求真实NAS指定交易日并核验HTTP内容、bar和coverage |
@@ -518,3 +519,10 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | ETF IOPV/溢折价 | `GuanpanFApp.swift` Tencent quote扩展字段，仅provider明确ETF且当前IOPV新鲜时展示参考 | 已编码；尚无实网响应证据 | 取得真实报价样本验证字段语义、时间和溢折价单位；否则保持Unavailable |
 | 初始真实持仓入口 | `RealAssetsOverview`→`FHomeModel.establishInitialLedger`→`FConfirmedLedgerWriter.confirmInitialLedger`；确认审计，不创造fills | 已编码；测试定义但当前HEAD未执行 | 当前HEAD CI通过；空账本UI实际录入和重开验收；已有账本不覆盖 |
 | 图表/主题整改 | `FUnifiedSecurityChart.swift`与`HomeExperience.swift`扩大绘图区域、缩小图例、移出MACD左轴标签、跨页主题token | 已编码；当前HEAD无编译证据、无本轮截图 | 合并SHA CI成功；实际查看导出截图并完成iPhone Air触控验收，主题逐页一致性另验 |
+
+| 集中修复后检查 | 当前实现/证据 | 状态 | 关闭条件 |
+|---|---|---|---|
+| 初始真实持仓快照入口 | `RealAssetsOverview`空账本显示“录入现有持仓”；确认表单写入审计化opening snapshot，不伪造fills | 已编码；合并SHA尚未编译/执行；空账本UI实际操作未验 | Apple CI当前SHA通过；Simulator录入、退出重开和已有账本不可覆盖验收 |
+| 分时/历史图表价格参考 | Tencent分钟成交量差分形成量价均价（非官方VWAP）；Tencent前收、鲜活ETF IOPV/溢折价作为实时参考；历史前收从所选日期之前真实日K取得 | 已编码；供应商真实字段/设备响应未验证；无字段保持Unavailable | CI通过；实网逐字段核实值、单位、时间和来源；历史日/当前分时分别核验 |
+| NAS HTTP 200历史返回格式兼容 | 可选coverage/source时间元数据与数字字符串价格解码；身份字段校验；来源质量不足降Partial | 已编码；本轮真实NAS历史指定日期未请求 | CI通过并从手机端验证HTTPS endpoint真实body、bars及coverage |
+| 图表可读性与真实参考标注 | 收窄价格轴、MACD文字移到右上、IOPV标记为参考、扩展日线/历史绘图布局 | 已编码；当前SHA无构建和截图人工审阅 | Apple CI通过后审阅Simulator截图；iPhone Air手势仍单独验收 |

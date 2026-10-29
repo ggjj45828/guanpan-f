@@ -491,7 +491,7 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 
 - `HomeDestination`证券详情中的当前持仓、已清仓、盈亏口径和Episode历史面板，以及`AdvisorOverview`的可用上下文/决策成绩单面板，移除固定系统`regularMaterial`背景，统一改用`FThemeSurfaceModifier`按当前主题渲染。
 - Advisor页面主内容纵向间距改用当前Theme Manifest的spacing token，避免主题切换后只有颜色变化而留白不变。
-- 本机`git diff --check`通过；本机无Swift/Xcode。此修改当时尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
+- 本机`git diff --check`通过；本机无Swift/Xcode。此修改尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
 - 下一步：将这组表面统一修正送入Apple CI；CI成功后继续审阅Simulator证据，并处理其余专业页面的主题一致性。
 
 ## Run 76：证券详情与Advisor主题表面修正（2026-10-29）
@@ -522,8 +522,8 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 根据用户实机截图继续加大证券详情中的当前分时、日K和历史分钟绘图区：高度由约500pt提高到620–640pt，横向内容边距收窄并让图表向页面可用宽度扩展；行情列表内迷你图由360pt提高到420pt。该改动尚无Simulator截图，实际比例与滚动体验待CI截图和iPhone Air确认。
 - MA/叠加层图例缩小字体、间距与按钮高度（30pt→24pt）；分时主线及MA线再减细，避免图例抢占绘图区和线条显粗。
 - 将真实资产列表接入当前主题的背景、表面、前景与强调色；所有导航目的页也统一继承主题背景、文字与tint，减少切换主题后页面各自使用系统默认颜色的问题。十套主题仍未完成人工逐页检查，不能记为视觉验收完成。
-- 已补“录入现有持仓”入口：仅在账本尚未建立时出现；表单录入当前现金、证券代码/名称/份额、本轮总经济成本、可选券商展示成本及确认说明。保存走唯一`FConfirmedLedgerWriter.confirmInitialLedger`，记录用户确认审计；不伪造历史成交。初始快照录入后旧成交流水仍标为不完整。另加初始账本审计回归和空账本UI可发现性场景。
-- 截至当前，图表/主题与初始持仓入口Swift修改均仅已编码，Windows本机没有Xcode；图表/主题版本Run 79正在Apple CI，持仓入口必须随后作为更新SHA再次提交并跑CI。人工Simulator截图和iPhone Air仍External Pending。历史分钟、新闻、均价、前收及IOPV仍无新的真实来源证据，继续如实显示未接入/不可用。
+- 本轮静态检查确认：真实资产页仍没有“录入当前真实持仓/建立初始账本”入口；目前只有真实成交确认、现金/费用对账、券商成本录入。该缺口保留为待办；创建入口须作为用户确认的初始账户快照并具有清晰审计语义，不能伪造成买入成交。
+- 截至当前，以上新增Swift仅已编码，Windows本机没有Xcode；待提交并触发Apple CI后才可标记编译/测试。人工Simulator截图和iPhone Air仍External Pending。历史分钟、新闻、均价、前收及IOPV仍无新的真实来源证据，继续如实显示未接入/不可用。
 
 ## 集中修复轮次：行情图表、NAS响应、设置布局与持仓入口（2026-10-29，CI待执行）
 
@@ -548,3 +548,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 主题：已将部分导航、页面、表面接入当前主题token；本轮不宣称10套逐页统一或视觉通过。当前没有新Simulator截图、人工逐主题检查或iPhone Air实测证据。
 - 最新CI证据只属于远端`6df3d516…` Run 79 [40835697907](https://github.com/ggjj45830/guanpan-f/actions/runs/40835697907)，成功证明Run 79源码的FCore 164/164、UI XCTest 3/3及XcodeGen/Device/Simulator/IPA流程通过；不覆盖本地HEAD、三笔本地提交或未提交的11项工作树修改。Windows无Xcode/xcodebuild，不能本机编译。
 - 下一步：先提交当前11文件为本地安全节点；在GitHub Desktop执行普通Pull/merge，把远端9笔提交与本地3笔提交合并，解决冲突并确认代码/图标/工作区无丢失；检查完整diff；普通Push触发Apple CI。CI成功后才报告这份合并SHA的编译与测试结果；若失败按第一个根因修复并再次提交。Simulator人工视觉、NAS真实历史日期、新闻源、DeepSeek E2E仍分别保持未验证。
+
+## 2026-10-29 远端合并后的集中修复（等待Apple CI）
+
+- 依据GitHub Desktop Fetch取得远端main `6df3d51662cf1b403d1304c166dcebef86630ea8`，与本地 `188739b22481b17fecfc91abb0f3e157f900daaa` 从 `c062bc54172b017f813f510f08b2c20806742f3f` 分叉。已逐文件保留远端UI/图表更新，并把本地NASDAQ/账本/报价修改重放到远端版本上；没有强推、没有丢弃任一边提交。冲突目前已经在Git索引中解决，合并提交尚未建立，推送尚未发生。
+- 合并变更涉及11个文件：FNAS响应解码兼容、Tencent分钟成交量增量解析、前收/当前ETF IOPV与溢折价参考请求和图表引用、量价均价（显式非官方VWAP）、图表MACD标签与坐标空间、现有真实持仓初始快照入口及Ledger审计/空账本UI测试，以及两份状态文档。
+- `真实资产`在账本尚未建立时提供“录入现有持仓”，填写现金、证券代码/名称/份额、本轮总经济成本及可选券商显示成本；保存调用唯一初始账本确认写入口，不会伪造历史成交。UI表单代码已经合入候选工作树，但未编译/未实际操作。
+- Tencent前收/IOPV/溢折价通过独立请求，不阻塞10秒分钟刷新；证券详情展示来源和观察时间。字段编码已完成，目标证券真实响应仍未在手机验证；无可靠值仍显示不可用。量价均价使用分钟收盘价与增量成交量加权，不能标成供应商官方VWAP。
+- 本地Windows没有Xcode/Swift。最新成功的Apple证据仍是远端Run 79（SHA `6df3d51662cf1b403d1304c166dcebef86630ea8`，FCore 164/164、UI XCTest 3/3、构建/IPA通过）；它不覆盖此次合并后的Swift。当前HEAD及合并SHA尚无编译或测试执行证据，测试定义也不等于通过。
+- NAS历史分钟、DeepSeek真实E2E、iPhone Air真机布局、人工Simulator截图仍未验收。Ready/HTTP 200不能证明指定日归档可读；新闻真实来源仍未接入。
+- 下一步：完成普通合并提交，经GitHub Desktop正常Push触发Apple CI；查看该次运行首个真实错误并按根因修复。禁止强推。CI通过后再查看导出截图；当前没有人工视觉通过证据。

@@ -1252,12 +1252,10 @@ struct HomeDestination: View {
                          ?? "无数据时明确显示不可用，不使用占位或模拟价格。")
                         .font(.caption2).foregroundStyle(.secondary)
                     if let reference = model.marketReferenceByCode[code] {
-                        let premiumText = reference.premiumPercent.map {
-                            " · 腾讯溢折价 \($0 >= 0 ? "+" : "")\(NSDecimalNumber(decimal: $0).stringValue)%"
-                        } ?? ""
+                        let premium = reference.premiumPercent.map { " · 腾讯溢折价 \($0)%" } ?? " · 溢折价不可用"
                         Text("前收 ¥\(NSDecimalNumber(decimal: reference.previousClose).stringValue)" +
-                             (reference.iopv.map { " · 当前 IOPV 参考 ¥\(NSDecimalNumber(decimal: $0).stringValue)" } ?? " · 当前 IOPV 不可用") +
-                             premiumText + " · \(reference.source) · \(reference.observedAt.formatted(date: .omitted, time: .standard))")
+                             (reference.iopv.map { " · IOPV参考 ¥\(NSDecimalNumber(decimal: $0).stringValue)" } ?? " · IOPV不可用") +
+                             premium + " · \(reference.source) · \(reference.observedAt.formatted(date: .omitted, time: .standard))")
                             .font(.caption2).foregroundStyle(.secondary)
                             .lineLimit(2).minimumScaleFactor(0.8)
                     }
@@ -1515,10 +1513,10 @@ struct RealAssetsOverview: View {
         .sheet(isPresented: $model.showingFeeCorrection) {
             FLedgerFeeCorrectionSheet(model: model)
         }
+        .scrollContentBackground(.hidden)
         .sheet(isPresented: $model.showingInitialLedgerSetup) {
             FInitialLedgerSetupSheet(model: model)
         }
-        .scrollContentBackground(.hidden)
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
         .tint(theme.accent)
@@ -1595,31 +1593,26 @@ struct SettingsOverview: View {
                 }
                 .disabled(model.checkingNASConnection)
                 .accessibilityIdentifier("settings.nas.test")
-                VStack(alignment: .leading, spacing: 10) {
-                    if nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("NAS 未配置 · 观盘max核心功能可独立使用")
-                            .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
-                    } else {
-                        Text(model.nasConnectionStatus)
-                            .font(.caption).foregroundStyle(.secondary)
-                            .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Text("局域网需连接同一 Wi‑Fi/VPN；蜂窝网络需使用可达的 HTTPS 地址。")
+                if nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("尚未填写 NAS 地址，连接测试还没有开始。")
+                        .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
+                } else {
+                    Text(model.nasConnectionStatus)
                         .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Divider()
-                    settingsCapabilityRow("历史分钟", status: nasBaseAddress.isEmpty ? "NAS 未配置" : "接口已接入 · 指定日期覆盖待验证")
-                    settingsCapabilityRow("自动历史同步", status: "未接入")
-                    settingsCapabilityRow("新闻", status: "尚无真实来源")
-                    Text("实时分时与日K来自腾讯公开行情。NAS Ready只表示服务在线，不代表选定日期已有完整归档；缺失数据不会补造。")
-                        .font(.caption2).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    DisclosureGroup("连接与安全说明") {
-                        Text("NAS是可选的历史归档、备份与扩展服务，不是核心投资功能的前置条件。连接测试仅读取 /readyz，不发送持仓，也不要求单独令牌。8788端口应限制可访问网络。")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
+                Text("局域网请连接同一 Wi‑Fi 或 VPN；蜂窝网络请使用可达的 HTTPS 地址。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                DisclosureGroup("连接方式与安全说明") {
+                Text("NAS用于可选的历史归档、备份与研究增强，不是观盘max正常使用的前置条件。连接测试只读取 /readyz，不发送持仓，也不要求单独令牌。NAS 的 8788 端口对可达网络开放，请限制网络入口。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                LabeledContent("历史分钟查询", value: nasBaseAddress.isEmpty ? "需配置 NAS；覆盖待验证" : "查询接口已编码；真实覆盖待验证")
+                LabeledContent("自动历史同步", value: "未接入")
+                LabeledContent("新闻来源", value: "未接入真实来源")
+                Text("实时分钟与日K使用腾讯公开行情接口。历史分钟通过可选 NAS 按日期查询；NAS Ready 只代表服务在线，不代表指定日期已有完整分钟归档。当前历史来源覆盖未通过实测，缺失日期不会补造。新闻目前没有接入供应商或真实新闻接口。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("主题") {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1696,16 +1689,6 @@ struct SettingsOverview: View {
             guard !nasBaseAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             await model.configureAndTestNAS(baseAddress: nasBaseAddress)
         }
-    }
-
-    private func settingsCapabilityRow(_ title: String, status: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.subheadline.weight(.medium))
-            Text(status).font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 3)
     }
 }
 
@@ -2384,7 +2367,6 @@ struct FInitialLedgerSetupSheet: View {
         }
     }
 }
-
 private extension FDecisionAction {
     var displayName: String {
         switch self {
@@ -2433,3 +2415,4 @@ private extension FDecisionGuardFinding {
         }
     }
 }
+
