@@ -184,7 +184,7 @@ struct HomeLayout: View {
                 .font(.caption).lineLimit(2).multilineTextAlignment(.center)
         }
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: 24))
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(theme.accent.opacity(0.6), lineWidth: 1))
     }
 
@@ -202,7 +202,7 @@ struct HomeLayout: View {
                 Text(shortTitle).font(.caption.weight(.semibold))
             }
             .frame(width: 98, height: 62)
-            .background(.regularMaterial, in: Capsule())
+            .modifier(FThemeSurfaceModifier(theme: theme, radius: 32))
             .overlay(Capsule().stroke(theme.accent.opacity(0.55), lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -2245,3 +2245,4 @@ private extension FDecisionGuardFinding {
         }
     }
 }
+

@@ -487,10 +487,26 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。
 - GitHub API确认远端main为Run 75 SHA。此环境 `git fetch/push` 仍报 `getaddrinfo() thread failed to start`；本地main仍在f6c2529本地提交；与远端Run 75源码改动一致，交接文档仅有空行差异，且有备份分支 `backup/local-f6-market-chart`。工作树源码与远端构建源码一致，后续网络恢复后再fetch/reconcile提交历史。
 
-## 2026-10-29 核心页面表面主题统一（已编码，待CI）
+## 2026-10-29 核心页面表面主题统一（历史状态，已由Run 76结果覆盖）
 
 - `HomeDestination`证券详情中的当前持仓、已清仓、盈亏口径和Episode历史面板，以及`AdvisorOverview`的可用上下文/决策成绩单面板，移除固定系统`regularMaterial`背景，统一改用`FThemeSurfaceModifier`按当前主题渲染。
 - Advisor页面主内容纵向间距改用当前Theme Manifest的spacing token，避免主题切换后只有颜色变化而留白不变。
 - 本机`git diff --check`通过；本机无Swift/Xcode。此修改尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
 - 下一步：将这组表面统一修正送入Apple CI；CI成功后继续审阅Simulator证据，并处理其余专业页面的主题一致性。
+
+## Run 76：证券详情与Advisor主题表面修正（2026-10-29）
+
+- 远端提交 `bbba0e60832b5f5c39663f1489f26cf0f3601d21` 基于当时已核对的 `main` 快进提交；未强推。Apple CI Run 76 [40829925945](https://github.com/ggjj45830/guanpan-f/actions/runs/40829925945) 已完成且成功。
+- Run 76 实际日志：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名 IPA 打包/校验与artifact上传均成功。
+- 这次源码把证券详情四组信息面板与Advisor两组主要面板改用主题 surface modifier，Advisor主栈间距读取Theme Manifest token。修改已编译并通过CI/UI自动测试。
+- Run 76自动截图已导出到artifact `12879185063`，但仍未人工逐页查看；没有iPhone Air实测、图表手势验收或真机验证。主题一致性只能记为“已编译/自动化通过”，不能记为视觉验收通过。
+- 当前远端源码SHA为 `bbba0e60832b5f5c39663f1489f26cf0f3601d21`。本机本地Git历史仍因网络fetch/push限制未与远端对齐；源码补丁以该远端CI提交为已验证事实。
+- 后续继续逐页检查其余页面的硬编码表面/颜色/间距；先人工查看Run 76截图，主题统一仍需截图对比。均价、前收、IOPV/溢价与新闻真实来源没有新证据，NAS实机连接、DeepSeek真实E2E及iPhone Air验收也未完成。
+
+## Run 77候选：数据星图表面接入主题渲染器（已编码，待CI）
+
+- Run 76静态逐主题检查发现，数据星图首页中心摘要与外围节点仍直接使用系统`regularMaterial`，会在非玻璃主题中绕开主题 surface treatment。
+- 已将这两个区域改为`FThemeSurfaceModifier`，保留其星图布局和节点路由，只统一视觉表面。`git diff --check`待本地提交前执行；Windows无Swift/Xcode，当前还未编译/测试。
+- 下一步：将该Swift修改和本节文档送Apple CI；CI实际通过后再更新状态。Run 76不能覆盖这项新增修改。主题截图人工审阅仍未完成。
+
 
