@@ -476,3 +476,12 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 本机Windows没有Swift/Xcode；当前HEAD未编译、未执行测试、未送Apple CI。没有本轮Simulator截图、人工视觉或iPhone Air手势证据；主题布局不能标为已验收。
 - 均价、前收、IOPV/溢价和新闻没有新增真实数据源，仍Unavailable/未接入。NAS历史分钟诊断也未由手机新包复测。
 - 下一步：静态差异检查后正常同步至远端并送Apple CI；CI通过后查看全宽行情图和三套标杆主题截图。用户手机上若实际图仍裁切/拥挤，按新截图继续修正。
+
+
+## 2026-10-29 行情图表放大与主题间距接入（当前工作树）
+
+- 已推送基线 `c062bc54172b017f813f510f08b2c20806742f3f` 的 Apple CI Run 74 [40826194186](https://github.com/ggjj45830/guanpan-f/actions/runs/40826194186) 全部成功：FCore、XcodeGen、Device Build、Simulator Build、UI XCTest、截图导出、IPA打包与artifact上传均通过。此次状态以Run 74为准，不沿用更早的CI结果。
+- Run 74产物包含自动导出的Simulator截图，但本轮尚未人工逐页查看；没有iPhone Air实机或手势验收证据。CI绿灯不代表视觉完成。
+- 随后继续修改 `MarketOverview`：市场信息流、证券行及页面边距改为读取当前主题spacing tokens；市场分时图从300pt增至360pt，页面水平边距从12pt缩至8pt，为图表释放更多可用区域。
+- 360pt/spacing是Run 74之后的新Swift改动，当前仅为“已编码、未编译”；须普通推送触发下一次Apple CI，不能继承Run 74成功。
+- 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。

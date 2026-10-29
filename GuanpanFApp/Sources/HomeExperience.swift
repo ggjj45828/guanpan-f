@@ -1815,7 +1815,7 @@ struct MarketOverview: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("实时行情").font(.title3.weight(.semibold)).foregroundStyle(theme.ink)
@@ -1897,7 +1897,7 @@ struct MarketOverview: View {
                 ForEach(visibleSecurityCodes, id: \.self) { code in
                     let holding = model.holdings.first { $0.instrumentCode == code }
                     let snapshot = model.marketDataByCode[code]
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
                         HStack(spacing: 8) {
                             NavigationLink(value: FHomeRoute.instrument(code)) {
                                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -1933,7 +1933,7 @@ struct MarketOverview: View {
                                     snapshot, holding: holding,
                                     candidate: model.advisorResult?.candidate,
                                     ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 300)
+                                height: 360)
                                 .frame(maxWidth: .infinity)
                         } else {
                             Text("暂无真实行情 · 点按刷新获取上游报价")
@@ -1947,15 +1947,15 @@ struct MarketOverview: View {
                         Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
                             .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
                     }
-                    .padding(.bottom, 12)
+                    .padding(.bottom, theme.manifest.tokens.spacing.standard)
                     .overlay(alignment: .bottom) {
                         Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 8)
+            .padding(.top, theme.manifest.tokens.spacing.compact)
+            .padding(.bottom, theme.manifest.tokens.spacing.spacious)
         }
         .navigationTitle("今日市场观察")
         .scrollContentBackground(.hidden)
