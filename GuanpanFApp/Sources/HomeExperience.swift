@@ -519,7 +519,7 @@ private struct HomeMarketResearchStrip: View {
 
     private var newestHoldingQuote: FCurrentIntradaySnapshot? {
         let now = Date()
-        model.holdings.compactMap { model.marketDataByCode[$0.instrumentCode] }
+        return model.holdings.compactMap { model.marketDataByCode[$0.instrumentCode] }
             .filter {
                 $0.latestPrice != nil && $0.quoteTimestamp <= now &&
                 now.timeIntervalSince($0.quoteTimestamp) <= 120

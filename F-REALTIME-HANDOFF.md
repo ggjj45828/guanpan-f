@@ -1,5 +1,25 @@
 # F实时进度交接
 
+## Apple CI最新状态补充（2026-10-29；优先于以下状态）
+
+- 远端 `origin/main` 当前仍为 `222acdcc2d88273fb5bf23258630b71355639a4a`；本地当前提交包含编译修复，领先远端1个提交。普通push因GitHub连接失败尚未送达；未强推、未改写远端历史。
+- Run 62 Attempt 2 [40769074408](https://github.com/ggjj45830/guanpan-f/actions/runs/40769074408) 对远端 `222acdc` 实际执行：FCore XCTest **164 executed / 164 passed / 0 failed**；XcodeGen通过。
+- Device Build 首个真实错误：`GuanpanFApp/Sources/HomeExperience.swift:522`，`newestHoldingQuote` 计算属性在局部 `let now` 之后缺少 `return`，诊断为 `missing return in getter expected to return 'FCurrentIntradaySnapshot?'`。当前本地已加 `return` 作最小修复；**该Swift修复尚未编译验证**。
+- 因Device Build失败，Simulator Build、App UI XCTest、IPA均未执行；截图导出步骤报告无xcresult附件，不能视为Simulator验收。
+- 当前源码测试定义：FCore 164、App UI 3；最近一次CI的FCore为164/164通过，但属于修复前远端SHA。修复后的当前本地SHA：FCore executed=0、App UI executed=0；Windows工作区没有Swift/Xcode/XcodeGen。
+- 下一步：GitHub连接恢复后先核对远端，再普通push当前编译修复，运行完整Apple CI；若出现新首错，按首个根因最小修复并重跑。当前普通push尝试分别遇到DNS线程启动失败和HTTPS 443连接重置，属于交付通道暂时不可用，不代表代码编译结果。
+- Simulator人工交互、iPhone Air、NAS HTTPS实测、真实DeepSeek端到端及Candidate成交闭环仍无新验收证据。
+
+## 最新状态覆盖（2026-10-29；本节优先于以下历史快照）
+
+- 当前本地 `main` HEAD：`222acdcc2d88273fb5bf23258630b71355639a4a`（`222acdc`），代码已普通推送到 `origin/main`；本次交接更新尚未提交。未强推。
+- Run 60 [40717961675](https://github.com/ggjj45830/guanpan-f/actions/runs/40717961675) Attempt 3 已取得macOS runner，FCore编译失败。第一个根因在 `CandidateShadowScorecardTests.swift`：测试把 `Date` 传给参数类型为 `TimeInterval` 的 `quote(_:at:)`。编译失败发生在测试启动前，因此本轮 XCTest executed=0、passed=0、failed assertions=0。
+- 已修复该类型错误并提交 `222acdc`。验证Run 62 [40769074408](https://github.com/ggjj45830/guanpan-f/actions/runs/40769074408) 的 job `123101039104` 等待约15分钟后该job被GitHub取消，steps为空；单job重跑也未取得runner，最新仍为cancelled、无日志/步骤，故当前提交仍未编译/测试。重复Run 61 [40769001582](https://github.com/ggjj45830/guanpan-f/actions/runs/40769001582)已取消，避免重复占用runner。队列等待后取消说明GitHub runner调度/容量问题，不是代码编译结论。
+- 当前测试定义：FCore 164、App UI 3。当前修复提交实际执行测试=0；此前旧提交上的通过数字不可继承。Windows环境没有Swift/Xcode/XcodeGen。
+- 当前未验证Swift范围：`222acdc`中的Shadow测试时间偏移修复及其所在提交的全部Swift源码；等待Run 62实际编译结果。
+- 编译恢复后第一件事：重新触发一次当前SHA的Apple验证；若再次因macOS runner排队被取消，不对同一队列无限重试，转做不依赖Apple工具链的查漏并等待可用窗口。若编译或测试失败，读取首个根因日志、最小修复、重新普通提交并验证FCore → XcodeGen → Device/Simulator Build → UI XCTest → IPA。
+- 真实Simulator人工验收、iPhone Air、NAS HTTPS实测、真实DeepSeek端到端及Candidate成交闭环仍没有本轮新证据。
+
 ## 权威当前状态覆盖（2026-10-28，本节优先于下方旧快照）
 
 - 当前 `main` HEAD 为 `7094d74496f32fa78e69eeb0792e8ee26da48ca6`，已普通push到 `origin/main`，工作树干净。未使用强推。
