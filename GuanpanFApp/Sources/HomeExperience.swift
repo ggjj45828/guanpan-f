@@ -1008,6 +1008,9 @@ struct HomeDestination: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .tint(theme.accent)
         .sheet(isPresented: $showingBrokerCostEditor) {
             NavigationStack {
                 Form {
@@ -1215,7 +1218,8 @@ struct HomeDestination: View {
                         model: FChartPresentationBuilder.live(snapshot, holding: holding,
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                        height: 510)
+                        height: 640)
+                    .padding(.horizontal, -8)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("日 K 与均线").font(.headline)
@@ -1230,7 +1234,8 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 500)
+                                height: 620)
+                            .padding(.horizontal, -8)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -1266,7 +1271,8 @@ struct HomeDestination: View {
                             FUnifiedSecurityChart(
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 510)
+                                height: 640)
+                            .padding(.horizontal, -8)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
@@ -1274,7 +1280,8 @@ struct HomeDestination: View {
                     .padding(.vertical, 8)
                 AdvisorComposer(model: model, theme: theme, instrumentCode: code)
             }
-            .padding(18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 14)
         }
         .accessibilityIdentifier("market.security-detail.scroll")
         .navigationTitle(code)
@@ -1390,7 +1397,9 @@ private struct CrossMarketOverview: View {
 
 struct RealAssetsOverview: View {
     @ObservedObject var model: FHomeModel
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @State private var selectedView = 0
+    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     var body: some View {
         List {
@@ -1483,6 +1492,11 @@ struct RealAssetsOverview: View {
         .sheet(isPresented: $model.showingFeeCorrection) {
             FLedgerFeeCorrectionSheet(model: model)
         }
+        .scrollContentBackground(.hidden)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .tint(theme.accent)
+        .listRowBackground(theme.manifest.tokens.surface)
     }
 
     private func assetSummaryRow(_ title: String, value: String) -> some View {
@@ -1933,7 +1947,7 @@ struct MarketOverview: View {
                                     snapshot, holding: holding,
                                     candidate: model.advisorResult?.candidate,
                                     ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 360)
+                                height: 420)
                                 .frame(maxWidth: .infinity)
                         } else {
                             Text("暂无真实行情 · 点按刷新获取上游报价")

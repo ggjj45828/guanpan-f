@@ -133,7 +133,7 @@ struct FUnifiedSecurityChart: View {
         .frame(height: height)
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
-        .padding(.vertical, 3)
+        .padding(.vertical, 2)
         .accessibilityLabel("统一证券图表")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }
@@ -141,7 +141,7 @@ struct FUnifiedSecurityChart: View {
     @ViewBuilder
     private func layerControls(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 5) {
                 if case .daily = model.chart.window {
                     ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
                         let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
@@ -425,7 +425,7 @@ struct FUnifiedSecurityChart: View {
                 let point = CGPoint(x: x(index), y: y(samples[index].price))
                 if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
             }
-            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.95, lineCap: .round, lineJoin: .round))
+            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.78, lineCap: .round, lineJoin: .round))
             let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
                                                     (162, "13:30"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
@@ -516,7 +516,7 @@ struct FUnifiedSecurityChart: View {
                     let point = CGPoint(x: x(index), y: y(value))
                     if started { path.addLine(to: point) } else { path.move(to: point); started = true }
                 }
-                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 0.85)
+                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 0.72)
             }
         }
         if showMACD {
@@ -670,14 +670,14 @@ struct FUnifiedSecurityChart: View {
         return Button { toggleLayer(key) } label: {
             HStack(spacing: 3) {
                 Circle().fill(color).frame(width: 4, height: 4)
-                Text(title).font(.system(size: 9, weight: .medium, design: .monospaced))
+                Text(title).font(.system(size: 8, weight: .medium, design: .monospaced))
                 Image(systemName: active ? "eye" : "eye.slash")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 7, weight: .semibold))
             }
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
-            .padding(.horizontal, 5).padding(.vertical, 2)
+            .padding(.horizontal, 4).padding(.vertical, 1)
             .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
-            .frame(minHeight: 30)
+            .frame(minHeight: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
