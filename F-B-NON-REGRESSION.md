@@ -5,6 +5,12 @@
 - NAS为可选服务；无NAS时当前Advisor基础上下文不得被阻断。完整本地Quant接线仍未完成，资产变化Candidate保持fail-closed。
 # F-B-NON-REGRESSION
 
+## Run 72 当前校正（2026-10-29）
+
+- Run 71确认10秒行情/当前分时刷新改动通过Apple CI；Run 72确认图表轴标签间距改动通过Apple CI（两轮均FCore 164/164、UI XCTest 3/3、Device/Simulator Build及IPA步骤成功）。这些只验证构建和自动化测试，不关闭B→F视觉/交互非回归项。
+- 最新截图已导出但未人工查看；iPhone Air、图表K柱/十字/缩放、主题布局差异和首页产品层级仍External Pending。当前产品结论仍为F不如B。
+- 本清单26项中，Run71之后经人工视觉/设备操作验证而关闭的项目为0项。不得把旧状态行中的“当前HEAD待CI”解释为最新事实；Run71对其源码树的自动验证结果见`F-REALTIME-HANDOFF.md`。
+
 ## 当前架构/非回归增补（2026-10-28）
 
 - 新决策不得退化真实账本隔离：Shadow事件、Candidate状态、Quant输出和建议结果均不能改现金、份额、成本、P&L、Fill或T Contribution；只有用户确认真实成交后唯一Writer可写账。
@@ -118,3 +124,4 @@
 - 没有可靠输入就显示Unavailable/暂停；不伪造VWAP、前收、IOPV、胜率、成交和T贡献。没有确认成交关联不得声称用户执行/未执行。
 - 新架构不允许牺牲B已有的真实投资有用体验。视觉改动必须以真实截图/Simulator或实机审阅验证；旧UI XCTest通过不能替代视觉验收。
 - 当前HEAD `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`工作树干净；该SHA Apple CI未核实，当前截图/人工视觉也未验收。近期Swift改动只能记为已编码，不能记为已编译或已验收。
+

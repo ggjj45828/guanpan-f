@@ -1,13 +1,45 @@
 # F实时进度交接
 
-## 2026-10-29 自动行情/分时刷新核对（当前工作树）
+## 2026-10-29 图表横轴标签修复：Run 72 已通过
 
-- 起点为已同步 `main` HEAD `412c6edcd5438d2d4b6211b57d38e882164f8442`，工作树原先干净；Run 70 对其父代码提交 `38c269645470a7f960c484dd3ad9b9d579edbeb0` 的FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出和IPA均成功。HEAD `412c6ed`仅更新验收文档；下面新Swift改动尚未编译。
+- 提交 `70105ce992dafbbdcd6dee4608b66201a94c79e0`（`Prevent intraday chart axis label collisions`）由远端main触发 Run 72 [40812245517](https://github.com/ggjj45830/guanpan-f/actions/runs/40812245517)，job `123245046482` 最终success。
+- 实际结果：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和Artifact上传均成功。Artifact `12870733069`，SHA-256 `f456b5ab749f5cafc837e4d4763a593225d16fcac091c6bf526795a1d869320d`。
+- 本次源码只调整统一图表时间轴标签挑选：根据实际绘图宽度和最小间隔筛选，避免窄屏右侧相邻标签重叠；没有改价格数据、横向坐标映射或Ledger/行情语义。
+- 这证明代码已编译且当前自动测试通过；截图只确认导出步骤成功，尚未人工查看，因此不能说横轴视觉缺陷已通过人工验收。iPhone Air和手势验收仍External Pending。
+- 远端main已通过GitHub API按 `expected_sha=94266a3...`、`force=false` 快进到 `70105ce...`。本地Git fetch仍因DNS线程错误失败。此后交接/矩阵/差距文档更正尚未推送，尚未对这些文档更正创建CI提交。
+
+## 2026-10-29 10秒行情/分时刷新改动：Run 71 已验证
+
+- 本地提交 `fd68bc349907d4bc491f861cb98c697ccbb9d739` 的Git树 `e6bf545b896e0d90c93981f86d4a6e2e9dfc3b9a` 与GitHub `main`上Run 71提交 `94266a3e7d29751dd9b14feb1106901d669bb26b` 的树完全一致。GitHub API以非强推方式快进更新了远端；本机fetch仍因DNS/网络线程错误未能更新缓存`origin/main`，所以本地HEAD与远端提交ID不同，但提交内容树一致。没有覆盖远端历史。
+- Run 71 [40808942962](https://github.com/ggjj45830/guanpan-f/actions/runs/40808942962) 对该源码树完成并成功：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、iOS Device Build、Simulator Build、Simulator截图导出、未签名IPA打包/校验、Artifact上传均成功。Artifact：`12869767202`（`guanpan-f-ios-build-evidence`）。
+- 10秒节拍改动已通过本次Apple编译与CI测试：轮询按照请求开始时间安排下一次刷新，避免网络请求耗时后再额外等待完整10秒。静态链路显示交易时段当前分时会随新的可靠分钟快照更新；上游没有新数据时不代表每10秒必然产生新曲线。日K和NAS历史分钟不在此轮询内。
+- CI有截图导出成功记录，但本Windows客户端未能读取artifact ZIP，截图**未人工查看**；Simulator人工视觉/手势、iPhone Air与真机仍External Pending。NAS手机HTTPS与DeepSeek真实E2E也没有新证据。
+- `F-REALTIME-HANDOFF.md`与验收矩阵的状态更新是本地文档更正，尚未推送；下一步继续产品可用性整改，不把CI截图导出当成人工视觉验收。
+
+## B → F产品整改进度（Run 72后）
+
+- B/F对照审计：19项；其中13项明确由B占优。人工视觉/设备操作闭环修复0项，待修复或待验收19项。完整逐项裁决见`F-B-UI-PRODUCT-GAP-AUDIT.md`。
+- 六核心页面当前均仍**不如B**：首页、行情、证券详情、图表、AI、真实资产。Run 71验证轮询节拍，Run 72验证横轴标签源码编译/自动测试；两者均未改变产品体验结论。
+- 东方编辑室、精密交易台、流体玻璃三套标杆布局：源码构图存在；没有最新Simulator截图对比或iPhone Air验收，均未算完成。
+- Simulator截图导出有证据，但ZIP未能在当前环境打开查看；人工视觉=未验收。iPhone Air真实使用仍是用户曾报告明显问题，尚无新包复验。
+- NAS HTTPS连接、DeepSeek真实E2E、真实成交后Ledger与Advisor复判均无本轮新证据；NAS不是核心Advisor的必要依赖。
+- 当前本地HEAD仍为 `fd68bc3`，其提交树等于Run 71远端基线 `94266a3`；横轴源码修复已通过GitHub API作为子提交 `70105ce` 普通快进至远端main，并由Run 72验证。本地Git fetch仍失败（`getaddrinfo() thread failed to start`）；工作树含横轴Swift改动和四份文档更正，源码改动与远端CI版本内容相同。网络恢复后先fetch/reconcile，再普通push文档；不强推。
+
+## 图表时间刻度碰撞修复（Run 72验证）
+
+- 静态核对用户截图指出的问题：分钟图横轴按固定数组下标抽样刻度，可能同时保留右端相邻的14:30和15:00；在iPhone窄图宽度上标签会挤在一起。午休压缩后13:00也不应与11:30强行显示在相邻位置。
+- 已修改唯一renderer `GuanpanFApp/Sources/FUnifiedSecurityChart.swift`：按实际绘制宽度和44pt最小标签距离筛选刻度，保留起止标签；空间不足时让相邻内侧刻度让位，避免右边缘重叠。价格数据、图表横向映射和业务模型没有改动。
+- 本次Swift修改已进入远端提交 `70105ce`，Run 72的FCore、UI XCTest、Device/Simulator Build和IPA步骤均通过；截图导出没有替代人工查看。
+- 当前本地工作树中的同一Swift改动与远端内容一致，但本地fetch仍因DNS线程错误未更新跟踪分支；四份文档更正尚未推送。无强推。
+
+## 2026-10-29 自动行情/分时刷新核对（实现背景；Run 71结果见上）
+
+- 起点为已同步 `main` HEAD `412c6edcd5438d2d4b6211b57d38e882164f8442`，工作树原先干净；本节记录刷新改动提出时的实现背景。此前Run 70对父代码提交的CI已成功；刷新节拍源码随后进入Run 71并已通过（详见上节）。
 - 静态追踪 `GuanpanFApp.swift` → `autoRefreshMarketData()` → `refreshMarketData()` → `fetchCurrentMinutes()` → `FChartPresentationBuilder.live()`：交易时段内持仓/自选/当前证券会重新请求当前分钟快照；新快照写入可观察状态后，行情页分时图随SwiftUI重绘。收盘后不轮询。报价时间比缓存旧时保留缓存并显示上游数据较旧；接口失败不伪造新曲线。
 - 日K没有被10秒任务请求；历史分钟仅在用户查询日期时从NAS读取，均由页面刷新/指定查询入口更新。因此“图表会刷新”只适用于当前分时图，不适用于日K或历史分钟。
-- 发现刷新间隔之前是“上轮请求结束后再等10秒”，会随网络耗时漂移。已编码改为以每轮请求起始时间为节拍，最短间隔10秒；若请求自身超过10秒则完成后立即开始下一轮。**当前修改未编译、未测试、未Simulator验证。**
+- 发现刷新间隔之前是“上轮请求结束后再等10秒”，会随网络耗时漂移。已改为以每轮请求起始时间为节拍，最短间隔10秒；若请求自身超过10秒则完成后立即开始下一轮。该Swift修改已由Run 71编译并通过自动测试；仍未进行人工Simulator视觉和交互验收。
 - Run 70截图 artifact 已由GitHub连接器取得引用，但在本Windows工作区无法读取ZIP：浏览器下载被客户端拦截，普通本机网络下载被系统权限拒绝。未查看截图内容；人工视觉验收仍External Pending。没有用该阻塞声称页面通过。
-- 编译恢复后第一件事：验证本次轮询节拍改动的Swift并送完整Apple CI；同时检查请求取消/后台切换不会在后台持续刷新。随后查看CI截图，仍需人工视觉审阅与iPhone Air实测。
+- 后续：继续检查请求取消/后台切换不会在后台持续刷新；取得可读截图后进行人工视觉审阅与iPhone Air实测。当前Windows环境不能人工操作iOS Simulator。
 
 ## 当前提交与Apple CI闭环（2026-10-29，Run 70）
 
@@ -397,3 +429,4 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Git命令直推遇到DNS线程错误；随后在GitHub Desktop打开正确的F仓库并成功推送。当前本地main与远端origin/main已同步。
 - 文档提交仅更新Markdown；Apple workflow的push paths限定在Package.swift、Sources、Tests、GuanpanFApp和workflow文件，因此文档提交本身不会触发新Apple CI。
 - 最近Swift提交仍为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a，其Run 69实测全绿：FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、未签名IPA校验及artifact上传成功。
+

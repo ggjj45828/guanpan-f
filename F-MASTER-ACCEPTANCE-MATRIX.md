@@ -1,5 +1,25 @@
 # F Master Acceptance Matrix
 
+## Run 72：图表横轴标签防碰撞（2026-10-29）
+
+| 项目 | 需求/实现 | 实际证据 | 状态/边界 |
+| --- | --- | --- | --- |
+| 窄屏分时横轴标签 | 按绘图区宽度与最小间距选择显示标签，避免右侧标签挤压重叠 | Run [40812245517](https://github.com/ggjj45830/guanpan-f/actions/runs/40812245517)，SHA `70105ce992dafbbdcd6dee4608b66201a94c79e0`；FCore 164/164、UI 3/3、XcodeGen、Device/Simulator Build、截图导出、IPA和Artifact全部成功 | 自动编译/测试通过；人工视觉截图未查看，iPhone Air未实测，问题不能标人工验收通过 |
+
+## Run 71：自动行情/当前分时刷新节拍（2026-10-29）
+
+| 项目 | 需求/实现 | 实际证据 | 状态/边界 |
+| --- | --- | --- | --- |
+| 前台行情轮询节拍 | 交易时段内按请求开始时间维持约10秒节拍；新可靠分钟快照进入状态后，当前分时图随状态重绘 | Run [40808942962](https://github.com/ggjj45830/guanpan-f/actions/runs/40808942962)，源码树 `e6bf545b896e0d90c93981f86d4a6e2e9dfc3b9a`；FCore 164/164、UI XCTest 3/3；XcodeGen、Device/Simulator Build、截图导出、IPA校验/打包、Artifact上传成功 | Apple CI通过；不保证上游每10秒都有新分钟数据；日K和NAS历史分钟不由此轮询刷新 |
+| 当前分时视觉与交互 | 图线应随真实行情更新且不伪造行情 | CI截图导出成功，Artifact `12869767202`；当前环境无法取得并查看ZIP | 人工截图审阅、iPhone Air、真机手势External Pending，不能标记视觉通过 |
+| Git同步 | 不强推；先确认远端未前进并以普通快进推送 | GitHub `main`现为 `94266a3e7d29751dd9b14feb1106901d669bb26b`；本地提交 `fd68bc3`与远端提交树相同（tree `e6bf545...`）；GitHub API非强推快进成功，本地fetch缓存未更新 | 文件树一致；本地origin跟踪引用因DNS错误暂旧；无历史覆盖 |
+
+## 当前图表横轴改动（2026-10-29；Run 72已编译验证）
+
+| 项目 | 需求/实现 | 实际证据 | 状态/边界 |
+| --- | --- | --- | --- |
+| 分时/日内时间轴避免标签碰撞 | `FUnifiedSecurityChart`按绘制宽度与最小标签间距挑选刻度，避免右端14:30/15:00等标签叠字 | Run 72 `40812245517` / SHA `70105ce...` 实际FCore 164/164、UI 3/3、XcodeGen、Device/Simulator Build及IPA通过 | Swift编译/自动测试通过；截图导出但未人工查看，iPhone Air/设备视觉和手势仍External Pending。无数据或早盘范围不造点 |
+
 ## 2026-10-29 当前分时刷新验收补记
 
 | 要求 | 源码 | 当前状态 | 关闭条件 |
@@ -471,3 +491,4 @@ Run 69通过的源码SHA是0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后生�
 ### 文档同步最终状态（2026-10-29）
 
 Git命令直推失败后，已通过GitHub Desktop对正确F仓库推送成功，本地main与origin/main同步。文档提交只有Markdown文件，workflow的push paths不会因此触发Apple CI。Swift SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a的Run69已真实验证FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、IPA校验和artifact上传成功。
+
