@@ -14,6 +14,7 @@ struct FAdvisorVerticalSliceResult: Equatable {
     let assessment: FAdvisorDecisionAssessment
     let narrative: FAdvisorNarrative
     let scope: FAdvisorEntryScope
+    let generatedAt: Date
     let ledgerCapturedAt: Date
     let holdingSummary: String
     let cashBalance: Decimal

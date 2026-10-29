@@ -1,5 +1,12 @@
 # F Master Acceptance Matrix
 
+## 2026-10-29：首页组合判断保留与时间标识
+
+| 需求 | 源码 | 当前状态 | 关闭条件 |
+|---|---|---|---|
+| 分析刷新期间保留上一份真实组合判断，明确标记旧结果与生成时间；请求失败不能让首页静默丢失已有结果 | `GuanpanFApp/Sources/GuanpanFApp.swift`; `GuanpanFApp/Sources/FAdvisorVerticalSlice.swift`; `GuanpanFApp/Sources/HomeExperience.swift` | 已编码，当前工作树未编译；旧结果仅展示为“上次分析”，非自动实时结论 | 当前SHA Apple CI通过；Simulator验证加载/失败状态；确认旧结果不会被呈现为最新数据 |
+| 首页自动本地Quant快速决策 | `Sources/FCore/RealtimeQuantTrigger.swift`及首页 | 尚未完成：只有Candidate价格区间触发器，没有完整本地因子Quant；当前AI组合判断仍由用户显式发起 | 完整确定性Quant + Guard/行情接线，且真实/模拟行情质量与不交易场景验证通过；不得用DeepSeek逐tick代替 |
+
 ## 当前视觉整改快照（2026-10-29；覆盖下方较早状态）
 
 - 用户实机反馈：F整体视觉不如B，部分主题只是换色，交易仪表盘黑白块感明显。当前产品结论仍为**F不如B**。

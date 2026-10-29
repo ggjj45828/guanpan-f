@@ -498,7 +498,6 @@ final class FHomeModel: ObservableObject {
         let scope: FAdvisorEntryScope
         if let focusCode { scope = .instrument(focusCode) } else { scope = .portfolio }
         isAskingAdvisor = true
-        advisorResult = nil
         advisorStatus = focusCode == nil
             ? "正在读取全部真实持仓并刷新组合行情；NAS研究为可选增强…"
             : "正在读取真实持仓并刷新目标证券行情；NAS研究为可选增强…"
@@ -675,6 +674,7 @@ final class FHomeModel: ObservableObject {
                 .joined(separator: "\n")
             advisorResult = FAdvisorVerticalSliceResult(assessment: assessment, narrative: narrative,
                                                         scope: scope,
+                                                        generatedAt: completedAt,
                                                         ledgerCapturedAt: freshLedger.capturedAt,
                                                         holdingSummary: holdingSummary,
                                                         cashBalance: freshLedger.cashBalance,

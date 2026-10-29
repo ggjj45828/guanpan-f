@@ -288,8 +288,22 @@ private struct HomeAdvisorLead: View {
                 Image(systemName: "sparkles").foregroundStyle(theme.accent)
                 Text("AI 今日指导").font(.headline)
                 Spacer()
-                Text(portfolioResult?.isReviewable == true ? "已完成组合分析" : "组合级")
+                Text(portfolioResult.map { "上次分析 · \($0.generatedAt.formatted(date: .omitted, time: .shortened))" } ?? "组合级")
                     .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+            }
+
+            if model.isAskingAdvisor, portfolioResult != nil {
+                Label("正在更新 · 暂时显示上次组合判断", systemImage: "arrow.clockwise")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.manifest.tokens.warning)
+            } else if let result = portfolioResult,
+                      model.advisorStatus != "尚未开始分析",
+                      !model.advisorStatus.hasPrefix("已完成 DecisionContext") {
+                Label("最近请求未完成 · 仍显示 \(result.generatedAt.formatted(date: .omitted, time: .shortened)) 的组合判断",
+                      systemImage: "exclamationmark.clock")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(theme.manifest.tokens.warning)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let result = portfolioResult {
@@ -345,7 +359,7 @@ private struct HomeAdvisorLead: View {
                 } label: {
                     HStack(spacing: 7) {
                         if model.isAskingAdvisor { ProgressView().tint(.white) }
-                        Text(model.isAskingAdvisor ? "正在分析真实组合" : "分析我的真实组合")
+                        Text(model.isAskingAdvisor ? "正在分析真实组合" : (portfolioResult == nil ? "生成组合判断" : "更新组合判断"))
                     }
                     .font(.subheadline.weight(.semibold))
                     .frame(minHeight: 44)
