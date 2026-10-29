@@ -448,3 +448,7 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 ### 本地文档提交状态补正（2026-10-29）
 
 Run 69通过的源码SHA是0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后生成了一个仅含五份Markdown更新的本地提交；本机git push失败，错误为“getaddrinfo() thread failed to start”。当前本地main比缓存origin/main ahead 1；Swift源码未变。当前仅文档提交未推送，也没有其远端CI结果。
+
+### 文档同步最终状态（2026-10-29）
+
+Git命令直推失败后，已通过GitHub Desktop对正确F仓库推送成功，本地main与origin/main同步。文档提交只有Markdown文件，workflow的push paths不会因此触发Apple CI。Swift SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a的Run69已真实验证FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、IPA校验和artifact上传成功。

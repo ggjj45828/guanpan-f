@@ -363,3 +363,9 @@ F_CURRENT_STATUS_END
 ## 本地文档提交状态补正（2026-10-29）
 
 Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随后我本地提交了仅包含五份Markdown状态校准的文档提交；GitHub推送因本机Git网络报错“getaddrinfo() thread failed to start”未成功。当前本地分支因此比缓存origin/main多一个文档提交，Swift没有再变更；该文档提交尚无远端CI。文档提交不改变Run 69针对Swift源码SHA的测试结论。
+
+## 文档同步最终状态补正（2026-10-29）
+
+- Git命令直推遇到DNS线程错误；随后在GitHub Desktop打开正确的F仓库并成功推送。当前本地main与远端origin/main已同步。
+- 文档提交仅更新Markdown；Apple workflow的push paths限定在Package.swift、Sources、Tests、GuanpanFApp和workflow文件，因此文档提交本身不会触发新Apple CI。
+- 最近Swift提交仍为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a，其Run 69实测全绿：FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出、未签名IPA校验及artifact上传成功。

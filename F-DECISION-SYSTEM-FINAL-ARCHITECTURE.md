@@ -109,3 +109,7 @@ Run 40802741213 is now confirmed running for SHA 0dff6c3d84af3870d4a10adcb02fcbe
 ## 本地文档提交未推送补正（2026-10-29）
 
 Run 69通过的Swift源码SHA为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后只提交了五份Markdown状态文档；git push因“getaddrinfo() thread failed to start”失败，本地main比缓存origin/main ahead 1。Swift未修改，Run 69结论仍只对应其SHA；文档提交没有远端CI证据。
+
+## 文档推送与Swift验证关系校正（2026-10-29）
+
+本轮五份文档已通过GitHub Desktop成功推送，当前本地与远端main同步。Workflow只监控Swift/工程及workflow路径，因此文档更新没有新触发Apple CI。当前Swift代码的最近验证SHA仍为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a；Run69全绿的FCore、UI XCTest、工程生成、Device/Simulator Build、截图导出、IPA校验与artifact上传均只对应该Swift SHA。
