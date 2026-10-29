@@ -6,7 +6,7 @@
 
 | 页面 | B 布局/交互可借鉴内容 | F 必须保留/重构 | B 旧业务不迁移 | 当前 F 源码 | 结构迁移 | 已接 F 真实数据 | Simulator 验证 | 视觉状态 |
 |---|---|---|---|---|---|---|---|---|
-| 首页 | 明确的编辑标题、分层区段、紧凑资产指标、跨场景入口；注意候选B源码没有独立总览页，入口从行情开始，资产页内有摘要 | 以 F Portfolio Advisor、真实资产、Quant/Trigger、风险和可选NAS为唯一数据输入；保留F自己的首页路由 | 模拟账户、虚拟盈亏、数字孪生入口 | GuanpanFApp/Sources/HomeExperience.swift HomeLayout / FEditorialMasthead / FEditorialMarketRibbon / HomeAdvisorLead / FEditorialResearchLine / HomePortfolioLead；GuanpanFApp/Sources/GuanpanFApp.swift FHomeRoot | 已编码首轮结构迁移 | 已接F真实Ledger、Advisor与持仓/自选行情；自动快速Quant未完整 | 未验证 | 仅源码层承接B的编辑页眉、市场先览和层级节奏；未经CI/截图审阅，仍不判视觉接近B |
+| 首页 | 明确的编辑标题、分层区段、紧凑资产指标、跨场景入口；注意候选B源码没有独立总览页，入口从行情开始，资产页内有摘要 | 以 F Portfolio Advisor、真实资产、Quant/Trigger、风险和可选NAS为唯一数据输入；保留F自己的首页路由 | 模拟账户、虚拟盈亏、数字孪生入口 | GuanpanFApp/Sources/HomeExperience.swift HomeLayout / FEditorialMasthead / FEditorialMarketRibbon / HomeAdvisorLead / FEditorialResearchLine / HomePortfolioLead；GuanpanFApp/Sources/GuanpanFApp.swift FHomeRoot | 首轮已编码并通过Run 73编译 | 已接F真实Ledger、Advisor与持仓/自选行情；自动快速Quant未完整 | 截图已导出；人工审阅/交互未验证 | 仅源码层承接B的编辑页眉、市场先览和层级节奏；仍未判视觉接近B |
 | 行情 | 指数带、输入代码、全部/自选/持仓筛选、列表来源/时效、行滑动快捷动作、空状态 | 自选与真实持仓分离；只读行情数据；F每10秒行情状态 | 自动真实交易、虚拟撮合 | HomeExperience.swift MarketOverview | 已定位B源码 | 已接F真实持仓/自选/腾讯报价请求；全局搜索和B完整列表体验待评估 | 未验证 | 用户反馈不如B；无法证明接近 |
 | 证券详情 | 单证券上下文连续组织报价、状态、图表、研究/AI、持仓操作；快捷刷新、关注和全屏入口 | F Episode/Broker双成本、日内/本轮/Lifetime/T语义、候选与确认成交边界、质量和来源状态 | B的旧账本成本算法、旧模拟计划、未验证盘口值 | HomeExperience.swift HomeDestination；FUnifiedSecurityChart.swift | 已定位B源码 | 部分：F行情、Ledger、Advisor、Candidate源码已接入页面 | 未验证 | 用户反馈不如B；无法证明接近 |
 | 分时/K线图表 | 固定A股日内时间轴、清楚的图层显隐、量能/副图、十字选择、缩放/平移、横屏全屏与日期入口 | F的唯一 FUnifiedSecurityChart、真实来源和质量、可见overlay共同定轴、成本双口径、无假IOPV/前收/均价 | B旧来源/价格语义；绝不复制第二renderer | GuanpanFApp/Sources/FUnifiedSecurityChart.swift | 已定位B源码 | 部分：F当前行情/日K/NAS历史精确日期输入存在；真实NAS历史覆盖无证据 | 未验证；iPhone Air未验 | 用户明确认为F图表差；不能称接近 |
@@ -17,6 +17,6 @@
 
 1. 已取得并核验用户提供的 Frozen Candidate ZIP；若要认定与手机B同版，仍需同版本截图/构建身份，不阻塞源码供体迁移。
 2. Frozen源码地图已建立；以 ZIP 内实现校正旧审计，旧副本仅作历史旁证。
-3. 首页第一轮结构迁移已编码：复用 F 模型与业务路由，没有搬入 B 策略/账本代码；待当前HEAD Apple CI和Simulator视觉审阅。
+3. 首页第一轮结构迁移已编码，Run 73对该SHA的Device/Simulator Build和UI XCTest全通过；复用F模型与业务路由，没有搬入B策略/账本代码。截图已导出，待人工视觉审阅。
 4. 先在可交互 Simulator 取得 B参考、F旧版、F新版截图，再决定是否将结构方案推广到其他页。
 5. 只有截图审阅/操作完成，才能从“已定位B源码”推进到“已完成结构迁移”“Simulator验证”或视觉接近/达到/超过B。

@@ -439,4 +439,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 ## 2026-10-29 远端同步与本地恢复
 
 - GitHub Desktop Fetch 已成功。已确认本地原HEAD `fd68bc3` 的唯一提交与远端 `94266a3` 补丁完全相同；因此本地分支安全rebase到最新 `origin/main`，Git自动跳过重复提交。创建了本地备份分支 `backup/pre-b-ui-sync` 保留原HEAD。
-- 暂存区备份并恢复了全部已有改动及两个新审计文件；远端改动已保留。文档冲突已按新状态合并；本地工作仍未推送。Apple CI尚未包含这些本地未提交Swift修改。
+- （Run 73 前的历史状态，已由下方 Run 73 记录覆盖）暂存区备份并恢复了全部已有改动及两个新审计文件；远端改动已保留。文档冲突已按新状态合并；当时本地工作仍未推送，Apple CI尚未包含这些Swift修改。
+
+## Run 73：B 首页首轮迁移实际验证（2026-10-29）
+
+- 提交 `bd01362fc72160ebb0fb28ccccb7c9fc4de5071c` 已普通推送到 `main`；GitHub API确认远端提交存在，父提交为 `28821428ba1cc45ee23cdf822ac1b2743e8f2a6b`。Run 73源码校验时，本地HEAD与origin/main为该SHA，工作树干净。重整前的旧HEAD由本地备份分支 `backup/pre-b-ui-sync` 保留；stash备份暂不删除。
+- Apple CI Run 73 [40817974922](https://github.com/ggjj45830/guanpan-f/actions/runs/40817974922) 对本次提交完整成功：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验、artifact上传均成功。
+- IPA验证确认 `CFBundleDisplayName=观盘max`、编译产物选择 `AppIcon`，归档完整性检查无错误。Artifact `12873681355`，包含 `观盘max.ipa`、xcresult、UI截图与构建日志；下载地址：[Run 73 build evidence](https://github.com/ggjj45830/guanpan-f/actions/runs/40817974922/artifacts/12873681355)，SHA-256 `6d18eddfd8ed48dfff31db2b912680fa69b7f7a26043b83923060411bb1aaea7`。
+- 这次 CI证明当前提交已编译、自动测试通过、Simulator截图已导出；**我尚未人工查看截图，也没有交互式Simulator/iPhone Air验收**。因此不能据此说首页视觉已达到或超过B，当前产品判断仍是F不如B。
+- 后续下一项：人工审阅Run 73首页截图并基于截图收小的视觉缺口；完成后再迁移行情/证券详情。NAS HTTPS、DeepSeek真实E2E和真实成交闭环本Run没有新证据。
+- 本次为补齐Run 73交接状态新增了仅文档的本地提交；普通命令行推送仍因本机 `getaddrinfo() thread failed to start` 失败。GitHub Desktop窗口自动化连续无法取得稳定窗口状态，因此本次没有声称已推送；Swift代码仍对应已通过Run 73的 `bd01362`，文档提交待普通推送。

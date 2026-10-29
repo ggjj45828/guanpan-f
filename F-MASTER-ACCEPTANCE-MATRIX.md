@@ -500,3 +500,5 @@ Git命令直推失败后，已通过GitHub Desktop对正确F仓库推送成功�
 | 空行情或过期报价 | 显示等待/状态，不推算指数或涨跌 | 源码静态确认；运行未验证 |
 | 主题纸面层级 | Editorial surface使用不透明纸面、细边和轻阴影 | 已编码；截图未验 |
 | B视觉胜出声明 | 当前仍依据用户实机反馈：F不如B | 未关闭 |
+
+Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出与IPA校验。首页人工视觉验收仍未完成；CI通过不等于B视觉达到。
