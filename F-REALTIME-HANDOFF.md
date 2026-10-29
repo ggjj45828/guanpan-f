@@ -290,3 +290,12 @@ F_CURRENT_STATUS_END
 - 行情页整改：本地自选独立保存，不写Ledger、不产生虚拟持仓；行情列表支持“持仓 / 自选 / 持仓 + 自选”，自选价格/图表仅读取实际行情快照，缺数据时显示Unavailable，不填假值；新增证券代码输入后加入/移出自选，手动/下拉刷新包含自选证券。
 - 上述行情自选修改已基于远端完整源码构建为新提交；Apple CI结果待该提交对应的后续run实际完成后填写。Simulator人工视觉/手势、iPhone Air、实机NAS HTTPS和DeepSeek端到端仍未验证。
 - Windows本机无Xcode/Simulator；代码若未由Apple CI实际构建，不写成已编译。
+
+
+## Run65编译根因与修复（2026-10-29）
+
+- Run65 `40795701608` / SHA `f5b21993fe6e44444c54379bd2f300f21eed3fc5`：FCore成功，XcodeGen成功，Device Build失败；Simulator Build、UI XCTest和IPA被跳过。
+- 首个真实错误为 `GuanpanFApp/Sources/HomeExperience.swift:1725`：SwiftUI对键盘 `.toolbar(content:)` 的View/ToolbarContent重载无法消歧。不是Ledger、XcodeGen或服务网络故障。
+- 修复：移除有歧义的键盘ToolbarItemGroup，在证券代码输入区聚焦时显示明确的“收起键盘”按钮；交互仍保留，避免影响其余导航工具栏。
+- 修复已送新Apple CI；只有后续完整run通过后才记为已编译。Run64的164/164与3/3只适用于它自己的SHA，不能覆盖Run65/66。
+- 本机fetch仍因 `getaddrinfo() thread failed to start`失败；后续远端更新均以当前main SHA为parent并设置expected SHA、force=false。Simulator人工视觉及iPhone Air验收未做。

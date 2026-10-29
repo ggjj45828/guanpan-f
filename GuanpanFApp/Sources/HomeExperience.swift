@@ -1631,6 +1631,10 @@ struct MarketOverview: View {
                             .filter { (48...57).contains($0.value) }.prefix(6))
                         if digits != value { securityLookupCode = digits }
                     }
+                if securityLookupFocused {
+                    Button("收起键盘") { securityLookupFocused = false }
+                        .accessibilityIdentifier("market.security-code.dismiss")
+                }
                 NavigationLink(value: FHomeRoute.instrument(securityLookupCode)) {
                     Label("打开证券详情", systemImage: "arrow.up.forward")
                 }
@@ -1722,12 +1726,6 @@ struct MarketOverview: View {
         }
         .navigationTitle("今日市场观察")
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("收起键盘") { securityLookupFocused = false }
-            }
-        }
         .refreshable { await model.refreshMarketData(for: refreshableSecurityCodes) }
     }
 }
