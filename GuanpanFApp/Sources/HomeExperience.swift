@@ -441,7 +441,7 @@ private struct HomeMasthead: View {
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             HStack(spacing: 7) {
-                Circle().fill(model.ledgerState == .available ? Color.green : Color.orange)
+                Circle().fill(model.ledgerState == .available ? theme.manifest.tokens.positive : theme.manifest.tokens.warning)
                     .frame(width: 7, height: 7)
                 Text(model.ledgerState == .available ? "本机真实账本" : model.ledgerStatus)
                     .font(.caption2.weight(.medium)).foregroundStyle(.secondary).lineLimit(1)
@@ -2065,9 +2065,9 @@ private struct FAdvisorResultCard: View {
                     }
                 }
             } else {
-                Text("Guard 已阻止此候选计划").font(.subheadline.bold()).foregroundStyle(.red)
+                Text("Guard 已阻止此候选计划").font(.subheadline.bold()).foregroundStyle(theme.manifest.tokens.risk)
                 ForEach(Array(result.assessment.guardResult.findings.enumerated()), id: \.offset) { _, item in
-                    Text("• \(item.displayName)").font(.caption).foregroundStyle(.red)
+                    Text("• \(item.displayName)").font(.caption).foregroundStyle(theme.manifest.tokens.risk)
                 }
             }
             Text("真实资产只能在用户确认真实成交后变化；此结果没有账本写入能力。")
