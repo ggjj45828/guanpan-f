@@ -1607,12 +1607,15 @@ struct SettingsOverview: View {
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                LabeledContent("历史分钟查询", value: nasBaseAddress.isEmpty ? "需配置 NAS；覆盖待验证" : "查询接口已编码；真实覆盖待验证")
-                LabeledContent("自动历史同步", value: "未接入")
-                LabeledContent("新闻来源", value: "未接入真实来源")
-                Text("实时分钟与日K使用腾讯公开行情接口。历史分钟通过可选 NAS 按日期查询；NAS Ready 只代表服务在线，不代表指定日期已有完整分钟归档。当前历史来源覆盖未通过实测，缺失日期不会补造。新闻目前没有接入供应商或真实新闻接口。")
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup("行情、历史数据与新闻") {
+                    LabeledContent("实时分钟 / 日 K", value: "腾讯公开行情接口")
+                    LabeledContent("历史分钟", value: nasBaseAddress.isEmpty ? "需配置 NAS；实际覆盖待验证" : "NAS 按日期查询；实际覆盖待验证")
+                    LabeledContent("自动历史同步", value: "未接入")
+                    LabeledContent("新闻来源", value: "未接入真实来源")
+                    Text("NAS Ready 只表示服务在线，不代表指定日期已有完整分钟归档。缺失日期不会补造；新闻源接入前不会显示虚构新闻。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Section("主题") {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1626,12 +1629,12 @@ struct SettingsOverview: View {
                                     Text(item.manifest.name)
                                 }
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(theme == item ? theme.accent : theme.ink)
+                                .foregroundStyle(theme == item ? item.manifest.tokens.accent : item.manifest.tokens.foreground)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 9)
-                                .background(theme == item ? theme.accent.opacity(0.13) : theme.background.opacity(0.72),
+                                .background(theme == item ? item.manifest.tokens.accent.opacity(0.13) : item.manifest.tokens.surface.opacity(0.78),
                                             in: Capsule())
-                                .overlay(Capsule().stroke(theme.accent.opacity(theme == item ? 0.55 : 0.16), lineWidth: 1))
+                                .overlay(Capsule().stroke(item.manifest.tokens.accent.opacity(theme == item ? 0.55 : 0.16), lineWidth: 1))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("theme.selector.\(item.rawValue)")

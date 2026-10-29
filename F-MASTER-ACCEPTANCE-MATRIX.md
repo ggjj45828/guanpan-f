@@ -1,5 +1,20 @@
 # F Master Acceptance Matrix
 
+## 2026-10-29 最新本地改动（待Apple CI）
+
+| 项目 | 当前改动 | 当前状态 | 关闭条件 |
+| --- | --- | --- | --- |
+| 实时分时横轴 | 交易中/午休按实际观测分钟范围绘制；历史图仍用固定完整交易时段显示覆盖空缺 | 已编码，未编译、未运行 | 当前改动SHA完成Apple CI；Simulator看实际曲线和刻度 |
+| 图表点选/十字命中 | 命中区左轴从54pt改为与绘图区一致的44pt，右侧均为8pt | 已编码，未编译、未人工手势验收 | CI通过；Simulator点击/长按/拖动验证 |
+| MA/图层按钮 | 降低活动层胶囊背景强度，保留触控高度 | 已编码，未编译、未视觉验收 | CI通过；截图对照确认密度与易点性 |
+| 主题栏一致性 | 每个主题选择项使用各自manifest语义色，不再全部套用当前主题色 | 已编码，未编译、未视觉验收 | CI通过；切换主题后跨页检查 |
+| 设置页数据状态 | 历史分钟、自动同步、新闻状态归到可折叠扩展数据组；明确同步/新闻未接入 | 已编码，未编译 | CI通过；视觉验收确认未隐藏关键NAS状态 |
+| 最近真实CI | Run 85 `40854072875` / SHA `31c2010d4324db6fa8251db0199e1c0cd8540113`：FCore 165/165、UI XCTest 4/4，XcodeGen、Device/Simulator Build、截图导出、IPA打包/校验/Artifact上传通过 | 只适用于Run85 SHA；不得覆盖上方未编译本地改动 | 新SHA完整Apple CI执行后更新本行 |
+| NAS/行情/新闻 | 历史分钟真实指定日期、前收/IOPV供应商字段、可靠新闻源、自动历史同步 | 当前没有新的实网证据；维持Unavailable/未接入状态 | 手机端实际请求/来源校验通过；禁止用Ready或HTTP 200替代历史数据验证 |
+| UI人工验收 | CI截图可导出，但本轮没有人工看图、iPhone Air或实机触控证据 | External Pending | Simulator截图人工审阅 + iPhone Air实机验收分别记录 |
+
+> 远端`main`经GitHub API核实为`31c2010...`，本地HEAD仍是其父`be0b8f...`；Windows fetch受DNS线程错误影响。推送前必须以远端`31c2010...`为父快进更新，禁止从旧本地引用覆盖远端。
+
 ## NAS历史分钟 HTTP 200响应诊断修正（待CI）
 
 | 项目 | 实现/证据 | 当前状态 | 关闭条件 |
@@ -550,9 +565,8 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 图表、主题、手机布局 | 当前SHA Simulator Build及截图导出步骤成功 | 未人工查看截图、未测iPhone Air和真实触控；不能据此说界面问题已全部修复，F目前仍不如B |
 | 新闻/均价/前收/IOPV/溢价 | 当前Run没有新的供应商或设备真实响应证据 | 未接入或未证实；数据缺失继续显示Unavailable，不得伪造 |
 
-## NAS诊断增量（待Run 85）
+## NAS诊断增量（Run 85，2026-10-29）
 
 | 验收项 | 当前增量 | 状态/关闭条件 |
 |---|---|---|
-| HTTP 200错误体诊断完整度 | 有服务端`error`说明时仍检查顶层与首条bar实际结构；行级支持`security_code`、`trading_date`、数字证券代码、大小写市场值 | 已编码，未编译；送Run 85。真实NAS指定日期响应仍待手机验证 |
-
+| HTTP 200错误体诊断完整度 | 有服务端`error`说明时仍检查顶层与首条bar实际结构；行级支持`security_code`、`trading_date`、数字证券代码、大小写市场值 | Run 85 [40854072875](https://github.com/ggjj45830/guanpan-f/actions/runs/40854072875) 对SHA `31c2010d4324db6fa8251db0199e1c0cd8540113`：FCore 165/165、UI XCTest 4/4、XcodeGen、Device/Simulator Build、截图导出、IPA打包/校验/上传全通过。真实NAS指定日期响应仍待手机验证 |

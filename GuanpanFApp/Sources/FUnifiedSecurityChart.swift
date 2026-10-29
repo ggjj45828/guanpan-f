@@ -24,6 +24,8 @@ struct FUnifiedSecurityChart: View {
     @State private var crosshairEnabled = false
 
     private let averagePeriods = [5, 10, 20, 60, 250]
+    private let plotLeftInset: CGFloat = 44
+    private let plotRightInset: CGFloat = 8
     private var averageColors: [Color] { theme.manifest.tokens.movingAverages }
     private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
@@ -39,7 +41,8 @@ struct FUnifiedSecurityChart: View {
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
                 let minuteDomain = minuteDisplayDomain(series: series, range: visibleRange,
-                                                       zoomScale: displayedZoomScale)
+                                                       zoomScale: displayedZoomScale,
+                                                       window: model.chart.window)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
@@ -315,8 +318,8 @@ struct FUnifiedSecurityChart: View {
                               series: FChartSeries, range: Range<Int>,
                               minuteDomain: ClosedRange<Double>) -> Int {
         guard !range.isEmpty else { return 0 }
-        let left: CGFloat = 54
-        let right: CGFloat = 8
+        let left = plotLeftInset
+        let right = plotRightInset
         let plotWidth = max(1, width - left - right)
         let fraction = min(max((locationX - left) / plotWidth, 0), 1)
         switch series {
@@ -346,12 +349,23 @@ struct FUnifiedSecurityChart: View {
     }
 
     private func minuteDisplayDomain(series: FChartSeries, range: Range<Int>,
-                                     zoomScale: CGFloat) -> ClosedRange<Double> {
+                                     zoomScale: CGFloat, window: FChartWindow) -> ClosedRange<Double> {
         guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
         let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
         let first = visibleMinutes.min() ?? 0
         let last = visibleMinutes.max() ?? 1
         if zoomScale > 1.01 { return first...(max(first + 1, last)) }
+        if case .liveIntraday = window {
+            switch FMainlandTradingCalendar.status(at: Date()) {
+            case .continuous, .lunchBreak:
+                // Keep today's live curve readable during the opening hours;
+                // plotting five minutes against a full-day axis hides it at
+                // the far left. Archived days retain the full-session clock.
+                return first...(max(first + 1, last))
+            case .preOpen, .closed, .unknown:
+                break
+            }
+        }
         // Keep live and archived intraday data on the same full-session clock.
         // At lunch or before the close, the blank afternoon is intentional.
         return 0...252
@@ -374,8 +388,8 @@ struct FUnifiedSecurityChart: View {
         let high = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
         // Reserve only the space needed for 3-decimal price labels; the old
         // 54pt gutter visibly squeezed the plot on phone screens.
-        let leftAxis: CGFloat = 44
-        let rightInset: CGFloat = 8
+        let leftAxis = plotLeftInset
+        let rightInset = plotRightInset
         let topInset: CGFloat = 8
         let bottomAxis: CGFloat = 24
         let showVolume = isDaily(series) && subchartMode == "volume" && visibleLayers.contains("volume")
@@ -677,9 +691,9 @@ struct FUnifiedSecurityChart: View {
                     .font(.system(size: 7, weight: .semibold))
             }
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
-            .padding(.horizontal, 4).padding(.vertical, 1)
-            .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
-            .frame(minHeight: 24)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(active ? color.opacity(0.07) : Color.clear, in: Capsule())
+            .frame(minHeight: 30)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
