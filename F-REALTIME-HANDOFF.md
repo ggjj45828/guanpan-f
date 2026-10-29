@@ -301,3 +301,27 @@ F_CURRENT_STATUS_END
 - 用户可下载CI证据包并从中取出IPA：`https://github.com/ggjj45830/guanpan-f/actions/runs/40686254194/artifacts/12814859492`。该IPA由CI以`CODE_SIGNING_ALLOWED=NO`生成，为未签名IPA；可打包验证不代表可直接在iPhone侧载。需用用户可用的签名安装渠道后实机确认图标和名称。
 - 这轮没有修订前端布局，没有人工Simulator视觉验收；UI XCTest通过和截图导出不能替代iPhone Air实机确认。
 - NAS服务端未修改；手机通过HTTPS穿透连接NAS仍未新包复测，不能标记NAS连接已解决。
+
+
+## 2026-10-29 行情自选整改与CI状态
+
+- GitHub远端main在本轮开始时为 `519ffe3c42361a4c8f09e8ae2b5b37e384bea71a`。前一条Run63因错误上传的截断源码在Device Build失败；随后完整文件恢复。最新Run64 `40793338913` 已对完整恢复版本实际通过：FCore 164/164、XcodeGen、Device Build、Simulator Build、App UI XCTest 3/3、截图导出、IPA打包校验和artifact上传。
+- Run64是本轮新改动之前的验证证据，不能继承给后续提交。
+- 行情页整改：本地自选独立保存，不写Ledger、不产生虚拟持仓；行情列表支持“持仓 / 自选 / 持仓 + 自选”，自选价格/图表仅读取实际行情快照，缺数据时显示Unavailable，不填假值；新增证券代码输入后加入/移出自选，手动/下拉刷新包含自选证券。
+- 上述行情自选修改已基于远端完整源码构建为新提交；Apple CI结果待该提交对应的后续run实际完成后填写。Simulator人工视觉/手势、iPhone Air、实机NAS HTTPS和DeepSeek端到端仍未验证。
+- Windows本机无Xcode/Simulator；代码若未由Apple CI实际构建，不写成已编译。
+
+
+## Run65编译根因与修复（2026-10-29）
+
+- Run65 `40795701608` / SHA `f5b21993fe6e44444c54379bd2f300f21eed3fc5`：FCore成功，XcodeGen成功，Device Build失败；Simulator Build、UI XCTest和IPA被跳过。
+- 首个真实错误为 `GuanpanFApp/Sources/HomeExperience.swift:1725`：SwiftUI对键盘 `.toolbar(content:)` 的View/ToolbarContent重载无法消歧。不是Ledger、XcodeGen或服务网络故障。
+- 修复：移除有歧义的键盘ToolbarItemGroup，在证券代码输入区聚焦时显示明确的“收起键盘”按钮；交互仍保留，避免影响其余导航工具栏。
+- 修复已送新Apple CI；只有后续完整run通过后才记为已编译。Run64的164/164与3/3只适用于它自己的SHA，不能覆盖Run65/66。
+- 本机fetch仍因 `getaddrinfo() thread failed to start`失败；后续远端更新均以当前main SHA为parent并设置expected SHA、force=false。Simulator人工视觉及iPhone Air验收未做。
+
+
+## Run66兼容性修复（2026-10-29）
+
+- Run66 `40796170487` / SHA `ef328df331b0567184d34833b99918d530fde1be`：FCore、XcodeGen通过；Device Build失败，首错为 `HomeExperience.swift:1663`：`ContentUnavailableView`仅iOS 17+可用，与当前更低deployment target不兼容。
+- 已替换为兼容当前最低系统版本的SwiftUI VStack空状态，不改变空态含义、不加入假数据。此次修复送后续Apple CI；Run66失败保留，不能继承Run64通过结果。

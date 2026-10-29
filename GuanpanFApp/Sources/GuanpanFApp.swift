@@ -47,6 +47,8 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var holdings: [FHomeHolding] = []
     @Published private(set) var instrumentHistories: [FInstrumentHistorySnapshot] = []
     @Published private(set) var cashFlow: [FReadOnlyCashFlowEntry] = []
+    /// Local watchlist is separate from Ledger positions and never creates holdings.
+    @Published private(set) var watchlistCodes: [String] = []
     @Published private(set) var ledgerStatus = "正在读取本机真实账本"
     @Published private(set) var ledgerState: FHomeLedgerState = .loading
     @Published var question = ""
@@ -102,6 +104,7 @@ final class FHomeModel: ObservableObject {
     var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
 
     init() {
+        watchlistCodes = Self.loadWatchlistCodes()
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory,
                                                       in: .userDomainMask).first else {
             ledgerState = .unavailable
@@ -781,6 +784,32 @@ final class FHomeModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func isInWatchlist(_ code: String) -> Bool {
+        watchlistCodes.contains(code)
+    }
+
+    func toggleWatchlist(_ code: String) {
+        guard Self.isValidWatchlistCode(code) else { return }
+        if watchlistCodes.contains(code) {
+            watchlistCodes.removeAll { $0 == code }
+        } else {
+            watchlistCodes.append(code)
+            watchlistCodes.sort()
+        }
+        UserDefaults.standard.set(watchlistCodes, forKey: Self.watchlistDefaultsKey)
+    }
+
+    private static let watchlistDefaultsKey = "guanpan.f.market.watchlist.v1"
+
+    private static func loadWatchlistCodes() -> [String] {
+        let saved = UserDefaults.standard.stringArray(forKey: watchlistDefaultsKey) ?? []
+        return Array(Set(saved.filter(isValidWatchlistCode))).sorted()
+    }
+
+    private static func isValidWatchlistCode(_ code: String) -> Bool {
+        code.utf8.count == 6 && code.utf8.allSatisfy { (48...57).contains($0) }
     }
 
     func autoRefreshMarketData() async {

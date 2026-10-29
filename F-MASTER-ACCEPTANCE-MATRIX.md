@@ -396,3 +396,20 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 
 - run `40677313197` 中FCore、XcodeGen、设备/模拟器构建和UI XCTest均成功，IPA阶段再次失败。真实原因：构建产品Info.plist没有`CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName`键。
 - 已改为校验图标源manifest/PNG，并用Xcode `assetutil`检查编译后的`Assets.car`包含AppIcon rendition。此检验尚未由CI执行。
+
+
+## 2026-10-29 行情自选验收增补
+
+- 行情页必须能分开查看真实持仓和自选，也可合并查看；自选只保存证券代码关注关系，不得创建Security持仓、成交、现金或盈亏。
+- 自选条目只能展示真实上游行情快照及其时间/来源；行情缺失时明确显示空值/不可用。加入自选后可进入证券详情；清除自选不得改变真实Ledger。
+- 当前状态：Swift实现已送Apple CI，构建/测试结果待记录；Simulator视觉验收待人工完成。
+
+
+## 自选行情页CI修正（2026-10-29）
+
+- Run65真实失败点：行情页键盘Toolbar重载歧义（HomeExperience.swift:1725）。修复是将键盘关闭操作放到聚焦时可见的查询区按钮；不删除关闭键盘能力。后续CI尚待执行/结果填写。
+
+
+## 行情空状态兼容修复（2026-10-29）
+
+- Run66确认项目deployment target低于iOS17；行情页不使用iOS17专有ContentUnavailableView，改用兼容布局。新CI结果待验证。

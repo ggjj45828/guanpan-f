@@ -192,3 +192,18 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 
 - run `40677313197`：FCore、工程生成、设备构建、模拟器构建、UI XCTest与截图导出成功；IPA检查因Info.plist根本不含预期图标键再次失败。IPA未通过打包验收。
 - 当前已切换到检查编译的`Assets.car`中AppIcon rendition，并核对源manifest/PNG；此workflow修改未执行。
+
+
+## 最新整改增补（2026-10-29）
+
+- 行情列表的B版观察入口缺失/不易发现，列为F退化整改。F新增持仓/自选/合并筛选及证券代码直接加入自选；自选与Ledger隔离，使用同一行情与证券详情实现。当前Swift已送Apple CI，尚未以本次CI结果标记验证通过，也无新Simulator截图。
+
+
+## Run65整改验证状态（2026-10-29）
+
+- 行情页自选/筛选实现的首轮CI Run65未通过Device Build，真实错误为SwiftUI键盘Toolbar重载歧义。已改为查询区聚焦时显示“收起键盘”按钮；新CI完成前，不视为修复验证通过。
+
+
+## Run66兼容性结果（2026-10-29）
+
+- 首轮Toolbar错误修复后，Run66继续发现ContentUnavailableView高于项目最低iOS版本。已替换成兼容的VStack空状态，待新CI确认。
