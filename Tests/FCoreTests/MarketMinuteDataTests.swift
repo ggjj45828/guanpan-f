@@ -26,6 +26,8 @@ final class MarketMinuteDataTests: XCTestCase {
                                                     fetchedAt: fetched, timeZone: shanghai)
         XCTAssertEqual(result.samples.map(\.timestamp), [stamp("20261026 0931"), stamp("20261026 0932")])
         XCTAssertEqual(result.samples.map(\.price), [Decimal(string: "1.200")!, Decimal(string: "1.201")!])
+        XCTAssertNil(result.samples[0].volume) // first observed cumulative value has no safe delta
+        XCTAssertEqual(result.samples[1].volume, Decimal(120))
         XCTAssertEqual(result.quoteTimestamp, stamp("20261026 0932"))
         XCTAssertEqual(result.fetchedAt, fetched)
         XCTAssertEqual(result.source, FTencentMinuteParser.source)

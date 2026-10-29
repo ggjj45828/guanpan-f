@@ -25,6 +25,14 @@ public actor FConfirmedLedgerWriter {
         guard try await store.currentDigest(now: now) == nil else {
             throw FLedgerPersistenceError.targetAlreadyInitialized
         }
+        let resultingDigest = try confirmed.ledgerStateDigest()
+        confirmed.audits.append(FLedgerAuditEvent(
+            occurredAt: confirmation.confirmedAt,
+            action: "用户确认录入初始真实账户快照",
+            reason: confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            priorLedgerDigest: nil,
+            resultingLedgerDigest: resultingDigest))
+        try confirmed.validate(now: now)
         return try await store.save(confirmed, expectedPriorDigest: nil, now: now)
     }
 

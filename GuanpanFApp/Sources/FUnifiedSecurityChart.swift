@@ -133,7 +133,7 @@ struct FUnifiedSecurityChart: View {
         .frame(height: height)
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
-        .padding(.vertical, 3)
+        .padding(.vertical, 2)
         .accessibilityLabel("统一证券图表")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }
@@ -141,7 +141,7 @@ struct FUnifiedSecurityChart: View {
     @ViewBuilder
     private func layerControls(for model: FChartOverlayModel, averages: [[Decimal?]], range: Range<Int>) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 5) {
                 if case .daily = model.chart.window {
                     ForEach(Array(averagePeriods.enumerated()), id: \.element) { index, period in
                         let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
@@ -155,7 +155,7 @@ struct FUnifiedSecurityChart: View {
                                 color: overlayColor(overlay.kind), available: !isUnavailable(overlay.quality))
                 }
                 if let iopv = model.iopv {
-                    layerButton("IOPV", key: "iopv", color: overlayColor(.iopv), available: !isUnavailable(iopv.quality))
+                    layerButton("IOPV参考", key: "iopv", color: overlayColor(.iopv), available: !isUnavailable(iopv.quality))
                 } else {
                     Text("IOPV 不可用").font(.caption2).foregroundStyle(.tertiary)
                 }
@@ -372,7 +372,9 @@ struct FUnifiedSecurityChart: View {
         guard let priceRange, range.count > 0 else { return }
         let low = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
         let high = NSDecimalNumber(decimal: priceRange.upperBound).doubleValue
-        let leftAxis: CGFloat = 54
+        // Reserve only the space needed for 3-decimal price labels; the old
+        // 54pt gutter visibly squeezed the plot on phone screens.
+        let leftAxis: CGFloat = 44
         let rightInset: CGFloat = 8
         let topInset: CGFloat = 8
         let bottomAxis: CGFloat = 24
@@ -399,6 +401,14 @@ struct FUnifiedSecurityChart: View {
             }
             return leftAxis + min(max(fraction, 0), 1) * plotWidth
         }
+        // Cost and other timestamp overlays commonly have one point per bar.
+        // Avoid rescanning the whole series for every overlay point while the
+        // Canvas is redrawn during pinch/drag gestures.
+        var indexByTimestamp: [Date: Int] = [:]
+        indexByTimestamp.reserveCapacity(series.timestamps.count)
+        for index in series.timestamps.indices {
+            indexByTimestamp[series.timestamps[index]] = index
+        }
         for step in 0...4 {
             let fraction = Double(step) / 4
             let lineY = priceTop + priceHeight * CGFloat(fraction)
@@ -417,7 +427,7 @@ struct FUnifiedSecurityChart: View {
                 let point = CGPoint(x: x(index), y: y(samples[index].price))
                 if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
             }
-            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.95, lineCap: .round, lineJoin: .round))
+            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.78, lineCap: .round, lineJoin: .round))
             let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
                                                     (162, "13:30"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
@@ -488,14 +498,16 @@ struct FUnifiedSecurityChart: View {
                 context.draw(Text("VOL").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
                             at: CGPoint(x: 3, y: subchartTop + subchartHeight / 2), anchor: .leading)
             }
-            let tickCount = min(5, range.count)
+            let desiredTickCount = min(5, max(2, Int(plotWidth / 74)))
+            let tickCount = min(desiredTickCount, range.count)
             if tickCount > 0 {
                 for tick in 0..<tickCount {
                     let index = range.lowerBound + (range.count - 1) * tick / max(tickCount - 1, 1)
                     let date = bars[index].tradingDate
                     let label = date.formatted(.dateTime.month(.abbreviated).day())
+                    let anchor: UnitPoint = tick == 0 ? .leading : (tick == tickCount - 1 ? .trailing : .center)
                     context.draw(Text(label).font(.system(size: 8)).foregroundColor(.secondary),
-                                at: CGPoint(x: x(index), y: size.height - 8))
+                                at: CGPoint(x: x(index), y: size.height - 8), anchor: anchor)
                 }
             }
             for (seriesIndex, values) in averages.enumerated() {
@@ -506,7 +518,7 @@ struct FUnifiedSecurityChart: View {
                     let point = CGPoint(x: x(index), y: y(value))
                     if started { path.addLine(to: point) } else { path.move(to: point); started = true }
                 }
-                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 0.85)
+                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 0.72)
             }
         }
         if showMACD {
@@ -534,7 +546,7 @@ struct FUnifiedSecurityChart: View {
             context.stroke(difPath, with: .color(averageColors[0]), lineWidth: 0.8)
             context.stroke(deaPath, with: .color(averageColors[1]), lineWidth: 0.8)
             context.draw(Text("MACD").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
-                         at: CGPoint(x: 3, y: subchartTop + 7), anchor: .leading)
+                         at: CGPoint(x: size.width - rightInset - 4, y: subchartTop + 7), anchor: .trailing)
         }
         for overlay in model.priceOverlays where !isUnavailable(overlay.quality) {
             if (overlay.kind == .candidateBuy || overlay.kind == .candidateSell),
@@ -552,7 +564,7 @@ struct FUnifiedSecurityChart: View {
             } else {
                 let matching = overlay.points.filter { visibleTimes.contains($0.timestamp) }
                 for point in matching {
-                    guard let index = series.timestamps.firstIndex(of: point.timestamp), range.contains(index) else { continue }
+                    guard let index = indexByTimestamp[point.timestamp], range.contains(index) else { continue }
                     let pointX = x(index)
                     let stepX = plotWidth / CGFloat(max(range.count, 1))
                     path.move(to: CGPoint(x: pointX, y: y(point.value)))
@@ -569,7 +581,7 @@ struct FUnifiedSecurityChart: View {
             iopvPath.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
             context.stroke(iopvPath, with: .color(overlayColor(.iopv)),
                            style: StrokeStyle(lineWidth: 1.0, dash: [2, 3]))
-            context.draw(Text("IOPV").font(.system(size: 8, weight: .semibold))
+            context.draw(Text("IOPV参考").font(.system(size: 8, weight: .semibold))
                             .foregroundColor(overlayColor(.iopv)),
                          at: CGPoint(x: leftAxis + 24, y: max(priceTop + 7, lineY - 7)))
         }
@@ -626,9 +638,9 @@ struct FUnifiedSecurityChart: View {
         switch kind {
         case .cost: return "本轮成本"
         case .brokerCost: return "券商成本"
-        case .intradayAverage: return "均价"
+        case .intradayAverage: return "量价均价"
         case .previousClose: return "前收"
-        case .iopv: return "IOPV"
+        case .iopv: return "当前IOPV参考"
         case .candidateBuy: return "B 候选"
         case .candidateSell: return "S 候选"
         }
@@ -660,14 +672,14 @@ struct FUnifiedSecurityChart: View {
         return Button { toggleLayer(key) } label: {
             HStack(spacing: 3) {
                 Circle().fill(color).frame(width: 4, height: 4)
-                Text(title).font(.system(size: 9, weight: .medium, design: .monospaced))
+                Text(title).font(.system(size: 8, weight: .medium, design: .monospaced))
                 Image(systemName: active ? "eye" : "eye.slash")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 7, weight: .semibold))
             }
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
-            .padding(.horizontal, 5).padding(.vertical, 2)
+            .padding(.horizontal, 4).padding(.vertical, 1)
             .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
-            .frame(minHeight: 30)
+            .frame(minHeight: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -694,6 +706,7 @@ struct FUnifiedSecurityChart: View {
     }
 
     private func unavailableOverlaySummary(_ model: FChartOverlayModel) -> String {
+        if case .daily = model.chart.window { return "" }
         var unavailable: [String] = []
         if !model.priceOverlays.contains(where: { $0.kind == .intradayAverage && !isUnavailable($0.quality) }) {
             unavailable.append("均价不可用")
@@ -702,6 +715,9 @@ struct FUnifiedSecurityChart: View {
             unavailable.append("前收不可用")
         }
         if model.iopv.map({ isUnavailable($0.quality) }) != false { unavailable.append("IOPV不可用") }
+        if model.priceOverlays.contains(where: { $0.kind == .intradayAverage && !isUnavailable($0.quality) }) {
+            unavailable.append("量价均价按分钟收盘价加权，非官方VWAP")
+        }
         return unavailable.joined(separator: " · ")
     }
 }
@@ -735,7 +751,8 @@ private struct FChartSurfaceModifier: ViewModifier {
 
 enum FChartPresentationBuilder {
     static func live(_ snapshot: FCurrentIntradaySnapshot?, holding: FHomeHolding?,
-                     candidate: FCandidateRecommendation?, ledgerCapturedAt: Date?) -> FChartOverlayModel? {
+                     candidate: FCandidateRecommendation?, ledgerCapturedAt: Date?,
+                     reference: FTencentMarketReference? = nil) -> FChartOverlayModel? {
         guard let snapshot else { return nil }
         let session = FMainlandTradingCalendar.status(at: Date())
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: snapshot.quoteTimestamp,
@@ -747,11 +764,13 @@ enum FChartPresentationBuilder {
         guard let chart = try? FChartDataModel(securityCode: snapshot.securityCode, window: .liveIntraday,
                                                series: .minute(snapshot.samples), quality: quality,
                                                temporalMetadata: metadata) else { return nil }
-        return makeOverlay(chart: chart, holding: holding, candidate: candidate, capturedAt: ledgerCapturedAt)
+        return makeOverlay(chart: chart, holding: holding, candidate: candidate,
+                           capturedAt: ledgerCapturedAt, reference: reference,
+                           previousClose: reference.map { ($0.previousClose, $0.source, $0.fetchedAt) })
     }
 
     static func historical(_ archive: FNASArchivedIntraday?, holding: FHomeHolding?,
-                           ledgerCapturedAt: Date?) -> FChartOverlayModel? {
+                           ledgerCapturedAt: Date?, daily: FDailyKlineSnapshot? = nil) -> FChartOverlayModel? {
         guard let archive, !archive.samples.isEmpty else { return nil }
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: archive.fetchedAt,
                                               source: archive.sourceSummary,
@@ -763,7 +782,11 @@ enum FChartPresentationBuilder {
                                                window: .historicalIntraday(tradingDate: archive.samples[0].timestamp),
                                                series: .minute(archive.samples), quality: quality,
                                                temporalMetadata: metadata) else { return nil }
-        return makeOverlay(chart: chart, holding: holding, candidate: nil, capturedAt: ledgerCapturedAt)
+        let date = chart.series?.timestamps.first ?? archive.samples[0].timestamp
+        let priorBar = daily?.bars.last(where: { $0.tradingDate < date })
+        let previousClose = priorBar.map { ($0.close, daily?.source ?? "腾讯日K前一交易日收盘", daily?.fetchedAt ?? Date()) }
+        return makeOverlay(chart: chart, holding: holding, candidate: nil,
+                           capturedAt: ledgerCapturedAt, reference: nil, previousClose: previousClose)
     }
 
     static func daily(_ snapshot: FDailyKlineSnapshot?, holding: FHomeHolding?,
@@ -775,12 +798,46 @@ enum FChartPresentationBuilder {
         guard let chart = try? FChartDataModel(securityCode: snapshot.securityCode, window: .daily,
                                                series: .daily(snapshot.bars), quality: .complete,
                                                temporalMetadata: metadata) else { return nil }
-        return makeOverlay(chart: chart, holding: holding, candidate: candidate, capturedAt: ledgerCapturedAt)
+        return makeOverlay(chart: chart, holding: holding, candidate: candidate,
+                           capturedAt: ledgerCapturedAt, reference: nil, previousClose: nil)
     }
 
     private static func makeOverlay(chart: FChartDataModel, holding: FHomeHolding?,
-                                    candidate: FCandidateRecommendation?, capturedAt: Date?) -> FChartOverlayModel? {
+                                    candidate: FCandidateRecommendation?, capturedAt: Date?,
+                                    reference: FTencentMarketReference?,
+                                    previousClose: (Decimal, String, Date)?) -> FChartOverlayModel? {
         var overlays: [FChartPriceOverlay] = []
+        if case .minute(let samples) = chart.series, !samples.isEmpty {
+            var cumulativeAmount = Decimal.zero
+            var cumulativeVolume = Decimal.zero
+            var weightedPoints: [FChartOverlayPoint] = []
+            for sample in samples {
+                guard let volume = sample.volume, volume > 0 else { continue }
+                cumulativeAmount += sample.price * volume
+                cumulativeVolume += volume
+                if cumulativeVolume > 0 {
+                    weightedPoints.append(FChartOverlayPoint(timestamp: sample.timestamp,
+                                                              value: cumulativeAmount / cumulativeVolume))
+                }
+            }
+            if !weightedPoints.isEmpty,
+               let average = try? FChartPriceOverlay(
+                securityCode: chart.securityCode, kind: .intradayAverage,
+                points: weightedPoints, quality: .partial(reason: "按分钟收盘价×分钟成交量加权；非官方VWAP"),
+                source: "Tencent minute/query volume deltas · weighted minute closes",
+                fetchedAt: chart.temporalMetadata?.fetchedAt) {
+                overlays.append(average)
+            }
+        }
+        if let previousClose, let timestamps = chart.series?.timestamps, !timestamps.isEmpty {
+            let points = timestamps.map { FChartOverlayPoint(timestamp: $0, value: previousClose.0) }
+            if let previous = try? FChartPriceOverlay(securityCode: chart.securityCode,
+                                                       kind: .previousClose, points: points,
+                                                       quality: .complete, source: previousClose.1,
+                                                       fetchedAt: previousClose.2) {
+                overlays.append(previous)
+            }
+        }
         if let holding, holding.instrumentCode == chart.securityCode, holding.units > 0,
            let capturedAt, let timestamps = chart.series?.timestamps, !timestamps.isEmpty {
             let unitCost = holding.bookCost / Decimal(holding.units)
@@ -812,11 +869,19 @@ enum FChartPresentationBuilder {
                 overlays.append(marker)
             }
         }
-        return try? FChartOverlayModel(chart: chart, priceOverlays: overlays,
-                                       iopv: try? FIOPVObservation(securityCode: chart.securityCode,
-                                                                   value: nil, observedAt: nil, fetchedAt: nil,
-                                                                   source: nil,
-                                                                   quality: .unavailable(reason: "没有可靠 IOPV 数据源")))
+        let iopv: FIOPVObservation?
+        if let reference, reference.providerInstrumentType == "ETF", let value = reference.iopv,
+           Date().timeIntervalSince(reference.observedAt) <= 900 {
+            iopv = try? FIOPVObservation(securityCode: chart.securityCode, value: value,
+                                         observedAt: reference.observedAt, fetchedAt: reference.fetchedAt,
+                                         source: reference.source,
+                                         quality: .partial(reason: "腾讯实时ETF IOPV快照；不是历史IOPV序列"))
+        } else {
+            iopv = try? FIOPVObservation(securityCode: chart.securityCode, value: nil,
+                                         observedAt: nil, fetchedAt: nil, source: nil,
+                                         quality: .unavailable(reason: "腾讯报价未提供新鲜、可验证的当前ETF IOPV"))
+        }
+        return try? FChartOverlayModel(chart: chart, priceOverlays: overlays, iopv: iopv)
     }
 }
 

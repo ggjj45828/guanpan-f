@@ -90,24 +90,71 @@ enum FNASReadinessClient {
 enum FNASHistoricalMinuteClient {
     private struct Response: Decodable {
         struct Coverage: Decodable {
-            let status: String
+            let status: String?
             let expectedCount: Int?
             let observedCount: Int?
             let missingTimestamps: [String]?
             let qualityPassed: Bool?
+
+            private enum CodingKeys: String, CodingKey { case status, expectedCount, observedCount, missingTimestamps, qualityPassed }
+            init(from decoder: Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                status = try? values.decodeIfPresent(String.self, forKey: .status)
+                expectedCount = try? values.decodeIfPresent(Int.self, forKey: .expectedCount)
+                observedCount = try? values.decodeIfPresent(Int.self, forKey: .observedCount)
+                missingTimestamps = try? values.decodeIfPresent([String].self, forKey: .missingTimestamps)
+                qualityPassed = try? values.decodeIfPresent(Bool.self, forKey: .qualityPassed)
+            }
         }
         struct Bar: Decodable {
             let timestamp: String
             let price: Decimal
-            let source: String
-            let fetchedAt: String
+            let securityCode: String?
+            let market: String?
+            let tradingDate: String?
+            let source: String?
+            let fetchedAt: String?
+            let minuteVolume: Decimal?
+
+            private enum CodingKeys: String, CodingKey { case timestamp, price, securityCode, market, tradingDate, source, fetchedAt, minuteVolume, volume }
+            init(from decoder: Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                timestamp = try values.decode(String.self, forKey: .timestamp)
+                securityCode = try? values.decodeIfPresent(String.self, forKey: .securityCode)
+                market = try? values.decodeIfPresent(String.self, forKey: .market)
+                tradingDate = try? values.decodeIfPresent(String.self, forKey: .tradingDate)
+                if let numeric = try? values.decode(Decimal.self, forKey: .price) {
+                    price = numeric
+                } else if let text = try? values.decode(String.self, forKey: .price),
+                          let numeric = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")) {
+                    price = numeric
+                } else {
+                    throw DecodingError.dataCorruptedError(forKey: .price, in: values,
+                                                           debugDescription: "price must be numeric")
+                }
+                source = try? values.decodeIfPresent(String.self, forKey: .source)
+                fetchedAt = try? values.decodeIfPresent(String.self, forKey: .fetchedAt)
+                minuteVolume = (try? values.decodeIfPresent(Decimal.self, forKey: .minuteVolume)) ??
+                    (try? values.decodeIfPresent(Decimal.self, forKey: .volume)) ?? nil
+            }
         }
         let securityCode: String
         let market: String
         let tradingDate: String
-        let status: String
+        let status: String?
         let coverage: Coverage?
         let bars: [Bar]
+
+        private enum CodingKeys: String, CodingKey { case securityCode, market, tradingDate, status, coverage, bars }
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            securityCode = try values.decode(String.self, forKey: .securityCode)
+            market = try values.decode(String.self, forKey: .market)
+            tradingDate = try values.decode(String.self, forKey: .tradingDate)
+            status = (try? values.decodeIfPresent(String.self, forKey: .status)) ?? "partial"
+            coverage = try? values.decodeIfPresent(Coverage.self, forKey: .coverage)
+            bars = (try? values.decode([Bar].self, forKey: .bars)) ?? []
+        }
     }
 
     // B's Frozen NAS contract predates F's coverage-aware endpoint. It is a
@@ -157,12 +204,12 @@ enum FNASHistoricalMinuteClient {
             // data-availability result, not an API/connection failure. Keep
             // Missing visible to the user instead of probing an unrelated
             // legacy route and turning HTTP 200 + Missing into a false error.
-            let status = body.status.lowercased()
+            let status = (body.status ?? "partial").lowercased()
             if ["missing", "not-a-session", "out_of_provider_coverage",
                 "permanent_unavailable", "retryable"].contains(status) {
                 return archive
             }
-            modernFailure = "F 历史接口已响应，但该证券/日期没有归档分钟点（\(body.status)）"
+            modernFailure = "F 历史接口已响应，但该证券/日期没有归档分钟点（\(body.status ?? "partial")）"
         } else {
             modernFailure = Self.responseFailure(data: data, response: http)
         }
@@ -189,17 +236,25 @@ enum FNASHistoricalMinuteClient {
             throw FNASConnectionError.invalidResponse
         }
         let samples = body.bars.compactMap { bar -> FMinuteSample? in
+            guard (bar.securityCode == nil || bar.securityCode == securityCode),
+                  (bar.market == nil || bar.market == "CN"),
+                  (bar.tradingDate == nil || bar.tradingDate == dateText) else { return nil }
             guard let stamp = parseTimestamp(bar.timestamp), stamp >= dayStart, stamp < dayEnd,
-                  let fetchedAt = parseTimestamp(bar.fetchedAt), fetchedAt >= stamp,
-                  !bar.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   bar.price > 0 else { return nil }
-            return FMinuteSample(timestamp: stamp, price: bar.price)
+            if let fetchedAtText = bar.fetchedAt,
+               let fetchedAt = parseTimestamp(fetchedAtText), fetchedAt < stamp { return nil }
+            return FMinuteSample(timestamp: stamp, price: bar.price, volume: bar.minuteVolume)
         }.sorted { $0.timestamp < $1.timestamp }
         let unique = Dictionary(samples.map { ($0.timestamp, $0) }, uniquingKeysWith: { first, _ in first })
         let ordered = unique.keys.sorted().compactMap { unique[$0] }
         let discardedCount = body.bars.count - ordered.count
-        let reportedStatus = body.status.lowercased()
-        let effectiveStatus = discardedCount > 0 && reportedStatus == "complete" ? "partial" : body.status
+        let reportedStatus = (body.status ?? "partial").lowercased()
+        let missingProvenance = body.bars.contains { bar in
+            bar.source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false ||
+            bar.fetchedAt.flatMap(parseTimestamp) == nil
+        }
+        let effectiveStatus = (discardedCount > 0 || missingProvenance || body.coverage == nil) && reportedStatus == "complete"
+            ? "partial" : (body.status ?? "partial")
         let coverage = body.coverage
         let coverageSummary: String
         if let coverage {
@@ -208,11 +263,12 @@ enum FNASHistoricalMinuteClient {
             let missing = coverage.missingTimestamps?.count
             let quality = coverage.qualityPassed.map { $0 ? " · 质量合格" : " · 质量未达标" } ?? ""
             let discarded = discardedCount > 0 ? " · 客户端剔除 \(discardedCount) 条无效/重复记录" : ""
-            coverageSummary = "\(effectiveStatus) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)\(discarded)"
+            let provenance = missingProvenance ? " · 来源/采集时间缺失，降为Partial" : ""
+            coverageSummary = "\(effectiveStatus) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)\(discarded)\(provenance)"
         } else {
             coverageSummary = "\(effectiveStatus) · NAS未提供完整度统计"
         }
-        let sources = Array(Set(body.bars.map(\.source))).sorted().joined(separator: ", ")
+        let sources = Array(Set(body.bars.compactMap(\.source))).sorted().joined(separator: ", ")
         return FNASArchivedIntraday(securityCode: securityCode, tradingDate: dateText,
                                     coverageStatus: effectiveStatus, coverageSummary: coverageSummary,
                                     sourceSummary: sources.isEmpty ? "无有效来源" : sources,
@@ -256,7 +312,8 @@ enum FNASHistoricalMinuteClient {
             guard let stamp = parseTimestamp(row.timestamp), stamp >= dayStart, stamp < dayEnd,
                   let price = Decimal(string: row.price, locale: Locale(identifier: "en_US_POSIX")),
                   price > 0 else { return nil }
-            return FMinuteSample(timestamp: stamp, price: price)
+            let volume = row.volume.flatMap { Decimal(string: $0, locale: Locale(identifier: "en_US_POSIX")) }
+            return FMinuteSample(timestamp: stamp, price: price, volume: volume)
         }
         let unique = Dictionary(samples.map { ($0.timestamp, $0) }, uniquingKeysWith: { first, _ in first })
         let ordered = unique.keys.sorted().compactMap { unique[$0] }

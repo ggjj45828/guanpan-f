@@ -4,10 +4,13 @@ public struct FMinuteSample: Equatable, Sendable, Identifiable {
     public var id: Date { timestamp }
     public let timestamp: Date
     public let price: Decimal
+    /// Incremental traded volume when the provider supplies it.
+    public let volume: Decimal?
 
-    public init(timestamp: Date, price: Decimal) {
+    public init(timestamp: Date, price: Decimal, volume: Decimal? = nil) {
         self.timestamp = timestamp
         self.price = price
+        self.volume = volume
     }
 }
 
@@ -164,7 +167,8 @@ public enum FTencentMinuteParser {
             throw FMarketDataError.staleOrWrongSession
         }
 
-        var points: [Date: Decimal] = [:]
+        var points: [Date: (price: Decimal, volume: Decimal?)] = [:]
+        var previousCumulativeVolume: Decimal?
         for row in rows {
             let fields = row.split(whereSeparator: \.isWhitespace)
             guard fields.count >= 2, fields[0].count == 4,
@@ -174,10 +178,19 @@ public enum FTencentMinuteParser {
             let minuteLabel = String(fields[0])
             if minuteLabel == "0930" { continue } // opening-auction point, not a regular minute close
             guard let stamp = formatter.date(from: dateText + " " + minuteLabel), stamp <= fetchedAt else { continue }
-            points[stamp] = price
+            let cumulativeVolume = fields.count > 2
+                ? Decimal(string: String(fields[2]), locale: Locale(identifier: "en_US_POSIX")) : nil
+            let minuteVolume: Decimal?
+            if let cumulativeVolume, cumulativeVolume >= 0 {
+                minuteVolume = previousCumulativeVolume.map { max(Decimal.zero, cumulativeVolume - $0) }
+                previousCumulativeVolume = cumulativeVolume
+            } else {
+                minuteVolume = nil
+            }
+            points[stamp] = (price, minuteVolume)
         }
         let samples = points.keys.sorted().compactMap { stamp in
-            points[stamp].map { FMinuteSample(timestamp: stamp, price: $0) }
+            points[stamp].map { FMinuteSample(timestamp: stamp, price: $0.price, volume: $0.volume) }
         }
         guard let latest = samples.last?.timestamp else { throw FMarketDataError.noUsableSamples }
         if FMainlandTradingCalendar.status(at: fetchedAt, timeZone: timeZone) == .continuous,

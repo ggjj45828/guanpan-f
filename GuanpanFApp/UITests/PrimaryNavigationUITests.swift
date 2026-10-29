@@ -104,6 +104,20 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
 
+    func testEmptyLedgerOffersInitialHoldingsEntry() {
+        let app = XCUIApplication()
+        app.launch()
+        app.tabBars.buttons["真实资产"].tap()
+
+        let entry = app.buttons["ledger.opening-snapshot.begin"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5), app.debugDescription)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["ledger.opening.cash"].exists)
+        XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
+        XCTAssertTrue(app.buttons["ledger.opening.confirm"].exists)
+    }
+
     private func attachScreenshot(_ name: String, app: XCUIApplication) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

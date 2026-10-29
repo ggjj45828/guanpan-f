@@ -487,10 +487,64 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。
 - GitHub API确认远端main为Run 75 SHA。此环境 `git fetch/push` 仍报 `getaddrinfo() thread failed to start`；本地main仍在f6c2529本地提交；与远端Run 75源码改动一致，交接文档仅有空行差异，且有备份分支 `backup/local-f6-market-chart`。工作树源码与远端构建源码一致，后续网络恢复后再fetch/reconcile提交历史。
 
-## 2026-10-29 核心页面表面主题统一（已编码，待CI）
+## 2026-10-29 核心页面表面主题统一（历史状态，已由Run 76结果覆盖）
 
 - `HomeDestination`证券详情中的当前持仓、已清仓、盈亏口径和Episode历史面板，以及`AdvisorOverview`的可用上下文/决策成绩单面板，移除固定系统`regularMaterial`背景，统一改用`FThemeSurfaceModifier`按当前主题渲染。
 - Advisor页面主内容纵向间距改用当前Theme Manifest的spacing token，避免主题切换后只有颜色变化而留白不变。
-- 本机`git diff --check`通过；本机无Swift/Xcode。此修改尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
+- 本机`git diff --check`通过；本机无Swift/Xcode。此修改当时尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
 - 下一步：将这组表面统一修正送入Apple CI；CI成功后继续审阅Simulator证据，并处理其余专业页面的主题一致性。
 
+## Run 76：证券详情与Advisor主题表面修正（2026-10-29）
+
+- 远端提交 `bbba0e60832b5f5c39663f1489f26cf0f3601d21` 基于当时已核对的 `main` 快进提交；未强推。Apple CI Run 76 [40829925945](https://github.com/ggjj45830/guanpan-f/actions/runs/40829925945) 已完成且成功。
+- Run 76 实际日志：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名 IPA 打包/校验与artifact上传均成功。
+- 这次源码把证券详情四组信息面板与Advisor两组主要面板改用主题 surface modifier，Advisor主栈间距读取Theme Manifest token。修改已编译并通过CI/UI自动测试。
+- Run 76自动截图已导出到artifact `12879185063`，但仍未人工逐页查看；没有iPhone Air实测、图表手势验收或真机验证。主题一致性只能记为“已编译/自动化通过”，不能记为视觉验收通过。
+- 当前远端源码SHA为 `bbba0e60832b5f5c39663f1489f26cf0f3601d21`。本机本地Git历史仍因网络fetch/push限制未与远端对齐；源码补丁以该远端CI提交为已验证事实。
+- 后续继续逐页检查其余页面的硬编码表面/颜色/间距；先人工查看Run 76截图，主题统一仍需截图对比。均价、前收、IOPV/溢价与新闻真实来源没有新证据，NAS实机连接、DeepSeek真实E2E及iPhone Air验收也未完成。
+
+## Run 77：数据星图表面接入主题渲染器（2026-10-29）
+
+- Run 76静态逐主题检查发现，数据星图首页中心摘要与外围节点仍直接使用系统`regularMaterial`，会在非玻璃主题中绕开主题 surface treatment。
+- 已将这两个区域改为`FThemeSurfaceModifier`，保留其星图布局和节点路由，只统一视觉表面。修改进入远端提交 `84a191b94e79e0f5d943cf2ba495beda7ccfb3cf`。
+- Apple CI Run 77 [40831405937](https://github.com/ggjj45830/guanpan-f/actions/runs/40831405937) 已实际成功：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和artifact上传全部成功。artifact `12878739682`。
+- 自动截图仍未人工审阅，没有iPhone Air实测或真机手势验收。CI成功仅证明源码编译与自动测试通过，不证明主题视觉完成。后续仍需按主题人工检查页面表面和整体布局。
+
+## Run 78：图表拖缩流畅度与日K横轴边缘修正（2026-10-29）
+
+- 静态性能检查发现统一图表绘制成本线等逐点overlay时，每个点都线性扫描整段时间戳，点数为N时会形成O(N²)查找；捏合/拖动重绘会重复付出该开销。现改为每次绘制先建立时间戳索引，再常数时间定位overlay点。
+- 日K日期轴原来最多固定画5个居中标签，小屏/窄绘图区会边缘截断或互相挤压；现按绘图区宽度减少刻度数，并让首尾标签贴边对齐。
+- 修改提交 `0ff77a6f51b9cf0b9854f7a3130b134384c189d5` 已由Apple CI Run 78 [40833407806](https://github.com/ggjj45830/guanpan-f/actions/runs/40833407806) 实际验证通过：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和artifact上传均成功。artifact `12879444294`。
+- CI通过只确认修改可编译且自动测试通过。模拟器截图未人工审阅，没有iPhone Air触控测试；拖缩是否达到用户要求的“顺滑自由”仍需实际设备手势验收。
+
+## 后续：证券图表面积与主题一致性（编码待CI）
+
+- 根据用户实机截图继续加大证券详情中的当前分时、日K和历史分钟绘图区：高度由约500pt提高到620–640pt，横向内容边距收窄并让图表向页面可用宽度扩展；行情列表内迷你图由360pt提高到420pt。该改动尚无Simulator截图，实际比例与滚动体验待CI截图和iPhone Air确认。
+- MA/叠加层图例缩小字体、间距与按钮高度（30pt→24pt）；分时主线及MA线再减细，避免图例抢占绘图区和线条显粗。
+- 将真实资产列表接入当前主题的背景、表面、前景与强调色；所有导航目的页也统一继承主题背景、文字与tint，减少切换主题后页面各自使用系统默认颜色的问题。十套主题仍未完成人工逐页检查，不能记为视觉验收完成。
+- 已补“录入现有持仓”入口：仅在账本尚未建立时出现；表单录入当前现金、证券代码/名称/份额、本轮总经济成本、可选券商展示成本及确认说明。保存走唯一`FConfirmedLedgerWriter.confirmInitialLedger`，记录用户确认审计；不伪造历史成交。初始快照录入后旧成交流水仍标为不完整。另加初始账本审计回归和空账本UI可发现性场景。
+- 截至当前，图表/主题与初始持仓入口Swift修改均仅已编码，Windows本机没有Xcode；图表/主题版本Run 79正在Apple CI，持仓入口必须随后作为更新SHA再次提交并跑CI。人工Simulator截图和iPhone Air仍External Pending。历史分钟、新闻、均价、前收及IOPV仍无新的真实来源证据，继续如实显示未接入/不可用。
+
+## 集中修复轮次：行情图表、NAS响应、设置布局与持仓入口（2026-10-29，CI待执行）
+
+- 当前工作树 HEAD=`73a979df240af8221ea3dbe54831c14fe1fdbaa7`；工作区有未提交改动。GitHub API实读 `main=6df3d51662cf1b403d1304c166dcebef86630ea8`，本地 `origin/main=0ff77a6f51b9cf0b9854f7a3130b134384c189d5`，远端比本地跟踪点多2个提交。普通 `git fetch origin main` 本轮失败：`getaddrinfo() thread failed to start`。未强推、未改远端引用；在确认远端改动与本地树安全合并前，不能声称已推送或已触发当前源码CI。
+- 本轮新编码：Tencent实时分钟保存源返回的累计成交量差分；统一图表按真实分钟收盘价×分钟成交量差分计算“量价均价”，明确注明它不是官方VWAP。首个累计量没有可证明差分时不伪造首点。已增加FCore解析回归断言，仍是测试定义，尚未执行。
+- 前收：实时分时读Tencent `qt.gtimg.cn` 的前收字段；历史分时从所选日之前最近一根真实未复权日K取收盘。日K不显示分时专属辅助线。当前IOPV和溢折价读取Tencent报价扩展字段，并只对明确标为ETF且数据时间新鲜的报价启用；图上线称“当前IOPV参考”，不冒充历史IOPV序列。报价辅助请求在独立任务刷新，不阻塞10秒分钟图刷新。接口字段实现已编码，尚无当前SHA实网/iPhone证据；腾讯可能不给非ETF、停牌或过期证券返回这些字段，届时仍显示不可用。
+- 证券详情图表左侧坐标占宽由54降至44，MACD标签移到副图右上，图层按钮继续收紧；设置页NAS能力状态改为紧凑分层，连接安全说明可展开。真实持仓开账入口和确认表单仍在工作树：只在账本未建立时显示，以用户确认的起始快照建立账本，不补造fills；需要本轮CI实际执行证明UI测试通过。
+- NAS历史分钟响应解码允许服务返回的coverage统计/来源元数据缺失或部分类型不兼容；价格可读JSON数值或数字字符串，volume可读`minuteVolume`/`volume`。bar若声明证券/市场/日期身份，客户端核对身份；来源、采集时间、质量元数据不足时降为Partial，绝不因此升成Complete。正常F接口若为明确Missing不再误报为连接错误；F格式失败时旧B路径仍可能404，服务端接口与实际归档覆盖仍未实网闭环。
+- 当前源文件修改涉及 `FNASConnection.swift`、`FUnifiedSecurityChart.swift`、`GuanpanFApp.swift`、`HomeExperience.swift`、`MarketMinuteData.swift`，以及初始持仓写边界/UI/FCore测试和两份交接矩阵。以上修改均仅“已编码”；Windows本机无Xcode，没有当前SHA的Swift Compile、XcodeGen、FCore/UI XCTest、Device/Simulator Build或IPA结果。Run 78的164/164与3/3只对应SHA `0ff77a6…`，不得继承到本轮。
+- Simulator截图未取得/未人工查看；主题没有逐主题截图验收；iPhone Air实测External Pending。新闻目前没有可靠新闻源；NAS历史自动同步仍未接入手机端；当前均诚实显示Unavailable/未接入，不伪造。真实NAS、实时行情扩展字段和DeepSeek E2E本轮均未执行。
+- 下一步：安全对齐远端2个提交并保留本地全部改动，提交新的单一可审查变更，触发完整Apple CI；先修第一条真实编译/测试错误。CI通过后再检查CI导出截图并安排人工交互，未能在Windows人工操作Simulator的部分继续标External Pending。
+
+
+## 2026-10-29 当前工作树集中修复与编译状态（以本节覆盖旧快照）
+
+- 当前工作树：F仓库本地HEAD=`73a979df240af8221ea3dbe54831c14fe1fdbaa7`；GitHub Desktop已成功Fetch。远端`main`实读=`6df3d51662cf1b403d1304c166dcebef86630ea8`（Apple CI Run 79成功），本地分叉为ahead 3 / behind 9，分叉基点`c062bc5`。尚未合并、尚未push；没有强推或覆盖远端。普通终端fetch报`getaddrinfo() thread failed to start`，GitHub Desktop Fetch成功。
+- 本轮工作树有11个改动文件（2文档、4个App源码、2个UI/Core测试、1个Ledger源码、1个FCore行情源码及1个行情测试，实际清单以`git status`为准）。改动已编码但尚未提交/编译/执行测试。
+- 行情图：证券详情分时/历史分钟/日K绘图区放大、图例缩小；MACD标签移出左侧价格轴；分钟线宽降低；小图继续放大。UI效果没有当前SHA Simulator截图/人工审阅证据。
+- 行情引用字段：Tencent分钟数据解析保留可推导的分钟成交量增量；显示的“量价均价”按分钟收盘价×成交量增量加权，明确不是官方VWAP；首个无可验证增量的点不补造。实时前收、ETF IOPV和溢折价请求Tencent `qt.gtimg.cn` 对应字段，IOPV只在provider明确ETF且报价时间不超过15分钟时作为“当前参考”；请求不阻塞10秒分时轮询。接口解析仅静态核对，当前SHA没有真实设备/实网抓包证明Tencent对目标代码实际返回这些字段，故缺字段仍会Unavailable，不得写成已联调。
+- 历史前收从所选日期之前最近一根真实日K读取。历史分钟volume可读取NAS返回的`minuteVolume`或`volume`；HTTP 200解码容忍可选coverage/来源字段差异，错误或身份不匹配记录不会升级成Complete。用户截图所示HTTP 200 JSON字段不匹配问题已针对性调整，但NAS实际payload/指定日期当前未实测，NAS仍未证明连接/历史分钟可用。新闻可靠来源未接入。
+- 持仓入口：仅空账本出现“录入现有持仓”，用户录入起始现金/证券份额/本轮总成本/可选券商成本和确认说明，经唯一`FConfirmedLedgerWriter.confirmInitialLedger`写入开账快照与确认审计，不伪装为历史fills，不覆盖已有账本。边界测试和UI可发现性测试已定义，当前HEAD未执行。
+- 主题：已将部分导航、页面、表面接入当前主题token；本轮不宣称10套逐页统一或视觉通过。当前没有新Simulator截图、人工逐主题检查或iPhone Air实测证据。
+- 最新CI证据只属于远端`6df3d516…` Run 79 [40835697907](https://github.com/ggjj45830/guanpan-f/actions/runs/40835697907)，成功证明Run 79源码的FCore 164/164、UI XCTest 3/3及XcodeGen/Device/Simulator/IPA流程通过；不覆盖本地HEAD、三笔本地提交或未提交的11项工作树修改。Windows无Xcode/xcodebuild，不能本机编译。
+- 下一步：先提交当前11文件为本地安全节点；在GitHub Desktop执行普通Pull/merge，把远端9笔提交与本地3笔提交合并，解决冲突并确认代码/图标/工作区无丢失；检查完整diff；普通Push触发Apple CI。CI成功后才报告这份合并SHA的编译与测试结果；若失败按第一个根因修复并再次提交。Simulator人工视觉、NAS真实历史日期、新闻源、DeepSeek E2E仍分别保持未验证。

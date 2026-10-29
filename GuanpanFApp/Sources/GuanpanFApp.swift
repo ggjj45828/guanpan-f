@@ -20,6 +20,26 @@ struct FHomeHolding: Identifiable {
     let brokerDisplayCostUpdatedAt: Date?
 }
 
+struct FInitialLedgerPositionInput {
+    let instrumentCode: String
+    let name: String
+    let units: Int64
+    let economicCost: Decimal
+    let brokerDisplayCostPerUnit: Decimal?
+}
+
+struct FTencentMarketReference: Equatable {
+    let securityCode: String
+    let latestPrice: Decimal
+    let previousClose: Decimal
+    let iopv: Decimal?
+    let premiumPercent: Decimal?
+    let observedAt: Date
+    let fetchedAt: Date
+    let providerInstrumentType: String?
+    let source: String
+}
+
 typealias FHomeLedgerState = FHomeLedgerAvailability
 
 @MainActor
@@ -54,6 +74,8 @@ final class FHomeModel: ObservableObject {
     @Published var question = ""
     @Published var alertMessage: String?
     @Published private(set) var marketDataByCode: [String: FCurrentIntradaySnapshot] = [:]
+    @Published private(set) var marketReferenceByCode: [String: FTencentMarketReference] = [:]
+    private var refreshingReferenceCodes: Set<String> = []
     @Published private(set) var marketRefreshStateByCode: [String: String] = [:]
     @Published private(set) var archivedIntradayByCode: [String: FNASArchivedIntraday] = [:]
     @Published private(set) var archiveRefreshStateByCode: [String: String] = [:]
@@ -72,6 +94,8 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var isAskingAdvisor = false
     @Published private(set) var advisorResult: FAdvisorVerticalSliceResult?
     @Published var showingLedgerConfirmation = false
+    @Published var showingInitialLedgerSetup = false
+    @Published private(set) var writingInitialLedger = false
     @Published var showingFeeCorrection = false
     @Published var showingCashAdjustment = false
     @Published var feeCorrectionFillID: UUID?
@@ -347,6 +371,55 @@ final class FHomeModel: ObservableObject {
     func confirmPendingFill() {
         guard !writingConfirmedFill else { return }
         Task { await writePendingConfirmedFill() }
+    }
+
+    func establishInitialLedger(cashText: String, positions: [FInitialLedgerPositionInput],
+                                note: String) async -> Bool {
+        guard ledgerState == .notEstablished, let store = ledgerStore else {
+            ledgerWriteStatus = "已有账本或账本不可用；初始快照不会覆盖现有数据。"
+            return false
+        }
+        guard let cash = Decimal(string: cashText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                 locale: Locale(identifier: "en_US_POSIX")), cash >= 0,
+              !positions.isEmpty,
+              positions.allSatisfy({
+                  $0.instrumentCode.utf8.count == 6 &&
+                  $0.instrumentCode.utf8.allSatisfy { (48...57).contains($0) } &&
+                  !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                  $0.units > 0 && $0.economicCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { $0 >= 0 } ?? true)
+              }), Set(positions.map(\.instrumentCode)).count == positions.count,
+              !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            ledgerWriteStatus = "请填写有效现金、至少一只证券、唯一代码、正份额、真实成本和确认说明。"
+            return false
+        }
+        writingInitialLedger = true
+        defer { writingInitialLedger = false }
+        do {
+            let now = Date()
+            let openingPositions = positions.map { input in
+                FPosition(instrumentCode: input.instrumentCode,
+                          name: input.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                          units: input.units, bookCost: input.economicCost,
+                          brokerDisplayCostPerUnit: input.brokerDisplayCostPerUnit,
+                          brokerDisplayCostUpdatedAt: input.brokerDisplayCostPerUnit == nil ? nil : now)
+            }
+            let opening = FAccountOpeningSnapshot(capturedAt: now, cashBalance: cash,
+                                                  positions: openingPositions)
+            let book = FAccountBook(openingSnapshot: opening, cashBalance: cash,
+                                    positions: openingPositions, updatedAt: now)
+            let confirmation = FUserLedgerConfirmation(
+                confirmedAt: now,
+                confirmationNote: "用户录入当前真实持仓快照：" + note.trimmingCharacters(in: .whitespacesAndNewlines))
+            let writer = FConfirmedLedgerWriter(store: store)
+            _ = try await writer.confirmInitialLedger(book, confirmation: confirmation, now: now)
+            await loadLedger(from: store)
+            ledgerWriteStatus = "初始真实账户快照已保存；份额是当前持仓起点，不会伪装成历史成交。"
+            return true
+        } catch {
+            ledgerWriteStatus = "初始真实持仓未保存：\(error.localizedDescription)"
+            return false
+        }
     }
 
     private func writePendingConfirmedFill() async {
@@ -784,6 +857,17 @@ final class FHomeModel: ObservableObject {
                 }
             }
         }
+        // Reference fields (previous close / ETF IOPV) are refreshed separately:
+        // a slow or unavailable auxiliary quote must never hold up the live minute chart.
+        for code in pending where !refreshingReferenceCodes.contains(code) {
+            refreshingReferenceCodes.insert(code)
+            Task {
+                defer { refreshingReferenceCodes.remove(code) }
+                if let reference = try? await FQuoteHTTPClient.fetchMarketReference(code: code) {
+                    marketReferenceByCode[code] = reference
+                }
+            }
+        }
     }
 
     func isInWatchlist(_ code: String) -> Bool {
@@ -929,6 +1013,11 @@ struct FHomeRoot: View {
 private enum FPrimaryTab: Hashable { case home, market, advisor, assets, settings }
 
 private enum FQuoteHTTPClient {
+    static func capture<Value>(_ operation: () async throws -> Value) async -> Result<Value, Error> {
+        do { return .success(try await operation()) }
+        catch { return .failure(error) }
+    }
+
     static func fetchCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {
         let symbol = try FTencentMinuteParser.symbol(for: code)
         guard var components = URLComponents(string: "https://web.ifzq.gtimg.cn/appstock/app/minute/query") else {
@@ -962,5 +1051,61 @@ private enum FQuoteHTTPClient {
             throw FMarketDataError.invalidPayload
         }
         return try FTencentDailyKlineParser.parse(data, securityCode: code, fetchedAt: Date())
+    }
+
+    static func fetchMarketReference(code: String) async throws -> FTencentMarketReference {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        guard let url = URL(string: "https://qt.gtimg.cn/q=\(symbol)&_t=\(Int(Date().timeIntervalSince1970))") else {
+            throw FMarketDataError.invalidPayload
+        }
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Accept")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw FMarketDataError.invalidPayload
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let bodyRange = Range(match.range(at: 2), in: text) else { throw FMarketDataError.invalidPayload }
+        let fields = text[bodyRange].split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+        guard fields.count > 30,
+              let price = Decimal(string: fields[3], locale: Locale(identifier: "en_US_POSIX")), price > 0,
+              let previousClose = Decimal(string: fields[4], locale: Locale(identifier: "en_US_POSIX")), previousClose > 0,
+              let observedAt = parseTencentTimestamp(fields[30]) else { throw FMarketDataError.invalidPayload }
+        let instrumentType = fields.count > 61 ? fields[61].trimmingCharacters(in: .whitespacesAndNewlines).uppercased() : nil
+        let rawIOPV = instrumentType == "ETF" && fields.count > 78
+            ? Decimal(string: fields[78], locale: Locale(identifier: "en_US_POSIX")) : nil
+        let iopv = rawIOPV.flatMap { $0 > 0 ? $0 : nil }
+        let premium = instrumentType == "ETF" && fields.count > 77
+            ? Decimal(string: fields[77], locale: Locale(identifier: "en_US_POSIX")) : nil
+        let now = Date()
+        guard observedAt <= now.addingTimeInterval(60) else {
+            throw FMarketDataError.staleOrWrongSession
+        }
+        return FTencentMarketReference(securityCode: code, latestPrice: price,
+                                       previousClose: previousClose, iopv: iopv,
+                                       premiumPercent: premium, observedAt: observedAt,
+                                       fetchedAt: now, providerInstrumentType: instrumentType,
+                                       source: "Tencent qt.gtimg.cn")
+    }
+
+    private static func parseTencentTimestamp(_ raw: String) -> Date? {
+        let digits = raw.filter(\.isNumber)
+        guard digits.count == 12 || digits.count == 14,
+              let year = Int(digits.prefix(4)), let month = Int(digits.dropFirst(4).prefix(2)),
+              let day = Int(digits.dropFirst(6).prefix(2)), let hour = Int(digits.dropFirst(8).prefix(2)),
+              let minute = Int(digits.dropFirst(10).prefix(2)) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        var parts = DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)
+        parts.second = digits.count == 14 ? Int(digits.dropFirst(12).prefix(2)) : 0
+        guard let date = calendar.date(from: parts) else { return nil }
+        let verified = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        guard verified.year == year, verified.month == month, verified.day == day,
+              verified.hour == hour, verified.minute == minute else { return nil }
+        return date
     }
 }

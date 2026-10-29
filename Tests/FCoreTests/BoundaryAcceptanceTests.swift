@@ -177,6 +177,33 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertEqual(after, before)
     }
 
+    func testInitialLedgerConfirmationPersistsAuditedAccountSnapshot() async throws {
+        let folder = try directory()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FAccountBookStore(fileURL: folder.appendingPathComponent("account.json"))
+        let writer = FConfirmedLedgerWriter(store: store)
+        let openingPosition = FPosition(instrumentCode: "159352", name: "A500 ETF",
+                                        units: 500, bookCost: 602.50,
+                                        brokerDisplayCostPerUnit: 1.19,
+                                        brokerDisplayCostUpdatedAt: now)
+        let opening = FAccountOpeningSnapshot(capturedAt: now, cashBalance: 1_200,
+                                              positions: [openingPosition])
+        let book = FAccountBook(openingSnapshot: opening, cashBalance: 1_200,
+                                positions: [openingPosition], updatedAt: now)
+        let confirmation = FUserLedgerConfirmation(confirmedAt: now,
+                                                   confirmationNote: "按券商当前真实账户录入")
+
+        _ = try await writer.confirmInitialLedger(book, confirmation: confirmation, now: now)
+        let maybeSaved = try await store.load(now: now)
+        let saved = try XCTUnwrap(maybeSaved)
+        XCTAssertEqual(saved.fills, [])
+        XCTAssertEqual(saved.positions, [openingPosition])
+        XCTAssertEqual(saved.audits.count, 1)
+        XCTAssertEqual(saved.audits[0].action, "用户确认录入初始真实账户快照")
+        XCTAssertEqual(saved.audits[0].reason, confirmation.confirmationNote)
+        XCTAssertNil(saved.audits[0].priorLedgerDigest)
+    }
+
     func testAdvisorDocumentsPersistInSeparateStoresAndAreIdempotent() async throws {
         let folder = try directory()
         defer { try? FileManager.default.removeItem(at: folder) }
