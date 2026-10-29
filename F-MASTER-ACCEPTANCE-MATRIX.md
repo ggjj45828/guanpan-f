@@ -670,3 +670,13 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 |---|---|---|---|
 | 顾问使用真实近期新闻 | iOS对每个分析证券按名称/代码查询Google News RSS；限制近24小时，保留媒体/时间/HTTPS跳转链接，作为DecisionContext只读新闻Observation；超时/无匹配明确Unavailable | 已编码；本机DNS不可达；未编译、未实网 | Apple CI通过；真实iPhone成功取到RSS并确认来源/发布时间/链接；DeepSeek能引用实际证据ID并标明标题未核实 |
 | 新闻来源边界 | Google News RSS是搜索聚合标题，不是新闻正文或核实事实；链接可能跳转且没有稳定服务承诺；仅查询代码/名称，不发送账本；模型不得从记忆补造即时新闻 | 已加提示词和设置说明；仍待实际顾问验证 | 检查输出引用与缺失降级；RSS不可用时不得声称新闻指导已成功 |
+
+
+## Run 99/100：顾问新闻标题证据（CI通过，真实新闻E2E未通过）
+
+| 验收项 | 当前实现/证据 | 状态 | 关闭条件 |
+|---|---|---|---|
+| 新闻Observation进入Advisor上下文 | 对当前Portfolio/证券scope内代码查询近24小时Google News RSS；最多5条、真实标题/媒体/发布时间/HTTPS Google News链接，失败明确Unavailable；RSS内容只读注入DecisionContext | Run 100 `31bee6ce6559d5500d9ef82a1d01b75797d1fe17` 已通过FCore 165/165、UI XCTest 4/4、XcodeGen、Device/Simulator Build、截图导出和unsigned IPA打包/校验/上传 | 实际iPhone取到真实相关标题并确认时间、来源、链接；DeepSeek正确引用Observation且不臆测正文 |
+| 新闻可信度与隐私 | Google News RSS是搜索聚合，不是媒体正文/事实核验；链接可能跳转且无稳定服务承诺；只发送证券查询词，不发送Ledger | 已编码并记入AI约束/设置说明 | 设备实网/AI输出实测；失败明确Unavailable；不得以HTTP 200或CI Build替代 |
+| 新闻真实E2E | 当前环境DNS无法解析`news.google.com`，Apple CI仅编译和测试，不做RSS外网请求 | External Pending | 设备网络确认可达、标题相关、来源可追溯、AI引用行为正确 |
+
