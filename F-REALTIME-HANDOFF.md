@@ -1,3 +1,14 @@
+## 2026-10-29 Run 94：首页持仓入口与Apple CI验收
+
+- 当前远端 main / Swift代码SHA：`5628275f91001cc751cf13da3f90325f709da0c1`。Run 94 [40868674531](https://github.com/ggjj45830/guanpan-f/actions/runs/40868674531) 对该SHA完整成功：FCore **165/165 passed**；XcodeGen、Device Build、Simulator Build通过；UI XCTest **4/4 passed**；截图导出、未签名IPA校验/打包、Artifact上传通过。
+- UI XCTest实际包括 Advisor unavailable、空账本初始持仓入口、五个主导航入口、资产/已清仓/现金区块，均通过。导出9张UI截图附件（主页及导航/详情/资产/设置），但本轮没有人工打开截图进行视觉评审；不等于人工Simulator或iPhone Air验收。
+- 首页Portfolio在Ledger未建立时显示“录入现有持仓”，进入受保护的初始真实账户快照流程；Ledger已建立但空仓时显示“登记已成交买入，开始建仓”，仅记录用户已在券商实际成交的买入。Assets文案改为“本机真实账本”，成交入口明确标注“登记已成交买入 / 卖出”。没有自动下单，也没有Candidate写Ledger。
+- **重要边界：** 已建立且为空的账本不能通过现有流程导入任意券商存量仓位快照；只能从确已发生的真实买入成交开始建账。不能把这一点报告为已支持存量持仓导入。
+- IPA日志验证显示名“观盘max”、编译产物选择AppIcon、图标资源存在且IPA ZIP无损。Artifact `12895991023`，SHA-256 `59786355b2057fb6faf9c6e39cadedcbd819276486450db8cf7e2939340cb906`；链接：[Run94 Artifact](https://github.com/ggjj45830/guanpan-f/actions/runs/40868674531/artifacts/12895991023)。
+- 当前未完成：截图人工审阅/iPhone Air与真机手势；B/F视觉差距仍未证明收敛；NAS历史分钟真实数据与HTTP契约仍未打通；真实新闻来源未接入；无可靠源时均价/前收/IOPV继续Unavailable；真实DeepSeek端到端及用户成交后Ledger/Advisor复判未完成。
+
+---
+
 ## 2026-10-29 Run 93：图表绘图区扩展（Apple CI通过）
 
 - 当前代码验证SHA：`27431788f761ae279ad8e5da1821cee5abf55f3f`；Run 93 [40865524107](https://github.com/ggjj45830/guanpan-f/actions/runs/40865524107) 已完成且成功。

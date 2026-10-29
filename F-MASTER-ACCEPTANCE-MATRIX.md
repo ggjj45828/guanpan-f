@@ -1,3 +1,14 @@
+## 2026-10-29 Run 94 验收增量
+
+| 项目 | 当前代码/入口 | 真实执行结果 | 剩余验收 |
+|---|---|---|---|
+| 首页持仓入口（Ledger未建立） | 首页Portfolio显示“录入现有持仓”，走确认后的初始真实快照 | SHA `5628275f91001cc751cf13da3f90325f709da0c1`，Run [40868674531](https://github.com/ggjj45830/guanpan-f/actions/runs/40868674531)：FCore 165/165，UI XCTest 4/4，XcodeGen、Device/Simulator Build、截图导出、IPA及Artifact均成功 | 自动UI验证不等于实际导入/重启持久化验收；截图未人工审阅 |
+| 首页持仓入口（已建立空账本） | 显示“登记已成交买入，开始建仓”，只录入已在券商完成的真实fill | 同上；UI检查包括空账本入口可发现 | 不支持把存量券商仓位凭空快照导入已建立账本；不得伪造confirmed fill |
+| App名称与图标 | Bundle显示名“观盘max”，Info.plist选择AppIcon且归档含图标 | Run94 IPA检查通过，ZIP完整性通过；Artifact `12895991023`，SHA256 `59786355b2057fb6faf9c6e39cadedcbd819276486450db8cf7e2939340cb906` | 仅证明构建产物，不证明用户设备已安装 |
+| 视觉与实机 | CI导出9张Simulator UI附件 | 导出成功；未进行人工逐张目检 | iPhone Air、主题一致性、实际布局与手势保持待验；不能标视觉PASS |
+
+---
+
 ## 2026-10-29 Run 93 真实执行记录
 
 - 代码SHA `27431788f761ae279ad8e5da1821cee5abf55f3f` 的Run 93 [40865524107](https://github.com/ggjj45830/guanpan-f/actions/runs/40865524107) 成功：FCore 165/165；XcodeGen、Device Build、Simulator Build通过；UI XCTest 4/4；截图导出、IPA校验和Artifact上传通过。
