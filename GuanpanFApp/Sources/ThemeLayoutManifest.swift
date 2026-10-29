@@ -157,12 +157,37 @@ enum FThemeLayoutRegistry {
         let family = theme.layoutFamily
         let style = theme.surfaceTreatment
         let isDark = theme == .dashboard
-        let background: Color = isDark
-            ? Color(red: 0.075, green: 0.10, blue: 0.15)
-            : Color(red: 0.97, green: 0.96, blue: 0.93)
-        let surface: Color = isDark
-            ? Color(red: 0.12, green: 0.16, blue: 0.23)
-            : Color(red: 0.995, green: 0.99, blue: 0.97)
+        let background: Color
+        let surface: Color
+        switch theme {
+        case .editorial:
+            background = Color(red: 0.965, green: 0.953, blue: 0.925)
+            surface = Color(red: 0.995, green: 0.988, blue: 0.968)
+        case .modern:
+            background = Color(red: 0.942, green: 0.955, blue: 0.972)
+            surface = Color(red: 0.990, green: 0.995, blue: 1.0)
+        case .dashboard:
+            background = Color(red: 0.075, green: 0.10, blue: 0.15)
+            surface = Color(red: 0.12, green: 0.16, blue: 0.23)
+        case .magazine:
+            background = Color(red: 0.975, green: 0.947, blue: 0.914)
+            surface = Color(red: 1.0, green: 0.982, blue: 0.953)
+        case .bento, .adaptiveBento:
+            background = Color(red: 0.935, green: 0.957, blue: 0.935)
+            surface = Color(red: 0.985, green: 0.995, blue: 0.980)
+        case .inkModern:
+            background = Color(red: 0.956, green: 0.944, blue: 0.911)
+            surface = Color(red: 0.992, green: 0.982, blue: 0.955)
+        case .minimalTerminal:
+            background = Color(red: 0.925, green: 0.944, blue: 0.953)
+            surface = Color(red: 0.976, green: 0.986, blue: 0.989)
+        case .fluidGlass:
+            background = Color(red: 0.913, green: 0.933, blue: 0.968)
+            surface = Color(red: 0.979, green: 0.987, blue: 1.0)
+        case .dataStarMap:
+            background = Color(red: 0.936, green: 0.925, blue: 0.963)
+            surface = Color(red: 0.989, green: 0.984, blue: 1.0)
+        }
         let foreground: Color = isDark ? Color(red: 0.91, green: 0.93, blue: 0.96) : Color(red: 0.12, green: 0.15, blue: 0.19)
         let accent: Color
         switch theme {
@@ -217,12 +242,13 @@ enum FThemeLayoutRegistry {
         }
         let tokens = FThemeSemanticTokens(
             background: background, surface: surface, foreground: foreground,
-            secondaryForeground: isDark ? Color.white.opacity(0.72) : Color.black.opacity(0.62),
+            secondaryForeground: isDark ? Color.white.opacity(0.72) : Color(red: 0.37, green: 0.40, blue: 0.45),
             accent: accent, positive: Color(red: 0.78, green: 0.18, blue: 0.17),
             negative: Color(red: 0.12, green: 0.55, blue: 0.30),
             risk: Color(red: 0.78, green: 0.16, blue: 0.16),
             warning: Color(red: 0.82, green: 0.47, blue: 0.06),
-            unavailable: .secondary, partial: Color(red: 0.72, green: 0.52, blue: 0.05),
+            unavailable: isDark ? Color(red: 0.68, green: 0.72, blue: 0.78) : Color(red: 0.48, green: 0.50, blue: 0.54),
+            partial: Color(red: 0.72, green: 0.52, blue: 0.05),
             candidate: accent, buyPoint: Color(red: 0.78, green: 0.18, blue: 0.17),
             sellPoint: Color(red: 0.12, green: 0.55, blue: 0.30),
             episodeCost: Color(red: 0.10, green: 0.40, blue: 0.78),

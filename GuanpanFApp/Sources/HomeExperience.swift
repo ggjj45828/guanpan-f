@@ -988,6 +988,7 @@ private struct FHomeRoleRenderer: View {
 struct HomeDestination: View {
     let route: FHomeRoute
     @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
     @State private var showingBrokerCostEditor = false
     @State private var brokerCostText = ""
     @State private var brokerCostNote = ""
@@ -1271,7 +1272,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(.vertical, 8)
-                AdvisorComposer(model: model, theme: .editorial, instrumentCode: code)
+                AdvisorComposer(model: model, theme: theme, instrumentCode: code)
             }
             .padding(18)
         }
@@ -1633,6 +1634,10 @@ struct SettingsOverview: View {
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
         .tint(theme.accent)
+        .scrollContentBackground(.hidden)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .listRowBackground(theme.manifest.tokens.surface)
         .scrollDismissesKeyboard(.interactively)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -1783,9 +1788,11 @@ private enum FMarketListScope: String, CaseIterable, Identifiable {
 
 struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @State private var securityLookupCode = ""
     @State private var listScope: FMarketListScope = .combined
     @FocusState private var securityLookupFocused: Bool
+    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
 
     private var isValidSecurityCode: Bool {
         let bytes = securityLookupCode.utf8
@@ -1807,141 +1814,154 @@ struct MarketOverview: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                HStack {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("实时分时行情").font(.headline)
-                        Text("报价每 10 秒请求；图表使用上游分钟时间戳。")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text(model.marketCalendarStatusText).font(.caption2).foregroundStyle(.secondary)
+                        Text("实时行情").font(.title3.weight(.semibold)).foregroundStyle(theme.ink)
+                        Text("报价每 10 秒更新；曲线按上游分钟时间戳绘制。")
+                            .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                        Text(model.marketCalendarStatusText).font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
                     Button {
                         Task { await model.refreshMarketData(for: refreshableSecurityCodes) }
                     } label: {
                         if model.refreshingMarketCodes.isEmpty {
                             Label("刷新", systemImage: "arrow.clockwise")
                         } else {
-                            HStack { ProgressView().controlSize(.small); Text("更新中") }
+                            HStack(spacing: 5) { ProgressView().controlSize(.small); Text("更新中") }
                         }
                     }
+                    .buttonStyle(.bordered)
                     .disabled(!model.refreshingMarketCodes.isEmpty || refreshableSecurityCodes.isEmpty)
                     .accessibilityIdentifier("market.refresh.all")
                 }
-            }
-            Section("证券查询") {
-                TextField("输入6位证券代码", text: $securityLookupCode)
-                    .keyboardType(.numberPad)
-                    .textInputAutocapitalization(.never)
-                    .focused($securityLookupFocused)
-                    .accessibilityIdentifier("market.security-code")
-                    .onChange(of: securityLookupCode) { value in
-                        let digits = String(value.unicodeScalars
-                            .filter { (48...57).contains($0.value) }.prefix(6))
-                        if digits != value { securityLookupCode = digits }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("证券查询").font(.headline).foregroundStyle(theme.ink)
+                    TextField("输入6位证券代码", text: $securityLookupCode)
+                        .keyboardType(.numberPad)
+                        .textInputAutocapitalization(.never)
+                        .focused($securityLookupFocused)
+                        .padding(.horizontal, 12).frame(height: 46)
+                        .background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("market.security-code")
+                        .onChange(of: securityLookupCode) { value in
+                            let digits = String(value.unicodeScalars
+                                .filter { (48...57).contains($0.value) }.prefix(6))
+                            if digits != value { securityLookupCode = digits }
+                        }
+                    HStack(spacing: 12) {
+                        NavigationLink(value: FHomeRoute.instrument(securityLookupCode)) {
+                            Label("打开详情", systemImage: "arrow.up.forward")
+                        }
+                        .disabled(!isValidSecurityCode)
+                        .accessibilityIdentifier("market.open-security")
+                        Button { model.toggleWatchlist(securityLookupCode) } label: {
+                            Label(model.isInWatchlist(securityLookupCode) ? "移出自选" : "加入自选",
+                                  systemImage: model.isInWatchlist(securityLookupCode) ? "star.slash" : "star")
+                        }
+                        .disabled(!isValidSecurityCode)
+                        .accessibilityIdentifier("market.watchlist.toggle")
+                        if securityLookupFocused {
+                            Button("收起键盘") { securityLookupFocused = false }
+                                .accessibilityIdentifier("market.security-code.dismiss")
+                        }
                     }
-                if securityLookupFocused {
-                    Button("收起键盘") { securityLookupFocused = false }
-                        .accessibilityIdentifier("market.security-code.dismiss")
+                    Text("自选只保存关注关系，不会创建真实持仓或改变账本。")
+                        .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
-                NavigationLink(value: FHomeRoute.instrument(securityLookupCode)) {
-                    Label("打开证券详情", systemImage: "arrow.up.forward")
-                }
-                .disabled(!isValidSecurityCode)
-                .accessibilityIdentifier("market.open-security")
-                Button { model.toggleWatchlist(securityLookupCode) } label: {
-                    Label(model.isInWatchlist(securityLookupCode) ? "移出自选" : "加入自选",
-                          systemImage: model.isInWatchlist(securityLookupCode) ? "star.slash" : "star")
-                }
-                .disabled(!isValidSecurityCode)
-                .accessibilityIdentifier("market.watchlist.toggle")
-                Text("自选只保存关注关系，不会创建真实持仓或改变账本。")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section {
+
                 Picker("证券列表", selection: $listScope) {
-                    ForEach(FMarketListScope.allCases) { scope in
-                        Text(scope.title).tag(scope)
-                    }
+                    ForEach(FMarketListScope.allCases) { scope in Text(scope.title).tag(scope) }
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("market.list.scope")
-            }
-            if visibleSecurityCodes.isEmpty {
-                Section {
+
+                if visibleSecurityCodes.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: listScope == .watchlist ? "star" : "chart.line.uptrend.xyaxis")
-                            .font(.title2).foregroundStyle(.secondary)
+                            .font(.title2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         Text(listScope == .watchlist ? "自选列表为空" : "当前没有真实持仓")
-                            .font(.headline)
+                            .font(.headline).foregroundStyle(theme.ink)
                         Text(listScope == .watchlist
                              ? "在上方输入证券代码并加入自选。自选不会创建持仓。"
                              : "添加关注证券，或切换到“自选”查看未持仓标的的真实行情。")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.subheadline).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, minHeight: 150)
-                    .padding(.vertical, 12)
                 }
-            }
-            ForEach(visibleSecurityCodes, id: \.self) { code in
-                let holding = model.holdings.first { $0.instrumentCode == code }
-                let snapshot = model.marketDataByCode[code]
-                Section {
-                    HStack(alignment: .top, spacing: 10) {
-                        NavigationLink(value: FHomeRoute.instrument(code)) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
+
+                ForEach(visibleSecurityCodes, id: \.self) { code in
+                    let holding = model.holdings.first { $0.instrumentCode == code }
+                    let snapshot = model.marketDataByCode[code]
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            NavigationLink(value: FHomeRoute.instrument(code)) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(holding?.name ?? code).font(.headline)
+                                        Text(holding?.name ?? code).font(.headline).foregroundStyle(theme.ink)
                                         HStack(spacing: 6) {
-                                            Text(code).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                            Text(code).font(.caption.monospaced())
                                             Text(holding == nil ? "自选关注" : "真实持仓")
-                                                .font(.caption2).foregroundStyle(.secondary)
                                         }
+                                        .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                                     }
-                                    Spacer()
+                                    Spacer(minLength: 6)
                                     Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
-                                        .font(.title3.weight(.semibold)).monospacedDigit()
+                                        .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(theme.ink)
                                 }
-                                if let snapshot {
-                                    FUnifiedSecurityChart(
-                                        model: FChartPresentationBuilder.live(
-                                            snapshot, holding: holding,
-                                            candidate: model.advisorResult?.candidate,
-                                            ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                        height: 115)
-                                } else {
-                                    Text("暂无真实行情 · 点按刷新获取上游报价")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                }
-                                Text(snapshot.map {
-                                    "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
-                                } ?? "行情时间/来源待获取")
-                                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
-                                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("market.instrument.\(code)")
-                        Button { model.toggleWatchlist(code) } label: {
-                            Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
-                                .foregroundStyle(model.isInWatchlist(code) ? .yellow : .secondary)
-                                .frame(minWidth: 40, minHeight: 44)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("market.instrument.\(code)")
+                            Button { model.toggleWatchlist(code) } label: {
+                                Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
+                                    .foregroundStyle(model.isInWatchlist(code) ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                                    .frame(minWidth: 40, minHeight: 40).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
+                            .accessibilityIdentifier("market.watchlist.\(code)")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
-                        .accessibilityIdentifier("market.watchlist.\(code)")
+                        if let snapshot {
+                            FUnifiedSecurityChart(
+                                model: FChartPresentationBuilder.live(
+                                    snapshot, holding: holding,
+                                    candidate: model.advisorResult?.candidate,
+                                    ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
+                                height: 300)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("暂无真实行情 · 点按刷新获取上游报价")
+                                .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
+                                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                        }
+                        Text(snapshot.map {
+                            "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
+                        } ?? "行情时间/来源待获取")
+                            .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
+                        Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
+                            .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
+                    }
+                    .padding(.bottom, 12)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                     }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 20)
         }
         .navigationTitle("今日市场观察")
+        .scrollContentBackground(.hidden)
+        .background(theme.background.ignoresSafeArea())
+        .foregroundStyle(theme.ink)
+        .tint(theme.accent)
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await model.refreshMarketData(for: refreshableSecurityCodes) }
     }

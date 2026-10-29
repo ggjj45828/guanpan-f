@@ -882,6 +882,8 @@ struct FHomeRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
+        .toolbarBackground(theme.manifest.tokens.background, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .alert("观盘max", isPresented: Binding(
             get: { model.alertMessage != nil },
             set: { if !$0 { model.alertMessage = nil } }
@@ -912,9 +914,15 @@ struct FHomeRoot: View {
         NavigationStack {
             content()
                 .navigationDestination(for: FHomeRoute.self) { route in
-                    HomeDestination(route: route, model: model)
+                    HomeDestination(route: route, model: model, theme: theme)
                 }
         }
+        .background(theme.background.ignoresSafeArea())
+        .environment(\.colorScheme, theme == .dashboard ? .dark : .light)
+        .toolbarBackground(theme.manifest.tokens.background, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(theme == .dashboard ? .dark : .light, for: .navigationBar)
+        .tint(theme.accent)
     }
 }
 

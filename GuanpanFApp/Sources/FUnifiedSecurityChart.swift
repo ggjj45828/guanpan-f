@@ -2,6 +2,12 @@ import SwiftUI
 import FCore
 import FAdvisor
 
+private struct FChartMACDPoint {
+    let dif: Double
+    let dea: Double
+    let histogram: Double
+}
+
 /// The App's one renderer for live minutes, NAS archived minutes and daily bars.
 /// Inputs remain source-labelled FCore chart models; missing overlays stay absent.
 struct FUnifiedSecurityChart: View {
@@ -9,7 +15,9 @@ struct FUnifiedSecurityChart: View {
     let height: CGFloat
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @AppStorage("guanpan.f.chart.visibleLayers") private var visibleLayerKeysRaw = "ma5,ma10,ma20,ma60,ma250,volume,cost,brokerCost,intradayAverage,previousClose,candidateBuy,candidateSell,iopv"
+    @AppStorage("guanpan.f.chart.subchart") private var subchartMode = "volume"
     @State private var zoomScale: CGFloat = 1
+    @GestureState private var liveMagnification: CGFloat = 1
     @State private var windowEndOffset = 0
     @State private var dragOriginOffset: Int?
     @State private var selectedTimestamp: Date?
@@ -24,28 +32,30 @@ struct FUnifiedSecurityChart: View {
             if let model, let series = model.chart.series, series.count > 0 {
                 let timestamps = series.timestamps
                 let count = timestamps.count
-                let visibleCount = min(count, max(2, Int(CGFloat(count) / zoomScale)))
+                let displayedZoomScale = min(max(zoomScale * liveMagnification, 1), 12)
+                let visibleCount = min(count, max(2, Int(CGFloat(count) / displayedZoomScale)))
                 let maxOffset = max(count - visibleCount, 0)
                 let end = count - min(windowEndOffset, maxOffset)
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
                 let minuteDomain = minuteDisplayDomain(series: series, range: visibleRange,
-                                                       zoomScale: zoomScale)
+                                                       zoomScale: displayedZoomScale)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
                 }
                 let interaction = try? FChartInteractionModel(
                     visibleRange: visibleRange, selectedIndex: selectedIndex,
-                    zoomScale: Double(zoomScale), crosshairEnabled: crosshairEnabled,
+                    zoomScale: Double(displayedZoomScale), crosshairEnabled: crosshairEnabled,
                     presentation: .inline, pointCount: count)
                 let selectedAveragePeriods = Set(averagePeriods.filter { visibleLayerKeys.contains("ma\($0)") })
                 let displayModel = modelWithVisibleOverlays(model)
                 let priceRange = displayModel.priceRange(interaction: interaction,
                                                          visibleMovingAveragePeriods: selectedAveragePeriods)
                 let averages = movingAverages(for: series)
+                let macd = macdValues(for: series)
 
-                let compact = height < 180
+                let compact = height < 240
                 VStack(alignment: .leading, spacing: compact ? 3 : 9) {
                     if compact {
                         compactHeader(model: model, window: model.chart.window)
@@ -57,7 +67,7 @@ struct FUnifiedSecurityChart: View {
                         draw(model: displayModel, series: series, range: visibleRange,
                              visibleTimes: visibleTimes, averages: averages,
                              priceRange: priceRange, minuteDomain: minuteDomain, selectedIndex: selectedIndex,
-                             visibleLayers: visibleLayerKeys,
+                             visibleLayers: visibleLayerKeys, macd: macd, subchartMode: subchartMode,
                              context: &context, size: size)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,12 +93,16 @@ struct FUnifiedSecurityChart: View {
                             windowEndOffset = min(max((dragOriginOffset ?? windowEndOffset) - shift, 0), maxOffset)
                         }
                     }.onEnded { _ in dragOriginOffset = nil })
-                    .simultaneousGesture(MagnificationGesture().onEnded { value in
-                        let next = min(max(zoomScale * value, 1), 12)
-                        zoomScale = next
-                        let nextVisible = min(count, max(2, Int(CGFloat(count) / next)))
-                        windowEndOffset = next <= 1.01 ? 0 : min(windowEndOffset, max(count - nextVisible, 0))
-                    })
+                    .simultaneousGesture(
+                        MagnificationGesture()
+                            .updating($liveMagnification) { value, state, _ in state = value }
+                            .onEnded { value in
+                                let next = min(max(zoomScale * value, 1), 12)
+                                zoomScale = next
+                                let nextVisible = min(count, max(2, Int(CGFloat(count) / next)))
+                                windowEndOffset = next <= 1.01 ? 0 : min(windowEndOffset, max(count - nextVisible, 0))
+                            }
+                    )
                     .simultaneousGesture(LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                         crosshairEnabled = true
                     })
@@ -135,6 +149,7 @@ struct FUnifiedSecurityChart: View {
                     }
                     layerButton("成交量", key: "volume", color: .secondary, available: true)
                 }
+                subchartPicker(for: model.chart.series)
                 ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
                     layerButton(overlayTitle(overlay.kind), key: layerKey(overlay.kind),
                                 color: overlayColor(overlay.kind), available: !isUnavailable(overlay.quality))
@@ -148,6 +163,57 @@ struct FUnifiedSecurityChart: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func subchartPicker(for series: FChartSeries?) -> some View {
+        HStack(spacing: 2) {
+            if case .daily? = series {
+                subchartButton("VOL", mode: "volume")
+            }
+            subchartButton("MACD", mode: "macd")
+                .disabled(!macdAvailable(for: series))
+        }
+        .padding(2)
+        .background(theme.manifest.tokens.secondaryForeground.opacity(0.08), in: Capsule())
+        .frame(minHeight: 30)
+    }
+
+    private func subchartButton(_ title: String, mode: String) -> some View {
+        Button { subchartMode = mode } label: {
+            Text(title).font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(subchartMode == mode ? theme.manifest.tokens.foreground : theme.manifest.tokens.secondaryForeground)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(subchartMode == mode ? theme.manifest.tokens.surface : .clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func macdAvailable(for series: FChartSeries?) -> Bool {
+        (series?.count ?? 0) >= 26
+    }
+
+    private func macdValues(for series: FChartSeries) -> [FChartMACDPoint] {
+        let prices: [Double]
+        switch series {
+        case let .minute(samples): prices = samples.map { NSDecimalNumber(decimal: $0.price).doubleValue }
+        case let .daily(bars): prices = bars.map { NSDecimalNumber(decimal: $0.close).doubleValue }
+        }
+        guard !prices.isEmpty else { return [] }
+        func ema(_ values: [Double], period: Int) -> [Double] {
+            let alpha = 2.0 / Double(period + 1)
+            var result: [Double] = []
+            result.reserveCapacity(values.count)
+            for value in values {
+                result.append(result.last.map { alpha * value + (1 - alpha) * $0 } ?? value)
+            }
+            return result
+        }
+        let fast = ema(prices, period: 12)
+        let slow = ema(prices, period: 26)
+        let dif = zip(fast, slow).map { $0.0 - $0.1 }
+        let dea = ema(dif, period: 9)
+        return zip(dif, dea).map { FChartMACDPoint(dif: $0.0, dea: $0.1, histogram: 2 * ($0.0 - $0.1)) }
     }
 
     private func movingAverages(for series: FChartSeries) -> [[Decimal?]] {
@@ -300,7 +366,8 @@ struct FUnifiedSecurityChart: View {
     private func draw(model: FChartOverlayModel, series: FChartSeries, range: Range<Int>,
                       visibleTimes: Set<Date>, averages: [[Decimal?]], priceRange: ClosedRange<Decimal>?,
                       minuteDomain: ClosedRange<Double>,
-                      selectedIndex: Int?, visibleLayers: Set<String>,
+                      selectedIndex: Int?, visibleLayers: Set<String>, macd: [FChartMACDPoint],
+                      subchartMode: String,
                       context: inout GraphicsContext, size: CGSize) {
         guard let priceRange, range.count > 0 else { return }
         let low = NSDecimalNumber(decimal: priceRange.lowerBound).doubleValue
@@ -309,11 +376,12 @@ struct FUnifiedSecurityChart: View {
         let rightInset: CGFloat = 8
         let topInset: CGFloat = 8
         let bottomAxis: CGFloat = 24
-        let showVolume = isDaily(series) && visibleLayers.contains("volume")
-        let volumeHeight: CGFloat = showVolume ? max(34, size.height * 0.19) : 0
-        let volumeTop = size.height - bottomAxis - volumeHeight
+        let showVolume = isDaily(series) && subchartMode == "volume" && visibleLayers.contains("volume")
+        let showMACD = subchartMode == "macd" && macd.count >= 26
+        let subchartHeight: CGFloat = (showVolume || showMACD) ? max(42, size.height * 0.22) : 0
+        let subchartTop = size.height - bottomAxis - subchartHeight
         let priceTop = topInset
-        let priceBottom = volumeTop - (showVolume ? 8 : 0)
+        let priceBottom = subchartTop - ((showVolume || showMACD) ? 8 : 0)
         let priceHeight = max(priceBottom - priceTop, 1)
         let plotWidth = max(size.width - leftAxis - rightInset, 1)
         let span = max(high - low, 0.000001)
@@ -349,7 +417,7 @@ struct FUnifiedSecurityChart: View {
                 let point = CGPoint(x: x(index), y: y(samples[index].price))
                 if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
             }
-            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
+            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.95, lineCap: .round, lineJoin: .round))
             let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
                                                     (162, "13:30"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
@@ -407,18 +475,18 @@ struct FUnifiedSecurityChart: View {
                 context.fill(Path(body), with: .color(color.opacity(0.85)))
                 if showVolume {
                     let volume = NSDecimalNumber(decimal: bar.volume).doubleValue
-                    let barHeight = (volumeHeight - 4) * CGFloat(volume / maxVolume)
+                    let barHeight = (subchartHeight - 4) * CGFloat(volume / maxVolume)
                     let volumeBar = CGRect(x: centerX - max(stepX * 0.3, 0.6),
-                                           y: volumeTop + 2 + volumeHeight - 4 - barHeight,
+                                           y: subchartTop + 2 + subchartHeight - 4 - barHeight,
                                            width: max(stepX * 0.6, 1), height: barHeight)
                     context.fill(Path(volumeBar), with: .color(color.opacity(0.55)))
                 }
             }
             if showVolume {
-                var divider = Path(); divider.move(to: CGPoint(x: leftAxis, y: volumeTop)); divider.addLine(to: CGPoint(x: size.width - rightInset, y: volumeTop))
+                var divider = Path(); divider.move(to: CGPoint(x: leftAxis, y: subchartTop)); divider.addLine(to: CGPoint(x: size.width - rightInset, y: subchartTop))
                 context.stroke(divider, with: .color(.secondary.opacity(0.2)), lineWidth: 1)
                 context.draw(Text("VOL").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
-                            at: CGPoint(x: 3, y: volumeTop + volumeHeight / 2), anchor: .leading)
+                            at: CGPoint(x: 3, y: subchartTop + subchartHeight / 2), anchor: .leading)
             }
             let tickCount = min(5, range.count)
             if tickCount > 0 {
@@ -438,8 +506,35 @@ struct FUnifiedSecurityChart: View {
                     let point = CGPoint(x: x(index), y: y(value))
                     if started { path.addLine(to: point) } else { path.move(to: point); started = true }
                 }
-                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 1)
+                context.stroke(path, with: .color(averageColors[seriesIndex]), lineWidth: 0.85)
             }
+        }
+        if showMACD {
+            let visibleValues = range.flatMap { [macd[$0].dif, macd[$0].dea, macd[$0].histogram] }
+            let extent = max(visibleValues.map(abs).max() ?? 0, 0.000001)
+            let centerY = subchartTop + subchartHeight / 2
+            func macdY(_ value: Double) -> CGFloat {
+                centerY - CGFloat(value / extent) * (subchartHeight * 0.43)
+            }
+            var baseline = Path(); baseline.move(to: CGPoint(x: leftAxis, y: centerY)); baseline.addLine(to: CGPoint(x: size.width - rightInset, y: centerY))
+            context.stroke(baseline, with: .color(.secondary.opacity(0.25)), lineWidth: 0.7)
+            var difPath = Path(); var deaPath = Path()
+            for index in range {
+                let point = macd[index]
+                let centerX = x(index)
+                let barWidth = max(plotWidth / CGFloat(max(range.count, 1)) * 0.56, 1)
+                let bar = CGRect(x: centerX - barWidth / 2, y: min(centerY, macdY(point.histogram)),
+                                 width: barWidth, height: max(abs(centerY - macdY(point.histogram)), 0.7))
+                context.fill(Path(bar), with: .color((point.histogram >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative).opacity(0.7)))
+                let difPoint = CGPoint(x: centerX, y: macdY(point.dif))
+                let deaPoint = CGPoint(x: centerX, y: macdY(point.dea))
+                if index == range.lowerBound { difPath.move(to: difPoint); deaPath.move(to: deaPoint) }
+                else { difPath.addLine(to: difPoint); deaPath.addLine(to: deaPoint) }
+            }
+            context.stroke(difPath, with: .color(averageColors[0]), lineWidth: 0.8)
+            context.stroke(deaPath, with: .color(averageColors[1]), lineWidth: 0.8)
+            context.draw(Text("MACD").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
+                         at: CGPoint(x: 3, y: subchartTop + 7), anchor: .leading)
         }
         for overlay in model.priceOverlays where !isUnavailable(overlay.quality) {
             if (overlay.kind == .candidateBuy || overlay.kind == .candidateSell),
@@ -463,7 +558,7 @@ struct FUnifiedSecurityChart: View {
                     path.move(to: CGPoint(x: pointX, y: y(point.value)))
                     path.addLine(to: CGPoint(x: min(pointX + stepX, size.width - rightInset), y: y(point.value)))
                 }
-                context.stroke(path, with: .color(overlayColor(overlay.kind)), style: StrokeStyle(lineWidth: 1.3, dash: [3, 2]))
+                context.stroke(path, with: .color(overlayColor(overlay.kind)), style: StrokeStyle(lineWidth: 1.0, dash: [3, 2]))
             }
         }
         if visibleLayers.contains("iopv"), let observation = model.iopv,
@@ -473,7 +568,7 @@ struct FUnifiedSecurityChart: View {
             iopvPath.move(to: CGPoint(x: leftAxis, y: lineY))
             iopvPath.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
             context.stroke(iopvPath, with: .color(overlayColor(.iopv)),
-                           style: StrokeStyle(lineWidth: 1.3, dash: [2, 3]))
+                           style: StrokeStyle(lineWidth: 1.0, dash: [2, 3]))
             context.draw(Text("IOPV").font(.system(size: 8, weight: .semibold))
                             .foregroundColor(overlayColor(.iopv)),
                          at: CGPoint(x: leftAxis + 24, y: max(priceTop + 7, lineY - 7)))
@@ -572,9 +667,7 @@ struct FUnifiedSecurityChart: View {
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
             .padding(.horizontal, 5).padding(.vertical, 2)
             .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
-            // Keep the visible chip compact while preserving a comfortable
-            // 44pt touch target for the horizontally scrolling control row.
-            .frame(minHeight: 44)
+            .frame(minHeight: 30)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

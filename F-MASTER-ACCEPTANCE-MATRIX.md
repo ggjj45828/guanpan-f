@@ -502,3 +502,8 @@ Git命令直推失败后，已通过GitHub Desktop对正确F仓库推送成功�
 | B视觉胜出声明 | 当前仍依据用户实机反馈：F不如B | 未关闭 |
 
 Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出与IPA校验。首页人工视觉验收仍未完成；CI通过不等于B视觉达到。
+
+| 验收项 | 当前实现/证据 | 状态 | 关闭条件 |
+|---|---|---|---|
+| NAS历史分钟响应诊断与B Frozen兼容 | `GuanpanFApp/Sources/FNASConnection.swift`：区分有效HTTP 200 + Missing与格式/路由失败；F格式失败时只读尝试B `/v1/market/minute/{code}?day=...`；旧格式只标legacy-unassessed/Partial | Swift dirty、尚未编译/CI/手机实测；NAS历史真实覆盖未知 | 当前SHA Apple CI通过；HTTPS手机查询同证券/日期；页面显示真实Complete/Partial/Missing；有分钟时曲线来自实际返回bar，无数据则不画假线 |
+| 市场图可读性与主题作用范围 | `HomeExperience.swift`、`FUnifiedSecurityChart.swift`、`GuanpanFApp.swift`、`ThemeLayoutManifest.swift` | 全宽ScrollView行情行、300pt分时图、30pt MA/图层按钮、连续缩放；日K真实VOL与由真实价格EMA(12,26,9)派生的MACD；设置Form和各主题背景/表面色统一 | 当前dirty Swift未编译、未截图/实机验收；均价/前收/IOPV真实来源仍未接入；主题视觉一致性需逐主题截图关闭 |

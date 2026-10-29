@@ -14,12 +14,14 @@ struct FNASArchivedIntraday: Equatable, Sendable {
 enum FNASConnectionError: Error, LocalizedError {
     case invalidAddress
     case notReady(String)
+    case historyUnavailable(String)
     case invalidResponse
 
     var errorDescription: String? {
         switch self {
         case .invalidAddress: return "NAS 地址无效；请填写 http(s)://主机:8788。"
         case let .notReady(status): return "NAS 已响应，但服务未就绪：\(status)"
+        case let .historyUnavailable(reason): return "NAS 历史分钟读取失败：\(reason)"
         case .invalidResponse: return "NAS 返回了无法识别的就绪状态。"
         }
     }
@@ -108,6 +110,22 @@ enum FNASHistoricalMinuteClient {
         let bars: [Bar]
     }
 
+    // B's Frozen NAS contract predates F's coverage-aware endpoint. It is a
+    // read-only compatibility fallback; its rows do not carry quality or fetch
+    // timestamps, so they must never be presented as Complete research data.
+    private struct LegacyBResponse: Decodable {
+        struct Bar: Decodable {
+            let timestamp: String
+            let price: String
+            let volume: String?
+            let iopv: String?
+        }
+        let code: String
+        let day: String
+        let source: String
+        let rows: [Bar]
+    }
+
     static func fetch(baseAddress: String, securityCode: String,
                       tradingDate: Date, timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current) async throws -> FNASArchivedIntraday {
         guard let readinessURL = FNASReadinessClient.validateAddress(baseAddress),
@@ -128,10 +146,36 @@ enum FNASHistoricalMinuteClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
-        guard (200..<300).contains(http.statusCode), let body = try? JSONDecoder().decode(Response.self, from: data),
-              body.securityCode == securityCode, body.market == "CN", body.tradingDate == dateText else {
-            throw FNASConnectionError.notReady("历史分时查询失败（HTTP \(http.statusCode)）")
+        var modernFailure: String?
+        if (200..<300).contains(http.statusCode),
+           let body = try? JSONDecoder().decode(Response.self, from: data),
+           body.securityCode == securityCode, body.market == "CN", body.tradingDate == dateText {
+            let archive = try makeArchive(body: body, securityCode: securityCode, dateText: dateText,
+                                          timeZone: timeZone)
+            if !archive.samples.isEmpty { return archive }
+            // A valid F response with an explicit empty coverage state is a
+            // data-availability result, not an API/connection failure. Keep
+            // Missing visible to the user instead of probing an unrelated
+            // legacy route and turning HTTP 200 + Missing into a false error.
+            let status = body.status.lowercased()
+            if ["missing", "not-a-session", "out_of_provider_coverage",
+                "permanent_unavailable", "retryable"].contains(status) {
+                return archive
+            }
+            modernFailure = "F 历史接口已响应，但该证券/日期没有归档分钟点（\(body.status)）"
+        } else {
+            modernFailure = Self.responseFailure(data: data, response: http)
         }
+        do {
+            return try await fetchLegacyB(baseURL: baseAddress, securityCode: securityCode,
+                                          dateText: dateText, timeZone: timeZone)
+        } catch {
+            throw FNASConnectionError.historyUnavailable("\(modernFailure ?? "F 历史接口不可用")；B 兼容接口也未取得数据：\(error.localizedDescription)")
+        }
+    }
+
+    private static func makeArchive(body: Response, securityCode: String, dateText: String,
+                                    timeZone: TimeZone) throws -> FNASArchivedIntraday {
         var formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = timeZone
@@ -153,6 +197,9 @@ enum FNASHistoricalMinuteClient {
         }.sorted { $0.timestamp < $1.timestamp }
         let unique = Dictionary(samples.map { ($0.timestamp, $0) }, uniquingKeysWith: { first, _ in first })
         let ordered = unique.keys.sorted().compactMap { unique[$0] }
+        let discardedCount = body.bars.count - ordered.count
+        let reportedStatus = body.status.lowercased()
+        let effectiveStatus = discardedCount > 0 && reportedStatus == "complete" ? "partial" : body.status
         let coverage = body.coverage
         let coverageSummary: String
         if let coverage {
@@ -160,16 +207,81 @@ enum FNASHistoricalMinuteClient {
             let observed = coverage.observedCount ?? ordered.count
             let missing = coverage.missingTimestamps?.count
             let quality = coverage.qualityPassed.map { $0 ? " · 质量合格" : " · 质量未达标" } ?? ""
-            coverageSummary = "\(body.status) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)"
+            let discarded = discardedCount > 0 ? " · 客户端剔除 \(discardedCount) 条无效/重复记录" : ""
+            coverageSummary = "\(effectiveStatus) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)\(discarded)"
         } else {
-            coverageSummary = "\(body.status) · NAS未提供完整度统计"
+            coverageSummary = "\(effectiveStatus) · NAS未提供完整度统计"
         }
         let sources = Array(Set(body.bars.map(\.source))).sorted().joined(separator: ", ")
         return FNASArchivedIntraday(securityCode: securityCode, tradingDate: dateText,
-                                    coverageStatus: body.status, coverageSummary: coverageSummary,
+                                    coverageStatus: effectiveStatus, coverageSummary: coverageSummary,
                                     sourceSummary: sources.isEmpty ? "无有效来源" : sources,
                                     fetchedAt: Date(),
                                     samples: ordered)
+    }
+
+    private static func fetchLegacyB(baseURL: String, securityCode: String, dateText: String,
+                                     timeZone: TimeZone) async throws -> FNASArchivedIntraday {
+        guard let readyURL = FNASReadinessClient.validateAddress(baseURL),
+              var components = URLComponents(url: readyURL, resolvingAgainstBaseURL: false) else {
+            throw FNASConnectionError.invalidAddress
+        }
+        components.path = "/v1/market/minute/\(securityCode)"
+        components.queryItems = [URLQueryItem(name: "day", value: dateText)]
+        guard let url = components.url else { throw FNASConnectionError.invalidAddress }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
+        guard (200..<300).contains(http.statusCode),
+              let body = try? JSONDecoder().decode(LegacyBResponse.self, from: data),
+              body.code == securityCode, body.day == dateText,
+              !body.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw FNASConnectionError.historyUnavailable(Self.responseFailure(data: data, response: http))
+        }
+        var dayFormatter = DateFormatter()
+        dayFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dayFormatter.timeZone = timeZone
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+        guard let dayStart = dayFormatter.date(from: dateText) else {
+            throw FNASConnectionError.invalidResponse
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
+            throw FNASConnectionError.invalidResponse
+        }
+        let samples = body.rows.compactMap { row -> FMinuteSample? in
+            guard let stamp = parseTimestamp(row.timestamp), stamp >= dayStart, stamp < dayEnd,
+                  let price = Decimal(string: row.price, locale: Locale(identifier: "en_US_POSIX")),
+                  price > 0 else { return nil }
+            return FMinuteSample(timestamp: stamp, price: price)
+        }
+        let unique = Dictionary(samples.map { ($0.timestamp, $0) }, uniquingKeysWith: { first, _ in first })
+        let ordered = unique.keys.sorted().compactMap { unique[$0] }
+        guard !ordered.isEmpty else {
+            throw FNASConnectionError.historyUnavailable("B 接口有响应，但没有该日期可用的分钟点")
+        }
+        return FNASArchivedIntraday(
+            securityCode: securityCode, tradingDate: dateText,
+            coverageStatus: "legacy-unassessed",
+            coverageSummary: "\(ordered.count) 个真实分钟点 · B 兼容接口未提供完整度、质量和采集时间；完整性/新鲜度未知",
+            sourceSummary: "B NAS 归档 · \(body.source)", fetchedAt: Date(), samples: ordered)
+    }
+
+    private static func responseFailure(data: Data, response: HTTPURLResponse) -> String {
+        let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? "未知 Content-Type"
+        if contentType.localizedCaseInsensitiveContains("text/html") {
+            return "HTTP \(response.statusCode) 返回了网页而非分钟 JSON（\(contentType)）；可能是 API 路径未映射到 NAS 服务"
+        }
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let message = object["error"] as? String, !message.isEmpty {
+                return "HTTP \(response.statusCode)：\(String(message.prefix(180)))"
+            }
+            return "HTTP \(response.statusCode) JSON 字段不符合历史分钟契约（字段：\(object.keys.sorted().joined(separator: ", "))）"
+        }
+        return "HTTP \(response.statusCode) 响应格式不是可识别的历史分钟 JSON（\(contentType)）"
     }
 
     private static func dayString(_ value: Date, timeZone: TimeZone) -> String {

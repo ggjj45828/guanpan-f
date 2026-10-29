@@ -449,3 +449,30 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 这次 CI证明当前提交已编译、自动测试通过、Simulator截图已导出；**我尚未人工查看截图，也没有交互式Simulator/iPhone Air验收**。因此不能据此说首页视觉已达到或超过B，当前产品判断仍是F不如B。
 - 后续下一项：人工审阅Run 73首页截图并基于截图收小的视觉缺口；完成后再迁移行情/证券详情。NAS HTTPS、DeepSeek真实E2E和真实成交闭环本Run没有新证据。
 - 本次为补齐Run 73交接状态新增了仅文档的本地提交；普通命令行推送仍因本机 `getaddrinfo() thread failed to start` 失败。GitHub Desktop窗口自动化连续无法取得稳定窗口状态，因此本次没有声称已推送；Swift代码仍对应已通过Run 73的 `bd01362`，文档提交待普通推送。
+
+## 2026-10-29 NAS历史分钟 HTTP 200 诊断修正（本地未编译）
+
+- 用户实机反馈历史分时显示“NAS 已响应，但服务未就绪：历史分时查询失败（HTTP 200）”。这条信息被旧客户端错误地归为“服务未就绪”；HTTP 200只说明NAS返回了响应，不能证明目标日期有分钟数据。
+- 本地当前HEAD为 `741fbc009db954e20e0159fcbd9108cb5d45396e`（比 `origin/main` ahead 1；另有Swift未提交修改）。在 `GuanpanFApp/Sources/FNASConnection.swift` 编码两项修正：对有效F历史响应将 `Missing` / `not-a-session` 等空数据状态如实返回页面，不再错误显示成API故障；仅在F响应格式/路由不匹配时只读回退B Frozen的 `/v1/market/minute/{code}?day=...` 契约。旧格式缺少覆盖度/采集时间，状态固定为 `legacy-unassessed`，UI归为Partial，绝不冒充Complete。
+- 两种格式的失败现可显示HTTP状态、Content-Type、JSON错误/字段信息；不会把完整响应正文或凭据写入错误文本。F现代格式的无效/重复行若被客户端剔除，会把服务端Complete降为Partial。
+- NAS服务源码 `/api/v1/minute-history` 对已知交易日无归档分钟数据会返回HTTP 200 + `status=missing` + `bars=[]`。因此如果本次iPhone查询命中该状态，根因是所选日期确无归档数据（或归档未覆盖），不是Readyz失败；新包会明确显示该日期Missing。若返回字段/路由不兼容，则错误文案将提示具体响应类型并尝试B只读兼容端点。
+- **状态区分：**上述Swift修改仅“已编码”；未在Windows编译、未提交、未推Apple CI；NAS实际响应未由新代码复测；iPhone安装、历史分钟曲线及Research消费均未验证。NAS本轮没有服务端修改或部署。
+- 下一步：检查diff后普通同步/送Apple CI；用户在同一HTTPS穿透地址重新查询同一证券和日期，回报新状态。若状态为Missing，先用NAS网页同代码同日期查询确认SQLite是否有真实分钟行；不能用换endpoint或伪数据掩盖空归档。
+
+## 2026-10-29 主题一致性与行情图表整改（本地编码，未编译）
+
+- `MarketOverview` 证券行情行重排：收藏按钮回到代码/价格标题行，取消其原来独占整列造成的图表横向挤压；图表从115pt提高至205pt，外层列表左右留白缩小，图表操作不再被证券详情导航链接整体包住；列表背景、行面和强调色改为当前主题tokens。
+- `FUnifiedSecurityChart` 放大手势改为GestureState连续跟手缩放，手势结束后再固定缩放结果；价格主线、MA及辅助overlay线宽进一步变细。日K/较大图表新增副图选择VOL/MACD；MACD按真实价格序列确定性计算EMA(12,26,9)，样本少于26时不可选；不生成行情来源中不存在的数据。
+- 主题作用范围修正：当前主题的明暗外观、NavigationBar、TabBar和tint由FHomeRoot统一应用；行情列表使用相同主题底色/表面色；`HomeDestination`将当前theme传入证券详情AI编辑器，修复该处始终硬编码东方编辑室的跨主题不一致。
+- 本节是第一轮行情整改记录，后续增补：行情页改为全宽ScrollView行，不再使用系统List单元格；图表容器增至300pt，图层控制视觉高度降至30pt；Settings Form背景/文字/行表面接入当前主题；每个主题拥有单独背景与表面颜色。此前记录的205pt/List只代表第一轮实现，已由本轮源码替换。
+- 只完成源码编码和静态diff检查；Windows环境无Swift/Xcode，Apple CI未执行，尚无Simulator/实机截图或手势验收。主题整页视觉统一不能仅凭上述源改动宣布完成；后续必须在CI、Simulator和iPhone Air截图检查后判断。
+
+## 2026-10-29 主题一致性与行情图第二轮收口（已编码、未编译）
+
+- `MarketOverview` 由系统 `List` 改为全宽 `ScrollView` 行情流，移除系统单元格左右边距及每只证券外框；证券名/代码/现价与收藏按钮同一行；真实分时图高度300pt，按行内全部可用宽度绘制。
+- MA/图层胶囊触控框视觉高度由44pt降至30pt；缩放由仅手势结束时生效改为GestureState连续跟手。日线MACD由真实收盘价按EMA(12,26,9)计算，样本不足26点禁用；日K成交量使用真实bar volume。分钟数据不伪造MA或成交量。
+- 十套主题现在分别定义背景/表面token；设置Form隐藏系统默认底并使用对应主题背景、文字和表面行色。导航栏、TabBar、行情页、统一图表、证券详情顾问区使用同一已选择主题。
+- 当前HEAD `741fbc009db954e20e0159fcbd9108cb5d45396e`；改动涉及 `HomeExperience.swift`、`FUnifiedSecurityChart.swift`、`GuanpanFApp.swift`、`ThemeLayoutManifest.swift`。此前NAS客户端改动仍保留在同一dirty工作树。
+- 本机Windows没有Swift/Xcode；当前HEAD未编译、未执行测试、未送Apple CI。没有本轮Simulator截图、人工视觉或iPhone Air手势证据；主题布局不能标为已验收。
+- 均价、前收、IOPV/溢价和新闻没有新增真实数据源，仍Unavailable/未接入。NAS历史分钟诊断也未由手机新包复测。
+- 下一步：静态差异检查后正常同步至远端并送Apple CI；CI通过后查看全宽行情图和三套标杆主题截图。用户手机上若实际图仍裁切/拥挤，按新截图继续修正。
