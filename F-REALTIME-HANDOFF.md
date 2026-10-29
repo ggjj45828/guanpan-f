@@ -703,3 +703,15 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 该诊断兼容改动仍未由Apple编译或测试。即使编译通过，也只能提升接口兼容/错误定位；没有手机端新响应和真实分钟样本，不代表NAS历史分钟已连接或成功归档。
 - 下一步：提交并普通推送，检查Run 83第一条真实失败并修复；若CI通过，用户在设置页重试指定交易日，依据新错误中的实际字段继续修正接口契约。`/readyz` Ready仍不代表历史API可读。
 - Run 83 [40850994603](https://github.com/ggjj45830/guanpan-f/actions/runs/40850994603) 已真实执行FCore（成功）和XcodeGen（成功），Device Build首错为 `FNASConnection.swift:167`：`??`右侧的日期解码表达式可抛错，但运算符表达式未标`try`。已按首错改为显式`if/else`解码。此修复仅编码，待下一次Apple CI验证；Run 83后续Simulator/UI/IPA步骤被跳过。
+
+
+## Run 98 · 行情参考解析与状态诊断（2026-10-29）
+
+- 当前 Swift SHA：`311f1c8cf639679b56f327abc000951ea3ef14dc`；Run [40878823535](https://github.com/ggjj45830/guanpan-f/actions/runs/40878823535) 成功。
+- Apple CI 实际结果：FCore 165/165、UI XCTest 4/4；XcodeGen、iOS Device Build、Simulator Build、截图导出、unsigned IPA 校验/打包与 artifact 上传成功。Artifact [12900381551](https://github.com/ggjj45830/guanpan-f/actions/runs/40878823535/artifacts/12900381551)，SHA256 `d3d6348353cd01cf957ff3575e65389708dda29d75903bc75afce46dcb84db08`。这些是自动构建/测试/导出证据，不代表截图已人工审阅、iPhone Air或真机已验收。
+- 源码修复：Tencent ETF 快照即使省略instrument-type字段，也可按B已验证的ETF代码段回退识别；排除508/180 REIT代码段；IOPV/溢价数字解析支持百分号、千位分隔符；过滤小于等于-100%的无效溢价。Run 97 CI已暴露“过滤值未传入返回对象”的真实遗漏；Run 98修正后零失败。
+- 参考行情诊断：失败原因现在会显示在证券详情参考数据区；请求失败会清掉旧缓存，避免过期前收/IOPV继续看似有效。
+- NAS静态合同审阅：当前NAS `/api/v1/minute-history`返回securityCode/market/tradingDate/status/timezone/coverage/bars；iOS当前解码器允许timezone缺失、识别对应身份字段，并兼容可选coverage/source/fetchedAt与数字字符串价格。用户先前截图的旧包要求timezone字段，当前源代码已放宽此字段；但没有当前iPhone穿透URL和真实设备HTTP响应，本轮**未证明手机NAS历史查询成功**。Ready只说明readiness端点可达，指定日期有bars/coverage仍须手机验证。
+- 新闻：当前F没有已接线且验证过的新闻供应商；仍显示Unavailable，不得当作已接入。
+- 主题：`ThemeLayoutManifest.swift`仍将`isDark = false`写死，appearanceCompatibility也注明仅浅色基础token完成；深色/护眼、逐主题各页面一致性及截图人工审阅未完成。
+- 下一步：安装Run 98 artifact进行HTTPS NAS指定日期查询；未取得供应商真实新闻源前保持Unavailable；继续修正深色/护眼主题实现并做真实截图视觉审阅。
