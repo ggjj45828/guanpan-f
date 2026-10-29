@@ -1207,7 +1207,7 @@ private enum FQuoteHTTPClient {
         }
         return FTencentMarketReference(securityCode: code, latestPrice: price,
                                        previousClose: previousClose, iopv: iopv,
-                                       premiumPercent: premium, observedAt: observedAt,
+                                       premiumPercent: validPremium, observedAt: observedAt,
                                        fetchedAt: now, providerInstrumentType: instrumentType,
                                        source: "Tencent qt.gtimg.cn")
     }
