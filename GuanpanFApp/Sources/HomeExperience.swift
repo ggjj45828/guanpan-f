@@ -1274,6 +1274,10 @@ struct HomeDestination: View {
                              premium + " · \(reference.source) · \(reference.observedAt.formatted(date: .omitted, time: .standard))")
                             .font(.caption2).foregroundStyle(.secondary)
                             .lineLimit(2).minimumScaleFactor(0.8)
+                    } else if let referenceState = model.marketReferenceStateByCode[code] {
+                        Text("前收 / IOPV / 溢折价不可用 · \(referenceState)")
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(2).minimumScaleFactor(0.8)
                     }
                     if let snapshot {
                         Text(Self.quoteFreshnessText(snapshot, now: Date()))
