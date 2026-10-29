@@ -558,3 +558,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 本地Windows没有Xcode/Swift。最新成功的Apple证据仍是远端Run 79（SHA `6df3d51662cf1b403d1304c166dcebef86630ea8`，FCore 164/164、UI XCTest 3/3、构建/IPA通过）；它不覆盖此次合并后的Swift。当前HEAD及合并SHA尚无编译或测试执行证据，测试定义也不等于通过。
 - NAS历史分钟、DeepSeek真实E2E、iPhone Air真机布局、人工Simulator截图仍未验收。Ready/HTTP 200不能证明指定日归档可读；新闻真实来源仍未接入。
 - 下一步：完成普通合并提交，经GitHub Desktop正常Push触发Apple CI；查看该次运行首个真实错误并按根因修复。禁止强推。CI通过后再查看导出截图；当前没有人工视觉通过证据。
+
+## Run 80 首错修复：Tencent分钟累计成交量顺序（2026-10-29）
+
+- 当前提交 `2f7fb7b1cefd9e16db1a2d77a2a50ebc42cb1af1` 已正常推送至 `origin/main`，GitHub Actions Run 80 [40841281547](https://github.com/ggjj45830/guanpan-f/actions/runs/40841281547) 已真实执行。
+- Run 80 在 FCore 阶段失败：**165 executed / 163 passed / 2 failed**。第一个真实失败来自 `MarketMinuteDataTests.testParserSortsCurrentSessionRowsAndDropsOpeningAuction` 的两条断言：首个正规分钟成交量应为 `nil`，下一分钟应为 `120`，实际分别为 `0` 与 `nil`。XcodeGen、Device Build、Simulator Build、UI XCTest、IPA步骤因此被跳过；Run 79结果不覆盖当前提交。
+- 根因：解析器按provider返回顺序计算累计成交量差，而fixture/provider行顺序不保证按时间排列。已在本地修改解析器：先按交易时间排序（同时间保持源顺序），再计算正规分钟量差；09:30竞价点仍排除且不参与分钟量基线，首个正规观察点的增量继续保持未知。该修改目前仅编码，Windows本机无Swift/Xcode，尚未编译或执行。
+- 本地 HEAD/远端 `main` 仍为 `2f7fb7b…`；工作树仅 `Sources/FCore/MarketMinuteData.swift` 有上述未提交修复。下一步提交此首错修复并正常Push，触发新Apple CI，确认FCore及后续全链；如果再失败，继续取第一个真实失败定位。
+- 产品整改状态不因Run 80失败而改变：NAS历史分钟真实指定日期读链、Tencent前收/均价/IOPV真实设备字段、新闻可靠来源、DeepSeek端到端、Simulator人工截图审阅和iPhone Air实机仍无当前证据。Run 80未生成UI结果包；当前没有新的Simulator截图或人工视觉验收。

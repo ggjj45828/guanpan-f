@@ -167,27 +167,47 @@ public enum FTencentMinuteParser {
             throw FMarketDataError.staleOrWrongSession
         }
 
-        var points: [Date: (price: Decimal, volume: Decimal?)] = [:]
-        var previousCumulativeVolume: Decimal?
-        for row in rows {
+        struct ParsedRow {
+            let timestamp: Date
+            let sourceIndex: Int
+            let isOpeningAuction: Bool
+            let price: Decimal?
+            let cumulativeVolume: Decimal?
+        }
+        let parsedRows = rows.enumerated().compactMap { index, row -> ParsedRow? in
             let fields = row.split(whereSeparator: \.isWhitespace)
             guard fields.count >= 2, fields[0].count == 4,
                   fields[0].allSatisfy(\.isNumber),
-                  let price = Decimal(string: String(fields[1]), locale: Locale(identifier: "en_US_POSIX")),
-                  price > 0 else { continue }
+                  let stamp = formatter.date(from: dateText + " " + String(fields[0])),
+                  stamp <= fetchedAt else { return nil }
+            let price = Decimal(string: String(fields[1]), locale: Locale(identifier: "en_US_POSIX"))
             let minuteLabel = String(fields[0])
-            if minuteLabel == "0930" { continue } // opening-auction point, not a regular minute close
-            guard let stamp = formatter.date(from: dateText + " " + minuteLabel), stamp <= fetchedAt else { continue }
             let cumulativeVolume = fields.count > 2
                 ? Decimal(string: String(fields[2]), locale: Locale(identifier: "en_US_POSIX")) : nil
+            return ParsedRow(timestamp: stamp, sourceIndex: index,
+                             isOpeningAuction: minuteLabel == "0930",
+                             price: price.flatMap { $0 > 0 ? $0 : nil },
+                             cumulativeVolume: cumulativeVolume.flatMap { $0 >= 0 ? $0 : nil })
+        }.sorted {
+            $0.timestamp == $1.timestamp ? $0.sourceIndex < $1.sourceIndex : $0.timestamp < $1.timestamp
+        }
+
+        var points: [Date: (price: Decimal, volume: Decimal?)] = [:]
+        var previousCumulativeVolume: Decimal?
+        for row in parsedRows {
+            // Opening-auction values are not regular-session minute bars or a
+            // safe baseline for incremental volume. Begin deltas at the first
+            // regular observation instead.
+            guard !row.isOpeningAuction else { continue }
             let minuteVolume: Decimal?
-            if let cumulativeVolume, cumulativeVolume >= 0 {
+            if let cumulativeVolume = row.cumulativeVolume {
                 minuteVolume = previousCumulativeVolume.map { max(Decimal.zero, cumulativeVolume - $0) }
                 previousCumulativeVolume = cumulativeVolume
             } else {
                 minuteVolume = nil
             }
-            points[stamp] = (price, minuteVolume)
+            guard let price = row.price else { continue }
+            points[row.timestamp] = (price, minuteVolume)
         }
         let samples = points.keys.sorted().compactMap { stamp in
             points[stamp].map { FMinuteSample(timestamp: stamp, price: $0.price, volume: $0.volume) }
