@@ -664,3 +664,9 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 新闻 | F中没有可靠新闻供应商接线 | 未接入；保持Unavailable，不得伪造 |
 | Theme dark/eye-care | 当前manifest将isDark写死false，浅色基础token有实现 | 未完成；需要补色彩方案接线并用截图验证 |
 | 视觉验收 | 本次CI截图导出成功 | 未人工视觉审阅；主题一致性、图表手势、iPhone Air、真机均待验 |
+## 2026-10-29 新闻证据接入（待Apple CI/手机实网）
+
+| 需求 | F实现 | 状态 | 验收关闭条件 |
+|---|---|---|---|
+| 顾问使用真实近期新闻 | iOS对每个分析证券按名称/代码查询Google News RSS；限制近24小时，保留媒体/时间/HTTPS跳转链接，作为DecisionContext只读新闻Observation；超时/无匹配明确Unavailable | 已编码；本机DNS不可达；未编译、未实网 | Apple CI通过；真实iPhone成功取到RSS并确认来源/发布时间/链接；DeepSeek能引用实际证据ID并标明标题未核实 |
+| 新闻来源边界 | Google News RSS是搜索聚合标题，不是新闻正文或核实事实；链接可能跳转且没有稳定服务承诺；仅查询代码/名称，不发送账本；模型不得从记忆补造即时新闻 | 已加提示词和设置说明；仍待实际顾问验证 | 检查输出引用与缺失降级；RSS不可用时不得声称新闻指导已成功 |

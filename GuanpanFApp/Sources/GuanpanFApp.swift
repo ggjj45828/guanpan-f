@@ -88,6 +88,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var nasConnectionStatus = "未配置"
     @Published private(set) var checkingNASConnection = false
     @Published private(set) var nasResearchStatus = "尚未请求"
+    @Published private(set) var newsStatus = "尚未请求"
     @Published private(set) var aiKeyStatus = "未配置 DeepSeek API Key"
     @Published private(set) var advisorStatus = "尚未开始分析"
     @Published private(set) var candidateShadowJournalStatus = "建议成绩单尚未记录"
@@ -692,6 +693,36 @@ final class FHomeModel: ObservableObject {
             let quotes = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
                 marketDataByCode[code].map { (code, $0) }
             })
+            var newsByCode: [String: FNewsFeed] = [:]
+            var newsFailureByCode: [String: String] = [:]
+            newsStatus = "正在按证券名称与代码查询近24小时新闻…"
+            let searchNames = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code -> (String, String)? in
+                let name = initial.positions.first(where: { $0.instrumentCode == code })?.name ??
+                    initial.instrumentHistories.first(where: { $0.instrumentCode == code })?.instrumentName
+                return name.map { (code, $0) }
+            })
+            await withTaskGroup(of: (String, FNewsFeed?, String?).self) { group in
+                for code in targetCodes {
+                    let searchName = searchNames[code]
+                    group.addTask {
+                        do {
+                            return (code, try await FNewsRSSClient.fetch(
+                                securityCode: code, searchName: searchName), nil)
+                        } catch {
+                            return (code, nil, error.localizedDescription)
+                        }
+                    }
+                }
+                for await (code, feed, failure) in group {
+                    if let feed, !feed.articles.isEmpty { newsByCode[code] = feed }
+                    else if let feed { newsFailureByCode[code] = "最近24小时没有匹配新闻（\(feed.provider)）" }
+                    else { newsFailureByCode[code] = failure ?? "新闻源未返回结果" }
+                }
+            }
+            let headlineCount = newsByCode.values.reduce(0) { $0 + $1.articles.count }
+            newsStatus = headlineCount > 0
+                ? "\(FNewsRSSClient.providerName) · \(newsByCode.count)/\(targetCodes.count) 个标的 · \(headlineCount) 条近24小时标题"
+                : "新闻暂不可用 · \(newsFailureByCode.values.first ?? "没有可用的近期标题")"
             let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
             var researchByCode: [String: FDecisionResearchEvidence] = [:]
             var researchFailureByCode: [String: String] = [:]
@@ -761,10 +792,26 @@ final class FHomeModel: ObservableObject {
                             timestampTrust: .unavailable, marketSessionStatus: sessionStatus)))
                     quoteStatuses.append("\(code) 行情不可用 · \(marketRefreshStateByCode[code] ?? "未返回分钟点")")
                 }
-                observations.append(FContextObservation(
-                    dataClass: .news, subject: code, source: "F News Provider",
-                    observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
-                    unavailableReason: "新闻源尚未接入"))
+                if let feed = newsByCode[code], let latestPublishedAt = feed.articles.map(\.publishedAt).max() {
+                    let payload = FNewsEvidencePayload(
+                        note: "Google News RSS 搜索聚合；仅含标题，不代表已核实正文或事实。逐条保留媒体、发布时间和Google News链接；链接可能跳转，不保证是媒体原文直链。",
+                        fetchedAt: feed.fetchedAt, articles: feed.articles)
+                    let encoder = JSONEncoder()
+                    encoder.dateEncodingStrategy = .iso8601
+                    let payloadReference = (try? encoder.encode(payload)).flatMap {
+                        String(data: $0, encoding: .utf8)
+                    }
+                    observations.append(FContextObservation(
+                        dataClass: .news, subject: code, source: feed.provider,
+                        reference: payloadReference, observedAt: latestPublishedAt,
+                        capturedAt: min(contextCaptureTime, feed.fetchedAt),
+                        decimalValue: Decimal(feed.articles.count)))
+                } else {
+                    observations.append(FContextObservation(
+                        dataClass: .news, subject: code, source: FNewsRSSClient.providerName,
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: newsFailureByCode[code] ?? "没有可用的近期新闻"))
+                }
                 if let research = researchByCode[code] {
                     try research.validate(contextCreatedAt: contextCaptureTime)
                     evidence.append(research)

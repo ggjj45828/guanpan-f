@@ -1361,7 +1361,7 @@ struct AdvisorOverview: View {
                     LabeledContent("持仓行情", value: model.holdings.isEmpty ? "暂无证券行情请求" : "按持仓证券逐项获取")
                     LabeledContent("建议成绩单", value: model.candidateShadowJournalStatus)
                     LabeledContent("NAS 历史研究", value: model.nasResearchStatus)
-                    LabeledContent("新闻", value: "新闻源尚未接入")
+                    LabeledContent("新闻", value: model.newsStatus)
                     HStack {
                         Text("在线 AI")
                         Spacer()
@@ -1638,12 +1638,12 @@ struct SettingsOverview: View {
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                DisclosureGroup("行情、历史数据与新闻") {
+                DisclosureGroup("行情与历史数据") {
                     LabeledContent("实时分钟 / 日 K", value: "腾讯公开行情接口")
                     LabeledContent("历史分钟", value: nasBaseAddress.isEmpty ? "需配置 NAS；实际覆盖待验证" : "NAS 按日期查询；实际覆盖待验证")
                     LabeledContent("自动历史同步", value: "未接入")
-                    LabeledContent("新闻来源", value: "未接入真实来源")
-                    Text("NAS Ready 只表示服务在线，不代表指定日期已有完整分钟归档。缺失日期不会补造；新闻源接入前不会显示虚构新闻。")
+                    LabeledContent("新闻来源", value: "Google News RSS 搜索聚合 · 标题级")
+                    Text("顾问提问时按证券名称和代码查询近24小时标题。搜索词会发送给 Google，不发送账本；标题附媒体、发布时间和 Google News 跳转链接，正文未经核实，也不保证有稳定服务承诺。NAS Ready 只表示服务在线，不代表指定日期已有完整分钟归档。缺失数据不会补造。")
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

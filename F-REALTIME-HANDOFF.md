@@ -715,3 +715,10 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 新闻：当前F没有已接线且验证过的新闻供应商；仍显示Unavailable，不得当作已接入。
 - 主题：`ThemeLayoutManifest.swift`仍将`isDark = false`写死，appearanceCompatibility也注明仅浅色基础token完成；深色/护眼、逐主题各页面一致性及截图人工审阅未完成。
 - 下一步：安装Run 98 artifact进行HTTPS NAS指定日期查询；未取得供应商真实新闻源前保持Unavailable；继续修正深色/护眼主题实现并做真实截图视觉审阅。
+## 2026-10-29 新闻顾问链增量（待CI与实网验证）
+- 远端基线：已通过GitHub API确认`main`为`a39ce045a6c8bc12e4f854fa42fe27938d4a9efd`，本地通过fast-forward对齐该提交；Windows本地Git fetch后续无法启动DNS解析线程，因此尚未推送本轮修改。
+- 本轮新增：iOS顾问提问时按目标证券代码/名称直接查询Google News RSS；最多保留近24小时、最多5条标题，要求有媒体、发布时间与HTTPS链接，并去重、拒绝未来时间/坏日期。链接可能为Google News跳转地址，不承诺直达媒体原文。标题证据写入只读`FContextObservation(.news)`，DeepSeek提示明确限制为标题级、必须标注聚合/未核实、仅引用现有Observation ID，不得推断新闻正文或依模型记忆伪造实时新闻。新闻失败仅形成明确Unavailable，不阻断NAS可选的基础顾问链。
+- UI：AI上下文显示本次新闻获取状态；设置中恢复新闻来源说明，并明确搜索词会发送给Google、不会发送账本。新闻缺失或网络失败会显示原因。
+- 当前状态：新闻RSS客户端、Advisor注入与提示词规则**已编码，尚未编译/执行**。本地Windows没有Swift/Xcode；当前执行环境对`news.google.com` DNS请求失败，故不能报告真实RSS成功。Google News RSS为无稳定服务承诺的搜索聚合来源，不等同媒体正文或已核实事实；RSS连通和顾问引用仍需设备/Apple CI验证。
+- 本轮未验证：Apple CI、iPhone端RSS可达性、真实标题/来源/日期有效性、顾问实际引用新闻、Simulator画面。不得把代码存在写成真实新闻E2E通过。
+- 下一步：完成当前差异检查；以远端`a39ce045...`为基线普通快进提交并触发完整Apple CI。CI通过后，在真实iPhone网络中验证Google RSS请求、DecisionContext新闻Observation和DeepSeek引用；若RSS不可达，改用有稳定官方接口的替代源再做实测，不伪称完成。
