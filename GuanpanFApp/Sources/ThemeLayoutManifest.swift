@@ -156,7 +156,7 @@ enum FThemeLayoutRegistry {
     static func manifest(for theme: FHomeTheme) -> FThemeManifest {
         let family = theme.layoutFamily
         let style = theme.surfaceTreatment
-        let isDark = theme == .dashboard
+        let isDark = false
         let background: Color
         let surface: Color
         switch theme {
@@ -167,8 +167,8 @@ enum FThemeLayoutRegistry {
             background = Color(red: 0.942, green: 0.955, blue: 0.972)
             surface = Color(red: 0.990, green: 0.995, blue: 1.0)
         case .dashboard:
-            background = Color(red: 0.075, green: 0.10, blue: 0.15)
-            surface = Color(red: 0.12, green: 0.16, blue: 0.23)
+            background = Color(red: 0.925, green: 0.943, blue: 0.958)
+            surface = Color(red: 0.987, green: 0.993, blue: 0.998)
         case .magazine:
             background = Color(red: 0.975, green: 0.947, blue: 0.914)
             surface = Color(red: 1.0, green: 0.982, blue: 0.953)
@@ -193,7 +193,7 @@ enum FThemeLayoutRegistry {
         switch theme {
         case .editorial, .inkModern: accent = Color(red: 0.68, green: 0.29, blue: 0.18)
         case .modern: accent = Color(red: 0.18, green: 0.39, blue: 0.82)
-        case .dashboard: accent = Color(red: 0.26, green: 0.78, blue: 0.81)
+        case .dashboard: accent = Color(red: 0.16, green: 0.53, blue: 0.61)
         case .magazine: accent = Color(red: 0.69, green: 0.27, blue: 0.19)
         case .bento, .adaptiveBento: accent = Color(red: 0.28, green: 0.49, blue: 0.35)
         case .minimalTerminal: accent = Color(red: 0.52, green: 0.78, blue: 0.88)

@@ -1111,7 +1111,7 @@ struct FHomeRoot: View {
                 }
         }
         .background(theme.background.ignoresSafeArea())
-        .environment(\.colorScheme, theme == .dashboard ? .dark : .light)
+        .environment(\.colorScheme, .light)
         .toolbarBackground(theme.manifest.tokens.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(theme == .dashboard ? .dark : .light, for: .navigationBar)
