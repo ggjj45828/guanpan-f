@@ -821,7 +821,7 @@ private struct AdvisorComposer: View {
             Text("组合问题会纳入全部真实持仓；证券详情入口只分析目标证券。账本、行情和合格 NAS 证据只读传入，Candidate Plan 不会改写资产。")
                 .font(.caption2).foregroundStyle(.secondary)
             if let result = model.advisorResult {
-                FAdvisorResultCard(result: result, accent: theme.accent, risk: risk) {
+                FAdvisorResultCard(result: result, accent: theme.accent, risk: theme.manifest.tokens.risk) {
                     model.beginLedgerConfirmation(for: result)
                 }
             }
@@ -2012,6 +2012,7 @@ struct MarketOverview: View {
 private struct FAdvisorResultCard: View {
     let result: FAdvisorVerticalSliceResult
     let accent: Color
+    let risk: Color
     let confirmLedger: () -> Void
 
     var body: some View {
