@@ -482,5 +482,8 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 已推送基线 `c062bc54172b017f813f510f08b2c20806742f3f` 的 Apple CI Run 74 [40826194186](https://github.com/ggjj45830/guanpan-f/actions/runs/40826194186) 全部成功：FCore、XcodeGen、Device Build、Simulator Build、UI XCTest、截图导出、IPA打包与artifact上传均通过。此次状态以Run 74为准，不沿用更早的CI结果。
 - Run 74产物包含自动导出的Simulator截图，但本轮尚未人工逐页查看；没有iPhone Air实机或手势验收证据。CI绿灯不代表视觉完成。
 - 随后继续修改 `MarketOverview`：市场信息流、证券行及页面边距改为读取当前主题spacing tokens；市场分时图从300pt增至360pt，页面水平边距从12pt缩至8pt，为图表释放更多可用区域。
-- 360pt/spacing是Run 74之后的新Swift改动，当前仅为“已编码、未编译”；须普通推送触发新的Apple CI，不能继承Run 74成功。
+- 360pt/spacing改动随远端提交 `8be2bb796f68fb1dbd925554277ae6d413b06706` 进入Apple CI Run 75 [40828035547](https://github.com/ggjj45830/guanpan-f/actions/runs/40828035547)，已实际成功：FCore 164/164、UI XCTest 3/3、XcodeGen、Device Build、Simulator Build、截图导出、IPA校验/打包与artifact上传均通过。此结果只覆盖该SHA的自动构建与测试。
+- Run 75自动截图尚未人工查看；仍没有iPhone Air实机/图表手势验收，因此视觉改进尚未达到人工验收状态。
 - 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。
+- GitHub API确认远端main为Run 75 SHA。此环境 `git fetch/push` 仍报 `getaddrinfo() thread failed to start`；本地main仍在f6c2529本地提交；与远端Run 75源码改动一致，交接文档仅有空行差异，且有备份分支 `backup/local-f6-market-chart`。工作树源码与远端构建源码一致，后续网络恢复后再fetch/reconcile提交历史。
+
