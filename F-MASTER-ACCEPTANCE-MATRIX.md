@@ -1,3 +1,11 @@
+## 2026-10-29 Run 93 真实执行记录
+
+- 代码SHA `27431788f761ae279ad8e5da1821cee5abf55f3f` 的Run 93 [40865524107](https://github.com/ggjj45830/guanpan-f/actions/runs/40865524107) 成功：FCore 165/165；XcodeGen、Device Build、Simulator Build通过；UI XCTest 4/4；截图导出、IPA校验和Artifact上传通过。
+- 本轮图表源码调整已编译：左价格轴占用减小6pt，详情页大图表可用高度增加80pt。截图未人工目检；交互、iPhone Air和真机仍待验收。
+- 未验证项目不继承PASS：NAS真实历史分钟、新闻源、均价/前收/IOPV可靠数据、DeepSeek真实E2E、既有券商持仓导入、人工视觉均保持未完成/待验证。
+
+---
+
 # 2026-10-29 最新Apple验证与产品修改结论
 
 - 当前远端Swift代码快照：`5303df7dee8a73de27ad460c8ed562fabb3dee95`；文档更新后的main为`2967a58fa2642f31912744dce3d586a70f8dc437`。均为普通快进提交，无强推。

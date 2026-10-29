@@ -1,3 +1,15 @@
+## 2026-10-29 Run 93：图表绘图区扩展（Apple CI通过）
+
+- 当前代码验证SHA：`27431788f761ae279ad8e5da1821cee5abf55f3f`；Run 93 [40865524107](https://github.com/ggjj45830/guanpan-f/actions/runs/40865524107) 已完成且成功。
+- 实际结果：FCore **165 executed / 165 passed / 0 failed**；XcodeGen通过；Device Build通过；Simulator Build通过；UI XCTest **4 executed / 4 passed / 0 failed**；Simulator截图导出、未签名IPA校验和Artifact上传通过。
+- 修改：统一图表绘图区左轴占用从44pt减至38pt；证券详情中高度不低于600pt的图表视窗增加80pt，给分时/历史分钟/日K更多绘制空间。该修改已编译并通过Run 93。
+- IPA Artifact `12894550480`，SHA-256 `d180e70110f2d4a3feab97536fb91f82c32260fd75b78c23f191f98c19d72c93`。日志确认显示名“观盘max”、Info.plist选择AppIcon、归档图标文件存在且ZIP校验无错误。
+- 验收边界：截图只确认成功导出，**没有人工打开目检**；CI Simulator启动/UI XCTest不等于人工图表交互、iPhone Air或真机验收。不能据此声称图表已经达到B版或用户问题已经完全解决。
+- 主线进度：Run 91的手动确认真实成交入口（SHA `662365be...`）与Run 92的仪表盘浅色一致性修改（SHA `5303df7d...`）也各自有完整成功CI。账本已建立时可以登记确已发生的成交；它并不等于任意既有券商持仓的无历史快照导入。后者需要明确的初始资产导入/对账语义，仍未验收。
+- 仍未解决的主要项：已有持仓导入/首次对账入口的产品语义与设备验收；B/F核心页面视觉对照；NAS真实历史分钟返回与iOS消费；真实新闻来源；可靠VWAP/前收/IOPV；DeepSeek真实端到端；真实成交后Ledger/Advisor复判；iPhone Air人工视觉与图表手势。
+
+---
+
 # 2026-10-29 最新Apple验证与产品修改结论
 
 - 当前远端Swift代码快照：`5303df7dee8a73de27ad460c8ed562fabb3dee95`；文档更新后的main为`2967a58fa2642f31912744dce3d586a70f8dc437`。均为普通快进提交，无强推。
