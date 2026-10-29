@@ -487,3 +487,10 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。
 - GitHub API确认远端main为Run 75 SHA。此环境 `git fetch/push` 仍报 `getaddrinfo() thread failed to start`；本地main仍在f6c2529本地提交；与远端Run 75源码改动一致，交接文档仅有空行差异，且有备份分支 `backup/local-f6-market-chart`。工作树源码与远端构建源码一致，后续网络恢复后再fetch/reconcile提交历史。
 
+## 2026-10-29 核心页面表面主题统一（已编码，待CI）
+
+- `HomeDestination`证券详情中的当前持仓、已清仓、盈亏口径和Episode历史面板，以及`AdvisorOverview`的可用上下文/决策成绩单面板，移除固定系统`regularMaterial`背景，统一改用`FThemeSurfaceModifier`按当前主题渲染。
+- Advisor页面主内容纵向间距改用当前Theme Manifest的spacing token，避免主题切换后只有颜色变化而留白不变。
+- 本机`git diff --check`通过；本机无Swift/Xcode。此修改尚未提交到远端、尚未编译或CI验证；Run 75不能覆盖这组新Swift修改。也未完成人工Simulator截图审阅或iPhone Air验收。
+- 下一步：将这组表面统一修正送入Apple CI；CI成功后继续审阅Simulator证据，并处理其余专业页面的主题一致性。
+

@@ -1116,7 +1116,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
                     Button(holding.brokerDisplayCostPerUnit == nil ? "录入券商展示成本" : "修正券商展示成本") {
                         brokerCostText = holding.brokerDisplayCostPerUnit.map {
                             NSDecimalNumber(decimal: $0).stringValue
@@ -1138,7 +1138,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
                 } else {
                     Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -1171,7 +1171,7 @@ struct HomeDestination: View {
                     }
                 }
                 .padding(14)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
                 if let history {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("持仓周期历史").font(.headline)
@@ -1189,7 +1189,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
                 }
                 let snapshot = quoteSnapshot
                     VStack(alignment: .leading, spacing: 8) {
@@ -1310,7 +1310,7 @@ struct AdvisorOverview: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
                 Text("AI 私人投资顾问")
                     .font(.largeTitle.bold())
                 Text("未指定持仓证券的提问按真实组合分析；明确指定证券代码或从证券详情进入时按证券级分析。")
@@ -1335,7 +1335,7 @@ struct AdvisorOverview: View {
                 }
                 .font(.subheadline)
                 .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
                 VStack(alignment: .leading, spacing: 10) {
                     Text("决策成绩单 · 最近30天").font(.headline)
                     if let summary = model.candidateShadowSummary {
@@ -1360,7 +1360,7 @@ struct AdvisorOverview: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
                 Text("发送时重新读取本机真实账本和标的行情，再构建 DecisionContext 并运行 Risk Guard / AI Guard；NAS 研究仅在配置且可用时附加。")
                     .font(.footnote).foregroundStyle(.secondary)
             }
