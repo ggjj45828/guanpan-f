@@ -1,3 +1,22 @@
+# 2026-10-29 观盘max 当前真实进度（远端主线）
+
+- 当前 GitHub `main`：`5303df7dee8a73de27ad460c8ed562fabb3dee95`。本轮远端提交按快进更新；未强推、未覆盖远端历史。Windows 本地工作树仍落后且有本地改动，不以本地 HEAD 代表远端。
+- Run 90 [40860441713](https://github.com/ggjj45830/guanpan-f/actions/runs/40860441713)，SHA `0e055bcb577f4e233e6295046b91bb7f84aaecd0`：FCore **165/165 passed**；XcodeGen、Device Build、Simulator Build 成功；UI XCTest **4/4 passed**；截图导出、未签名IPA打包校验和artifact上传成功。IPA显示名为“观盘max”、归档AppIcon有效。此Run的截图尚未人工审阅，不能算视觉/实机通过。
+- 本轮后续变更：
+  - `662365be` 增加真实资产页“记录已完成的真实成交”入口。初始账户快照仍只用于未建立账本；已建立账本的手动成交必须填写真实成交字段、审计说明并二次确认，沿用 `FConfirmedLedgerWriter.confirmFill`，成功后重读账本并重新请求Advisor；不发券商订单、不创建Candidate虚拟成交。该代码尚未有Apple编译/测试证据。
+  - `5303df7d` 将交易仪表盘色板改为统一浅色终端层次，移除仅对该主题强制深色的系统外观，降低系统表单与自定义容器黑白割裂。该代码尚未有Apple编译/截图证据。
+- Run 91 [40862240070](https://github.com/ggjj45830/guanpan-f/actions/runs/40862240070) 针对成交入口提交 `662365be`，以及Run 92 [40862807997](https://github.com/ggjj45830/guanpan-f/actions/runs/40862807997) 针对主题提交 `5303df7d`，截至本记录均为 **queued**；没有当前Swift修改的编译、测试结果。紧接着将以含文档的当前主线再触发CI；若Run 91/92开始/结束，分别按其固定SHA记录，不互相继承。
+- 图表控制顺序/紧凑尺寸已在Run 87 SHA `9004003`验证成功；不代表手势、布局和iPhone Air视觉通过。仍没有本轮人工查看Simulator截图、iPhone Air交互或真机验收。
+- 主要未完成项：
+  1. 取得含手动成交入口和仪表盘主题修复的完整Apple CI结果，首错按真实日志修复。
+  2. 继续改善图表绘图区和分时横轴可读性；对CI截图做实际视觉审阅，不能把截图导出步骤算人工验收。
+  3. NAS历史分钟手机响应仍显示HTTP 200契约不匹配/兼容路径404；没有真实指定日分钟进入iOS的证据。NAS不再是核心Advisor前置条件。
+  4. 新闻真实来源仍未接入；均价、前收、IOPV无可靠数据时继续Unavailable，不补造。
+  5. B/F视觉差距与十主题跨页一致性仍未完成；用户设备反馈F仍不如B。真机iPhone Air待外部实测。
+- 下阶段正在做：等待/核对含本轮Swift修改的Apple CI；按首个真实失败收口。CI成功后检查Simulator导出截图的可访问性/视觉问题，并继续修复真实资产入口和图表布局的产品缺口。
+
+---
+
 ## 2026-10-29 Run 88 编译失败根因与修复
 
 - Run 88 [40859682193](https://github.com/ggjj45830/guanpan-f/actions/runs/40859682193) 对SHA `b410ef6...`：FCore和XcodeGen通过；iOS Device Build失败，Simulator Build/UI XCTest/IPA因前置构建失败未运行。Simulator截图导出步骤“成功”只因无xcresult时正常跳过，不能算截图验收。
