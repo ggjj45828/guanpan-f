@@ -485,3 +485,4 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 随后继续修改 `MarketOverview`：市场信息流、证券行及页面边距改为读取当前主题spacing tokens；市场分时图从300pt增至360pt，页面水平边距从12pt缩至8pt，为图表释放更多可用区域。
 - 360pt/spacing是Run 74之后的新Swift改动，当前仅为“已编码、未编译”；须普通推送触发下一次Apple CI，不能继承Run 74成功。
 - 十主题尚无逐主题截图验收，也没有灰度下十套构图可区分的证据；主题设计仍是部分实现。可靠均价、前收、IOPV/溢价与新闻来源没有新接入，必须继续显示Unavailable/未接入。
+- GitHub API确认远端main已指向Run 75 SHA。此环境 `git fetch/push` 仍报 `getaddrinfo() thread failed to start`；本地main提交历史未能fetch/reconcile，源码与远端Run 75一致，历史待网络恢复后对齐。
