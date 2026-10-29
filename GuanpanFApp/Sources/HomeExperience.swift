@@ -1660,12 +1660,19 @@ struct MarketOverview: View {
             }
             if visibleSecurityCodes.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        listScope == .watchlist ? "自选列表为空" : "当前没有真实持仓",
-                        systemImage: listScope == .watchlist ? "star" : "chart.line.uptrend.xyaxis",
-                        description: Text(listScope == .watchlist
-                                          ? "在上方输入证券代码并加入自选。自选不会创建持仓。"
-                                          : "添加关注证券，或切换到“自选”查看未持仓标的的真实行情。"))
+                    VStack(spacing: 10) {
+                        Image(systemName: listScope == .watchlist ? "star" : "chart.line.uptrend.xyaxis")
+                            .font(.title2).foregroundStyle(.secondary)
+                        Text(listScope == .watchlist ? "自选列表为空" : "当前没有真实持仓")
+                            .font(.headline)
+                        Text(listScope == .watchlist
+                             ? "在上方输入证券代码并加入自选。自选不会创建持仓。"
+                             : "添加关注证券，或切换到“自选”查看未持仓标的的真实行情。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 150)
+                    .padding(.vertical, 12)
                 }
             }
             ForEach(visibleSecurityCodes, id: \.self) { code in

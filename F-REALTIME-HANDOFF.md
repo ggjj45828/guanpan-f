@@ -299,3 +299,9 @@ F_CURRENT_STATUS_END
 - 修复：移除有歧义的键盘ToolbarItemGroup，在证券代码输入区聚焦时显示明确的“收起键盘”按钮；交互仍保留，避免影响其余导航工具栏。
 - 修复已送新Apple CI；只有后续完整run通过后才记为已编译。Run64的164/164与3/3只适用于它自己的SHA，不能覆盖Run65/66。
 - 本机fetch仍因 `getaddrinfo() thread failed to start`失败；后续远端更新均以当前main SHA为parent并设置expected SHA、force=false。Simulator人工视觉及iPhone Air验收未做。
+
+
+## Run66兼容性修复（2026-10-29）
+
+- Run66 `40796170487` / SHA `ef328df331b0567184d34833b99918d530fde1be`：FCore、XcodeGen通过；Device Build失败，首错为 `HomeExperience.swift:1663`：`ContentUnavailableView`仅iOS 17+可用，与当前更低deployment target不兼容。
+- 已替换为兼容当前最低系统版本的SwiftUI VStack空状态，不改变空态含义、不加入假数据。此次修复送后续Apple CI；Run66失败保留，不能继承Run64通过结果。

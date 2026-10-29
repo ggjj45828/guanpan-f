@@ -408,3 +408,8 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 ## 自选行情页CI修正（2026-10-29）
 
 - Run65真实失败点：行情页键盘Toolbar重载歧义（HomeExperience.swift:1725）。修复是将键盘关闭操作放到聚焦时可见的查询区按钮；不删除关闭键盘能力。后续CI尚待执行/结果填写。
+
+
+## 行情空状态兼容修复（2026-10-29）
+
+- Run66确认项目deployment target低于iOS17；行情页不使用iOS17专有ContentUnavailableView，改用兼容布局。新CI结果待验证。

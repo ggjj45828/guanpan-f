@@ -104,3 +104,8 @@
 ## 行情自选首轮CI结果（2026-10-29）
 
 - 自选与Ledger隔离要求仍有效。Run65因键盘Toolbar重载歧义未进入Simulator/UI/IPA；键盘关闭入口已移入证券查询区。新CI通过前不能标记编译/交互验证完成。
+
+
+## 最低iOS版本兼容性（2026-10-29）
+
+- 行情空状态使用项目deployment target支持的标准SwiftUI组件；不得因CI部署目标错误添加仅iOS17+的ContentUnavailableView。

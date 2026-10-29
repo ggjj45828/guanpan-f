@@ -202,3 +202,8 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 ## Run65整改验证状态（2026-10-29）
 
 - 行情页自选/筛选实现的首轮CI Run65未通过Device Build，真实错误为SwiftUI键盘Toolbar重载歧义。已改为查询区聚焦时显示“收起键盘”按钮；新CI完成前，不视为修复验证通过。
+
+
+## Run66兼容性结果（2026-10-29）
+
+- 首轮Toolbar错误修复后，Run66继续发现ContentUnavailableView高于项目最低iOS版本。已替换成兼容的VStack空状态，待新CI确认。
