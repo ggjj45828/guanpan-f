@@ -281,3 +281,12 @@ F_CURRENT_STATUS_END
 - 用户可下载CI证据包并从中取出IPA：`https://github.com/ggjj45830/guanpan-f/actions/runs/40686254194/artifacts/12814859492`。该IPA由CI以`CODE_SIGNING_ALLOWED=NO`生成，为未签名IPA；可打包验证不代表可直接在iPhone侧载。需用用户可用的签名安装渠道后实机确认图标和名称。
 - 这轮没有修订前端布局，没有人工Simulator视觉验收；UI XCTest通过和截图导出不能替代iPhone Air实机确认。
 - NAS服务端未修改；手机通过HTTPS穿透连接NAS仍未新包复测，不能标记NAS连接已解决。
+
+
+## 2026-10-29 行情自选整改与CI状态
+
+- GitHub远端main在本轮开始时为 `519ffe3c42361a4c8f09e8ae2b5b37e384bea71a`。前一条Run63因错误上传的截断源码在Device Build失败；随后完整文件恢复。最新Run64 `40793338913` 已对完整恢复版本实际通过：FCore 164/164、XcodeGen、Device Build、Simulator Build、App UI XCTest 3/3、截图导出、IPA打包校验和artifact上传。
+- Run64是本轮新改动之前的验证证据，不能继承给后续提交。
+- 行情页整改：本地自选独立保存，不写Ledger、不产生虚拟持仓；行情列表支持“持仓 / 自选 / 持仓 + 自选”，自选价格/图表仅读取实际行情快照，缺数据时显示Unavailable，不填假值；新增证券代码输入后加入/移出自选，手动/下拉刷新包含自选证券。
+- 上述行情自选修改已基于远端完整源码构建为新提交；Apple CI结果待该提交对应的后续run实际完成后填写。Simulator人工视觉/手势、iPhone Air、实机NAS HTTPS和DeepSeek端到端仍未验证。
+- Windows本机无Xcode/Simulator；代码若未由Apple CI实际构建，不写成已编译。

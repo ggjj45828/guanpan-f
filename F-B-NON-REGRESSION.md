@@ -92,3 +92,10 @@
 ### AppIcon打包检查的二次修正
 
 - CI run `40677313197`证明本项目构建的Info.plist既无根`CFBundleIconName`，也无预期嵌套键。工作树改为验证Asset Catalog源清单/PNG及编译后`Assets.car`里的AppIcon rendition，等待Apple CI证明。
+
+
+## 行情自选非退化要求（2026-10-29）
+
+- F必须保留便捷的证券观察/自选入口，支持查看未持仓证券的真实行情和进入证券详情。
+- 自选状态与真实资产、Ledger成交及盈亏完全分离；行情Unavailable时不得使用假价格或假图表。
+- 代码实现、Apple CI、Simulator人工视觉/交互分别记录，不相互替代。当前新增实现已提交等待Apple CI。
