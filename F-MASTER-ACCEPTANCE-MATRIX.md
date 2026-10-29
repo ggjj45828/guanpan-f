@@ -538,3 +538,21 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 分时/历史图表价格参考 | Tencent分钟成交量差分形成量价均价（非官方VWAP）；Tencent前收、鲜活ETF IOPV/溢折价作为实时参考；历史前收从所选日期之前真实日K取得 | 已编码；供应商真实字段/设备响应未验证；无字段保持Unavailable | CI通过；实网逐字段核实值、单位、时间和来源；历史日/当前分时分别核验 |
 | NAS HTTP 200历史返回格式兼容 | 可选coverage/source时间元数据与数字字符串价格解码；身份字段校验；来源质量不足降Partial | 已编码；本轮真实NAS历史指定日期未请求 | CI通过并从手机端验证HTTPS endpoint真实body、bars及coverage |
 | 图表可读性与真实参考标注 | 收窄价格轴、MACD文字移到右上、IOPV标记为参考、扩展日线/历史绘图布局 | 已编码；当前SHA无构建和截图人工审阅 | Apple CI通过后审阅Simulator截图；iPhone Air手势仍单独验收 |
+
+## 当前HEAD实证补记（Run 84，2026-10-29）
+
+| 验收项 | 实际执行证据 | 状态/剩余要求 |
+|---|---|---|
+| Apple CI完整链 | SHA `be0b8f783ed0dd2c23dd91b65bbfdcbe82d7c7cf`，Run [40851719577](https://github.com/ggjj45830/guanpan-f/actions/runs/40851719577)，job `123372567830` success；FCore 165/165、UI XCTest 4/4、XcodeGen、Device Build、Simulator Build、截图导出、IPA打包/校验、artifact上传均通过；artifact `12888415712` | 当前SHA自动编译/测试已通过；截图未人工审阅，未替代人工视觉或真机验收 |
+| NAS历史响应格式与错误诊断 | `FNASConnection.swift`解码兼容数字`securityCode`、`trading_date`及大小写市场；错误bar结构不会降级为空数据，诊断附请求/返回身份与首条bar字段类型 | 已编译并通过当前CI；真实NAS HTTP 200 body和指定日期历史bar仍待手机HTTPS E2E，不代表NAS已连通 |
+| 观盘max图标/名称 | Run 84 IPA日志验证display name `观盘max`、bundle icon `AppIcon`，ZIP结构校验无错误 | CI打包产物已验证；未证明用户手机已安装该IPA |
+| 录入现有持仓入口 | UI XCTest `testEmptyLedgerOffersInitialHoldingsEntry`通过 | 自动化可发现入口；真实交互录入、持久化重开仍待Simulator/设备验收 |
+| 图表、主题、手机布局 | 当前SHA Simulator Build及截图导出步骤成功 | 未人工查看截图、未测iPhone Air和真实触控；不能据此说界面问题已全部修复，F目前仍不如B |
+| 新闻/均价/前收/IOPV/溢价 | 当前Run没有新的供应商或设备真实响应证据 | 未接入或未证实；数据缺失继续显示Unavailable，不得伪造 |
+
+## NAS诊断增量（待Run 85）
+
+| 验收项 | 当前增量 | 状态/关闭条件 |
+|---|---|---|
+| HTTP 200错误体诊断完整度 | 有服务端`error`说明时仍检查顶层与首条bar实际结构；行级支持`security_code`、`trading_date`、数字证券代码、大小写市场值 | 已编码，未编译；送Run 85。真实NAS指定日期响应仍待手机验证 |
+

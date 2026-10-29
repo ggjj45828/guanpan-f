@@ -116,13 +116,27 @@ enum FNASHistoricalMinuteClient {
             let fetchedAt: String?
             let minuteVolume: Decimal?
 
-            private enum CodingKeys: String, CodingKey { case timestamp, price, securityCode, market, tradingDate, source, fetchedAt, minuteVolume, volume }
+            private enum CodingKeys: String, CodingKey {
+                case timestamp, price, securityCode, security_code, market
+                case tradingDate, trading_date, source, fetchedAt, minuteVolume, volume
+            }
             init(from decoder: Decoder) throws {
                 let values = try decoder.container(keyedBy: CodingKeys.self)
                 timestamp = try values.decode(String.self, forKey: .timestamp)
-                securityCode = try? values.decodeIfPresent(String.self, forKey: .securityCode)
+                if let value = try? values.decode(String.self, forKey: .securityCode) {
+                    securityCode = value
+                } else if let value = try? values.decode(Int.self, forKey: .securityCode) {
+                    securityCode = String(value)
+                } else if let value = try? values.decode(String.self, forKey: .security_code) {
+                    securityCode = value
+                } else if let value = try? values.decode(Int.self, forKey: .security_code) {
+                    securityCode = String(value)
+                } else {
+                    securityCode = nil
+                }
                 market = try? values.decodeIfPresent(String.self, forKey: .market)
-                tradingDate = try? values.decodeIfPresent(String.self, forKey: .tradingDate)
+                tradingDate = (try? values.decodeIfPresent(String.self, forKey: .tradingDate)) ??
+                    (try? values.decodeIfPresent(String.self, forKey: .trading_date)) ?? nil
                 if let numeric = try? values.decode(Decimal.self, forKey: .price) {
                     price = numeric
                 } else if let text = try? values.decode(String.self, forKey: .price),
@@ -266,7 +280,7 @@ enum FNASHistoricalMinuteClient {
         }
         let samples = body.bars.compactMap { bar -> FMinuteSample? in
             guard (bar.securityCode == nil || bar.securityCode == securityCode),
-                  (bar.market == nil || bar.market == "CN"),
+                  (bar.market == nil || bar.market?.uppercased() == "CN"),
                   (bar.tradingDate == nil || bar.tradingDate == dateText) else { return nil }
             guard let stamp = parseTimestamp(bar.timestamp), stamp >= dayStart, stamp < dayEnd,
                   bar.price > 0 else { return nil }
@@ -366,10 +380,8 @@ enum FNASHistoricalMinuteClient {
             return "HTTP \(response.statusCode) 返回了网页而非分钟 JSON（\(contentType)）；可能是 API 路径未映射到 NAS 服务"
         }
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let message = object["error"] as? String, !message.isEmpty {
-                return "HTTP \(response.statusCode)：\(String(message.prefix(180)))"
-            }
             var problems: [String] = []
+            let serverMessage = (object["error"] as? String).map { String($0.prefix(180)) }
             let returnedCode = object["securityCode"] ?? object["security_code"]
             if let expectedSecurityCode, let returnedCode,
                Self.jsonScalar(returnedCode) != expectedSecurityCode {
@@ -399,12 +411,27 @@ enum FNASHistoricalMinuteClient {
                             (!(first["price"] is String) && !(first["price"] is NSNumber)) {
                     problems.append("bars首条 timestamp/price 类型不兼容")
                 }
+                let rowCode = first["securityCode"] ?? first["security_code"]
+                if let rowCode, let expectedSecurityCode,
+                   Self.jsonScalar(rowCode) != expectedSecurityCode {
+                    problems.append("bars首条证券代码期望 \(expectedSecurityCode)，实际 \(Self.jsonScalar(rowCode))")
+                }
+                if let rowDate = first["tradingDate"] ?? first["trading_date"],
+                   let expectedTradingDate,
+                   Self.jsonScalar(rowDate) != expectedTradingDate {
+                    problems.append("bars首条交易日期望 \(expectedTradingDate)，实际 \(Self.jsonScalar(rowDate))")
+                }
+                if let rowMarket = first["market"], Self.jsonScalar(rowMarket).uppercased() != "CN" {
+                    problems.append("bars首条市场期望 CN，实际 \(Self.jsonScalar(rowMarket))")
+                }
             } else if let rawBars = object["bars"], !(rawBars is NSNull), !(rawBars is [Any]) {
                 problems.append("bars应为数组，实际类型不符")
             }
-            let reason = problems.isEmpty
+            let shape = problems.isEmpty
                 ? "响应内容无法解码为历史分钟记录"
                 : problems.joined(separator: "；")
+            let reason = [serverMessage.map { "服务端说明：\($0)" }, Optional(shape)]
+                .compactMap { $0 }.joined(separator: "；")
             return "HTTP \(response.statusCode) 历史分钟响应校验失败：\(reason)（顶层字段：\(object.keys.sorted().joined(separator: ", "))）"
         }
         return "HTTP \(response.statusCode) 响应格式不是可识别的历史分钟 JSON（\(contentType)）"
@@ -433,3 +460,4 @@ enum FNASHistoricalMinuteClient {
         return standard.date(from: value)
     }
 }
+

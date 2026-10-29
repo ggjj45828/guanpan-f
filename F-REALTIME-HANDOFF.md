@@ -1,5 +1,18 @@
 # F实时进度交接
 
+## 2026-10-29 当前源码与 Apple CI（Run 84，最新证据）
+- Run 84验证的源码HEAD/远端 `main`：`be0b8f783ed0dd2c23dd91b65bbfdcbe82d7c7cf`，当时与`origin/main`同步。Run 84 [40851719577](https://github.com/ggjj45830/guanpan-f/actions/runs/40851719577) 对此SHA完成，job `123372567830` success。当前另有Run 85修正尚未提交/验证，见下文最新补记。
+- 本次真实执行：FCore **165 executed / 165 passed / 0 failed**；App UI XCTest **4 executed / 4 passed / 0 failed**；XcodeGen、iOS Device Build、Simulator Build、Simulator截图导出、未签名 IPA `观盘max.ipa` 打包/ZIP校验及 artifact 上传均成功。Artifact `12888415712`（`guanpan-f-ios-build-evidence`）。构建包内显示名 `观盘max`、选择 `AppIcon` 已由该Run日志核实。
+- Run 83曾在 Device Build 因Swift `try` nil-coalescing表达式报错；已改为显式解码分支。Run 84已通过两种目标构建，确认该编译根因修复。
+- 同次NAS响应诊断改动已编译：兼容数字形式证券代码、`trading_date`日期别名及大小写市场值；对错误`bars`类型不再静默转成空列表，并补充请求/返回身份和分钟bar字段类型诊断。Run 84证明客户端代码可编译，但**未证明真实NAS历史查询成功**；截图中的HTTP 200契约不匹配/兼容路由404尚无新的手机实测响应，NAS服务端未修改。
+- 本次UI XCTest中的空账本录入入口与导航/资产测试通过自动化；并非用户真实录入操作或人工视觉验收。CI截图仅确认已导出，没有人工逐页查看；iPhone Air布局、图表手势、主题一致性仍未实机/人工验收。均价/前收/IOPV及溢价、新闻真实来源、DeepSeek E2E、Candidate→真实成交→Ledger→Advisor复判也没有本Run的实网证明。
+- 后续：先查看用户设备新包的NAS具体返回；若有新错误再按证据修复。UI应基于实际截图继续修，不以CI截图导出或测试PASS宣称视觉完成。产品比较结论仍是**F目前不如B**。
+
+## 2026-10-29 NAS历史错误详情补强（等待Run 85）
+- 本地HEAD仍是Run 84 SHA `be0b8f...`；Swift及交接/矩阵文档有未提交修改，尚未编译。远端main在准备提交前重新核对仍为`be0b8f...`，无历史分叉。
+- 对截图中HTTP 200后格式失败、随后旧接口404的诊断补强：服务端`error`文本不再提前终止客户端结构分析；诊断同时检查首条bar的`securityCode/security_code`、`tradingDate/trading_date`、`market`及timestamp/price类型；bar解码兼容整数代码、snake_case字段和大小写市场值。真实时间戳/数据覆盖仍按服务端实际响应验证，不生成数据。
+- 当前正在将该修改和Run 84证据文档通过单个普通快进提交送Apple CI。通过前状态为“已编码，未编译”。
+
 ## 2026-10-29 图表横轴标签修复：Run 72 已通过
 - 提交 `70105ce992dafbbdcd6dee4608b66201a94c79e0`（`Prevent intraday chart axis label collisions`）由远端main触发 Run 72 [40812245517](https://github.com/ggjj45830/guanpan-f/actions/runs/40812245517)，job `123245046482` 最终success。
 - 实际结果：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和Artifact上传均成功。Artifact `12870733069`，SHA-256 `f456b5ab749f5cafc837e4d4763a593225d16fcac091c6bf526795a1d869320d`。
@@ -591,3 +604,4 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 该诊断兼容改动仍未由Apple编译或测试。即使编译通过，也只能提升接口兼容/错误定位；没有手机端新响应和真实分钟样本，不代表NAS历史分钟已连接或成功归档。
 - 下一步：提交并普通推送，检查Run 83第一条真实失败并修复；若CI通过，用户在设置页重试指定交易日，依据新错误中的实际字段继续修正接口契约。`/readyz` Ready仍不代表历史API可读。
 - Run 83 [40850994603](https://github.com/ggjj45830/guanpan-f/actions/runs/40850994603) 已真实执行FCore（成功）和XcodeGen（成功），Device Build首错为 `FNASConnection.swift:167`：`??`右侧的日期解码表达式可抛错，但运算符表达式未标`try`。已按首错改为显式`if/else`解码。此修复仅编码，待下一次Apple CI验证；Run 83后续Simulator/UI/IPA步骤被跳过。
+
