@@ -2,15 +2,15 @@
 
 ## Apple CI最新状态补充（2026-10-29；优先于以下状态）
 
-- 远端 `origin/main` 当前仍为 `222acdcc2d88273fb5bf23258630b71355639a4a`；本地当前提交包含编译修复，领先远端1个提交。普通push因GitHub连接失败尚未送达；未强推、未改写远端历史。
-- Run 62 Attempt 2 [40769074408](https://github.com/ggjj45830/guanpan-f/actions/runs/40769074408) 对远端 `222acdc` 实际执行：FCore XCTest **164 executed / 164 passed / 0 failed**；XcodeGen通过。
-- Device Build 首个真实错误：`GuanpanFApp/Sources/HomeExperience.swift:522`，`newestHoldingQuote` 计算属性在局部 `let now` 之后缺少 `return`，诊断为 `missing return in getter expected to return 'FCurrentIntradaySnapshot?'`。当前本地已加 `return` 作最小修复；**该Swift修复尚未编译验证**。
-- 因Device Build失败，Simulator Build、App UI XCTest、IPA均未执行；截图导出步骤报告无xcresult附件，不能视为Simulator验收。
-- 当前源码测试定义：FCore 164、App UI 3；最近一次CI的FCore为164/164通过，但属于修复前远端SHA。修复后的当前本地SHA：FCore executed=0、App UI executed=0；Windows工作区没有Swift/Xcode/XcodeGen。
-- 下一步：GitHub连接恢复后先核对远端，再普通push当前编译修复，运行完整Apple CI；若出现新首错，按首个根因最小修复并重跑。当前普通push尝试分别遇到DNS线程启动失败和HTTPS 443连接重置，属于交付通道暂时不可用，不代表代码编译结果。
-- Simulator人工交互、iPhone Air、NAS HTTPS实测、真实DeepSeek端到端及Candidate成交闭环仍无新验收证据。
+- 本地 `HEAD=e3cf354d39dfec93dfaeabd88910446105778480`，是保留原本地提交 `33bd010` 后合并已fetch的 `origin/main=445388948bd5b7648f65a79f3323348a69826ee7`。无强推、无重置。当前源码内容与远端main一致；本地合并提交尚未推送。
+- 为安全reconcile，本地此前未提交的3个文件已保存在 `stash@{0}`；远端已有行情自选、键盘收起和兼容空状态实现。暂存内容没有删除，待当前CI后核对是否有需要保留的独有改动。
+- Run 64 [40793338913](https://github.com/ggjj45830/guanpan-f/actions/runs/40793338913) 在 SHA `519ffe3c` 实际通过：FCore **164/164**、XcodeGen、Device Build、Simulator Build、UI XCTest **3/3**、截图导出和未签名IPA校验/打包；这些结果不适用于后续SHA。
+- Run 65 [40795701608](https://github.com/ggjj45830/guanpan-f/actions/runs/40795701608) Device Build 首错为键盘 `.toolbar(content:)` 重载歧义；Run 66 [40796170487](https://github.com/ggjj45830/guanpan-f/actions/runs/40796170487) 首错为 `ContentUnavailableView` 要求 iOS 17。两项修复都已进入后续远端提交。
+- Run 67 [40796670551](https://github.com/ggjj45830/guanpan-f/actions/runs/40796670551) 对 SHA `4453889` 的最后可见证据是FCore、XcodeGen通过，Device Build仍在运行；目前GitHub API返回HTTP 429、浏览器读取超时，最终结果仍**未核实**，不标记通过或失败。
+- 当前本机无Swift/Xcode/XcodeGen，无法本机编译；合并提交还没有自己的CI结果。Simulator人工视觉/手势、iPhone Air、NAS HTTPS、DeepSeek真实E2E和Candidate成交闭环仍无新验收证据。
+- 下一步：普通推送本地合并提交，检查该提交的完整Apple CI；若失败按第一条真实根因最小修复。不能把Run 64通过数字继承给当前合并SHA，也不能强推。
 
-## 最新状态覆盖（2026-10-29；本节优先于以下历史快照）
+## 历史状态快照（2026-10-29；已被本文档开头的最新状态覆盖）
 
 - 当前本地 `main` HEAD：`222acdcc2d88273fb5bf23258630b71355639a4a`（`222acdc`），代码已普通推送到 `origin/main`；本次交接更新尚未提交。未强推。
 - Run 60 [40717961675](https://github.com/ggjj45830/guanpan-f/actions/runs/40717961675) Attempt 3 已取得macOS runner，FCore编译失败。第一个根因在 `CandidateShadowScorecardTests.swift`：测试把 `Date` 传给参数类型为 `TimeInterval` 的 `quote(_:at:)`。编译失败发生在测试启动前，因此本轮 XCTest executed=0、passed=0、failed assertions=0。
