@@ -1,3 +1,11 @@
+# Run 88 编译根因追踪（2026-10-29）
+
+- SHA `b410ef6...`：FCore/XcodeGen通过；Device Build因HomeExperience.swift第2068、2070行引用局部作用域不存在的`theme`失败；后续Simulator Build、UI XCTest、IPA未执行。
+- 修复在后继SHA：风险语义token通过显式参数传入Advisor结果卡；修复待下一轮Apple CI验证。
+- Run 87（SHA `9004003...`）设备构建和Simulator构建通过，UI XCTest仍执行中；不继承为后继SHA PASS。
+
+---
+
 # 当前远端验证快照（2026-10-29）
 
 - 远端 `main`: `b410ef69b5eed880171012b85181607af651caff`。

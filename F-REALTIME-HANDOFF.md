@@ -1,3 +1,13 @@
+## 2026-10-29 Run 88 编译失败根因与修复
+
+- Run 88 [40859682193](https://github.com/ggjj45830/guanpan-f/actions/runs/40859682193) 对SHA `b410ef6...`：FCore和XcodeGen通过；iOS Device Build失败，Simulator Build/UI XCTest/IPA因前置构建失败未运行。Simulator截图导出步骤“成功”只因无xcresult时正常跳过，不能算截图验收。
+- 首个真实编译错误在 `GuanpanFApp/Sources/HomeExperience.swift:2068,2070`：`FAdvisorResultCard`子视图没有`theme`变量；上次主题风险色改动误用了外层主题对象。这是本次代码回归，不是网络或runner容量问题。
+- 修复：把当前主题的风险语义色作为显式`risk`参数传给Advisor结果卡，再由Guard阻止状态使用；无业务/账本逻辑变化。该修复已编码并随本交接进入下一次CI；通过前仍未编译验证。
+- 图表层控件顺序改动已在Run 87的SHA `9004003...`验证到FCore、XcodeGen、Device Build、Simulator Build成功，UI XCTest仍在运行；完整结果未出。
+- 当前没有人工Simulator视觉、iPhone Air或真机证据。NAS真实历史分钟、新闻来源、空账本/已建立空仓下的持仓录入便利性仍未解决。
+
+---
+
 ## 2026-10-29 当前工作快照：图表控制与主题语义色
 
 - 远端 `main` 当前快照基线：`b410ef69b5eed880171012b85181607af651caff`；父提交 `900400328fd92a5ce0ce6d5f9123685dd8c393b9` 已将图表次图选择器（VOL/MACD）移到图层栏首位并将控制高度缩至24pt；本快照又把首页账本状态点与Advisor Guard风险文案接到主题语义tokens，避免主题切换后仍显示固定绿/橙/红。

@@ -821,7 +821,7 @@ private struct AdvisorComposer: View {
             Text("组合问题会纳入全部真实持仓；证券详情入口只分析目标证券。账本、行情和合格 NAS 证据只读传入，Candidate Plan 不会改写资产。")
                 .font(.caption2).foregroundStyle(.secondary)
             if let result = model.advisorResult {
-                FAdvisorResultCard(result: result, accent: theme.accent) {
+                FAdvisorResultCard(result: result, accent: theme.accent, risk: risk) {
                     model.beginLedgerConfirmation(for: result)
                 }
             }
@@ -2065,9 +2065,9 @@ private struct FAdvisorResultCard: View {
                     }
                 }
             } else {
-                Text("Guard 已阻止此候选计划").font(.subheadline.bold()).foregroundStyle(theme.manifest.tokens.risk)
+                Text("Guard 已阻止此候选计划").font(.subheadline.bold()).foregroundStyle(risk)
                 ForEach(Array(result.assessment.guardResult.findings.enumerated()), id: \.offset) { _, item in
-                    Text("• \(item.displayName)").font(.caption).foregroundStyle(theme.manifest.tokens.risk)
+                    Text("• \(item.displayName)").font(.caption).foregroundStyle(risk)
                 }
             }
             Text("真实资产只能在用户确认真实成交后变化；此结果没有账本写入能力。")
