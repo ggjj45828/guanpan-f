@@ -572,3 +572,21 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 修复前提交 `297ca05a2a65893a504dacbae5966c960978148e` 已推送并触发 Apple CI Run 81 [40841943569](https://github.com/ggjj45830/guanpan-f/actions/runs/40841943569)。实际执行：FCore **165/165通过**、XcodeGen成功；Device Build失败，Simulator Build/UI XCTest/IPA因前序失败跳过。
 - 首个且唯一报告的Swift编译根因：`HomeExperience.swift:1422` 从资产页按钮直接写 `FHomeModel.ledgerWriteStatus`，但该属性声明为`private(set)`。现已添加模型方法`clearLedgerWriteStatus()`并让按钮调用它，保留私有写入边界与既有流程。
 - 这个修复目前仅编码在工作树，尚无当前修复SHA的编译或测试结果。下一步提交、正常推送并重跑Apple完整CI；只有通过后更新该SHA的FCore、构建、UI测试和IPA状态。
+
+## Run 82 完整 Apple CI 验证（2026-10-29）
+
+- 当前源码 HEAD 与 `origin/main` 均为 `5caf26de3a3b65e8497f56470bb355d42ac3b1e9`；GitHub Actions Run 82 [40843215165](https://github.com/ggjj45830/guanpan-f/actions/runs/40843215165) 对应此 SHA，结论 `success`。
+- 当前SHA真实执行：FCore **165/165通过**；XcodeGen通过；iOS Device Build通过；iOS Simulator Build通过；App Navigation UI XCTest **4/4通过**；Simulator截图导出通过；未签名IPA打包和校验通过；构建证据artifact上传成功。
+- Run 82 修复的是 Run 81 Device Build 的 `private(set) ledgerWriteStatus` setter错误：新增模型内清除方法并将UI直接赋值改为方法调用。该改动已由本轮完整Apple CI验证。
+- UI XCTest覆盖Unavailable在线服务说明、空账本初始持仓入口、五个主导航目的地可发现性、真实资产当前/已清仓/现金分区。它们是自动UI测试证据，不代表人工视觉或手势验收。
+- CI已导出Simulator截图，但本轮尚未人工查看截图；iPhone Air真机/布局未验证。NAS HTTPS和指定日历史分钟真实端到端、真实Tencent扩展行情字段、新闻真实来源、DeepSeek真实服务端到端及Candidate→真实成交→Ledger→Advisor复判仍未完成；不得由本轮CI成功推定这些链路完成。
+- IPA artifact：`guanpan-f-ios-build-evidence`，artifact ID `12883943154`，大小约11.2 MB，GitHub保留至2026-11-12。它是未签名构建产物，不是可直接安装的签名IPA。
+- 下一步：先查看本轮已导出的截图和IPA内容；随后按用户的产品差距清单继续UI整改，并将NAS/行情/DeepSeek和真实成交链的未验证项分别用真实设备/服务证据验收。B/F产品差距、NAS和真实服务E2E没有因Run 82变绿而整体完成。
+
+## NAS HTTP 200历史响应诊断修正（待Run 83验证）
+
+- 当前基线仍为Run 82已完整编译通过的SHA `5caf26de3a3b65e8497f56470bb355d42ac3b1e9`；随后本地修改尚未提交/编译。
+- 根据手机截图的“历史接口HTTP 200字段不符合契约、B兼容接口404”，定位到客户端将`bars`解码错误静默降为`[]`，并且顶层响应失败时只展示字段名、不指出证券/日期/分钟点的实际不匹配。由此把接口响应异常和旧路径404混成一个模糊错误。
+- 已编码修正：证券代码支持字符串/整数及`security_code`别名；交易日支持`trading_date`；市场值进行大小写归一；仅当bars缺失/null时视为空归档，错误类型或错误bar不再静默丢弃；HTTP JSON错误将报告实际代码/市场/日期不匹配及首条bar字段/类型。
+- 该诊断兼容改动仍未由Apple编译或测试。即使编译通过，也只能提升接口兼容/错误定位；没有手机端新响应和真实分钟样本，不代表NAS历史分钟已连接或成功归档。
+- 下一步：提交并普通推送，检查Run 83第一条真实失败并修复；若CI通过，用户在设置页重试指定交易日，依据新错误中的实际字段继续修正接口契约。`/readyz` Ready仍不代表历史API可读。

@@ -145,15 +145,39 @@ enum FNASHistoricalMinuteClient {
         let coverage: Coverage?
         let bars: [Bar]
 
-        private enum CodingKeys: String, CodingKey { case securityCode, market, tradingDate, status, coverage, bars }
+        private enum CodingKeys: String, CodingKey {
+            case securityCode, security_code, market, tradingDate, trading_date, status, coverage, bars
+        }
         init(from decoder: Decoder) throws {
             let values = try decoder.container(keyedBy: CodingKeys.self)
-            securityCode = try values.decode(String.self, forKey: .securityCode)
+            if let value = try? values.decode(String.self, forKey: .securityCode) {
+                securityCode = value
+            } else if let value = try? values.decode(Int.self, forKey: .securityCode) {
+                // Some NAS deployments serialize a numeric-only security code as JSON number.
+                securityCode = String(value)
+            } else if let value = try? values.decode(String.self, forKey: .security_code) {
+                securityCode = value
+            } else if let value = try? values.decode(Int.self, forKey: .security_code) {
+                securityCode = String(value)
+            } else {
+                throw DecodingError.dataCorruptedError(forKey: .securityCode, in: values,
+                                                       debugDescription: "securityCode must be a string or integer")
+            }
             market = try values.decode(String.self, forKey: .market)
-            tradingDate = try values.decode(String.self, forKey: .tradingDate)
+            tradingDate = (try? values.decode(String.self, forKey: .tradingDate)) ??
+                (try values.decode(String.self, forKey: .trading_date))
             status = (try? values.decodeIfPresent(String.self, forKey: .status)) ?? "partial"
             coverage = try? values.decodeIfPresent(Coverage.self, forKey: .coverage)
-            bars = (try? values.decode([Bar].self, forKey: .bars)) ?? []
+            let hasBars = values.contains(.bars)
+            let barsAreNull = hasBars ? try values.decodeNil(forKey: .bars) : true
+            if !hasBars || barsAreNull {
+                bars = []
+            } else {
+                // Do not silently turn malformed bar rows into an empty archive. The caller
+                // needs the response-shape diagnostic so a valid HTTP 200 is not masked by
+                // the legacy endpoint's unrelated 404.
+                bars = try values.decode([Bar].self, forKey: .bars)
+            }
         }
     }
 
@@ -196,7 +220,7 @@ enum FNASHistoricalMinuteClient {
         var modernFailure: String?
         if (200..<300).contains(http.statusCode),
            let body = try? JSONDecoder().decode(Response.self, from: data),
-           body.securityCode == securityCode, body.market == "CN", body.tradingDate == dateText {
+           body.securityCode == securityCode, body.market.uppercased() == "CN", body.tradingDate == dateText {
             let archive = try makeArchive(body: body, securityCode: securityCode, dateText: dateText,
                                           timeZone: timeZone)
             if !archive.samples.isEmpty { return archive }
@@ -211,7 +235,9 @@ enum FNASHistoricalMinuteClient {
             }
             modernFailure = "F 历史接口已响应，但该证券/日期没有归档分钟点（\(body.status ?? "partial")）"
         } else {
-            modernFailure = Self.responseFailure(data: data, response: http)
+            modernFailure = Self.responseFailure(data: data, response: http,
+                                                 expectedSecurityCode: securityCode,
+                                                 expectedTradingDate: dateText)
         }
         do {
             return try await fetchLegacyB(baseURL: baseAddress, securityCode: securityCode,
@@ -294,7 +320,9 @@ enum FNASHistoricalMinuteClient {
               let body = try? JSONDecoder().decode(LegacyBResponse.self, from: data),
               body.code == securityCode, body.day == dateText,
               !body.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw FNASConnectionError.historyUnavailable(Self.responseFailure(data: data, response: http))
+            throw FNASConnectionError.historyUnavailable(Self.responseFailure(data: data, response: http,
+                                                                                expectedSecurityCode: securityCode,
+                                                                                expectedTradingDate: dateText))
         }
         var dayFormatter = DateFormatter()
         dayFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -327,7 +355,9 @@ enum FNASHistoricalMinuteClient {
             sourceSummary: "B NAS 归档 · \(body.source)", fetchedAt: Date(), samples: ordered)
     }
 
-    private static func responseFailure(data: Data, response: HTTPURLResponse) -> String {
+    private static func responseFailure(data: Data, response: HTTPURLResponse,
+                                        expectedSecurityCode: String? = nil,
+                                        expectedTradingDate: String? = nil) -> String {
         let contentType = response.value(forHTTPHeaderField: "Content-Type") ?? "未知 Content-Type"
         if contentType.localizedCaseInsensitiveContains("text/html") {
             return "HTTP \(response.statusCode) 返回了网页而非分钟 JSON（\(contentType)）；可能是 API 路径未映射到 NAS 服务"
@@ -336,9 +366,52 @@ enum FNASHistoricalMinuteClient {
             if let message = object["error"] as? String, !message.isEmpty {
                 return "HTTP \(response.statusCode)：\(String(message.prefix(180)))"
             }
-            return "HTTP \(response.statusCode) JSON 字段不符合历史分钟契约（字段：\(object.keys.sorted().joined(separator: ", "))）"
+            var problems: [String] = []
+            let returnedCode = object["securityCode"] ?? object["security_code"]
+            if let expectedSecurityCode, let returnedCode,
+               Self.jsonScalar(returnedCode) != expectedSecurityCode {
+                problems.append("证券代码期望 \(expectedSecurityCode)，实际 \(Self.jsonScalar(returnedCode))")
+            } else if expectedSecurityCode != nil, returnedCode == nil {
+                problems.append("缺少 securityCode")
+            }
+            if let expectedTradingDate, let returnedDate = object["tradingDate"] ?? object["trading_date"] {
+                if Self.jsonScalar(returnedDate) != expectedTradingDate {
+                    problems.append("交易日期望 \(expectedTradingDate)，实际 \(Self.jsonScalar(returnedDate))")
+                }
+            } else if expectedTradingDate != nil {
+                problems.append("缺少 tradingDate")
+            }
+            if let market = object["market"] {
+                if Self.jsonScalar(market).uppercased() != "CN" {
+                    problems.append("市场期望 CN，实际 \(Self.jsonScalar(market))")
+                }
+            } else {
+                problems.append("缺少 market")
+            }
+            if let bars = object["bars"] as? [[String: Any]], let first = bars.first {
+                let barKeys = Set(first.keys)
+                if !(barKeys.contains("timestamp") && barKeys.contains("price")) {
+                    problems.append("bars首条缺少 timestamp/price（实际字段：\(barKeys.sorted().joined(separator: ", "))）")
+                } else if !(first["timestamp"] is String) ||
+                            (!(first["price"] is String) && !(first["price"] is NSNumber)) {
+                    problems.append("bars首条 timestamp/price 类型不兼容")
+                }
+            } else if let rawBars = object["bars"], !(rawBars is NSNull), !(rawBars is [Any]) {
+                problems.append("bars应为数组，实际类型不符")
+            }
+            let reason = problems.isEmpty
+                ? "响应内容无法解码为历史分钟记录"
+                : problems.joined(separator: "；")
+            return "HTTP \(response.statusCode) 历史分钟响应校验失败：\(reason)（顶层字段：\(object.keys.sorted().joined(separator: ", "))）"
         }
         return "HTTP \(response.statusCode) 响应格式不是可识别的历史分钟 JSON（\(contentType)）"
+    }
+
+    private static func jsonScalar(_ value: Any) -> String {
+        if let string = value as? String { return string }
+        if let number = value as? NSNumber { return number.stringValue }
+        if value is NSNull { return "null" }
+        return String(describing: type(of: value))
     }
 
     private static func dayString(_ value: Date, timeZone: TimeZone) -> String {

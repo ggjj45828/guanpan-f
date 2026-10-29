@@ -1,5 +1,17 @@
 # F Master Acceptance Matrix
 
+## NAS历史分钟 HTTP 200响应诊断修正（待CI）
+
+| 项目 | 实现/证据 | 当前状态 | 关闭条件 |
+| --- | --- | --- | --- |
+| HTTP 200但历史分钟响应无法识别 | `GuanpanFApp/Sources/FNASConnection.swift`：支持数字证券代码和snake_case代码/日期；bars错误结构不再静默转换为空；诊断实际请求/响应不匹配。依据手机截图中HTTP 200契约错误与旧路径404 | 已编码，未编译/未执行；真实NAS端点/指定日数据尚未验证 | 当前SHA Apple CI通过；手机端重新请求能正确返回真实bars或准确显示Missing/Partial及原因；核验证券、交易日、时间、分钟数和来源 |
+
+## Run 82：当前HEAD完整Apple构建（2026-10-29）
+
+| 项目 | 需求/实现 | 实际证据 | 状态/边界 |
+| --- | --- | --- | --- |
+| 当前HEAD Apple验证 | `5caf26de3a3b65e8497f56470bb355d42ac3b1e9`；Run 81首错修复：将Ledger状态清除封装为HomeModel方法，保持`private(set)`写权限边界 | Run [40843215165](https://github.com/ggjj45830/guanpan-f/actions/runs/40843215165)：FCore 165/165；XcodeGen、Device Build、Simulator Build、UI XCTest 4/4、截图导出、未签名IPA打包/校验、Artifact上传均成功 | 当前SHA的Apple编译与自动测试通过；截图尚未人工审阅；iPhone Air/真机、NAS/行情/DeepSeek实网E2E仍未通过本轮验证 |
+
 ## Run 72：图表横轴标签防碰撞（2026-10-29）
 
 | 项目 | 需求/实现 | 实际证据 | 状态/边界 |
