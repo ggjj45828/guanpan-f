@@ -651,3 +651,16 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 验收项 | 当前增量 | 状态/关闭条件 |
 |---|---|---|
 | HTTP 200错误体诊断完整度 | 有服务端`error`说明时仍检查顶层与首条bar实际结构；行级支持`security_code`、`trading_date`、数字证券代码、大小写市场值 | Run 85 [40854072875](https://github.com/ggjj45830/guanpan-f/actions/runs/40854072875) 对SHA `31c2010d4324db6fa8251db0199e1c0cd8540113`：FCore 165/165、UI XCTest 4/4、XcodeGen、Device/Simulator Build、截图导出、IPA打包/校验/上传全通过。真实NAS指定日期响应仍待手机验证 |
+
+
+## Run 98 证据与当前缺口（2026-10-29）
+
+| 项目 | 当前结果 | 状态边界 |
+| --- | --- | --- |
+| 当前SHA Apple CI | `311f1c8cf639679b56f327abc000951ea3ef14dc` / Run [40878823535](https://github.com/ggjj45830/guanpan-f/actions/runs/40878823535)：FCore 165/165、UI XCTest 4/4、XcodeGen、Device/Simulator Build、截图导出、unsigned IPA校验/上传通过 | 已编译/自动测试通过；CI截图未人工查看；未真机验收 |
+| Tencent ETF IOPV/溢价解析 | Tencent缺省ETF类型时按受支持代码段兜底；不把508/180 REIT纳入ETF；数值支持百分号/千位符；无效溢价过滤值已传入最终模型 | 已编译；缺当前真实供应商响应样本，字段端到端仍待实测 |
+| 参考行情错误状态 | 当前取数失败显示诊断并清除旧参考缓存 | 已编译；具体证券/网络实测待设备 |
+| NAS指定日分钟 | 当前客户端与仓库NAS服务响应字段静态匹配；readyz不等于指定日数据就绪 | 手机上的HTTPS穿透、bars/coverage真实返回仍未验证 |
+| 新闻 | F中没有可靠新闻供应商接线 | 未接入；保持Unavailable，不得伪造 |
+| Theme dark/eye-care | 当前manifest将isDark写死false，浅色基础token有实现 | 未完成；需要补色彩方案接线并用截图验证 |
+| 视觉验收 | 本次CI截图导出成功 | 未人工视觉审阅；主题一致性、图表手势、iPhone Air、真机均待验 |
