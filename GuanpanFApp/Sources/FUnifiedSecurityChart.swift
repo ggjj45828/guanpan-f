@@ -399,6 +399,14 @@ struct FUnifiedSecurityChart: View {
             }
             return leftAxis + min(max(fraction, 0), 1) * plotWidth
         }
+        // Cost and other timestamp overlays commonly have one point per bar.
+        // Avoid rescanning the whole series for every overlay point while the
+        // Canvas is redrawn during pinch/drag gestures.
+        var indexByTimestamp: [Date: Int] = [:]
+        indexByTimestamp.reserveCapacity(series.timestamps.count)
+        for index in series.timestamps.indices {
+            indexByTimestamp[series.timestamps[index]] = index
+        }
         for step in 0...4 {
             let fraction = Double(step) / 4
             let lineY = priceTop + priceHeight * CGFloat(fraction)
@@ -488,14 +496,16 @@ struct FUnifiedSecurityChart: View {
                 context.draw(Text("VOL").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
                             at: CGPoint(x: 3, y: subchartTop + subchartHeight / 2), anchor: .leading)
             }
-            let tickCount = min(5, range.count)
+            let desiredTickCount = min(5, max(2, Int(plotWidth / 74)))
+            let tickCount = min(desiredTickCount, range.count)
             if tickCount > 0 {
                 for tick in 0..<tickCount {
                     let index = range.lowerBound + (range.count - 1) * tick / max(tickCount - 1, 1)
                     let date = bars[index].tradingDate
                     let label = date.formatted(.dateTime.month(.abbreviated).day())
+                    let anchor: UnitPoint = tick == 0 ? .leading : (tick == tickCount - 1 ? .trailing : .center)
                     context.draw(Text(label).font(.system(size: 8)).foregroundColor(.secondary),
-                                at: CGPoint(x: x(index), y: size.height - 8))
+                                at: CGPoint(x: x(index), y: size.height - 8), anchor: anchor)
                 }
             }
             for (seriesIndex, values) in averages.enumerated() {
@@ -552,7 +562,7 @@ struct FUnifiedSecurityChart: View {
             } else {
                 let matching = overlay.points.filter { visibleTimes.contains($0.timestamp) }
                 for point in matching {
-                    guard let index = series.timestamps.firstIndex(of: point.timestamp), range.contains(index) else { continue }
+                    guard let index = indexByTimestamp[point.timestamp], range.contains(index) else { continue }
                     let pointX = x(index)
                     let stepX = plotWidth / CGFloat(max(range.count, 1))
                     path.move(to: CGPoint(x: pointX, y: y(point.value)))
@@ -819,4 +829,5 @@ enum FChartPresentationBuilder {
                                                                    quality: .unavailable(reason: "没有可靠 IOPV 数据源")))
     }
 }
+
 
