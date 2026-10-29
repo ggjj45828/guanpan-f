@@ -849,6 +849,22 @@ private struct PortfolioCard: View {
             LabeledContent("今日证券盈亏", value: "不可用 · 缺可靠前收与日初持仓口径")
             if model.ledgerState == .available && model.holdings.isEmpty {
                 Text("账本已读取，当前没有真实持仓").font(.subheadline).foregroundStyle(.secondary)
+                Button { model.prepareManualLedgerFill() } label: {
+                    Label("登记已成交买入，开始建仓", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.bordered).tint(theme.accent)
+                .accessibilityIdentifier("ledger.manual-fill.emptyPortfolio")
+            } else if model.ledgerState == .notEstablished {
+                Text("还没有本机账本；可按券商当前余额和持仓建立起点。")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Button {
+                    model.clearLedgerWriteStatus()
+                    model.showingInitialLedgerSetup = true
+                } label: {
+                    Label("录入现有持仓", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.bordered).tint(theme.accent)
+                .accessibilityIdentifier("ledger.opening.home")
             } else if model.ledgerState != .available {
                 Text("持仓状态未确认 · \(model.ledgerStatus)")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -1413,7 +1429,7 @@ struct RealAssetsOverview: View {
 
     var body: some View {
         List {
-            Section("本机真实账本 · 只读") {
+            Section("本机真实账本") {
                 assetSummaryRow("账本状态", value: model.ledgerStatus)
                 assetSummaryRow("可用现金", value: model.cashText)
                 assetSummaryRow("真实持仓", value: "\(model.holdings.count) 项")
@@ -1430,10 +1446,10 @@ struct RealAssetsOverview: View {
                 }
                 if model.ledgerState == .available {
                     Button { model.prepareManualLedgerFill() } label: {
-                        Label("记录已完成的真实成交", systemImage: "arrow.left.arrow.right.circle")
+                        Label("登记已成交买入 / 卖出", systemImage: "arrow.left.arrow.right.circle")
                     }
                     .accessibilityIdentifier("ledger.manual-fill.begin")
-                    Text("登记券商已经成交的买入或卖出；确认后才更新账本，不会发起下单。")
+                    Text("已建账时，记录券商真实成交；若当前空仓，可录入已成交买入开始建仓。不会向券商下单。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Picker("资产视图", selection: $selectedView) {
