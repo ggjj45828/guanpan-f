@@ -740,8 +740,8 @@ private struct FThemeSurfaceModifier: ViewModifier {
     func body(content: Content) -> some View {
         switch theme.surfaceTreatment {
         case .terminal, .minimal:
-            content.background(theme.manifest.tokens.background.opacity(0.96))
-                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.35)).frame(height: 0.5) }
+            content.background(theme.manifest.tokens.surface.opacity(0.98))
+                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.24)).frame(height: 0.5) }
         case .glass, .orbit:
             content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius + 8))
                 .overlay(RoundedRectangle(cornerRadius: radius + 8).stroke(.white.opacity(0.28), lineWidth: 1))
@@ -942,8 +942,8 @@ struct HomeDestination: View {
                     Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("盈亏口径").font(.headline)
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 9) {
                     LabeledContent("今日证券总盈亏", value: "不可用 · 缺可靠前收与今日开盘持仓标记")
                     LabeledContent("今日交易已实现盈亏", value: dailyTradingPnL)
                     LabeledContent("今日做T贡献", value: dailyTDisplay)
@@ -960,6 +960,14 @@ struct HomeDestination: View {
                             : "未实现部分不可用 · 行情缺失或已过期"))
                     Text("今日证券总盈亏含全天市值变化；今日已实现仅统计卖出成交。做T需有明确成交标记，不能用普通卖出代替。")
                         .font(.caption).foregroundStyle(.secondary)
+                    }
+                } label: {
+                    HStack {
+                        Text("盈亏口径").font(.headline)
+                        Spacer()
+                        Text("今日 · 本轮 · 累计 · 做T")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 .padding(14)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -1006,7 +1014,7 @@ struct HomeDestination: View {
                         model: FChartPresentationBuilder.live(snapshot, holding: holding,
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                        height: 330)
+                        height: 430)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("日 K 与均线").font(.headline)
@@ -1021,7 +1029,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 315)
+                                height: 400)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -1058,7 +1066,7 @@ struct HomeDestination: View {
                             FUnifiedSecurityChart(
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 330)
+                                height: 430)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }

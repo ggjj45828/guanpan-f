@@ -62,6 +62,7 @@ struct FThemeSpacingScale {
 
 struct FThemeSemanticTokens {
     let background: Color
+    let surface: Color
     let foreground: Color
     let secondaryForeground: Color
     let accent: Color
@@ -153,11 +154,14 @@ enum FThemeLayoutRegistry {
     static func manifest(for theme: FHomeTheme) -> FThemeManifest {
         let family = theme.layoutFamily
         let style = theme.surfaceTreatment
-        let isDark = theme == .dashboard || theme == .minimalTerminal
+        let isDark = theme == .dashboard
         let background: Color = isDark
-            ? Color(red: 0.055, green: 0.075, blue: 0.12)
+            ? Color(red: 0.075, green: 0.10, blue: 0.15)
             : Color(red: 0.97, green: 0.96, blue: 0.93)
-        let foreground: Color = isDark ? .white : Color(red: 0.12, green: 0.15, blue: 0.19)
+        let surface: Color = isDark
+            ? Color(red: 0.12, green: 0.16, blue: 0.23)
+            : Color(red: 0.995, green: 0.99, blue: 0.97)
+        let foreground: Color = isDark ? Color(red: 0.91, green: 0.93, blue: 0.96) : Color(red: 0.12, green: 0.15, blue: 0.19)
         let accent: Color
         switch theme {
         case .editorial, .inkModern: accent = Color(red: 0.68, green: 0.29, blue: 0.18)
@@ -210,7 +214,7 @@ enum FThemeLayoutRegistry {
             advisor = "风险态自动扩展"; market = "状态感知小模块"; assets = "正常态大模块"; chart = "自适应网格外围"
         }
         let tokens = FThemeSemanticTokens(
-            background: background, foreground: foreground,
+            background: background, surface: surface, foreground: foreground,
             secondaryForeground: isDark ? Color.white.opacity(0.72) : Color.black.opacity(0.62),
             accent: accent, positive: Color(red: 0.78, green: 0.18, blue: 0.17),
             negative: Color(red: 0.12, green: 0.55, blue: 0.30),

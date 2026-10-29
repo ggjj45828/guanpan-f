@@ -1,5 +1,13 @@
 # F Master Acceptance Matrix
 
+## 当前视觉整改快照（2026-10-29；覆盖下方较早状态）
+
+- 用户实机反馈：F整体视觉不如B，部分主题只是换色，交易仪表盘黑白块感明显。当前产品结论仍为**F不如B**。
+- 当前基线HEAD `0bc40cc` 的Run 68通过FCore 164/164、UI XCTest 3/3、生成工程、Device/Simulator Build与IPA；这些只覆盖HEAD，不等于人工视觉验收。本轮dirty修改尚未编译。
+- 本轮已编码：早盘分时范围按可见真实分钟铺开；图表增高、主线变细、图层按钮缩小；盈亏口径折叠；自选随活跃交易时段自动刷新；交易仪表盘改柔和蓝灰surface、极简终端回到浅纸面。
+- 本轮验收状态：`git diff --check`通过；本轮Apple CI=未执行；Simulator人工截图=无；iPhone Air=External Pending。不得把以上编码写成视觉修复完成。
+- 当前6个核心页相对B仍不作胜出判断，沿用“整体不如B”；三套标杆主题截图对比尚未完成。下一关闭条件是本轮源码经Apple CI，再审实际Simulator截图并逐项人工确认。
+
 ## 2026-10-28 当前工作树权威补记（覆盖下方旧验证快照）
 
 - 当前 `main` HEAD `7094d74496f32fa78e69eeb0792e8ee26da48ca6` 已普通push到`origin/main`，工作树干净。

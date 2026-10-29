@@ -1,14 +1,24 @@
 # F实时进度交接
 
+## 用户最新视觉反馈与本轮处理（2026-10-29）
+
+- 用户明确反馈：F整体视觉仍明显不如B；部分主题只是换色，交易仪表盘有黑白块感。该反馈作为实际产品验收结论，不能以主题数量、编译或测试通过抵消。
+- 对照B `GuanpanNext-work/ios/Sources/DesignSystem.swift`：B使用分层的canvas/paper/raised/ink/muted/line与语义色；F主题虽有layout manifest，但专业页和部分角色组件仍共享卡片结构，不能据此称多主题已完成。
+- 本轮已编码、尚未编译：实时分时自适应当前可见分钟范围，修正早盘曲线挤在最左侧；主价格线由2.2pt减为1.25pt；时间轴按实际范围生成不拥挤标签；MA/图层按钮从44pt压到32pt；详情当前/历史分钟图扩大到430pt、日K到400pt；盈亏口径改为折叠显示；10秒行情自动刷新也纳入自选代码。
+- 本轮已编码、尚未编译：主题语义token增加独立surface；交易仪表盘采用低对比的蓝灰底、抬高一层的蓝灰内容面与柔和浅字，极简终端回归浅色纸面，避免把两套都做成黑底白字块。该改动仅是针对反馈的第一轮视觉收敛，不代表超过B，仍需Apple CI和Simulator截图验收。
+- 当前工作树有未提交Swift/文档修改；`git diff --check`通过，Windows无Apple工具链，因此编译/测试执行数未增加。Run 68的164/164与UI 3/3只覆盖HEAD `0bc40cc`，不能继承到本轮dirty源码。
+- 没有本轮Simulator人工截图或iPhone Air新验收。产品评价保持：**F目前不如B**。下一步先送本轮源码至Apple CI；通过后审阅实际截图，再按B信息层级整改首页/详情，而不是继续增主题数量。
+
 ## Apple CI最新状态补充（2026-10-29；优先于以下状态）
 
-- 本地 `HEAD=e3cf354d39dfec93dfaeabd88910446105778480`，是保留原本地提交 `33bd010` 后合并已fetch的 `origin/main=445388948bd5b7648f65a79f3323348a69826ee7`。无强推、无重置。当前源码内容与远端main一致；本地合并提交尚未推送。
+- 本地 `HEAD=0bc40ccf6a8894fc71492cbc57f437aa7e5118cc`，已普通推送到 `origin/main`；其父提交保留原本地 `33bd010` 并合并已fetch的 `4453889`。无强推、无重置或覆盖远端历史。
 - 为安全reconcile，本地此前未提交的3个文件已保存在 `stash@{0}`；远端已有行情自选、键盘收起和兼容空状态实现。暂存内容没有删除，待当前CI后核对是否有需要保留的独有改动。
+- Run 68 [40799987058](https://github.com/ggjj45828/guanpan-f/actions/runs/40799987058) 对当前HEAD `0bc40ccf6a8894fc71492cbc57f437aa7e5118cc` 已真实完成并成功：FCore **164/164 executed/passed，0 failed**；XcodeGen通过；iOS Device Build通过；Simulator Build通过；App UI XCTest **3/3 executed/passed，0 failed**；Simulator截图附件导出步骤通过；`观盘max.ipa`完成打包、ZIP校验和Artifact上传。CI日志SHA256：`331b49e1cd56894e165edadd769b1f479bffe812bbfdc753e51cb540ea7920c4`（artifact zip）。
 - Run 64 [40793338913](https://github.com/ggjj45830/guanpan-f/actions/runs/40793338913) 在 SHA `519ffe3c` 实际通过：FCore **164/164**、XcodeGen、Device Build、Simulator Build、UI XCTest **3/3**、截图导出和未签名IPA校验/打包；这些结果不适用于后续SHA。
 - Run 65 [40795701608](https://github.com/ggjj45830/guanpan-f/actions/runs/40795701608) Device Build 首错为键盘 `.toolbar(content:)` 重载歧义；Run 66 [40796170487](https://github.com/ggjj45830/guanpan-f/actions/runs/40796170487) 首错为 `ContentUnavailableView` 要求 iOS 17。两项修复都已进入后续远端提交。
-- Run 67 [40796670551](https://github.com/ggjj45830/guanpan-f/actions/runs/40796670551) 对 SHA `4453889` 的最后可见证据是FCore、XcodeGen通过，Device Build仍在运行；目前GitHub API返回HTTP 429、浏览器读取超时，最终结果仍**未核实**，不标记通过或失败。
-- 当前本机无Swift/Xcode/XcodeGen，无法本机编译；合并提交还没有自己的CI结果。Simulator人工视觉/手势、iPhone Air、NAS HTTPS、DeepSeek真实E2E和Candidate成交闭环仍无新验收证据。
-- 下一步：普通推送本地合并提交，检查该提交的完整Apple CI；若失败按第一条真实根因最小修复。不能把Run 64通过数字继承给当前合并SHA，也不能强推。
+- Run 67 [40796670551](https://github.com/ggjj45830/guanpan-f/actions/runs/40796670551) 对 SHA `4453889` 最终成功；仅作该SHA历史证据，不代替当前HEAD的Run 68。
+- 当前本机无Swift/Xcode/XcodeGen，Apple编译结果来自Run 68。UI XCTest通过不等于人工视觉/交互验收：当前没有确认已人工查看CI截图；Simulator真实交互、iPhone Air、NAS HTTPS实机、DeepSeek真实E2E和Candidate真实成交闭环仍无新验收证据。
+- 下一步：CI编译工作收口；从Run 68 Artifact下载/检查截图并推进产品验收。继续查代码前先审阅并安全处理`stash@{0}`中的未提交本地差异；不因Run 68全绿就将人工体验或真实服务E2E标为完成，也不强推。
 
 ## 历史状态快照（2026-10-29；已被本文档开头的最新状态覆盖）
 

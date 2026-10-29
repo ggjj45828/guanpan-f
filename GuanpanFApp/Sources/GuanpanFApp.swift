@@ -813,7 +813,8 @@ final class FHomeModel: ObservableObject {
     }
 
     func autoRefreshMarketData() async {
-        let codes = holdings.map(\.instrumentCode) + [selectedInstrumentCode].compactMap { $0 }
+        let codes = Array(Set(holdings.map(\.instrumentCode) + watchlistCodes +
+            [selectedInstrumentCode].compactMap { $0 })).sorted()
         guard !codes.isEmpty else { return }
         await refreshMarketData(for: codes)
     }

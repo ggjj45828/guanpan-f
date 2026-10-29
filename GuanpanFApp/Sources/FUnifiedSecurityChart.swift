@@ -29,6 +29,8 @@ struct FUnifiedSecurityChart: View {
                 let end = count - min(windowEndOffset, maxOffset)
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
+                let minuteDomain = minuteDisplayDomain(series: series, window: model.chart.window,
+                                                       range: visibleRange, zoomScale: zoomScale)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
@@ -54,7 +56,7 @@ struct FUnifiedSecurityChart: View {
                     Canvas { context, size in
                         draw(model: displayModel, series: series, range: visibleRange,
                              visibleTimes: visibleTimes, averages: averages,
-                             priceRange: priceRange, selectedIndex: selectedIndex,
+                             priceRange: priceRange, minuteDomain: minuteDomain, selectedIndex: selectedIndex,
                              visibleLayers: visibleLayerKeys,
                              context: &context, size: size)
                     }
@@ -63,7 +65,7 @@ struct FUnifiedSecurityChart: View {
                     .simultaneousGesture(SpatialTapGesture().onEnded { value in
                         selectedTimestamp = timestamps[nearestIndex(
                             at: value.location.x, width: proxy.size.width,
-                            series: series, range: visibleRange)]
+                            series: series, range: visibleRange, minuteDomain: minuteDomain)]
                         crosshairEnabled = true
                     })
                     // Allow the parent detail ScrollView to scroll when the user starts a
@@ -73,7 +75,7 @@ struct FUnifiedSecurityChart: View {
                         if crosshairEnabled {
                             selectedTimestamp = timestamps[nearestIndex(
                                 at: value.location.x, width: proxy.size.width,
-                                series: series, range: visibleRange)]
+                                series: series, range: visibleRange, minuteDomain: minuteDomain)]
                         } else if zoomScale > 1.01 {
                             if dragOriginOffset == nil { dragOriginOffset = windowEndOffset }
                             let shift = Int((value.translation.width / max(proxy.size.width, 1)) *
@@ -243,7 +245,8 @@ struct FUnifiedSecurityChart: View {
     }
 
     private func nearestIndex(at locationX: CGFloat, width: CGFloat,
-                              series: FChartSeries, range: Range<Int>) -> Int {
+                              series: FChartSeries, range: Range<Int>,
+                              minuteDomain: ClosedRange<Double>) -> Int {
         guard !range.isEmpty else { return 0 }
         let left: CGFloat = 54
         let right: CGFloat = 8
@@ -254,7 +257,8 @@ struct FUnifiedSecurityChart: View {
             return min(range.upperBound - 1,
                        range.lowerBound + Int((fraction * CGFloat(range.count)).rounded(.down)))
         case let .minute(samples):
-            let target = Double(fraction) * 252
+            let target = minuteDomain.lowerBound + Double(fraction) *
+                (minuteDomain.upperBound - minuteDomain.lowerBound)
             return range.min(by: {
                 abs(sessionMinute(samples[$0].timestamp) - target) <
                     abs(sessionMinute(samples[$1].timestamp) - target)
@@ -274,8 +278,26 @@ struct FUnifiedSecurityChart: View {
         return 252
     }
 
+    private func minuteDisplayDomain(series: FChartSeries, window: FChartWindow,
+                                     range: Range<Int>, zoomScale: CGFloat) -> ClosedRange<Double> {
+        guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
+        let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
+        let first = visibleMinutes.min() ?? 0
+        let last = visibleMinutes.max() ?? 1
+        if zoomScale > 1.01 { return first...(max(first + 1, last)) }
+        if case .liveIntraday = window { return 0...(max(1, last)) }
+        return 0...252
+    }
+
+    private func intradayClockLabel(_ sessionMinute: Double) -> String {
+        let minute = Int(sessionMinute.rounded())
+        let clockMinute = minute <= 120 ? 570 + minute : 780 + minute - 132
+        return String(format: "%02d:%02d", clockMinute / 60, clockMinute % 60)
+    }
+
     private func draw(model: FChartOverlayModel, series: FChartSeries, range: Range<Int>,
                       visibleTimes: Set<Date>, averages: [[Decimal?]], priceRange: ClosedRange<Decimal>?,
+                      minuteDomain: ClosedRange<Double>,
                       selectedIndex: Int?, visibleLayers: Set<String>,
                       context: inout GraphicsContext, size: CGSize) {
         guard let priceRange, range.count > 0 else { return }
@@ -302,7 +324,8 @@ struct FUnifiedSecurityChart: View {
             case .daily:
                 fraction = (CGFloat(index - range.lowerBound) + 0.5) / CGFloat(max(range.count, 1))
             case let .minute(samples):
-                fraction = CGFloat(sessionMinute(samples[index].timestamp) / 252)
+                fraction = CGFloat((sessionMinute(samples[index].timestamp) - minuteDomain.lowerBound) /
+                                   max(minuteDomain.upperBound - minuteDomain.lowerBound, 1))
             }
             return leftAxis + min(max(fraction, 0), 1) * plotWidth
         }
@@ -324,14 +347,31 @@ struct FUnifiedSecurityChart: View {
                 let point = CGPoint(x: x(index), y: y(samples[index].price))
                 if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
             }
-            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-            let ticks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"), (132, "13:00"), (192, "14:00"), (252, "15:00")]
-            for (minute, label) in ticks {
-                let tickX = leftAxis + CGFloat(minute / 252) * plotWidth
+            context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
+            let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
+                                                    (162, "13:30"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
+            var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
+            if ticks.isEmpty || ticks.first?.0 != minuteDomain.lowerBound {
+                ticks.insert((minuteDomain.lowerBound, intradayClockLabel(minuteDomain.lowerBound)), at: 0)
+            }
+            if let lastTick = ticks.last, abs(lastTick.0 - minuteDomain.upperBound) > 0.5 {
+                ticks.append((minuteDomain.upperBound, intradayClockLabel(minuteDomain.upperBound)))
+            }
+            if ticks.count > 5 {
+                let stride = max(1, Int(ceil(Double(ticks.count - 1) / 4)))
+                let lastIndex = ticks.count - 1
+                ticks = ticks.enumerated().compactMap { index, item in
+                    index == 0 || index == lastIndex || index % stride == 0 ? item : nil
+                }
+            }
+            for (index, item) in ticks.enumerated() {
+                let tickX = leftAxis + CGFloat((item.0 - minuteDomain.lowerBound) /
+                                               max(minuteDomain.upperBound - minuteDomain.lowerBound, 1)) * plotWidth
                 var tick = Path(); tick.move(to: CGPoint(x: tickX, y: priceBottom)); tick.addLine(to: CGPoint(x: tickX, y: priceBottom + 3))
                 context.stroke(tick, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
-                context.draw(Text(label).font(.system(size: 8, design: .monospaced)).foregroundColor(.secondary),
-                            at: CGPoint(x: tickX, y: size.height - 8))
+                let anchor: UnitPoint = index == 0 ? .leading : (index == ticks.count - 1 ? .trailing : .center)
+                context.draw(Text(item.1).font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary),
+                             at: CGPoint(x: tickX, y: size.height - 8), anchor: anchor)
             }
         case let .daily(bars):
             let volumes = range.map { NSDecimalNumber(decimal: bars[$0].volume).doubleValue }
@@ -509,13 +549,13 @@ struct FUnifiedSecurityChart: View {
         return Button { toggleLayer(key) } label: {
             HStack(spacing: 4) {
                 Circle().fill(color).frame(width: 6, height: 6)
-                Text(title).font(.caption.monospaced().weight(.medium))
+                Text(title).font(.system(size: 11, weight: .medium, design: .monospaced))
                 Image(systemName: active ? "eye" : "eye.slash")
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .frame(minHeight: 44)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .frame(minHeight: 32)
             .background(active ? color.opacity(0.11) : Color.clear, in: Capsule())
             .contentShape(Capsule())
         }
