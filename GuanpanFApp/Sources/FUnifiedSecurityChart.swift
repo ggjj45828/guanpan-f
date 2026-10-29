@@ -357,12 +357,26 @@ struct FUnifiedSecurityChart: View {
             if let lastTick = ticks.last, abs(lastTick.0 - minuteDomain.upperBound) > 0.5 {
                 ticks.append((minuteDomain.upperBound, intradayClockLabel(minuteDomain.upperBound)))
             }
-            if ticks.count > 5 {
-                let stride = max(1, Int(ceil(Double(ticks.count - 1) / 4)))
-                let lastIndex = ticks.count - 1
-                ticks = ticks.enumerated().compactMap { index, item in
-                    index == 0 || index == lastIndex || index % stride == 0 ? item : nil
+            if ticks.count > 2 {
+                // Select labels by their rendered distance, not by array stride.
+                // A stride can keep both 14:30 and 15:00 at the right edge, where
+                // the two labels collide on an iPhone-width plot.
+                let domainWidth = max(minuteDomain.upperBound - minuteDomain.lowerBound, 1)
+                let minimumLabelSpacing: CGFloat = 44
+                var spacedTicks = [ticks[0]]
+                for item in ticks.dropFirst().dropLast() {
+                    guard let previous = spacedTicks.last else { continue }
+                    let distance = CGFloat((item.0 - previous.0) / domainWidth) * plotWidth
+                    if distance >= minimumLabelSpacing { spacedTicks.append(item) }
                 }
+                if let last = ticks.last {
+                    if let previous = spacedTicks.last, spacedTicks.count > 1 {
+                        let distance = CGFloat((last.0 - previous.0) / domainWidth) * plotWidth
+                        if distance < minimumLabelSpacing { spacedTicks.removeLast() }
+                    }
+                    spacedTicks.append(last)
+                }
+                ticks = spacedTicks
             }
             for (index, item) in ticks.enumerated() {
                 let tickX = leftAxis + CGFloat((item.0 - minuteDomain.lowerBound) /
@@ -708,3 +722,4 @@ enum FChartPresentationBuilder {
                                                                    quality: .unavailable(reason: "没有可靠 IOPV 数据源")))
     }
 }
+
