@@ -1,3 +1,14 @@
+# 2026-10-29 最新Apple验证与产品修改结论
+
+- 当前远端Swift代码快照：`5303df7dee8a73de27ad460c8ed562fabb3dee95`；文档更新后的main为`2967a58fa2642f31912744dce3d586a70f8dc437`。均为普通快进提交，无强推。
+- Run 91 [40862240070](https://github.com/ggjj45830/guanpan-f/actions/runs/40862240070)，验证代码SHA `662365be15ce2c4426ed6063dea413e2c2540693`：FCore **165/165 passed**；XcodeGen、Device Build、Simulator Build成功；UI XCTest **4/4 passed**；截图导出、IPA校验、artifact上传成功。该SHA包含已建立账本的“记录已完成的真实成交”入口及显式二次确认。Artifact `12892922721`，SHA256 `1d2f0fecdb03007416d1d16283d6c0c809939ca6cc7392a7edd63405adf33a41`。
+- Run 92 [40862807997](https://github.com/ggjj45830/guanpan-f/actions/runs/40862807997)，验证Swift代码SHA `5303df7dee8a73de27ad460c8ed562fabb3dee95`：FCore **165/165 passed**；XcodeGen、Device Build、Simulator Build成功；UI XCTest **4/4 passed**；截图导出、IPA校验、artifact上传成功。此SHA另将交易仪表盘改为统一浅色终端配色，去除其特有深色系统外观。Artifact `12893216686`，SHA256 `5997cc8b7d6acabb1669b8edb95a426b1af1faabe7ef4884da293bc9573adda0`。
+- 两轮产物日志都校验了显示名“观盘max”、Info.plist选择AppIcon且归档内图标有效。CI截图已经导出，**没有人工逐页审阅**；CI执行Simulator UI测试成功也不等于iPhone Air/真机视觉验收。
+- 手动成交入口仅允许登记用户已经完成的券商成交，调用真实确认写入器，保留费用、成交流水、Episode及账本校验；不会创建Candidate成交或自动下单。Run91 UI XCTest覆盖的是已有四项导航/空账本/资产场景，**没有直接点击新手动成交表单**，故其可见UI状态尚未单独人工验收。
+- 仍未完成：图表在iPhone Air的实际尺寸/手势及截图人工审阅；跨主题所有页面的逐页视觉一致性；NAS历史分钟真实数据进入手机；可靠新闻、前收、均价、IOPV真实来源；DeepSeek真实端到端及真实成交后Advisor复判。产品整体仍不能写成超过B。
+
+---
+
 # 2026-10-29 观盘max 当前真实进度（远端主线）
 
 - 当前 GitHub `main`：`5303df7dee8a73de27ad460c8ed562fabb3dee95`。本轮远端提交按快进更新；未强推、未覆盖远端历史。Windows 本地工作树仍落后且有本地改动，不以本地 HEAD 代表远端。
