@@ -85,3 +85,27 @@ Shadow评价至少区分：触发、触发时刻/价格、5/15/30/60分钟结果
 P0 Ledger与Apple CI；P1 B→F原生体验；P2最小可靠本地Quant；P3 Market Regime/Risk Guard；P4 Candidate/Trigger；P5首页和详情接线；P6 Shadow Score/Decision Scorecard；P7 DeepSeek读取Quant形成组合/证券建议；P8确认成交→Ledger→Quant复算→Advisor复判；P9三套标杆主题；P10其余主题/策略扩展。NAS研究不属于当前核心P级主线。
 
 验收严格区分：设计、编码、编译、测试定义、实际执行、Simulator、真机、真实服务。旧要求把NAS分钟研究列为Advisor必经前置的部分均标记为Superseded。
+
+## 2026-10-29 当前工作树校准（覆盖上方2026-10-28实现快照）
+
+- 当前仓库F的HEAD为 `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`；本地 `main` 与缓存 `origin/main` 同SHA，工作树干净。这只代表本地Git状态。
+- 本轮HEAD涉及统一图表显示密度/横轴/图例控件、盈亏折叠、主题表面和自选行情刷新；没有新增Quant、Candidate、Shadow或Ledger实现。
+- GitHub连接器对当前SHA返回空workflow run和空combined status，无法确认当前Apple CI是否已启动或完成。**当前SHA CI未核实**，不得继承旧run结论。Windows当前环境无Xcode/Swift，未能本地Apple编译。
+- 有部分价格区Trigger evaluator与Candidate Shadow追加记录；完整本机多因子Quant、Market Regime、实时报价订阅/后台触发、Risk Guard接线、首页/详情Quant状态、完整Shadow评分与基准对照、DeepSeek真实E2E及成交后Advisor复判仍未完成。
+- NAS已降级为可选同步/归档/备份/扩展研究；NAS分钟研究不再是核心Advisor前置或当前核心P级任务。手机HTTPS连通性没有新现场证据，作为可选链路待验证。
+- 测试定义不等于当前HEAD执行。FCore/UI XCTest、Simulator启动/人工视觉、真机和真实服务E2E必须分别以当前SHA的实际证据记录。
+
+## Run 69 live status correction (2026-10-29)
+
+Run 40802741213 is now confirmed running for SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a. FCore, XcodeGen, Device Build and Simulator Build steps report success; App UI XCTest is in progress, with screenshot export, IPA and artifact steps pending. This supersedes the earlier “CI未核实” wording for this SHA. Exact test totals/final status remain pending. The architecture-document-only edits currently in the local worktree are not included in run 69.
+
+## Run 69 final execution evidence (2026-10-29)
+
+- Run 40802741213 for Swift HEAD 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a completed with success.
+- Actual test totals: FCore 164/164 passed, 0 failed; App UI XCTest 3/3 passed, 0 failed.
+- XcodeGen, Device Build, Simulator Build, screenshot export, unsigned IPA validation and upload all succeeded. Artifact ID 12866733256. The package validation confirms display name “观盘max” and AppIcon metadata.
+- This verifies the tested Swift SHA only. Simulator screenshots were exported but not manually reviewed; iPhone Air, gestures, real NAS HTTPS and DeepSeek E2E remain unverified. Documentation changes made after this run are not part of the CI-tested SHA.
+
+## 本地文档提交未推送补正（2026-10-29）
+
+Run 69通过的Swift源码SHA为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后只提交了五份Markdown状态文档；git push因“getaddrinfo() thread failed to start”失败，本地main比缓存origin/main ahead 1。Swift未修改，Run 69结论仍只对应其SHA；文档提交没有远端CI证据。

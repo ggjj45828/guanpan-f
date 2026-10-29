@@ -335,3 +335,31 @@ F_CURRENT_STATUS_END
 
 - Run66 `40796170487` / SHA `ef328df331b0567184d34833b99918d530fde1be`：FCore、XcodeGen通过；Device Build失败，首错为 `HomeExperience.swift:1663`：`ContentUnavailableView`仅iOS 17+可用，与当前更低deployment target不兼容。
 - 已替换为兼容当前最低系统版本的SwiftUI VStack空状态，不改变空态含义、不加入假数据。此次修复送后续Apple CI；Run66失败保留，不能继承Run64通过结果。
+
+## 2026-10-29 当前HEAD与架构定稿校准
+
+- **当前HEAD：** `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`。本地`main`与缓存`origin/main`相同，工作树干净。
+- **Apple CI：** 当前SHA的workflow run/combined status经GitHub连接器未取得可核实记录，因此CI状态记为“未核实”，不是通过，也不据空列表认定未启动。旧run数字不继承。本机Windows没有Xcode/Swift/Simulator。
+- **最近修改做了什么：** 图表横轴更充分利用分钟数据、减细分时线、缩小MA/overlay按钮、增大图表显示高度、折叠盈亏明细、调整主题背景、10秒活跃行情刷新包含自选。这些属于展示/刷新改动，不等于完整UI整改或AI主动指导。
+- **用户问的快速AI今日判断：尚未完成。** 当前首页没有稳定呈现“市场→真实持仓影响→Quant/风险→操作或等待→价格区/份额→依据/失效”的自动化指导卡。需列为产品整改项，不可用聊天入口或旧卡片替代。
+- **架构优先级：** NAS可选；核心快通道为可靠实时行情→本机确定性Quant→Risk Guard→Trigger，慢通道为真实Ledger/行情/Quant/背景→DeepSeek Advisor。Candidate/Shadow/触发没有Ledger写权限；只有用户确认的券商真实成交经唯一Writer写账。旧NAS研究必经链要求Superseded。
+- **当前真实缺口：** 完整多因子Quant与Market Regime、Risk Guard/报价订阅/提醒接线、首页和证券详情的实时Quant计划、不可变Candidate状态机与完整Shadow成绩评估、DeepSeek真实E2E及成交后重新判断均未完成。NAS手机HTTPS没有新实测；人工Simulator与iPhone Air验收无证据。
+- **下一步：** 先取得当前SHA Apple CI实际结果；若CI未触发，依GitHub正常流程为当前提交补触发/确认，不强推。之后优先做首页主动AI判断与统一图表/六核心页面体验整改，再实现最小可靠Quant快通道；严格逐阶段记实际执行与截图证据。
+
+## Run 69 current execution update (2026-10-29)
+
+- GitHub Actions run 40802741213 is executing against current Swift HEAD 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a.
+- Observed completed steps: FCore tests, XcodeGen, iOS Device Build, iOS Simulator Build all report success. App navigation UI XCTest is currently in progress. Screenshot export, IPA packaging and artifact upload remain pending.
+- Exact executed/passed counts and final UI result have not yet been observed; do not call this run green. This execution validates the Swift commit only; documentation edits in the current local working tree are not part of that SHA.
+
+## Run 69 final result (2026-10-29)
+
+- Run 40802741213 completed successfully for Swift HEAD 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a.
+- Actual test logs: FCore 164 executed / 164 passed / 0 failed; App UI XCTest 3 executed / 3 passed / 0 failed.
+- XcodeGen, iOS Device Build, iOS Simulator Build, Simulator screenshot export, unsigned IPA package validation, and artifact upload all succeeded.
+- IPA validation confirmed display name “观盘max” and AppIcon selection. Artifact 12866733256; this does not mean an iPhone installation or icon rendering was verified.
+- UI XCTest and exported screenshot artifacts are automated evidence only. No human visual review, iPhone Air, gesture, HTTPS NAS, or real DeepSeek E2E has been performed in this run.
+
+## 本地文档提交状态补正（2026-10-29）
+
+Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随后我本地提交了仅包含五份Markdown状态校准的文档提交；GitHub推送因本机Git网络报错“getaddrinfo() thread failed to start”未成功。当前本地分支因此比缓存origin/main多一个文档提交，Swift没有再变更；该文档提交尚无远端CI。文档提交不改变Run 69针对Swift源码SHA的测试结论。

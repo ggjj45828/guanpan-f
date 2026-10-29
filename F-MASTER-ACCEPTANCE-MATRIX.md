@@ -421,3 +421,30 @@ NAS 8788 / GitHub F repo 状态补充（2026-10-26历史现场）：旧部署 `/
 ## 行情空状态兼容修复（2026-10-29）
 
 - Run66确认项目deployment target低于iOS17；行情页不使用iOS17专有ContentUnavailableView，改用兼容布局。新CI结果待验证。
+
+## 2026-10-29 当前HEAD与正式架构验收更新（覆盖较早快照）
+
+- **架构覆盖：** NAS是可选同步/备份/归档/扩展，不是核心Advisor必经条件。核心为实时行情 + 真实Ledger + 本机确定性Quant/Risk/Trigger快通道 + DeepSeek慢通道。Quant Signal、AI Advice、Market Result、User Execution严格分离；Candidate/Shadow/Trigger均不得写Ledger。旧NAS必经描述标记Superseded。
+- **HEAD：** `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`；工作树干净，本地`main`与缓存`origin/main`一致。
+- **Apple CI：** GitHub连接器没有返回当前SHA可核实的workflow run或combined status；当前SHA结果为“未核实”，不继承旧run测试数字。
+- **本轮改动范围：** 统一图表展示、自选刷新、盈亏折叠及主题表面；没有完成首页主动AI今日判断，也未实现完整本机Quant。
+- **Quant状态：** 只有基础价格区间Trigger evaluator；正式多因子、Market Regime、Risk Guard完整接线、行情订阅/提醒、首页/证券详情状态接线未完成。
+- **其他未验证：** NAS手机HTTPS、Simulator人工视觉、iPhone Air及DeepSeek真实闭环无新完成证据。NAS不是核心链路的阻断项。
+
+## Run 69 live status (2026-10-29)
+
+- Current Swift HEAD 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a has run 40802741213 in progress.
+- FCore, XcodeGen, Device Build and Simulator Build steps are successful; UI XCTest remains in progress; screenshot/IPA/artifact steps are pending.
+- No final executed test count or all-green result yet. Documentation updates in this worktree have not been pushed and are outside this run.
+
+## Run 69 finalized evidence (2026-10-29)
+
+- SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a; GitHub Actions run 40802741213 succeeded.
+- FCore: 164 executed, 164 passed, 0 failed. App UI XCTest: 3 executed, 3 passed, 0 failed.
+- XcodeGen, Device Build, Simulator Build, screenshot export, unsigned IPA validation, and artifact upload all succeeded.
+- Artifact 12866733256. IPA metadata validation confirms display name “观盘max” and AppIcon. This is not proof of successful iPhone install or human visual approval.
+- Current local documentation edits are not included in that tested SHA. They are documentation-only; no Swift code changed in this follow-up.
+
+### 本地文档提交状态补正（2026-10-29）
+
+Run 69通过的源码SHA是0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之后生成了一个仅含五份Markdown更新的本地提交；本机git push失败，错误为“getaddrinfo() thread failed to start”。当前本地main比缓存origin/main ahead 1；Swift源码未变。当前仅文档提交未推送，也没有其远端CI结果。

@@ -109,3 +109,12 @@
 ## 最低iOS版本兼容性（2026-10-29）
 
 - 行情空状态使用项目deployment target支持的标准SwiftUI组件；不得因CI部署目标错误添加仅iOS17+的ContentUnavailableView。
+
+## 正式决策架构非退化要求（2026-10-29）
+
+- NAS只作为可选同步、归档、备份和扩展研究；不可成为核心Advisor前置。无NAS时核心Ledger、行情、本机Quant/Guard/Trigger与基础Advisor必须可用。旧NAS必经要求已被替代。
+- Quant Signal、AI Advice、Market Result、User Execution不可混为一个结果。Candidate、触发、Shadow和提醒永远不得写真实Ledger；仅用户明确确认真实成交后，唯一Writer才写真实fills。
+- Shadow保存全部Candidate/WAIT的原始不可变快照和后续客观行情评价；失败、未触发、过期、失效、数据不足、未执行/部分执行不得删除或事后修改来抬高表现。Shadow不产生真实收益，也不构成模拟账户。
+- 没有可靠输入就显示Unavailable/暂停；不伪造VWAP、前收、IOPV、胜率、成交和T贡献。没有确认成交关联不得声称用户执行/未执行。
+- 新架构不允许牺牲B已有的真实投资有用体验。视觉改动必须以真实截图/Simulator或实机审阅验证；旧UI XCTest通过不能替代视觉验收。
+- 当前HEAD `0dff6c3d84af3870d4a10adcb02fcbea0d492b2a`工作树干净；该SHA Apple CI未核实，当前截图/人工视觉也未验收。近期Swift改动只能记为已编码，不能记为已编译或已验收。
