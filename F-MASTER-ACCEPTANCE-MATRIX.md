@@ -4,7 +4,7 @@
 
 | 项目 | 实现/证据 | 当前状态 | 关闭条件 |
 | --- | --- | --- | --- |
-| HTTP 200但历史分钟响应无法识别 | `GuanpanFApp/Sources/FNASConnection.swift`：支持数字证券代码和snake_case代码/日期；bars错误结构不再静默转换为空；诊断实际请求/响应不匹配。依据手机截图中HTTP 200契约错误与旧路径404 | 已编码，未编译/未执行；真实NAS端点/指定日数据尚未验证 | 当前SHA Apple CI通过；手机端重新请求能正确返回真实bars或准确显示Missing/Partial及原因；核验证券、交易日、时间、分钟数和来源 |
+| HTTP 200但历史分钟响应无法识别 | `GuanpanFApp/Sources/FNASConnection.swift`：支持数字证券代码和snake_case代码/日期；bars错误结构不再静默转换为空；诊断实际请求/响应不匹配。依据手机截图中HTTP 200契约错误与旧路径404 | Run 83 FCore成功；Device Build发现日期解码`??`右侧缺少`try`，已做最小修复，等待下一次Apple CI；真实NAS端点/指定日数据尚未验证 | 当前修复SHA Apple CI通过；手机端重新请求能正确返回真实bars或准确显示Missing/Partial及原因；核验证券、交易日、时间、分钟数和来源 |
 
 ## Run 82：当前HEAD完整Apple构建（2026-10-29）
 

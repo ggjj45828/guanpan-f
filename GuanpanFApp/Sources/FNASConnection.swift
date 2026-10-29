@@ -164,8 +164,11 @@ enum FNASHistoricalMinuteClient {
                                                        debugDescription: "securityCode must be a string or integer")
             }
             market = try values.decode(String.self, forKey: .market)
-            tradingDate = (try? values.decode(String.self, forKey: .tradingDate)) ??
-                (try values.decode(String.self, forKey: .trading_date))
+            if let value = try? values.decode(String.self, forKey: .tradingDate) {
+                tradingDate = value
+            } else {
+                tradingDate = try values.decode(String.self, forKey: .trading_date)
+            }
             status = (try? values.decodeIfPresent(String.self, forKey: .status)) ?? "partial"
             coverage = try? values.decodeIfPresent(Coverage.self, forKey: .coverage)
             let hasBars = values.contains(.bars)

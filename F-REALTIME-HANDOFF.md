@@ -590,3 +590,4 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 已编码修正：证券代码支持字符串/整数及`security_code`别名；交易日支持`trading_date`；市场值进行大小写归一；仅当bars缺失/null时视为空归档，错误类型或错误bar不再静默丢弃；HTTP JSON错误将报告实际代码/市场/日期不匹配及首条bar字段/类型。
 - 该诊断兼容改动仍未由Apple编译或测试。即使编译通过，也只能提升接口兼容/错误定位；没有手机端新响应和真实分钟样本，不代表NAS历史分钟已连接或成功归档。
 - 下一步：提交并普通推送，检查Run 83第一条真实失败并修复；若CI通过，用户在设置页重试指定交易日，依据新错误中的实际字段继续修正接口契约。`/readyz` Ready仍不代表历史API可读。
+- Run 83 [40850994603](https://github.com/ggjj45830/guanpan-f/actions/runs/40850994603) 已真实执行FCore（成功）和XcodeGen（成功），Device Build首错为 `FNASConnection.swift:167`：`??`右侧的日期解码表达式可抛错，但运算符表达式未标`try`。已按首错改为显式`if/else`解码。此修复仅编码，待下一次Apple CI验证；Run 83后续Simulator/UI/IPA步骤被跳过。
