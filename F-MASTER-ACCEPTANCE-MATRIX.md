@@ -1,5 +1,11 @@
 # F Master Acceptance Matrix
 
+## 2026-10-29 当前分时刷新验收补记
+
+| 要求 | 源码 | 当前状态 | 关闭条件 |
+|---|---|---|---|
+| 活跃交易时段约每10秒刷新持仓/自选/当前证券的实时分钟快照，当前分时图随新快照重绘；较旧/失败响应不能伪造或倒退曲线 | `GuanpanFApp/Sources/GuanpanFApp.swift`; `GuanpanFApp/Sources/FUnifiedSecurityChart.swift`; `FQuoteHTTPClient.fetchCurrentMinutes` | 静态链路确认；新节拍修改已编码但未编译/测试。日K和NAS历史分钟不随该计时器刷新 | 当前SHA Apple CI通过；截图查看曲线点数/时间戳变化；实机核对上游是否按预期提供新分钟 |
+
 ## 当前HEAD实测状态（Run 70，2026-10-29）
 
 - `38c269645470a7f960c484dd3ad9b9d579edbeb0`：FCore **164 executed / 164 passed / 0 failed**；UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、iOS Device Build、Simulator Build、截图附件导出、观盘max未签名IPA校验/打包、artifact上传全部通过。

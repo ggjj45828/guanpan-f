@@ -893,12 +893,16 @@ struct FHomeRoot: View {
         }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            let clock = ContinuousClock()
             await model.autoRefreshMarketData()
             while !Task.isCancelled {
+                // Keep the polling cadence anchored to the start of each fetch.
+                // A slow request must not add another full 10-second delay.
+                let nextRefresh = clock.now + .seconds(10)
                 if FMainlandTradingCalendar.status(at: Date()) == .continuous {
                     await model.autoRefreshMarketData()
                 }
-                do { try await Task.sleep(nanoseconds: 10_000_000_000) }
+                do { try await clock.sleep(until: nextRefresh) }
                 catch { break }
             }
         }

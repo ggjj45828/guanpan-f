@@ -1,5 +1,14 @@
 # F实时进度交接
 
+## 2026-10-29 自动行情/分时刷新核对（当前工作树）
+
+- 起点为已同步 `main` HEAD `412c6edcd5438d2d4b6211b57d38e882164f8442`，工作树原先干净；Run 70 对其父代码提交 `38c269645470a7f960c484dd3ad9b9d579edbeb0` 的FCore 164/164、UI XCTest 3/3、XcodeGen、Device/Simulator Build、截图导出和IPA均成功。HEAD `412c6ed`仅更新验收文档；下面新Swift改动尚未编译。
+- 静态追踪 `GuanpanFApp.swift` → `autoRefreshMarketData()` → `refreshMarketData()` → `fetchCurrentMinutes()` → `FChartPresentationBuilder.live()`：交易时段内持仓/自选/当前证券会重新请求当前分钟快照；新快照写入可观察状态后，行情页分时图随SwiftUI重绘。收盘后不轮询。报价时间比缓存旧时保留缓存并显示上游数据较旧；接口失败不伪造新曲线。
+- 日K没有被10秒任务请求；历史分钟仅在用户查询日期时从NAS读取，均由页面刷新/指定查询入口更新。因此“图表会刷新”只适用于当前分时图，不适用于日K或历史分钟。
+- 发现刷新间隔之前是“上轮请求结束后再等10秒”，会随网络耗时漂移。已编码改为以每轮请求起始时间为节拍，最短间隔10秒；若请求自身超过10秒则完成后立即开始下一轮。**当前修改未编译、未测试、未Simulator验证。**
+- Run 70截图 artifact 已由GitHub连接器取得引用，但在本Windows工作区无法读取ZIP：浏览器下载被客户端拦截，普通本机网络下载被系统权限拒绝。未查看截图内容；人工视觉验收仍External Pending。没有用该阻塞声称页面通过。
+- 编译恢复后第一件事：验证本次轮询节拍改动的Swift并送完整Apple CI；同时检查请求取消/后台切换不会在后台持续刷新。随后查看CI截图，仍需人工视觉审阅与iPhone Air实测。
+
 ## 当前提交与Apple CI闭环（2026-10-29，Run 70）
 
 - 当前 `HEAD=38c269645470a7f960c484dd3ad9b9d579edbeb0`，已与 `origin/main` 同步，工作树干净；普通提交/推送，无强推。提交：`Keep previous portfolio guidance visible`。
