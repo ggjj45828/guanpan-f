@@ -6,7 +6,7 @@
 - 实际结果：FCore **164 executed / 164 passed / 0 failed**；App UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、Device Build、Simulator Build、截图导出、未签名IPA打包/校验和Artifact上传均成功。Artifact `12870733069`，SHA-256 `f456b5ab749f5cafc837e4d4763a593225d16fcac091c6bf526795a1d869320d`。
 - 本次源码只调整统一图表时间轴标签挑选：根据实际绘图宽度和最小间隔筛选，避免窄屏右侧相邻标签重叠；没有改价格数据、横向坐标映射或Ledger/行情语义。
 - 这证明代码已编译且当前自动测试通过；截图只确认导出步骤成功，尚未人工查看，因此不能说横轴视觉缺陷已通过人工验收。iPhone Air和手势验收仍External Pending。
-- 远端main已通过GitHub API按 `expected_sha=94266a3...`、`force=false` 快进到 `70105ce...`。本地Git fetch仍因DNS线程错误失败。此后交接/矩阵/差距文档更正尚未推送，尚未对这些文档更正创建CI提交。
+- 远端main先按 `expected_sha=94266a3...`、`force=false` 快进到 `70105ce...`；随后交接/验收/差距文档按 `expected_sha=70105ce...`、`force=false` 普通快进发布。本机Git fetch仍因DNS线程错误失败，本地`origin/main`跟踪引用暂旧；没有强推或覆盖历史。
 
 ## 2026-10-29 10秒行情/分时刷新改动：Run 71 已验证
 
@@ -23,7 +23,7 @@
 - 东方编辑室、精密交易台、流体玻璃三套标杆布局：源码构图存在；没有最新Simulator截图对比或iPhone Air验收，均未算完成。
 - Simulator截图导出有证据，但ZIP未能在当前环境打开查看；人工视觉=未验收。iPhone Air真实使用仍是用户曾报告明显问题，尚无新包复验。
 - NAS HTTPS连接、DeepSeek真实E2E、真实成交后Ledger与Advisor复判均无本轮新证据；NAS不是核心Advisor的必要依赖。
-- 当前本地HEAD仍为 `fd68bc3`，其提交树等于Run 71远端基线 `94266a3`；横轴源码修复已通过GitHub API作为子提交 `70105ce` 普通快进至远端main，并由Run 72验证。本地Git fetch仍失败（`getaddrinfo() thread failed to start`）；工作树含横轴Swift改动和四份文档更正，源码改动与远端CI版本内容相同。网络恢复后先fetch/reconcile，再普通push文档；不强推。
+- 当前本地HEAD仍为 `fd68bc3`，其提交树等于Run 71远端基线 `94266a3`；横轴源码修复及交接文档均已作为远端main的普通快进提交发布。本地Git fetch仍失败（`getaddrinfo() thread failed to start`），因此本地分支引用未更新；本地工作文件已包含CI验证的Swift源码和远端文档内容。网络恢复后先fetch/reconcile；不强推。
 
 ## 图表时间刻度碰撞修复（Run 72验证）
 
