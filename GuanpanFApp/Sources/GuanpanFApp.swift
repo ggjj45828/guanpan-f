@@ -1185,11 +1185,14 @@ private enum FQuoteHTTPClient {
               let previousClose = Decimal(string: fields[4], locale: Locale(identifier: "en_US_POSIX")), previousClose > 0,
               let observedAt = parseTencentTimestamp(fields[30]) else { throw FMarketDataError.invalidPayload }
         let instrumentType = fields.count > 61 ? fields[61].trimmingCharacters(in: .whitespacesAndNewlines).uppercased() : nil
-        let rawIOPV = instrumentType == "ETF" && fields.count > 78
-            ? Decimal(string: fields[78], locale: Locale(identifier: "en_US_POSIX")) : nil
+        // Tencent occasionally omits the instrument-type field for ETFs. Match
+        // B's verified code-family fallback while excluding REITs, which have no
+        // intraday IOPV/premium semantics.
+        let isETF = instrumentType == "ETF" || isTencentETFCode(code)
+        let rawIOPV = isETF && fields.count > 78 ? parseTencentDecimal(fields[78]) : nil
         let iopv = rawIOPV.flatMap { $0 > 0 ? $0 : nil }
-        let premium = instrumentType == "ETF" && fields.count > 77
-            ? Decimal(string: fields[77], locale: Locale(identifier: "en_US_POSIX")) : nil
+        let premium = isETF && fields.count > 77 ? parseTencentDecimal(fields[77]) : nil
+        let validPremium = premium.flatMap { $0 > -100 ? $0 : nil }
         let now = Date()
         guard observedAt <= now.addingTimeInterval(60) else {
             throw FMarketDataError.staleOrWrongSession
@@ -1199,6 +1202,19 @@ private enum FQuoteHTTPClient {
                                        premiumPercent: premium, observedAt: observedAt,
                                        fetchedAt: now, providerInstrumentType: instrumentType,
                                        source: "Tencent qt.gtimg.cn")
+    }
+
+    private static func isTencentETFCode(_ raw: String) -> Bool {
+        let code = raw.filter(\.isNumber)
+        guard code.count == 6, !code.hasPrefix("508"), !code.hasPrefix("180") else { return false }
+        return ["15", "16", "18", "50", "51", "52", "56", "58", "59"].contains { code.hasPrefix($0) }
+    }
+
+    private static func parseTencentDecimal(_ raw: String) -> Decimal? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "%", with: "")
+        return Decimal(string: value, locale: Locale(identifier: "en_US_POSIX"))
     }
 
     private static func parseTencentTimestamp(_ raw: String) -> Date? {
