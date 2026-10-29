@@ -1,10 +1,16 @@
 # F Master Acceptance Matrix
 
+## 当前HEAD实测状态（Run 70，2026-10-29）
+
+- `38c269645470a7f960c484dd3ad9b9d579edbeb0`：FCore **164 executed / 164 passed / 0 failed**；UI XCTest **3 executed / 3 passed / 0 failed**；XcodeGen、iOS Device Build、Simulator Build、截图附件导出、观盘max未签名IPA校验/打包、artifact上传全部通过。
+- 证据：[GitHub Actions Run 70](https://github.com/ggjj45830/guanpan-f/actions/runs/40805872905)，Artifact ID `12867429801`。
+- 仅记录CI级验证；没有据此宣称Simulator截图已人工审阅、iPhone Air或真机验收通过。
+
 ## 2026-10-29：首页组合判断保留与时间标识
 
 | 需求 | 源码 | 当前状态 | 关闭条件 |
 |---|---|---|---|
-| 分析刷新期间保留上一份真实组合判断，明确标记旧结果与生成时间；请求失败不能让首页静默丢失已有结果 | `GuanpanFApp/Sources/GuanpanFApp.swift`; `GuanpanFApp/Sources/FAdvisorVerticalSlice.swift`; `GuanpanFApp/Sources/HomeExperience.swift` | 已编码，当前工作树未编译；旧结果仅展示为“上次分析”，非自动实时结论 | 当前SHA Apple CI通过；Simulator验证加载/失败状态；确认旧结果不会被呈现为最新数据 |
+| 分析刷新期间保留上一份真实组合判断，明确标记旧结果与生成时间；请求失败不能让首页静默丢失已有结果 | `GuanpanFApp/Sources/GuanpanFApp.swift`; `GuanpanFApp/Sources/FAdvisorVerticalSlice.swift`; `GuanpanFApp/Sources/HomeExperience.swift` | 当前HEAD已编译，Run 70自动测试通过；旧结果只显示为“上次分析”，非自动实时结论 | Simulator验证加载/失败状态；确认旧结果不会被呈现为最新数据 |
 | 首页自动本地Quant快速决策 | `Sources/FCore/RealtimeQuantTrigger.swift`及首页 | 尚未完成：只有Candidate价格区间触发器，没有完整本地因子Quant；当前AI组合判断仍由用户显式发起 | 完整确定性Quant + Guard/行情接线，且真实/模拟行情质量与不交易场景验证通过；不得用DeepSeek逐tick代替 |
 
 ## 当前视觉整改快照（2026-10-29；覆盖下方较早状态）

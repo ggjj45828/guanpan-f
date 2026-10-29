@@ -1,5 +1,15 @@
 # F实时进度交接
 
+## 当前提交与Apple CI闭环（2026-10-29，Run 70）
+
+- 当前 `HEAD=38c269645470a7f960c484dd3ad9b9d579edbeb0`，已与 `origin/main` 同步，工作树干净；普通提交/推送，无强推。提交：`Keep previous portfolio guidance visible`。
+- Run 70 [40805872905](https://github.com/ggjj45830/guanpan-f/actions/runs/40805872905) 对当前SHA已完成并成功：FCore **164/164 passed**；XcodeGen通过；Device Build通过；Simulator Build通过；UI XCTest **3/3 passed**；Simulator截图附件导出通过；未签名 `观盘max.ipa`校验/打包通过；Artifact上传通过。CI日志确认测试总数；Run 70没有失败断言。
+- 本次首页行为：组合分析刷新期间保留最近的真实组合结果并展示生成时间；明确提示正在刷新或最近请求未完成。旧结论被标记为“上次分析”，不伪装成当前实时判断。
+- 本次只证明当前SHA自动测试/构建通过。CI导出的截图尚未人工审阅；Simulator截图不等于iPhone Air人工交互或真机验收。NAS HTTPS与DeepSeek真实服务闭环仍未验证。
+- 快速AI现状：组合分析仍由用户显式发起DeepSeek请求；当前本地Quant仍非完整因子判断引擎。没有实现自动生成的每日计划，也未声称已经完成。
+- Run 70 Artifact ID `12867429801`（`guanpan-f-ios-build-evidence`）；包含构建证据、UI截图附件和IPA。摘要SHA-256：`e144c3af34bcf0f40eb24d64b8b4a35da195a0e1f128a31e87c32b6e70ad0f90`。
+- 下一步：审阅本轮Simulator截图并继续首页/AI产品整改；随后再推进Quant→Candidate Shadow→真实成交回写后的重算闭环。保持“CI通过≠人工视觉/真机通过”。
+
 ## 2026-10-29 首页“快速知道”更新保真修复（当前工作树）
 
 - 当前基线：`HEAD=2c96ef55e47dd9fc04bf37a8045b18dff8e86edf`，与GitHub `main`一致；工作树有本轮3个Swift文件修改，尚未提交/编译。
