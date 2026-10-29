@@ -1,3 +1,15 @@
+## 2026-10-29 Run 99/100：新闻标题证据接入与Apple CI
+
+- 当前Swift代码提交：Run 100 SHA `31bee6ce6559d5500d9ef82a1d01b75797d1fe17`，GitHub Actions [Run 100](https://github.com/ggjj45830/guanpan-f/actions/runs/40886452459) 全部成功。FCore **165/165**；XcodeGen；Device Build；Simulator Build；UI XCTest **4/4**；截图导出；未签名IPA校验/打包；Artifact上传均通过。
+- 前一提交Run 99 SHA `5e30761e086f3010ba54188f958de97bc0611819` 的完整Apple CI也通过：[Run 99](https://github.com/ggjj45830/guanpan-f/actions/runs/40885768193)。该轮用于确认首次RSS接线可编译，随后Run100验证规范换行后的代码。
+- 本轮新增：AI顾问请求时按当前分析证券代码/已知名称并发查询Google News RSS近24小时标题；过滤过期/未来时间、重复、无媒体、非HTTPS链接，最多5条，写入只读DecisionContext news observation。顾问提示限定只能引用上下文的标题/媒体/时间/链接，不得推断新闻正文；无结果或请求失败明确降级。
+- UI显示本次新闻获取状态；设置解释来源和隐私边界：搜索词发送给Google，账本不发送；Google News是聚合标题，链接可能跳转，正文未核实，且没有稳定服务承诺。
+- 证据边界：本机DNS无法解析 `news.google.com`；本轮Apple CI没有访问新闻网络，**没有证明真实RSS可达、返回标题相关、DeepSeek引用正确或iPhone显示效果**。这些仍是External Pending。若设备实测RSS不可达/不稳定，需换为可实测且服务边界更可靠的新闻源；不能把本次Build成功当新闻E2E。
+- 本机Windows没有Xcode；本地Git push失败（DNS线程无法启动），因此通过GitHub受控Git接口普通快进提交。提交严格使用expected SHA，无强推。远端最新业务代码SHA为Run100的 `31bee6c...`；对应Swift文件已由CI验证，当前工作区保留原本地提交 `2b80fbb` 作为同树追踪，文档另按GitHub内容接口追加本段。
+- 下一步：先在真实iPhone网络中验证RSS结果是否可达、相关性及DeepSeek引用；再继续处理已知NAS历史分钟HTTP契约、B/F UI视觉差距、真机布局等独立缺口。不得宣称新闻真实E2E已完成。
+
+---
+
 ## 2026-10-29 Run 94：首页持仓入口与Apple CI验收
 
 - 当前远端 main / Swift代码SHA：`5628275f91001cc751cf13da3f90325f709da0c1`。Run 94 [40868674531](https://github.com/ggjj45830/guanpan-f/actions/runs/40868674531) 对该SHA完整成功：FCore **165/165 passed**；XcodeGen、Device Build、Simulator Build通过；UI XCTest **4/4 passed**；截图导出、未签名IPA校验/打包、Artifact上传通过。
