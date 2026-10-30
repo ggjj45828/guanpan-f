@@ -128,26 +128,10 @@ enum FThemeLayoutRegistry {
             .minimalTerminal: ("高密度", "弱卡片、分割线和数字流构成紧凑行情终端。", false),
             .spatialGlass: ("中等", "AI指导居中，玻璃表面和层叠空间组织信息。", false),
             .radialMap: ("节点式", "AI与真实资产位于中心，市场和研究以外围节点连接。", false),
-            .adaptiveBento: ("自适应", "按本地账本可用性与Guard状态确定性调整模块面积。", true)
+            .adaptiveBento: ("自适应", "按本地账本可用性与Guard状态调整卡片强调度，卡片顺序固定。", false)
         ]
         let value = descriptions[family] ?? ("均衡", "共享业务角色布局。", false)
-        let order: [FHomeCardRole]
-        switch family {
-        case .editorial:
-            order = [.marketObservation, .advisorGuidance, .crossMarketPulse, .portfolio]
-        case .inkEditorial, .magazine, .spatialGlass:
-            order = [.advisorGuidance, .portfolio, .marketObservation, .crossMarketPulse]
-        case .cardGrid:
-            order = [.marketObservation, .crossMarketPulse, .portfolio, .advisorGuidance]
-        case .terminalDashboard:
-            order = [.portfolio, .marketObservation, .crossMarketPulse, .advisorGuidance]
-        case .minimalTerminal:
-            order = [.marketObservation, .portfolio, .advisorGuidance, .crossMarketPulse]
-        case .radialMap:
-            order = [.portfolio, .advisorGuidance, .marketObservation, .crossMarketPulse]
-        default:
-            order = roleOrder
-        }
+        let order = roleOrder
         return FLayoutManifest(family: family, informationDensity: value.0,
                                description: value.1, roleOrder: order,
                                reordersForLocalRiskState: value.2)
