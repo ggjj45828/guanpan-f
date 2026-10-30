@@ -235,7 +235,8 @@ public enum FRealtimeQuantTrigger {
                                   reasons: ["GLOBAL_RISK_OFF_T_BUY_RESTRICTED"], confidence: 0,
                                   resumeState: operationalState)
             }
-            if marketContext.riskLevel == .r4Extreme &&
+            if (marketContext.riskLevel == .r4Extreme ||
+                marketContext.marketRiskLevel == .r4Extreme) &&
                 (plan.direction == .buy || plan.direction == .tBuy) {
                 return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                                   reasons: ["EXTREME_MARKET_RISK"], confidence: 0,
@@ -339,7 +340,8 @@ public enum FRealtimeQuantTrigger {
             suggestedQuantity: plan?.suggestedQuantity, validUntil: plan?.validUntil,
             invalidationPrice: plan?.invalidationPrice,
             quoteTimestamp: quote.temporalMetadata.quoteTimestamp,
-            marketRegime: marketContext?.regime, marketRiskLevel: marketContext?.riskLevel,
+            marketRegime: marketContext?.marketRegime ?? marketContext?.regime,
+            marketRiskLevel: marketContext?.marketRiskLevel ?? marketContext?.riskLevel,
             resumeState: resumeState)
     }
 }

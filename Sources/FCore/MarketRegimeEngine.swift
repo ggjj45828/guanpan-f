@@ -374,6 +374,9 @@ public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let secondaryBenchmarks: [FMarketBenchmark]
     public let globalSensors: [FMarketBenchmark]
     public let globalRegime: FGlobalRegime
+    /// Regime and risk from the mapped primary market index, distinct from the security's own regime.
+    public let marketRegime: FMarketRegime?
+    public let marketRiskLevel: FMarketRiskLevel?
     /// Per-index classification from timestamped history; nil only for decoding pre-snapshot records.
     public let indexRegimeSnapshots: [FIndexRegimeSnapshot]?
     public let primaryBenchmark: FMarketBenchmark?
@@ -613,7 +616,19 @@ public enum FMarketRegimeEngine {
             : unavailableBenchmarks.map { "benchmark_unavailable_\($0.rawValue)" }
         let usableFactorCount = factors.filter(\.available).count
         let confidence = dataReliable ? min(100, 35 + usableFactorCount * 8) : 0
-        let strategies = strategyPolicy(regime: regime, risk: confirmedRisk, reliable: dataReliable, global: globalRegime)
+        let primaryIndexSnapshot = indexRegimeSnapshots.first { $0.benchmark == primaryBenchmark }
+        let primaryMarketRegime = primaryIndexSnapshot?.regime
+        let primaryMarketRisk = primaryIndexSnapshot?.riskLevel
+        let marketStrategies = strategyPolicy(
+            regime: primaryMarketRegime ?? .dataUnreliable,
+            risk: primaryMarketRisk ?? .r4Extreme,
+            reliable: primaryIndexSnapshot?.available == true,
+            global: globalRegime)
+        let strategies = strategyPolicy(regime: regime, risk: confirmedRisk,
+                                        reliable: dataReliable, global: globalRegime)
+        let permittedStrategies = marketContextComplete ? strategies.intersection(marketStrategies) : []
+        let marketAllowsOrdinaryTBuy = primaryMarketRegime.map { [.bullTrend, .range].contains($0) } == true &&
+            (primaryMarketRisk ?? .r4Extreme) < .r2High
         let memory = FMarketRegimeMemory(
             confirmedRegime: regime, confirmedRiskLevel: confirmedRisk,
             pendingRegime: pendingRegime, pendingRegimeSessions: pendingRegimeSessions,
@@ -625,7 +640,8 @@ public enum FMarketRegimeEngine {
             contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
             secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors,
-            globalRegime: globalRegime, indexRegimeSnapshots: indexRegimeSnapshots,
+            globalRegime: globalRegime, marketRegime: primaryMarketRegime,
+            marketRiskLevel: primaryMarketRisk, indexRegimeSnapshots: indexRegimeSnapshots,
             primaryBenchmark: primaryBenchmark, regime: regime,
             riskLevel: confirmedRisk, confidence: confidence, factors: factors,
             reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
@@ -633,10 +649,11 @@ public enum FMarketRegimeEngine {
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
-            allowedStrategies: marketContextComplete ? strategies : [],
-            observationOnly: !marketContextComplete ||
+            allowedStrategies: permittedStrategies,
+            observationOnly: !marketContextComplete || !marketAllowsOrdinaryTBuy ||
                 [.recovery, .transition, .uncertain, .highVolatility, .riskOff, .extremeRisk, .dataUnreliable].contains(regime),
-            ordinaryTBuyAllowed: dataReliable && marketContextComplete && confirmedRisk < .r2High &&
+            ordinaryTBuyAllowed: dataReliable && marketContextComplete && marketAllowsOrdinaryTBuy &&
+                confirmedRisk < .r2High && (primaryMarketRisk ?? .r4Extreme) < .r2High &&
                 ![.riskOff, .extreme].contains(globalRegime) &&
                 [.bullTrend, .range].contains(regime),
             memory: memory)

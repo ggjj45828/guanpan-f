@@ -620,7 +620,8 @@ public enum FRiskGuard {
                 findings.append(.unavailableMarketRegime(code))
                 return FDecisionGuardResult(allowedForReview: false, findings: findings)
             }
-            if regimeAssessment.riskLevel == .r4Extreme &&
+            if (regimeAssessment.riskLevel == .r4Extreme ||
+                regimeAssessment.marketRiskLevel == .r4Extreme) &&
                 [.buy, .dayTrade, .grid].contains(candidate.action) {
                 findings.append(.extremeMarketRisk(code))
             }

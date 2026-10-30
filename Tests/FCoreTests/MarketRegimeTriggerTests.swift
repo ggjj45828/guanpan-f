@@ -55,6 +55,34 @@ final class MarketRegimeTriggerTests: XCTestCase {
                 marketSessionStatus: .continuous))
     }
 
+    func testExtremePrimaryIndexBlocksCalmSecurityTBuy() throws {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let securityBars = (0..<70).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 69) * 86_400), close: 100)
+        }
+        let indexCloses = Array(repeating: 100.0, count: 70) + [90, 80, 70, 60, 50]
+        let indexBars = indexCloses.enumerated().map { index, close in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - indexCloses.count + 1) * 86_400),
+                             close: close)
+        }
+        let context = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+                contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture-security",
+                bars: securityBars,
+                benchmarkHistories: [
+                    .init(benchmark: .csiA500, bars: indexBars, sourceUpdatedAt: now,
+                          source: "fixture-index-history", sessionTimeZoneIdentifier: "Asia/Shanghai")
+                ], benchmarkMapping: mapping), now: now)
+        let result = FRealtimeQuantTrigger.evaluate(
+            plan: try plan(), quote: try quote(), marketContext: context, now: now)
+        XCTAssertEqual(context.regime, .range)
+        XCTAssertEqual(context.marketRegime, .extremeRisk)
+        XCTAssertEqual(context.marketRiskLevel, .r4Extreme)
+        XCTAssertFalse(context.ordinaryTBuyAllowed)
+        XCTAssertEqual(result.state, .paused)
+        XCTAssertEqual(result.reasonCodes, ["EXTREME_MARKET_RISK"])
+    }
+
     func testExtremeMarketRiskBlocksTBuyCandidate() throws {
         let context = assessment(crash: true)
         let result = FRealtimeQuantTrigger.evaluate(plan: try plan(), quote: try quote(),
