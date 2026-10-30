@@ -36,19 +36,19 @@ struct HomeLayout: View {
     private var editorial: some View {
         VStack(alignment: .leading, spacing: 14) {
             FEditorialMasthead(model: model, theme: theme)
-            FEditorialMarketRibbon(model: model, theme: theme)
-            HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
-            FEditorialResearchLine(model: model, theme: theme)
             HomePortfolioLead(model: model, theme: theme, treatment: .editorial)
+            FEditorialMarketRibbon(model: model, theme: theme)
+            FEditorialResearchLine(model: model, theme: theme)
+            HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
         }
     }
 
     private var modern: some View {
         VStack(spacing: 14) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                role(.portfolio)
                 role(.marketObservation)
                 role(.crossMarketPulse)
-                role(.portfolio)
             }
             role(.advisorGuidance)
         }
@@ -61,8 +61,9 @@ struct HomeLayout: View {
             HomePortfolioLead(model: model, theme: theme, treatment: .terminal)
                 .padding(.bottom, 12)
             Divider().overlay(theme.accent.opacity(0.5))
-            HomeMarketResearchStrip(model: model, theme: theme)
-                .padding(.vertical, 12)
+            role(.marketObservation).padding(.vertical, 12)
+            Divider().overlay(theme.accent.opacity(0.5))
+            role(.crossMarketPulse).padding(.vertical, 12)
             Divider().overlay(theme.accent.opacity(0.5))
             HomeAdvisorLead(model: model, theme: theme, treatment: .terminal)
                 .padding(.top, 12)
@@ -78,10 +79,10 @@ struct HomeLayout: View {
             Rectangle().fill(theme.accent).frame(width: 54, height: 4)
             Text("本期焦点 · 真实组合与长期研究")
                 .font(.subheadline).foregroundStyle(.secondary)
-            role(.advisorGuidance)
             role(.portfolio)
             role(.marketObservation)
             role(.crossMarketPulse)
+            role(.advisorGuidance)
         }
     }
 
@@ -106,9 +107,10 @@ struct HomeLayout: View {
                 .font(.system(size: 38, weight: .regular, design: .serif))
                 .fixedSize(horizontal: false, vertical: true)
             Rectangle().fill(theme.accent).frame(width: 44, height: 3)
+            role(.portfolio)
+            role(.marketObservation)
+            role(.crossMarketPulse)
             HomeAdvisorLead(model: model, theme: theme, treatment: .editorial)
-            HomePortfolioLead(model: model, theme: theme, treatment: .editorial)
-            HomeMarketResearchStrip(model: model, theme: theme)
         }
     }
 
@@ -120,27 +122,24 @@ struct HomeLayout: View {
                 Text(model.cashText).font(.title3.monospacedDigit().weight(.bold))
             }.padding(.vertical, 12)
             Divider()
+            role(.portfolio).padding(.vertical, 8)
+            Divider()
             role(.marketObservation).padding(.vertical, 8)
             Divider()
-            role(.portfolio).padding(.vertical, 8)
+            role(.crossMarketPulse).padding(.vertical, 8)
             Divider()
             Text("ADVISOR STREAM").font(.caption.monospaced().weight(.semibold)).padding(.top, 12)
             role(.advisorGuidance).padding(.vertical, 8)
-            Divider()
-            role(.crossMarketPulse).padding(.vertical, 8)
         }
     }
 
     private var fluidGlass: some View {
         VStack(alignment: .leading, spacing: 16) {
             HomeMasthead(model: model, theme: theme, eyebrow: "你的投资空间")
+            HomePortfolioLead(model: model, theme: theme, treatment: .glass)
+            role(.marketObservation)
+            role(.crossMarketPulse)
             HomeAdvisorLead(model: model, theme: theme, treatment: .glass)
-            HStack(alignment: .top, spacing: 12) {
-                HomePortfolioLead(model: model, theme: theme, treatment: .glass)
-                    .frame(maxWidth: .infinity)
-                HomeMarketResearchStrip(model: model, theme: theme, compact: true)
-                    .frame(maxWidth: .infinity)
-            }
         }
     }
 
@@ -163,9 +162,9 @@ struct HomeLayout: View {
                     }.stroke(theme.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     centralStarSummary.frame(width: min(width * 0.52, 210), height: 150)
                         .position(x: width / 2, y: height / 2)
-                    orbitNode(.marketObservation, shortTitle: "市场", x: width / 2, y: 48)
-                    orbitNode(.crossMarketPulse, shortTitle: "跨市场", x: width - 68, y: height / 2)
-                    orbitNode(.portfolio, shortTitle: "持仓", x: width / 2, y: height - 48)
+                    orbitNode(.portfolio, shortTitle: "持仓", x: width / 2, y: 48)
+                    orbitNode(.marketObservation, shortTitle: "市场", x: width - 68, y: height / 2)
+                    orbitNode(.crossMarketPulse, shortTitle: "跨市场", x: width / 2, y: height - 48)
                     orbitNode(.advisorGuidance, shortTitle: "AI 决策", x: 68, y: height / 2)
                 }
             }
@@ -214,21 +213,10 @@ struct HomeLayout: View {
         let attention = model.ledgerState != .available ||
             (model.advisorResult.map { !$0.assessment.isEligibleForUserReview } ?? false)
         return VStack(spacing: 12) {
-            if attention {
-                role(.advisorGuidance).frame(minHeight: 250)
-                role(.portfolio).frame(minHeight: 145)
-                HStack(spacing: 12) {
-                    role(.marketObservation)
-                    role(.crossMarketPulse)
-                }
-            } else {
-                HStack(alignment: .top, spacing: 12) {
-                    role(.portfolio).frame(maxWidth: .infinity, minHeight: 220)
-                    role(.marketObservation).frame(maxWidth: .infinity, minHeight: 220)
-                }
-                role(.crossMarketPulse).frame(minHeight: 100)
-                role(.advisorGuidance)
-            }
+            role(.portfolio).frame(minHeight: attention ? 180 : 220)
+            role(.marketObservation).frame(minHeight: 130)
+            role(.crossMarketPulse).frame(minHeight: 100)
+            role(.advisorGuidance).frame(minHeight: attention ? 250 : 180)
         }
         .animation(.easeInOut(duration: 0.18), value: attention)
     }
