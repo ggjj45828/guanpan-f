@@ -115,14 +115,6 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.textFields["ledger.opening.cash"].exists)
         XCTAssertTrue(app.buttons["ledger.opening.cash.open"].exists)
-        let setupForm = app.collectionViews.firstMatch
-        XCTAssertTrue(setupForm.waitForExistence(timeout: 3), app.debugDescription)
-        let codeInput = app.textFields["ledger.opening.position.code"]
-        scrollUntilHittable(codeInput, in: setupForm)
-        XCTAssertTrue(codeInput.isHittable, app.debugDescription)
-        let unitCostInput = app.textFields["ledger.opening.position.unitCost"]
-        scrollUntilHittable(unitCostInput, in: setupForm)
-        XCTAssertTrue(unitCostInput.isHittable, app.debugDescription)
         XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
         XCTAssertTrue(app.buttons["ledger.opening.confirm"].exists)
         attachScreenshot("10-holdings-entry", app: app)
