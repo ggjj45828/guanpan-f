@@ -680,7 +680,7 @@ public enum FMarketRegimeEngine {
             let reason: String? = !sourceIsValid ? "benchmark_source_missing" :
                 (!sourceIsFresh ? "benchmark_history_stale_or_future" :
                     (bars.count < 60 ? "benchmark_history_under_60_sessions" : nil))
-            guard let reason else {
+            if reason == nil {
                 let result = evaluate(FMarketRegimeInput(
                     market: "benchmark:\(benchmark.rawValue)", contextKind: .unclassified,
                     asOf: asOf, sessionTimeZoneIdentifier: history.sessionTimeZoneIdentifier,
@@ -710,8 +710,9 @@ public enum FMarketRegimeEngine {
                     trend: "unavailable", volatility: "unavailable",
                     freshness: sourceIsFresh ? "insufficient_history" : "stale",
                     sampleCount: bars.count, observedAt: bars.last?.timestamp,
-                    source: history.source, reasons: [reason], available: false,
-                    unavailableReason: reason))
+                    source: history.source, reasons: [reason ?? "benchmark_history_unavailable"],
+                    available: false,
+                    unavailableReason: reason ?? "benchmark_history_unavailable"))
             }
         }
         return (snapshots, observations)
