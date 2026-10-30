@@ -27,11 +27,11 @@ final class BoundaryAcceptanceTests: XCTestCase {
                 benchmarkObservations: [
                     .init(benchmark: mapping.primaryBenchmark, dailyReturn: 0,
                           observedAt: now, source: "acceptance-index-feed")
-                ]
+                ],
                 benchmarkHistories: [
                     .init(benchmark: mapping.primaryBenchmark, bars: bars, sourceUpdatedAt: now,
                           source: "acceptance-index-feed-daily-history", sessionTimeZoneIdentifier: "UTC")
-                ],, benchmarkMapping: mapping), now: now)
+                ], benchmarkMapping: mapping), now: now)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let reference = String(data: try encoder.encode(assessment), encoding: .utf8)!
