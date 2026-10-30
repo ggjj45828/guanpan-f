@@ -683,8 +683,8 @@ final class FHomeModel: ObservableObject {
         if let focusCode { scope = .instrument(focusCode) } else { scope = .portfolio }
         isAskingAdvisor = true
         advisorStatus = focusCode == nil
-            ? "正在读取全部真实持仓并刷新组合行情；NAS研究为可选增强…"
-            : "正在读取真实持仓并刷新目标证券行情；NAS研究为可选增强…"
+            ? "正在读取真实持仓并直接刷新组合行情…"
+            : "正在读取真实持仓并直接刷新目标证券行情…"
         defer { isAskingAdvisor = false }
 
         do {
@@ -720,31 +720,12 @@ final class FHomeModel: ObservableObject {
                 for code in targetCodes { newsFailureByCode[code] = failure }
                 newsStatus = "新闻暂不可用 · \(failure)"
             }
-            let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            var researchByCode: [String: FDecisionResearchEvidence] = [:]
+            let researchByCode: [String: FDecisionResearchEvidence] = [:]
             var researchFailureByCode: [String: String] = [:]
-            if FNASReadinessClient.validateAddress(baseAddress) != nil {
-                await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
-                    for code in targetCodes {
-                        group.addTask {
-                            do { return (code, try await FNASResearchClient.fetchEvidence(
-                                baseAddress: baseAddress, securityCode: code), nil) }
-                            catch { return (code, nil, error.localizedDescription) }
-                        }
-                    }
-                    for await (code, evidence, failure) in group {
-                        if let evidence { researchByCode[code] = evidence }
-                        else { researchFailureByCode[code] = failure ?? "NAS未返回研究证据" }
-                    }
-                }
-            } else {
-                for code in targetCodes {
-                    researchFailureByCode[code] = "NAS未配置（可选增强，本次核心顾问继续运行）"
-                }
+            for code in targetCodes {
+                researchFailureByCode[code] = "按设置，iOS顾问不读取NAS；只有历史分钟查询会连接NAS"
             }
-            nasResearchStatus = FNASReadinessClient.validateAddress(baseAddress) == nil
-                ? "NAS 未配置 · 可选增强；核心顾问不受影响"
-                : "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得可选 NAS 研究证据"
+            nasResearchStatus = "iOS行情刷新和顾问分析不访问NAS；仅历史分钟查询按需连接"
 
             guard let ledgerStore else { throw FAdvisorLiveError.noRealLedger }
             let contextCaptureTime = Date()
