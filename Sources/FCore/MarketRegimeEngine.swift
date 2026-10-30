@@ -157,6 +157,16 @@ public struct FMarketBenchmarkMapping: Codable, Equatable, Sendable {
 
 public enum FGlobalRegime: String, Codable, CaseIterable, Sendable {
     case riskOn, neutral, riskOff, extreme, uncertain
+
+    public var displayName: String {
+        switch self {
+        case .riskOn: return "全球风险偏好"
+        case .neutral: return "全球中性"
+        case .riskOff: return "全球风险规避"
+        case .extreme: return "全球极端风险"
+        case .uncertain: return "全球状态不确定"
+        }
+    }
 }
 
 public struct FIndexRegimeSnapshot: Codable, Equatable, Sendable, Identifiable {
