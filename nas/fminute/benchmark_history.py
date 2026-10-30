@@ -166,13 +166,16 @@ class BenchmarkArchive:
         with self._connect() as db:
             rows = db.execute("SELECT * FROM benchmark_daily WHERE " + " AND ".join(clauses)
                               + " ORDER BY trading_date", params).fetchall()
-        bars = [dict(row) for row in rows]
+        bars = [{"benchmarkId": row["benchmark_id"], "tradingDate": row["trading_date"],
+                 "open": row["open"], "high": row["high"], "low": row["low"], "close": row["close"],
+                 "volume": row["volume"], "sourceTimestamp": row["source_timestamp"],
+                 "fetchedAt": row["fetched_at"], "source": row["source"]} for row in rows]
         return {"benchmarkId": spec.benchmark_id, "name": spec.name, "ticker": spec.ticker,
             "market": spec.market, "timezone": spec.timezone_name,
             "status": "available" if bars else "unavailable",
             "reason": None if bars else "history_not_archived_yet",
-            "sampleCount": len(bars), "startDate": bars[0]["trading_date"] if bars else None,
-            "endDate": bars[-1]["trading_date"] if bars else None, "bars": bars}
+            "sampleCount": len(bars), "startDate": bars[0]["tradingDate"] if bars else None,
+            "endDate": bars[-1]["tradingDate"] if bars else None, "bars": bars}
 
 
 class BenchmarkHistoryWorker:
