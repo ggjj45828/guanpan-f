@@ -13,7 +13,6 @@ from nas.fminute.benchmark_history import (
     BENCHMARKS, BenchmarkArchive, BenchmarkHistoryError, YahooBenchmarkProvider,
 )
 from nas.fminute.http_api import make_handler
-)
 
 
 class BenchmarkHistoryTests(unittest.TestCase):
