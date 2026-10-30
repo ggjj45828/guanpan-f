@@ -2,11 +2,17 @@ from datetime import date, datetime, timezone
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
+from http.server import ThreadingHTTPServer
+from types import SimpleNamespace
+from urllib.request import urlopen
 from unittest.mock import patch
 
 from nas.fminute.benchmark_history import (
     BENCHMARKS, BenchmarkArchive, BenchmarkHistoryError, YahooBenchmarkProvider,
+)
+from nas.fminute.http_api import make_handler
 )
 
 
@@ -58,6 +64,30 @@ class BenchmarkHistoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["close"], 104.0)
         self.assertEqual(BENCHMARKS["hang_seng"].market, "HK")
+
+
+    def test_http_endpoint_exposes_camel_case_archived_rows(self):
+        self.archive.ingest([self.row()])
+        service = SimpleNamespace(benchmark_archive=self.archive,
+                                  benchmark_worker=SimpleNamespace(status={"status": "ok"}))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(service))
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urlopen(f"http://127.0.0.1:{server.server_port}/api/v1/benchmark-history"
+                         "?benchmarkId=nasdaq100&startDate=2026-10-29&endDate=2026-10-29",
+                         timeout=3) as response:
+                payload = json.loads(response.read())
+            self.assertEqual(payload["status"], "available")
+            self.assertEqual(payload["sampleCount"], 1)
+            self.assertEqual(payload["bars"][0]["tradingDate"], "2026-10-29")
+            self.assertEqual(payload["bars"][0]["fetchedAt"], "2026-10-30T14:00:00+00:00")
+            self.assertEqual(payload["collector"]["status"], "ok")
+            self.assertNotIn("trading_date", payload["bars"][0])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
     def test_unknown_benchmark_and_reversed_range_fail_closed(self):
         with self.assertRaises(BenchmarkHistoryError):
