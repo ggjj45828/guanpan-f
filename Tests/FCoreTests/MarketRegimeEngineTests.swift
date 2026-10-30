@@ -32,6 +32,37 @@ final class MarketRegimeEngineTests: XCTestCase {
         XCTAssertEqual(FMarketBenchmarkMapping.resolve(securityCode: "513770", instrumentName: "韩国KOSPI ETF")?.primaryBenchmark, .kospi)
     }
 
+    func testBenchmarkInputsRequireFreshTimestampedSourceObservations() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let future = FMarketBenchmarkObservation(benchmark: .csiA500, dailyReturn: -0.08,
+            observedAt: now.addingTimeInterval(86_400), source: "fixture")
+        let stale = FMarketBenchmarkObservation(benchmark: .sseComposite, dailyReturn: -0.08,
+            observedAt: now.addingTimeInterval(-10 * 86_400), source: "fixture")
+        let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture",
+            bars: bars(flat()), benchmarkObservations: [future, stale], benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        XCTAssertEqual(result.unavailableBenchmarks, [.csiA500])
+        XCTAssertEqual(result.globalRegime, .uncertain)
+        XCTAssertFalse(result.ordinaryTBuyAllowed)
+    }
+
+    func testGlobalRiskOffNeedsSeveralIndependentFreshSensors() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159941")!
+        let sensors: [FMarketBenchmarkObservation] = [
+            .init(benchmark: .nasdaq100, dailyReturn: -0.05, observedAt: now, source: "fixture"),
+            .init(benchmark: .sp500, dailyReturn: -0.05, observedAt: now, source: "fixture"),
+            .init(benchmark: .hangSeng, dailyReturn: -0.05, observedAt: now, source: "fixture")
+        ]
+        let input = FMarketRegimeInput(market: "security:159941", securityCode: "159941",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture",
+            bars: bars(flat()), benchmarkObservations: sensors, benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        XCTAssertEqual(result.globalRegime, .riskOff)
+        XCTAssertEqual(result.availableBenchmarks, [.nasdaq100])
+        XCTAssertTrue(result.unavailableBenchmarks.isEmpty)
+    }
+
     func testMissingPrimaryBenchmarkLeavesMappedMarketObservationOnly() {
         let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
         let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
