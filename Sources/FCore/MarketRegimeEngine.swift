@@ -122,7 +122,7 @@ public struct FMarketBenchmarkMapping: Codable, Equatable, Sendable {
 
     public static func resolve(securityCode: String, instrumentName: String? = nil) -> FMarketBenchmarkMapping? {
         let name = (instrumentName ?? "").lowercased()
-        let global: [FMarketBenchmark] = [.nasdaq100, .sp500, .hangSeng, .nikkei225, .kospi, .vix]
+        let global: [FMarketBenchmark] = [.sseComposite, .csi300, .csiA500, .nasdaq100, .sp500, .hangSeng, .nikkei225, .topix, .kospi, .vix]
         func mapping(_ market: FMarketContextKind, _ primary: FMarketBenchmark,
                      _ secondary: [FMarketBenchmark], _ currency: String, _ session: String) -> Self {
             Self(securityID: securityCode, market: market, primaryBenchmark: primary,
