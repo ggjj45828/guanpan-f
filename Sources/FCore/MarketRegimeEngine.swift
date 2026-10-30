@@ -198,6 +198,23 @@ public struct FMarketRegimeBar: Codable, Equatable, Sendable {
     }
 }
 
+/// A benchmark close-to-close observation with an explicit timestamp and source.
+/// Without a timestamped observation, the benchmark is unavailable to the engine.
+public struct FMarketBenchmarkObservation: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { benchmark.rawValue + "@" + observedAt.timeIntervalSince1970.description }
+    public let benchmark: FMarketBenchmark
+    public let dailyReturn: Double
+    public let observedAt: Date
+    public let source: String
+
+    public init(benchmark: FMarketBenchmark, dailyReturn: Double, observedAt: Date, source: String) {
+        self.benchmark = benchmark
+        self.dailyReturn = dailyReturn
+        self.observedAt = observedAt
+        self.source = source
+    }
+}
+
 public struct FMarketRegimeInput: Sendable {
     public let market: String
     public let securityCode: String?
@@ -211,14 +228,14 @@ public struct FMarketRegimeInput: Sendable {
     /// Returns from separately observed, synchronized benchmarks. Missing
     /// benchmarks remain unavailable and are never synthesized.
     public let synchronizedBenchmarkReturns: [Double]
-    public let benchmarkReturns: [FMarketBenchmark: Double]
+    public let benchmarkObservations: [FMarketBenchmarkObservation]
     public let benchmarkMapping: FMarketBenchmarkMapping?
 
     public init(market: String, securityCode: String? = nil,
                 contextKind: FMarketContextKind = .unclassified, asOf: Date,
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
                 breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
-                benchmarkReturns: [FMarketBenchmark: Double] = [:],
+                benchmarkObservations: [FMarketBenchmarkObservation] = [],
                 benchmarkMapping: FMarketBenchmarkMapping? = nil) {
         self.market = market
         self.securityCode = securityCode
@@ -229,7 +246,7 @@ public struct FMarketRegimeInput: Sendable {
         self.bars = bars
         self.breadthRatio = breadthRatio
         self.synchronizedBenchmarkReturns = synchronizedBenchmarkReturns
-        self.benchmarkReturns = benchmarkReturns
+        self.benchmarkObservations = benchmarkObservations
         self.benchmarkMapping = benchmarkMapping
     }
 }
@@ -334,20 +351,28 @@ public enum FMarketRegimeEngine {
         let vol20 = realizedVolatility(closes, count: 20)
         let volumeExpansion = volumeExpansionRatio(uniqueBars)
         let breadth = input.breadthRatio.flatMap { $0.isFinite && (0...1).contains($0) ? $0 : nil }
-        let marketBenchmarkReturns = input.benchmarkReturns.values.filter(\.isFinite)
+        let freshBenchmarkObservations = input.benchmarkObservations.filter { item in
+            item.dailyReturn.isFinite &&
+            !item.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            item.observedAt <= input.asOf && item.observedAt <= now &&
+            now.timeIntervalSince(item.observedAt) <= maximumDataAge
+        }
+        let observedReturns = Dictionary(freshBenchmarkObservations.map { ($0.benchmark, $0.dailyReturn) },
+                                         uniquingKeysWith: { _, latest in latest })
+        let marketBenchmarkReturns = Array(observedReturns.values)
         let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite) + marketBenchmarkReturns
         let negativeBenchmarks = benchmarkReturns.filter { $0 <= -0.04 }.count
         let mapping = input.benchmarkMapping
         let primaryBenchmark = mapping?.primaryBenchmark
         let requiredBenchmarks = primaryBenchmark.map { [$0] } ?? input.contextKind.requiredBenchmarks
-        let availableBenchmarks = requiredBenchmarks.filter { input.benchmarkReturns[$0]?.isFinite == true }
-        let unavailableBenchmarks = requiredBenchmarks.filter { input.benchmarkReturns[$0]?.isFinite != true }
+        let availableBenchmarks = requiredBenchmarks.filter { observedReturns[$0]?.isFinite == true }
+        let unavailableBenchmarks = requiredBenchmarks.filter { observedReturns[$0]?.isFinite != true }
         let marketContextComplete = mapping != nil && input.contextKind != .unclassified && unavailableBenchmarks.isEmpty
         let secondaryBenchmarks = mapping?.secondaryBenchmarks ?? []
         let globalSensors = mapping?.globalSensors ?? []
         let allMappedSensors = Set(requiredBenchmarks + secondaryBenchmarks + globalSensors)
-        let unavailableMappedSensors = allMappedSensors.filter { input.benchmarkReturns[$0]?.isFinite != true }.sorted { $0.rawValue < $1.rawValue }
-        let globalAvailable = globalSensors.compactMap { input.benchmarkReturns[$0] }.filter(\\.isFinite)
+        let unavailableMappedSensors = allMappedSensors.filter { observedReturns[$0]?.isFinite != true }.sorted { $0.rawValue < $1.rawValue }
+        let globalAvailable = globalSensors.compactMap { observedReturns[$0] }.filter(\\.isFinite)
         let globalRegime: FGlobalRegime = globalAvailable.isEmpty ? .uncertain :
             (globalAvailable.filter { $0 <= -0.04 }.count >= 3 ? .riskOff :
              (globalAvailable.filter { $0 >= 0.02 }.count >= 3 ? .riskOn : .neutral))
