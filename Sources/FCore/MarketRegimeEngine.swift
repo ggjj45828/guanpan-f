@@ -663,14 +663,22 @@ public enum FMarketRegimeEngine {
         _ histories: [FMarketBenchmarkHistory], mapping: FMarketBenchmarkMapping?,
         asOf: Date, now: Date, maximumDataAge: TimeInterval
     ) -> ([FIndexRegimeSnapshot], [FMarketBenchmarkObservation]) {
-        let benchmarks = Set((mapping?.globalSensors ?? []) +
-            (mapping?.secondaryBenchmarks ?? []) +
-            (mapping?.primaryBenchmark.map { [$0] } ?? []) +
-            histories.map(\.benchmark))
-        let latestHistory = Dictionary(histories.map { ($0.benchmark, $0) },
-            uniquingKeysWith: { current, candidate in
-                candidate.sourceUpdatedAt >= current.sourceUpdatedAt ? candidate : current
-            })
+        var benchmarkSet = Set<FMarketBenchmark>()
+        if let mapping {
+            benchmarkSet.formUnion(mapping.globalSensors)
+            benchmarkSet.formUnion(mapping.secondaryBenchmarks)
+            benchmarkSet.insert(mapping.primaryBenchmark)
+        }
+        for history in histories { benchmarkSet.insert(history.benchmark) }
+        let benchmarks = benchmarkSet.sorted { $0.rawValue < $1.rawValue }
+        var latestHistory: [FMarketBenchmark: FMarketBenchmarkHistory] = [:]
+        for history in histories {
+            if let current = latestHistory[history.benchmark],
+               current.sourceUpdatedAt > history.sourceUpdatedAt {
+                continue
+            }
+            latestHistory[history.benchmark] = history
+        }
         var snapshots: [FIndexRegimeSnapshot] = []
         var observations: [FMarketBenchmarkObservation] = []
         for benchmark in benchmarks.sorted(by: { $0.rawValue < $1.rawValue }) {
@@ -683,7 +691,7 @@ public enum FMarketRegimeEngine {
                     unavailableReason: "benchmark_history_missing"))
                 continue
             }
-            let sourceIsValid = !history.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let sourceIsValid = !history.source.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty
             let sourceIsFresh = history.sourceUpdatedAt <= asOf && history.sourceUpdatedAt <= now &&
                 now.timeIntervalSince(history.sourceUpdatedAt) <= maximumDataAge
             var calendar = Calendar(identifier: .gregorian)
