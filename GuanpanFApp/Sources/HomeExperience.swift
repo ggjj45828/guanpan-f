@@ -398,7 +398,7 @@ private struct FEditorialResearchLine: View {
                 Image(systemName: "globe.asia.australia").foregroundStyle(theme.accent).frame(width: 20)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("跨市场与研究").font(.caption.weight(.semibold)).foregroundStyle(theme.ink)
-                    Text("跨市场实时联动尚未接入 · NAS 为可选归档增强（\(model.nasConnectionStatus)）")
+                    Text("跨市场状态使用 NAS 指数日线归档 · \(model.nasConnectionStatus)")
                         .font(.caption2).foregroundStyle(.secondary)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
@@ -1418,7 +1418,7 @@ private struct CrossMarketOverview: View {
     var body: some View {
         List {
             Section {
-                Text("指数行情来自 Yahoo Finance 公共 Chart 接口，按各自市场时区显示真实日线样本。该公开接口非签约行情源；每项显示来源、样本数和数据日期，缺失或不足60个交易日时标为不可用。分钟历史与 NAS Research 仍走 NAS。")
+                Text("指数历史从 NAS 日线归档读取，按各自市场时区展示真实样本。每项显示来源、样本数和数据日期；缺失、过期或不足60个交易日时标为不可用。盘中行情刷新仍由本机行情源处理。")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button {
                     Task { await model.refreshCrossMarketData() }
