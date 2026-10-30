@@ -99,6 +99,23 @@ final class MarketRegimeEngineTests: XCTestCase {
         XCTAssertTrue(result.ordinaryTBuyAllowed)
     }
 
+    func testFreshFetchCannotMakeStaleBenchmarkBarsAvailable() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let staleBars = bars(flat(), start: now.addingTimeInterval(-80 * 86_400))
+        let history = FMarketBenchmarkHistory(
+            benchmark: .csiA500, bars: staleBars, sourceUpdatedAt: now,
+            source: "fixture-index-history", sessionTimeZoneIdentifier: "Asia/Shanghai")
+        let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture-security",
+            bars: bars(flat()), benchmarkHistories: [history], benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        let snapshot = result.indexRegimeSnapshots?.first { $0.benchmark == .csiA500 }
+        XCTAssertFalse(snapshot?.available ?? true)
+        XCTAssertEqual(snapshot?.unavailableReason, "benchmark_observation_stale_or_future")
+        XCTAssertTrue(result.unavailableBenchmarks.contains(.csiA500))
+        XCTAssertFalse(result.ordinaryTBuyAllowed)
+    }
+
     func testMissingPrimaryBenchmarkLeavesMappedMarketObservationOnly() {
         let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
         let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",

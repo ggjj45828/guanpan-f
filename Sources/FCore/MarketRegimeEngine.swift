@@ -702,9 +702,14 @@ public enum FMarketRegimeEngine {
             var bySession: [Date: FMarketRegimeBar] = [:]
             for bar in sortedBars { bySession[calendar.startOfDay(for: bar.timestamp)] = bar }
             let bars = bySession.values.sorted { $0.timestamp < $1.timestamp }
+            let latestObservationIsFresh = bars.last.map { bar in
+                bar.timestamp <= asOf && bar.timestamp <= now &&
+                now.timeIntervalSince(bar.timestamp) <= maximumDataAge
+            } ?? false
             let reason: String? = !sourceIsValid ? "benchmark_source_missing" :
                 (!sourceIsFresh ? "benchmark_history_stale_or_future" :
-                    (bars.count < 60 ? "benchmark_history_under_60_sessions" : nil))
+                    (bars.count < 60 ? "benchmark_history_under_60_sessions" :
+                        (!latestObservationIsFresh ? "benchmark_observation_stale_or_future" : nil)))
             if reason == nil {
                 let result = evaluate(FMarketRegimeInput(
                     market: "benchmark:\(benchmark.rawValue)", contextKind: .unclassified,

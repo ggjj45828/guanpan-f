@@ -84,6 +84,9 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var dailyKlineStateByCode: [String: String] = [:]
     @Published private(set) var securityRegimeByCode: [String: FMarketRegimeAssessment] = [:]
     @Published private(set) var securityRegimeStatusByCode: [String: String] = [:]
+    @Published private(set) var benchmarkHistoryByID: [String: FMarketBenchmarkHistory] = [:]
+    @Published private(set) var benchmarkStatusByID: [String: String] = [:]
+    @Published private(set) var benchmarkSnapshotByID: [String: FIndexRegimeSnapshot] = [:]
     @Published var selectedHistoryDate = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: Date()) ?? Date()
     @Published private(set) var refreshingMarketCodes: Set<String> = []
     @Published private(set) var selectedInstrumentCode: String?
@@ -165,6 +168,7 @@ final class FHomeModel: ObservableObject {
             ? "未配置 DeepSeek API Key" : "DeepSeek Key 已保存在本机 Keychain"
         Task { await loadLedger(from: store) }
         Task { await refreshCandidateShadowSummary() }
+        Task { await refreshCrossMarketData() }
     }
 
     func refreshCandidateShadowSummary(now: Date = Date()) async {
@@ -961,51 +965,86 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    func refreshCrossMarketData() async {
+        let benchmarks = FMarketBenchmark.allCases
+        await withTaskGroup(of: (FMarketBenchmark, FMarketBenchmarkHistory?, String?).self) { group in
+            for benchmark in benchmarks {
+                group.addTask {
+                    do { return (benchmark, try await FIndexBenchmarkHTTPClient.fetchHistory(benchmark), nil) }
+                    catch { return (benchmark, nil, error.localizedDescription) }
+                }
+            }
+            for await (benchmark, history, error) in group {
+                let key = benchmark.rawValue
+                if let history {
+                    benchmarkHistoryByID[key] = history
+                    let evaluatedAt = Date()
+                    let assessment = FMarketRegimeEngine.evaluate(
+                        FMarketRegimeInput(market: "benchmark:\(key)", contextKind: .unclassified,
+                            asOf: evaluatedAt, sessionTimeZoneIdentifier: history.sessionTimeZoneIdentifier,
+                            sourceUpdatedAt: history.sourceUpdatedAt, source: history.source,
+                            bars: history.bars, benchmarkHistories: [history]),
+                        now: evaluatedAt)
+                    benchmarkSnapshotByID[key] = assessment.indexRegimeSnapshots?.first
+                    let latest = history.bars.last?.timestamp.formatted(date: .numeric, time: .omitted) ?? "未知"
+                    benchmarkStatusByID[key] = "\(history.source) · \(history.bars.count)日 · 最新样本 \(latest) · 获取于 \(history.sourceUpdatedAt.formatted(date: .omitted, time: .standard))"
+                } else {
+                    benchmarkHistoryByID.removeValue(forKey: key)
+                    benchmarkSnapshotByID.removeValue(forKey: key)
+                    benchmarkStatusByID[key] = "不可用 · \(error ?? "来源没有返回数据")"
+                }
+            }
+        }
+        for (code, snapshot) in dailyKlineByCode {
+            evaluateSecurityRegime(code: code, snapshot: snapshot)
+        }
+    }
+
+    var crossMarketBenchmarks: [FMarketBenchmark] { FMarketBenchmark.allCases }
+
+    private func evaluateSecurityRegime(code: String, snapshot: FDailyKlineSnapshot) {
+        let evaluatedAt = Date()
+        let regimeBars = snapshot.bars.map { bar in
+            FMarketRegimeBar(timestamp: bar.tradingDate,
+                close: NSDecimalNumber(decimal: bar.close).doubleValue,
+                open: NSDecimalNumber(decimal: bar.open).doubleValue,
+                high: NSDecimalNumber(decimal: bar.high).doubleValue,
+                low: NSDecimalNumber(decimal: bar.low).doubleValue,
+                volume: NSDecimalNumber(decimal: bar.volume).doubleValue)
+        }
+        let instrumentName = holdings.first(where: { $0.instrumentCode == code })?.name
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: code, instrumentName: instrumentName)
+        let regimeMemoryKey = "guanpan.f.market-regime.\(code).\(mapping?.primaryBenchmark.rawValue ?? "unmapped")"
+        let previousRegimeMemory = UserDefaults.standard.data(forKey: regimeMemoryKey).flatMap {
+            try? JSONDecoder().decode(FMarketRegimeMemory.self, from: $0)
+        }
+        let regime = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:\(code)", securityCode: code,
+                contextKind: mapping?.market ?? .unclassified, asOf: evaluatedAt,
+                sourceUpdatedAt: snapshot.fetchedAt, source: snapshot.source, bars: regimeBars,
+                benchmarkHistories: Array(benchmarkHistoryByID.values), benchmarkMapping: mapping),
+            previous: previousRegimeMemory, now: evaluatedAt)
+        securityRegimeByCode[code] = regime
+        if let encodedMemory = try? JSONEncoder().encode(regime.memory) {
+            UserDefaults.standard.set(encodedMemory, forKey: regimeMemoryKey)
+        }
+        let availableFactors = regime.factors.filter(\.available).count
+        let dataTime = regime.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
+        let primaryStatus = regime.primaryBenchmark.map { benchmark in
+            regime.unavailableBenchmarks.contains(benchmark) ? "主基准未接通" : "主基准有新鲜数据"
+        } ?? "主基准未映射"
+        let indexSnapshots = regime.indexRegimeSnapshots ?? []
+        let availableIndexCount = indexSnapshots.filter(\.available).count
+        securityRegimeStatusByCode[code] =
+            "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · 对应市场：\(regime.contextKind.displayName) · 主基准：\(regime.primaryBenchmark?.displayName ?? "无") · 市场Regime：\(regime.marketRegime?.displayName ?? "不可用") / \(regime.marketRiskLevel?.displayName ?? "不可用") · \(primaryStatus) · 指数Regime \(availableIndexCount)/\(indexSnapshots.count) 可用 · \(regime.globalRegime.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
+    }
+
     func refreshDailyKline(for code: String) async {
         dailyKlineStateByCode[code] = "正在请求腾讯未复权日 K…"
         do {
             let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code)
             dailyKlineByCode[code] = snapshot
-            let evaluatedAt = Date()
-            let regimeBars = snapshot.bars.map { bar in
-                FMarketRegimeBar(
-                    timestamp: bar.tradingDate,
-                    close: NSDecimalNumber(decimal: bar.close).doubleValue,
-                    open: NSDecimalNumber(decimal: bar.open).doubleValue,
-                    high: NSDecimalNumber(decimal: bar.high).doubleValue,
-                    low: NSDecimalNumber(decimal: bar.low).doubleValue,
-                    volume: NSDecimalNumber(decimal: bar.volume).doubleValue
-                )
-            }
-            let instrumentName = holdings.first(where: { $0.instrumentCode == code })?.name
-            let mapping = FMarketBenchmarkMapping.resolve(securityCode: code, instrumentName: instrumentName)
-            let regimeMemoryKey = "guanpan.f.market-regime.\(code).\(mapping?.primaryBenchmark.rawValue ?? "unmapped")"
-            let previousRegimeMemory = UserDefaults.standard.data(forKey: regimeMemoryKey).flatMap {
-                try? JSONDecoder().decode(FMarketRegimeMemory.self, from: $0)
-            }
-            let regime = FMarketRegimeEngine.evaluate(
-                FMarketRegimeInput(
-                    market: "security:\(code)", securityCode: code,
-                    contextKind: mapping?.market ?? .unclassified, asOf: evaluatedAt,
-                    sourceUpdatedAt: snapshot.fetchedAt, source: snapshot.source, bars: regimeBars,
-                    benchmarkMapping: mapping
-                ),
-                previous: previousRegimeMemory,
-                now: evaluatedAt
-            )
-            securityRegimeByCode[code] = regime
-            if let encodedMemory = try? JSONEncoder().encode(regime.memory) {
-                UserDefaults.standard.set(encodedMemory, forKey: regimeMemoryKey)
-            }
-            let availableFactors = regime.factors.filter(\.available).count
-            let dataTime = regime.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
-            let primaryStatus = regime.primaryBenchmark.map { benchmark in
-                regime.unavailableBenchmarks.contains(benchmark) ? "主基准未接通" : "主基准有新鲜数据"
-            } ?? "主基准未映射"
-            let indexSnapshots = regime.indexRegimeSnapshots ?? []
-            let availableIndexCount = indexSnapshots.filter(\.available).count
-            securityRegimeStatusByCode[code] =
-                "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · 对应市场：\(regime.contextKind.displayName) · 主基准：\(regime.primaryBenchmark?.displayName ?? "无") · 市场Regime：\(regime.marketRegime?.displayName ?? "不可用") / \(regime.marketRiskLevel?.displayName ?? "不可用") · \(primaryStatus) · 指数Regime \(availableIndexCount)/\(indexSnapshots.count) 可用 · \(regime.globalRegime.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
+            evaluateSecurityRegime(code: code, snapshot: snapshot)
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
             dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
@@ -1530,5 +1569,83 @@ private enum FQuoteHTTPClient {
         guard verified.year == year, verified.month == month, verified.day == day,
               verified.hour == hour, verified.minute == minute else { return nil }
         return date
+    }
+}
+
+private enum FIndexBenchmarkHTTPClient {
+    private struct Instrument {
+        let ticker: String
+        let timeZone: String
+    }
+
+    private static func instrument(_ benchmark: FMarketBenchmark) -> Instrument {
+        switch benchmark {
+        case .sseComposite: Instrument(ticker: "000001.SS", timeZone: "Asia/Shanghai")
+        case .csi300: Instrument(ticker: "000300.SS", timeZone: "Asia/Shanghai")
+        case .csiA500: Instrument(ticker: "000510.SS", timeZone: "Asia/Shanghai")
+        case .nasdaq100: Instrument(ticker: "^NDX", timeZone: "America/New_York")
+        case .sp500: Instrument(ticker: "^GSPC", timeZone: "America/New_York")
+        case .nikkei225: Instrument(ticker: "^N225", timeZone: "Asia/Tokyo")
+        case .topix: Instrument(ticker: "^TOPX", timeZone: "Asia/Tokyo")
+        case .kospi: Instrument(ticker: "^KS11", timeZone: "Asia/Seoul")
+        case .hangSeng: Instrument(ticker: "^HSI", timeZone: "Asia/Hong_Kong")
+        case .vix: Instrument(ticker: "^VIX", timeZone: "America/New_York")
+        }
+    }
+
+    static func fetchHistory(_ benchmark: FMarketBenchmark) async throws -> FMarketBenchmarkHistory {
+        let instrument = instrument(benchmark)
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-"))
+        guard let escapedTicker = instrument.ticker.addingPercentEncoding(withAllowedCharacters: allowed),
+              var components = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(escapedTicker)") else {
+            throw FMarketDataError.invalidPayload
+        }
+        components.queryItems = [URLQueryItem(name: "range", value: "2y"),
+                                 URLQueryItem(name: "interval", value: "1d"),
+                                 URLQueryItem(name: "events", value: "history")]
+        guard let url = components.url else { throw FMarketDataError.invalidPayload }
+        var request = URLRequest(url: url, timeoutInterval: 12)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let chart = root["chart"] as? [String: Any],
+              let results = chart["result"] as? [[String: Any]], let result = results.first,
+              let timestamps = result["timestamp"] as? [NSNumber],
+              let indicators = result["indicators"] as? [String: Any],
+              let quotes = indicators["quote"] as? [[String: Any]], let quote = quotes.first,
+              let closes = quote["close"] as? [Any], closes.count == timestamps.count else {
+            throw FMarketDataError.invalidPayload
+        }
+        let opens = quote["open"] as? [Any] ?? []
+        let highs = quote["high"] as? [Any] ?? []
+        let lows = quote["low"] as? [Any] ?? []
+        let volumes = quote["volume"] as? [Any] ?? []
+        let zone = TimeZone(identifier: instrument.timeZone) ?? .gmt
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        var bars: [FMarketRegimeBar] = []
+        for index in timestamps.indices {
+            guard !(closes[index] is NSNull), let close = (closes[index] as? NSNumber)?.doubleValue,
+                  close.isFinite, close > 0 else { continue }
+            let timestamp = Date(timeIntervalSince1970: timestamps[index].doubleValue)
+            guard timestamp <= Date() else { continue }
+            func number(_ values: [Any]) -> Double? {
+                guard index < values.count, !(values[index] is NSNull),
+                      let value = (values[index] as? NSNumber)?.doubleValue,
+                      value.isFinite, value > 0 else { return nil }
+                return value
+            }
+            bars.append(FMarketRegimeBar(timestamp: calendar.startOfDay(for: timestamp), close: close,
+                open: number(opens), high: number(highs), low: number(lows), volume: number(volumes)))
+        }
+        let unique = Dictionary(bars.map { ($0.timestamp, $0) }, uniquingKeysWith: { _, latest in latest })
+            .values.sorted { $0.timestamp < $1.timestamp }
+        guard unique.count >= 60, unique.count <= 520 else { throw FMarketDataError.invalidPayload }
+        let fetchedAt = Date()
+        return FMarketBenchmarkHistory(benchmark: benchmark, bars: unique,
+            sourceUpdatedAt: fetchedAt, source: "Yahoo Finance public chart \(instrument.ticker)",
+            sessionTimeZoneIdentifier: instrument.timeZone)
     }
 }

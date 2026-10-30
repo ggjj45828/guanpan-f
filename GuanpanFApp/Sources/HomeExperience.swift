@@ -1002,7 +1002,7 @@ struct HomeDestination: View {
             case .market:
                 MarketOverview(model: model)
             case .crossMarket:
-                CrossMarketOverview()
+                CrossMarketOverview(model: model)
             case .advisor:
                 AdvisorOverview(model: model)
             case .portfolio:
@@ -1400,17 +1400,48 @@ struct AdvisorOverview: View {
 }
 
 private struct CrossMarketOverview: View {
+    @ObservedObject var model: FHomeModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "globe.asia.australia")
-                .font(.largeTitle).foregroundStyle(.secondary)
-            Text("暂无合格跨市场证据").font(.title2.bold())
-            Text("跨市场实时行情与研究尚未接入。NAS 可提供可选历史研究增强；样本、时区或数据质量未达到门槛时，不会把观察伪装成研究结论。NAS 不影响本机基础顾问功能。")
-                .foregroundStyle(.secondary)
-            Spacer()
+        List {
+            Section {
+                Text("指数行情来自 Yahoo Finance 公共 Chart 接口，按各自市场时区显示真实日线样本。该公开接口非签约行情源；每项显示来源、样本数和数据日期，缺失或不足60个交易日时标为不可用。分钟历史与 NAS Research 仍走 NAS。")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button {
+                    Task { await model.refreshCrossMarketData() }
+                } label: {
+                    Label("刷新指数数据", systemImage: "arrow.clockwise")
+                }
+            }
+            Section("跨市场指数与风险状态") {
+                ForEach(model.crossMarketBenchmarks, id: \.rawValue) { benchmark in
+                    let snapshot = model.benchmarkSnapshotByID[benchmark.rawValue]
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text(benchmark.displayName).font(.headline)
+                            Spacer()
+                            Text(snapshot?.available == true
+                                 ? "\(snapshot!.regime.displayName) · \(snapshot!.riskLevel.displayName)"
+                                 : "不可用")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(snapshot?.available == true ? Color.primary : Color.secondary)
+                        }
+                        Text(model.benchmarkStatusByID[benchmark.rawValue] ?? "尚未读取")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let snapshot {
+                            Text("样本 \(snapshot.sampleCount) 日 · \(snapshot.freshness) · \(snapshot.reasons.joined(separator: "、"))")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .task {
+            if model.benchmarkHistoryByID.isEmpty {
+                await model.refreshCrossMarketData()
+            }
+        }
         .navigationTitle("跨市场脉搏")
     }
 }
