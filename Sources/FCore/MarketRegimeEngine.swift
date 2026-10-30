@@ -299,6 +299,7 @@ public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let secondaryBenchmarks: [FMarketBenchmark]
     public let globalSensors: [FMarketBenchmark]
     public let globalRegime: FGlobalRegime
+    public let primaryBenchmark: FMarketBenchmark?
     public let regime: FMarketRegime
     public let riskLevel: FMarketRiskLevel
     /// Evidence-strength score, not a forecast or probability of profit.
@@ -372,10 +373,35 @@ public enum FMarketRegimeEngine {
         let globalSensors = mapping?.globalSensors ?? []
         let allMappedSensors = Set(requiredBenchmarks + secondaryBenchmarks + globalSensors)
         let unavailableMappedSensors = allMappedSensors.filter { observedReturns[$0]?.isFinite != true }.sorted { $0.rawValue < $1.rawValue }
-        let globalAvailable = globalSensors.compactMap { observedReturns[$0] }.filter(\.isFinite)
-        let globalRegime: FGlobalRegime = globalAvailable.isEmpty ? .uncertain :
-            (globalAvailable.filter { $0 <= -0.04 }.count >= 3 ? .riskOff :
-             (globalAvailable.filter { $0 >= 0.02 }.count >= 3 ? .riskOn : .neutral))
+        let synchronizedReadings = freshBenchmarkObservations
+            .filter { globalSensors.contains($0.benchmark) && $0.benchmark != .vix }
+        let globalAnchor = synchronizedReadings.map(\.observedAt).max()
+        let globalWindow = synchronizedReadings.filter { item in
+            guard let globalAnchor else { return false }
+            return globalAnchor.timeIntervalSince(item.observedAt) <= 48 * 60 * 60
+        }
+        let regionalGroups: [[FMarketBenchmark]] = [
+            [.sseComposite, .csi300, .csiA500],
+            [.nasdaq100, .sp500],
+            [.hangSeng],
+            [.nikkei225, .topix],
+            [.kospi]
+        ]
+        let regionalReturns: [Double] = regionalGroups.compactMap { group in
+            let values = globalWindow.filter { group.contains($0.benchmark) }.map(\.dailyReturn)
+            guard !values.isEmpty else { return nil }
+            return values.reduce(0, +) / Double(values.count)
+        }
+        let deterioratingRegions = regionalReturns.filter { $0 <= -0.04 }.count
+        let stronglyDeterioratingRegions = regionalReturns.filter { $0 <= -0.06 }.count
+        let improvingRegions = regionalReturns.filter { $0 >= 0.02 }.count
+        let globalRegime: FGlobalRegime = {
+            guard regionalReturns.count >= 2 else { return .uncertain }
+            if stronglyDeterioratingRegions >= 4 { return .extreme }
+            if deterioratingRegions >= 3 { return .riskOff }
+            if improvingRegions >= 3 { return .riskOn }
+            return .neutral
+        }()
 
         let factors = [
             factor("trend_MA20_60", value: ma20.flatMap { a in ma60.map { a / $0 - 1 } },
@@ -499,7 +525,7 @@ public enum FMarketRegimeEngine {
             : unavailableBenchmarks.map { "benchmark_unavailable_\($0.rawValue)" }
         let usableFactorCount = factors.filter(\.available).count
         let confidence = dataReliable ? min(100, 35 + usableFactorCount * 8) : 0
-        let strategies = strategyPolicy(regime: regime, risk: confirmedRisk, reliable: dataReliable)
+        let strategies = strategyPolicy(regime: regime, risk: confirmedRisk, reliable: dataReliable, global: globalRegime)
         let memory = FMarketRegimeMemory(
             confirmedRegime: regime, confirmedRiskLevel: confirmedRisk,
             pendingRegime: pendingRegime, pendingRegimeSessions: pendingRegimeSessions,
@@ -513,7 +539,7 @@ public enum FMarketRegimeEngine {
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
             reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
             secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors,
-            globalRegime: globalRegime, dataAsOf: uniqueBars.last?.timestamp,
+            globalRegime: globalRegime, primaryBenchmark: primaryBenchmark, dataAsOf: uniqueBars.last?.timestamp,
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
@@ -521,6 +547,7 @@ public enum FMarketRegimeEngine {
             observationOnly: !marketContextComplete ||
                 [.recovery, .transition, .uncertain, .highVolatility, .riskOff, .extremeRisk, .dataUnreliable].contains(regime),
             ordinaryTBuyAllowed: dataReliable && marketContextComplete && confirmedRisk < .r2High &&
+                ![.riskOff, .extreme].contains(globalRegime) &&
                 [.bullTrend, .range].contains(regime),
             memory: memory)
     }
@@ -572,16 +599,21 @@ public enum FMarketRegimeEngine {
         return (recent.reduce(0, +) / 5) / baseline
     }
     private static func strategyPolicy(regime: FMarketRegime, risk: FMarketRiskLevel,
-                                       reliable: Bool) -> Set<FQuantStrategyKind> {
+                                       reliable: Bool, global: FGlobalRegime) -> Set<FQuantStrategyKind> {
         guard reliable, risk < .r4Extreme else { return [] }
+        var allowed: Set<FQuantStrategyKind>
         switch regime {
-        case .bullTrend: return [.trendPullback, .maStructure, .vwapDeviation]
-        case .range: return [.meanReversion, .vwapDeviation]
-        case .bearTrend: return [.maStructure]
-        case .highVolatility: return [.maStructure]
-        case .recovery, .transition: return [.maStructure]
-        case .riskOff, .extremeRisk, .uncertain, .dataUnreliable: return []
+        case .bullTrend: allowed = [.trendPullback, .maStructure, .vwapDeviation]
+        case .range: allowed = [.meanReversion, .vwapDeviation]
+        case .bearTrend: allowed = [.maStructure]
+        case .highVolatility: allowed = [.maStructure]
+        case .recovery, .transition: allowed = [.maStructure]
+        case .riskOff, .extremeRisk, .uncertain, .dataUnreliable: allowed = []
         }
+        if [.riskOff, .extreme].contains(global) {
+            allowed.subtract([.meanReversion, .vwapDeviation])
+        }
+        return allowed
     }
     private static func reasonList(regime: FMarketRegime, risk: FMarketRiskLevel,
                                    drawdown: Double?, volatility: Double?, breadth: Double?,
