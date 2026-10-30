@@ -88,6 +88,8 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var nasConnectionStatus = "未配置"
     @Published private(set) var checkingNASConnection = false
     @Published private(set) var nasResearchStatus = "尚未请求"
+    @Published private(set) var nasResearchEvidenceByCode: [String: FDecisionResearchEvidence] = [:]
+    private var refreshingNASResearchCodes: Set<String> = []
     @Published private(set) var newsStatus = "尚未请求"
     @Published private(set) var aiKeyStatus = "未配置 DeepSeek API Key"
     @Published private(set) var advisorStatus = "尚未开始分析"
@@ -683,8 +685,8 @@ final class FHomeModel: ObservableObject {
         if let focusCode { scope = .instrument(focusCode) } else { scope = .portfolio }
         isAskingAdvisor = true
         advisorStatus = focusCode == nil
-            ? "正在读取真实持仓、刷新组合行情并请求NAS历史研究证据…"
-            : "正在读取真实持仓、刷新目标证券行情并请求NAS历史研究证据…"
+            ? "正在读取真实持仓并刷新组合行情；NAS研究摘要可选，不阻塞顾问…"
+            : "正在读取真实持仓并刷新目标证券行情；NAS研究摘要可选，不阻塞顾问…"
         defer { isAskingAdvisor = false }
 
         do {
@@ -720,37 +722,19 @@ final class FHomeModel: ObservableObject {
                 for code in targetCodes { newsFailureByCode[code] = failure }
                 newsStatus = "新闻暂不可用 · \(failure)"
             }
-            let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            var researchByCode: [String: FDecisionResearchEvidence] = [:]
+            let researchByCode = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
+                nasResearchEvidenceByCode[code].map { (code, $0) }
+            })
             var researchFailureByCode: [String: String] = [:]
-            if FNASReadinessClient.validateAddress(baseAddress) != nil {
-                await withTaskGroup(of: (String, FDecisionResearchEvidence?, String?).self) { group in
-                    for code in targetCodes {
-                        group.addTask {
-                            do {
-                                let evidence = try await FNASResearchClient.fetchEvidence(
-                                    baseAddress: baseAddress, securityCode: code)
-                                return (code, evidence, nil)
-                            } catch {
-                                return (code, nil, error.localizedDescription)
-                            }
-                        }
-                    }
-                    for await (code, evidence, failure) in group {
-                        if let evidence {
-                            researchByCode[code] = evidence
-                        } else {
-                            researchFailureByCode[code] = failure ?? "NAS未返回研究证据"
-                        }
-                    }
-                }
-                nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只目标证券取得 NAS 历史研究证据"
-            } else {
-                for code in targetCodes {
-                    researchFailureByCode[code] = "NAS未配置；历史波动研究不可用，顾问不会伪造历史证据"
-                }
-                nasResearchStatus = "NAS 未配置 · 历史研究不可用"
+            for code in targetCodes where researchByCode[code] == nil {
+                researchFailureByCode[code] = "NAS历史研究摘要尚不可用；本次顾问不等待NAS，继续基于其他上下文分析"
             }
+            if !researchByCode.isEmpty {
+                nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只标的有可用 NAS 历史研究摘要"
+            } else {
+                nasResearchStatus = "NAS历史研究摘要暂不可用 · 不阻塞本次顾问分析"
+            }
+            Task { await refreshNASResearchEvidence(for: targetCodes) }
 
             guard let ledgerStore else { throw FAdvisorLiveError.noRealLedger }
             let contextCaptureTime = Date()
@@ -978,6 +962,42 @@ final class FHomeModel: ObservableObject {
             dailyKlineStateByCode[code] = "日 K 不可用 · \(error.localizedDescription)"
             dailyKlineByCode[code] = nil
         }
+    }
+
+    private func refreshNASResearchEvidence(for codes: [String]) async {
+        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
+            nasResearchStatus = "NAS历史研究摘要不可用 · 未配置；不影响实时Quant或顾问分析"
+            return
+        }
+        let pending = codes.filter {
+            nasResearchEvidenceByCode[$0] == nil && !refreshingNASResearchCodes.contains($0)
+        }
+        guard !pending.isEmpty else { return }
+        for code in pending { refreshingNASResearchCodes.insert(code) }
+        await withTaskGroup(of: (String, FDecisionResearchEvidence?).self) { group in
+            for code in pending {
+                group.addTask {
+                    do {
+                        let evidence = try await FNASResearchClient.fetchEvidence(
+                            baseAddress: baseAddress, securityCode: code)
+                        return (code, evidence)
+                    } catch {
+                        return (code, nil)
+                    }
+                }
+            }
+            for await (code, evidence) in group {
+                refreshingNASResearchCodes.remove(code)
+                if let evidence {
+                    nasResearchEvidenceByCode[code] = evidence
+                }
+            }
+        }
+        let available = codes.filter { nasResearchEvidenceByCode[$0] != nil }.count
+        nasResearchStatus = available > 0
+            ? "\(available)/\(codes.count) 只标的的历史研究摘要已缓存，可辅助后续顾问分析"
+            : "NAS历史研究摘要暂不可用 · 本次和实时Quant不等待NAS"
     }
 
     func configureAndTestNAS(baseAddress: String) async {
