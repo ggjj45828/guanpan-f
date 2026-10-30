@@ -230,6 +230,7 @@ public struct FMarketRegimeInput: Sendable {
     public let securityCode: String?
     public let contextKind: FMarketContextKind
     public let asOf: Date
+    public let sessionTimeZoneIdentifier: String
     public let sourceUpdatedAt: Date?
     public let source: String?
     public let bars: [FMarketRegimeBar]
@@ -243,6 +244,7 @@ public struct FMarketRegimeInput: Sendable {
 
     public init(market: String, securityCode: String? = nil,
                 contextKind: FMarketContextKind = .unclassified, asOf: Date,
+                sessionTimeZoneIdentifier: String = "Asia/Shanghai",
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
                 breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
                 benchmarkObservations: [FMarketBenchmarkObservation] = [],
@@ -251,6 +253,7 @@ public struct FMarketRegimeInput: Sendable {
         self.securityCode = securityCode
         self.contextKind = contextKind
         self.asOf = asOf
+        self.sessionTimeZoneIdentifier = sessionTimeZoneIdentifier
         self.sourceUpdatedAt = sourceUpdatedAt
         self.source = source
         self.bars = bars
@@ -480,7 +483,11 @@ public enum FMarketRegimeEngine {
         let confirmedRegime: FMarketRegime
         let pendingRegime: FMarketRegime?
         let pendingRegimeSessions: Int
-        let isNewSession = previous.map { input.asOf > $0.lastEvaluationAt } ?? true
+        var sessionCalendar = Calendar(identifier: .gregorian)
+        sessionCalendar.timeZone = TimeZone(identifier: input.sessionTimeZoneIdentifier) ?? .gmt
+        let evaluationSession = sessionCalendar.startOfDay(for: input.asOf)
+        let previousSession = previous.map { sessionCalendar.startOfDay(for: $0.lastEvaluationAt) }
+        let isNewSession = previousSession.map { $0 < evaluationSession } ?? true
         if previous == nil || candidateRegime == .dataUnreliable || candidateRegime == .extremeRisk ||
             candidateRegime == previous?.confirmedRegime {
             confirmedRegime = candidateRegime
