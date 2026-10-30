@@ -44,6 +44,9 @@ jobs:
       - name: Verify NAS benchmark daily archive
         run: python3 -m unittest -v Tools.test_benchmark_history
 
+      - name: Verify ledger and Advisor architecture boundaries
+        run: python3 Tools/verify_architecture_boundaries.py
+
       - name: Show Apple toolchain
         run: |
           xcode-select -p
