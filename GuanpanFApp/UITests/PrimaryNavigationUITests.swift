@@ -104,7 +104,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
 
-    func testEmptyLedgerOffersInitialHoldingsEntry() {
+    func testEmptyLedgerOffersSeparateCashAndHoldingsEntry() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["真实资产"].tap()
@@ -113,9 +113,33 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 5), app.debugDescription)
         entry.tap()
         XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.textFields["ledger.opening.cash"].exists)
+        XCTAssertFalse(app.textFields["ledger.opening.cash"].exists)
+        XCTAssertTrue(app.buttons["ledger.opening.cash.open"].exists)
+        XCTAssertTrue(app.textFields["ledger.opening.position.code"].exists)
+        XCTAssertTrue(app.textFields["ledger.opening.position.unitCost"].exists)
         XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
         XCTAssertTrue(app.buttons["ledger.opening.confirm"].exists)
+        attachScreenshot("10-holdings-entry", app: app)
+
+        app.buttons["ledger.opening.cash.open"].tap()
+        XCTAssertTrue(app.navigationBars["录入券商现金"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["ledger.opening.cash"].exists)
+        attachScreenshot("11-separate-cash-entry", app: app)
+    }
+
+    func testAllTenThemesRenderHomeScreenshotsInConsistentOrder() {
+        let themes = [
+            "editorial", "modern", "dashboard", "magazine", "bento",
+            "inkModern", "minimalTerminal", "fluidGlass", "dataStarMap", "adaptiveBento"
+        ]
+        for theme in themes {
+            let app = XCUIApplication()
+            app.launchArguments = ["-guanpan.f.homeTheme", theme]
+            app.launch()
+            XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8), "Home failed for theme \(theme)")
+            attachScreenshot("theme-\(theme)-home", app: app)
+            app.terminate()
+        }
     }
 
     private func attachScreenshot(_ name: String, app: XCUIApplication) {
