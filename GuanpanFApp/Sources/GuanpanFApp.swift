@@ -1174,6 +1174,17 @@ struct FHomeRoot: View {
 
 private enum FPrimaryTab: Hashable { case home, market, advisor, assets, settings }
 
+private enum FQuoteProviderError: LocalizedError {
+    case bothProvidersFailed(tencent: String, eastmoney: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .bothProvidersFailed(let tencent, let eastmoney):
+            return "腾讯与东方财富实时分钟行情均不可用（腾讯：\(tencent)；东方财富：\(eastmoney)）"
+        }
+    }
+}
+
 private enum FQuoteHTTPClient {
     static func capture<Value>(_ operation: () async throws -> Value) async -> Result<Value, Error> {
         do { return .success(try await operation()) }
@@ -1181,6 +1192,22 @@ private enum FQuoteHTTPClient {
     }
 
     static func fetchCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {
+        do {
+            return try await fetchTencentCurrentMinutes(code: code)
+        } catch {
+            let primaryFailure = error.localizedDescription
+            do {
+                return try await fetchEastmoneyCurrentMinutes(code: code)
+            } catch {
+                throw FQuoteProviderError.bothProvidersFailed(
+                    tencent: primaryFailure,
+                    eastmoney: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private static func fetchTencentCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {
         let symbol = try FTencentMinuteParser.symbol(for: code)
         guard var components = URLComponents(string: "https://web.ifzq.gtimg.cn/appstock/app/minute/query") else {
             throw FMarketDataError.invalidPayload
@@ -1196,6 +1223,73 @@ private enum FQuoteHTTPClient {
             throw FMarketDataError.invalidPayload
         }
         return try FTencentMinuteParser.parse(data, securityCode: code, fetchedAt: Date())
+    }
+
+    private static func fetchEastmoneyCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        let market = symbol.hasPrefix("sh") ? "1" : "0"
+        guard var components = URLComponents(string: "https://push2.eastmoney.com/api/qt/stock/trends2/get") else {
+            throw FMarketDataError.invalidPayload
+        }
+        components.queryItems = [
+            URLQueryItem(name: "secid", value: "\(market).\(code)"),
+            URLQueryItem(name: "fields1", value: "f1,f2,f3,f4,f5,f6"),
+            URLQueryItem(name: "fields2", value: "f51,f52,f53,f54,f55,f56,f57"),
+            URLQueryItem(name: "ndays", value: "1"),
+            URLQueryItem(name: "iscr", value: "0"),
+            URLQueryItem(name: "iscca", value: "0"),
+            URLQueryItem(name: "ut", value: "fa5fd1943c7b386f172d6893dbbd1d0c")
+        ]
+        guard let url = components.url else { throw FMarketDataError.invalidPayload }
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("https://quote.eastmoney.com/", forHTTPHeaderField: "Referer")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw FMarketDataError.invalidPayload
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = root["data"] as? [String: Any],
+              let rows = payload["trends"] as? [String] else {
+            throw FMarketDataError.invalidPayload
+        }
+
+        let timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        var formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.isLenient = false
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        let fetchedDay = Calendar(identifier: .gregorian).dateComponents(in: timeZone, from: Date())
+        let fetchedAt = Date()
+        let expectedDay = formatter.string(from: fetchedAt).prefix(10)
+        var byTimestamp: [Date: FMinuteSample] = [:]
+        for row in rows {
+            let fields = row.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            guard fields.count >= 2,
+                  fields[0].hasPrefix(expectedDay),
+                  let stamp = formatter.date(from: fields[0]),
+                  stamp <= fetchedAt,
+                  !fields[0].hasSuffix("09:30"),
+                  let price = Decimal(string: fields[1], locale: Locale(identifier: "en_US_POSIX")),
+                  price > 0 else { continue }
+            byTimestamp[stamp] = FMinuteSample(timestamp: stamp, price: price)
+        }
+        let samples = byTimestamp.keys.sorted().compactMap { byTimestamp[$0] }
+        guard let latest = samples.last?.timestamp else { throw FMarketDataError.noUsableSamples }
+        if FMainlandTradingCalendar.status(at: fetchedAt, timeZone: timeZone) == .continuous,
+           fetchedAt.timeIntervalSince(latest) > 300 {
+            throw FMarketDataError.staleOrWrongSession
+        }
+        _ = fetchedDay
+        return try FCurrentIntradaySnapshot(
+            securityCode: code,
+            samples: samples,
+            quoteTimestamp: latest,
+            fetchedAt: fetchedAt,
+            source: "Eastmoney push2 实时分钟（Tencent 备用源）"
+        )
     }
 
     static func fetchDailyKline(code: String) async throws -> FDailyKlineSnapshot {
