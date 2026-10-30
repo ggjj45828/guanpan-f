@@ -137,6 +137,7 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
             case .news: kind = .news
             case .nasResearch: kind = .nasResearch
             case .crossMarket: kind = .crossMarket
+            case .marketRegime: kind = .riskState
             }
             let summary = observation.decimalValue.map {
                 NSDecimalNumber(decimal: $0).stringValue
