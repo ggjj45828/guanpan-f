@@ -262,7 +262,7 @@ public enum FMarketRegimeEngine {
             } else if candidateRisk < previous!.confirmedRiskLevel && count >= 3 {
                 confirmedRisk = FMarketRiskLevel(rawValue: previous!.confirmedRiskLevel.rawValue - 1) ?? candidateRisk
                 pendingRisk = confirmedRisk == candidateRisk ? nil : candidateRisk
-                pendingRiskSessions = confirmedRisk == candidateRisk ? 0 : 0
+                pendingRiskSessions = 0
             } else {
                 confirmedRisk = previous!.confirmedRiskLevel
                 pendingRisk = candidateRisk
@@ -270,7 +270,8 @@ public enum FMarketRegimeEngine {
             }
         }
 
-        let regime = confirmedRisk == .r4Extreme ? .extremeRisk : confirmedRegime
+        let regime: FMarketRegime = !dataReliable ? .dataUnreliable :
+            (confirmedRisk == .r4Extreme ? .extremeRisk : confirmedRegime)
         let reasons = reasonList(regime: regime, risk: confirmedRisk, drawdown: drawdown20,
                                  volatility: vol20, breadth: breadth, crashCount: crashCount,
                                  pending: pendingRegime)
@@ -319,8 +320,8 @@ public enum FMarketRegimeEngine {
     }
     private static func realizedVolatility(_ values: [Double], count: Int) -> Double? {
         guard values.count > count else { return nil }
-        let returns = zip(values.suffix(count + 1).dropFirst(), values.suffix(count + 1))
-            .map { $1 / $0 - 1 }
+        let sample = Array(values.suffix(count + 1))
+        let returns = zip(sample.dropLast(), sample.dropFirst()).map { current, prior in current / prior - 1 }
         guard !returns.isEmpty else { return nil }
         let mean = returns.reduce(0, +) / Double(returns.count)
         let variance = returns.map { pow($0 - mean, 2) }.reduce(0, +) / Double(returns.count)
