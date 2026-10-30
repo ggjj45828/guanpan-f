@@ -723,13 +723,14 @@ final class FHomeModel: ObservableObject {
                 newsStatus = "新闻暂不可用 · \(failure)"
             }
             let researchCheckedAt = Date()
-            let researchByCode = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
+            let usableResearchEntries: [(String, FDecisionResearchEvidence)] = targetCodes.compactMap { code in
                 guard let cached = nasResearchEvidenceByCode[code],
                       cached.isUsableForAI(contextCreatedAt: researchCheckedAt, now: researchCheckedAt) else {
                     return nil
                 }
                 return (code, cached)
-            })
+            }
+            let researchByCode = Dictionary(uniqueKeysWithValues: usableResearchEntries)
             var researchFailureByCode: [String: String] = [:]
             for code in targetCodes where researchByCode[code] == nil {
                 researchFailureByCode[code] = "历史Quant研究摘要暂不可用。"
