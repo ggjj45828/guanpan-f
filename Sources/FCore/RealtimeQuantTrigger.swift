@@ -217,6 +217,24 @@ public enum FRealtimeQuantTrigger {
                                   reasons: ["DATA_UNRELIABLE"], confidence: 0,
                                   resumeState: operationalState)
             }
+            guard let primary = marketContext.primaryBenchmark,
+                  marketContext.contextKind != .unclassified,
+                  !marketContext.unavailableBenchmarks.contains(primary) else {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["PRIMARY_BENCHMARK_UNAVAILABLE"], confidence: 0,
+                                  resumeState: operationalState)
+            }
+            if marketContext.globalRegime == .extreme &&
+                (plan.direction == .buy || plan.direction == .tBuy) {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["GLOBAL_EXTREME_RISK"], confidence: 0,
+                                  resumeState: operationalState)
+            }
+            if marketContext.globalRegime == .riskOff && plan.direction == .tBuy {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["GLOBAL_RISK_OFF_T_BUY_RESTRICTED"], confidence: 0,
+                                  resumeState: operationalState)
+            }
             if marketContext.riskLevel == .r4Extreme &&
                 (plan.direction == .buy || plan.direction == .tBuy) {
                 return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
