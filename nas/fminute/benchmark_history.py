@@ -76,7 +76,10 @@ class YahooBenchmarkProvider:
         bars, seen = [], set()
         for index, epoch in enumerate(timestamps):
             try:
-                day = datetime.fromtimestamp(int(epoch), timezone.utc).astimezone(zone).date().isoformat()
+                source_timestamp = datetime.fromtimestamp(int(epoch), timezone.utc)
+                if source_timestamp > now.astimezone(timezone.utc):
+                    continue
+                day = source_timestamp.astimezone(zone).date().isoformat()
                 prices = [opens[index], highs[index], lows[index], closes[index]]
                 if any(v is None or not math.isfinite(float(v)) or float(v) <= 0 for v in prices):
                     continue
@@ -89,7 +92,7 @@ class YahooBenchmarkProvider:
                 bars.append({"benchmarkId": benchmark_id, "date": day,
                     "open": float(prices[0]), "high": float(prices[1]), "low": float(prices[2]),
                     "close": float(prices[3]), "volume": float(volume) if volume is not None else None,
-                    "sourceTimestamp": datetime.fromtimestamp(int(epoch), timezone.utc).isoformat(),
+                    "sourceTimestamp": source_timestamp.isoformat(),
                     "fetchedAt": fetched_at, "source": self.name})
             except (TypeError, ValueError, OverflowError):
                 continue
@@ -129,7 +132,8 @@ class BenchmarkArchive:
                     raise ValueError("ohlc")
                 fetched = datetime.fromisoformat(row["fetchedAt"].replace("Z", "+00:00"))
                 stamp = datetime.fromisoformat(row["sourceTimestamp"].replace("Z", "+00:00"))
-                if fetched.tzinfo is None or stamp.tzinfo is None:
+                if (fetched.tzinfo is None or stamp.tzinfo is None or stamp > fetched or
+                        stamp.astimezone(ZoneInfo(BENCHMARKS[benchmark_id].timezone_name)).date().isoformat() != day):
                     raise ValueError("timestamp")
                 volume = row.get("volume")
                 if volume is not None and (not math.isfinite(float(volume)) or float(volume) < 0):
