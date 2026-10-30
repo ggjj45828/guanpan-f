@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 import os
+from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -244,8 +245,8 @@ class MinuteProviderTests(unittest.TestCase):
             self.assertIn("Tencent", names[1])
             self.assertEqual(service.runtime_worker.securities, ("159352", "159941"))
             self.assertIsNotNone(service.runtime_worker.calendar_sync)
-            self.assertEqual(os.fspath(service.runtime_worker.calendar_sync.store.path),
-                             os.path.join(directory, "official-calendar-v1.json"))
+            self.assertEqual(Path(service.runtime_worker.calendar_sync.store.path).resolve(),
+                             (Path(directory) / "official-calendar-v1.json").resolve())
             self.assertTrue(os.path.exists(os.path.join(directory, "minute-archive.sqlite3")))
 
     def test_runtime_requires_explicit_security_universe(self):
