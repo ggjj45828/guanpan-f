@@ -84,6 +84,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var dailyKlineStateByCode: [String: String] = [:]
     @Published private(set) var securityRegimeByCode: [String: FMarketRegimeAssessment] = [:]
     @Published private(set) var securityRegimeStatusByCode: [String: String] = [:]
+    @Published private(set) var localQuantByCode: [String: FLocalQuantAssessment] = [:]
     @Published private(set) var benchmarkHistoryByID: [String: FMarketBenchmarkHistory] = [:]
     @Published private(set) var benchmarkStatusByID: [String: String] = [:]
     @Published private(set) var benchmarkSnapshotByID: [String: FIndexRegimeSnapshot] = [:]
@@ -965,6 +966,12 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    private func evaluateLocalQuant(for code: String) {
+        localQuantByCode[code] = FLocalQuantEngine.evaluate(
+            securityCode: code, quote: marketDataByCode[code], daily: dailyKlineByCode[code],
+            marketRegime: securityRegimeByCode[code], now: Date())
+    }
+
     func refreshCrossMarketData() async {
         let benchmarks = FMarketBenchmark.allCases
         await withTaskGroup(of: (FMarketBenchmark, FMarketBenchmarkHistory?, String?).self) { group in
@@ -997,6 +1004,7 @@ final class FHomeModel: ObservableObject {
         }
         for (code, snapshot) in dailyKlineByCode {
             evaluateSecurityRegime(code: code, snapshot: snapshot)
+            evaluateLocalQuant(for: code)
         }
     }
 
@@ -1045,6 +1053,7 @@ final class FHomeModel: ObservableObject {
             let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code)
             dailyKlineByCode[code] = snapshot
             evaluateSecurityRegime(code: code, snapshot: snapshot)
+            evaluateLocalQuant(for: code)
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
             dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
@@ -1054,6 +1063,7 @@ final class FHomeModel: ObservableObject {
             dailyKlineByCode[code] = nil
             securityRegimeByCode[code] = nil
             securityRegimeStatusByCode[code] = "证券自身状态不可用 · 缺少可信日K"
+            evaluateLocalQuant(for: code)
         }
     }
 
@@ -1160,6 +1170,7 @@ final class FHomeModel: ObservableObject {
                         marketRefreshStateByCode[code] = "上游数据较旧 · 保留较新图表缓存"
                     } else {
                         marketDataByCode[code] = snapshot
+                        evaluateLocalQuant(for: code)
                         marketRefreshStateByCode[code] = "已更新 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
                     }
                     if let candidateShadowJournalStore,
@@ -1177,6 +1188,7 @@ final class FHomeModel: ObservableObject {
                     }
                 } else {
                     marketRefreshStateByCode[code] = "更新失败 · \(error ?? "来源没有返回数据")"
+                    evaluateLocalQuant(for: code)
                 }
             }
         }
