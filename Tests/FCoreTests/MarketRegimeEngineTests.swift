@@ -80,6 +80,25 @@ final class MarketRegimeEngineTests: XCTestCase {
         XCTAssertFalse(result.ordinaryTBuyAllowed)
     }
 
+    func testFreshPrimaryHistoryProducesAnAuditableIndexRegimeSnapshot() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let indexBars = bars(flat())
+        let history = FMarketBenchmarkHistory(
+            benchmark: .csiA500, bars: indexBars, sourceUpdatedAt: now,
+            source: "fixture-index-history", sessionTimeZoneIdentifier: "Asia/Shanghai")
+        let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture-security",
+            bars: bars(flat()), benchmarkHistories: [history], benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        let snapshot = result.indexRegimeSnapshots?.first { $0.benchmark == .csiA500 }
+        XCTAssertEqual(result.availableBenchmarks, [.csiA500])
+        XCTAssertTrue(snapshot?.available == true)
+        XCTAssertEqual(snapshot?.sampleCount, 70)
+        XCTAssertEqual(snapshot?.movingAverages[20], 100)
+        XCTAssertEqual(snapshot?.regime, .range)
+        XCTAssertTrue(result.ordinaryTBuyAllowed)
+    }
+
     func testMissingPrimaryBenchmarkLeavesMappedMarketObservationOnly() {
         let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
         let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
