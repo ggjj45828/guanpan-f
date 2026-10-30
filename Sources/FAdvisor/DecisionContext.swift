@@ -540,6 +540,7 @@ public enum FDecisionGuardFinding: Codable, Equatable, Hashable, Sendable {
     case unavailableMarketRegime(String)
     case extremeMarketRisk(String)
     case regimeRestrictedTrade(String)
+    case globalMarketRisk(String)
 }
 
 public struct FDecisionGuardResult: Codable, Equatable, Sendable {
@@ -620,6 +621,13 @@ public enum FRiskGuard {
             if regimeAssessment.riskLevel == .r4Extreme &&
                 [.buy, .dayTrade, .grid].contains(candidate.action) {
                 findings.append(.extremeMarketRisk(code))
+            }
+            if regimeAssessment.globalRegime == .extreme &&
+                [.buy, .dayTrade, .grid].contains(candidate.action) {
+                findings.append(.globalMarketRisk("全球多市场同步处于极端风险"))
+            } else if regimeAssessment.globalRegime == .riskOff &&
+                [.dayTrade, .grid].contains(candidate.action) {
+                findings.append(.globalMarketRisk("全球多市场同步走弱，暂停普通做T/网格买入"))
             }
             if candidate.action == .dayTrade && !regimeAssessment.ordinaryTBuyAllowed {
                 findings.append(.regimeRestrictedTrade(code))
