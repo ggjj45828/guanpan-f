@@ -937,6 +937,10 @@ final class FHomeModel: ObservableObject {
         selectedInstrumentCode = code
     }
 
+    func lookupInstrumentName(code: String) async -> String? {
+        try? await FQuoteHTTPClient.fetchInstrumentName(code: code)
+    }
+
     func loadArchivedIntraday(for code: String) async {
         let day = selectedHistoryDate
         archiveRefreshStateByCode[code] = "正在查询 NAS 历史分时…"
@@ -1270,6 +1274,30 @@ private enum FQuoteHTTPClient {
                                        premiumPercent: validPremium, observedAt: observedAt,
                                        fetchedAt: now, providerInstrumentType: instrumentType,
                                        source: "Tencent qt.gtimg.cn")
+    }
+
+    static func fetchInstrumentName(code: String) async throws -> String {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        guard let url = URL(string: "https://qt.gtimg.cn/q=\(symbol)&_t=\(Int(Date().timeIntervalSince1970))") else {
+            throw FMarketDataError.invalidPayload
+        }
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Accept")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw FMarketDataError.invalidPayload
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let bodyRange = Range(match.range(at: 2), in: text) else { throw FMarketDataError.invalidPayload }
+        let fields = text[bodyRange].split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+        guard fields.count > 1 else { throw FMarketDataError.invalidPayload }
+        let name = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw FMarketDataError.invalidPayload }
+        return name
     }
 
     private static func isTencentETFCode(_ raw: String) -> Bool {
