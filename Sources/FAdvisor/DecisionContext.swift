@@ -614,6 +614,8 @@ public enum FRiskGuard {
             }
             guard let regimeAssessment, regimeAssessment.securityCode == code,
                   regimeAssessment.regime != .dataUnreliable,
+                  regimeAssessment.contextKind != .unclassified,
+                  regimeAssessment.primaryBenchmark != nil,
                   regimeAssessment.unavailableBenchmarks.isEmpty else {
                 findings.append(.unavailableMarketRegime(code))
                 return FDecisionGuardResult(allowedForReview: false, findings: findings)
