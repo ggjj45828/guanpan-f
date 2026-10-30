@@ -970,9 +970,7 @@ final class FHomeModel: ObservableObject {
             nasResearchStatus = "NAS历史研究摘要不可用 · 未配置；不影响实时Quant或顾问分析"
             return
         }
-        let pending = codes.filter {
-            nasResearchEvidenceByCode[$0] == nil && !refreshingNASResearchCodes.contains($0)
-        }
+        let pending = codes.filter { !refreshingNASResearchCodes.contains($0) }
         guard !pending.isEmpty else { return }
         for code in pending { refreshingNASResearchCodes.insert(code) }
         await withTaskGroup(of: (String, FDecisionResearchEvidence?).self) { group in
