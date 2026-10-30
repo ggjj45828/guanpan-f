@@ -15,6 +15,28 @@ private struct FixedAdvisorModel: FAdvisorModelProviding {
 final class BoundaryAcceptanceTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    private func marketRegimeObservation(code: String) throws -> FContextObservation {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: code)!
+        let bars = (0..<70).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 69) * 86_400), close: 100)
+        }
+        let assessment = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:\(code)", securityCode: code,
+                contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
+                source: "acceptance-index-feed", bars: bars,
+                benchmarkObservations: [
+                    .init(benchmark: mapping.primaryBenchmark, dailyReturn: 0,
+                          observedAt: now, source: "acceptance-index-feed")
+                ], benchmarkMapping: mapping), now: now)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let reference = String(data: try encoder.encode(assessment), encoding: .utf8)!
+        return FContextObservation(dataClass: .marketRegime, subject: code,
+            source: "FCore deterministic Market Regime Engine", reference: reference,
+            observedAt: assessment.dataAsOf, capturedAt: now,
+            decimalValue: Decimal(assessment.riskLevel.rawValue))
+    }
+
     private func makeBook() -> FAccountBook {
         let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 1_000)
         return FAccountBook(openingSnapshot: opening, cashBalance: 1_000,
@@ -146,7 +168,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
             source: "acceptance-fixture", observedAt: metadata.quoteTimestamp,
             capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
         let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
-                                       observations: [quote])
+                                       observations: [quote, try marketRegimeObservation(code: "159352")])
         let uncited = FCandidateRecommendation(accountDigest: context.accountDigest,
             action: .buy, instrumentCode: "159352", units: 100,
             limitPrice: 1, rationale: "基于价格评估")
@@ -406,7 +428,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
                                         capturedAt: now, decimalValue: 1,
                                         quoteTemporalMetadata: riskQuoteMetadata)
         let quoteSnapshot = try makeBook().readOnlySnapshot(capturedAt: now)
-        let riskContext = FDecisionContext(snapshot: quoteSnapshot, observations: [quote])
+        let riskContext = FDecisionContext(snapshot: quoteSnapshot, observations: [quote, try marketRegimeObservation(code: "159352")])
         let oversizedPrice = try XCTUnwrap(Decimal(string: "1e120"))
         let overflowingCandidate = FCandidateRecommendation(
             accountDigest: riskContext.accountDigest, action: .buy, instrumentCode: "159352",
