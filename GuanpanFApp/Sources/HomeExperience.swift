@@ -2276,8 +2276,7 @@ private struct FInitialLedgerPositionDraft: Identifiable {
     var instrumentCode = ""
     var name = ""
     var units = ""
-    var economicCost = ""
-    var brokerDisplayCost = ""
+    var economicCostPerUnit = ""
 }
 
 struct FInitialLedgerSetupSheet: View {
@@ -2286,6 +2285,7 @@ struct FInitialLedgerSetupSheet: View {
     @State private var cashText = ""
     @State private var positions = [FInitialLedgerPositionDraft()]
     @State private var confirmationNote = ""
+    @State private var showingCashEntry = false
     @FocusState private var inputFocused: Bool
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
@@ -2294,19 +2294,15 @@ struct FInitialLedgerSetupSheet: View {
             guard draft.instrumentCode.utf8.count == 6,
                   draft.instrumentCode.utf8.allSatisfy({ (48...57).contains($0) }),
                   let units = Int64(draft.units), units > 0,
-                  let cost = Decimal(string: draft.economicCost, locale: Locale(identifier: "en_US_POSIX")),
-                  cost >= 0,
+                  let costPerUnit = Decimal(string: draft.economicCostPerUnit, locale: Locale(identifier: "en_US_POSIX")),
+                  costPerUnit >= 0,
                   !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            let brokerCostText = draft.brokerDisplayCost.trimmingCharacters(in: .whitespacesAndNewlines)
-            let brokerCost: Decimal?
-            if brokerCostText.isEmpty { brokerCost = nil }
-            else if let value = Decimal(string: brokerCostText, locale: Locale(identifier: "en_US_POSIX")), value >= 0 {
-                brokerCost = value
-            } else { return nil }
+            let totalEconomicCost = costPerUnit * Decimal(units)
+            guard !totalEconomicCost.isNaN, totalEconomicCost >= 0 else { return nil }
             return FInitialLedgerPositionInput(instrumentCode: draft.instrumentCode,
                                                name: draft.name, units: units,
-                                               economicCost: cost,
-                                               brokerDisplayCostPerUnit: brokerCost)
+                                               economicCost: totalEconomicCost,
+                                               brokerDisplayCostPerUnit: nil)
         }
         guard parsed.count == positions.count,
               Set(parsed.map(\.instrumentCode)).count == parsed.count else { return nil }
@@ -2324,13 +2320,20 @@ struct FInitialLedgerSetupSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("券商当前账户") {
-                    TextField("当前可用现金", text: $cashText)
-                        .keyboardType(.decimalPad)
-                        .focused($inputFocused)
-                        .accessibilityIdentifier("ledger.opening.cash")
-                    Text("这是账本起始快照，不会补造历史成交、手续费或历史盈亏。")
-                        .font(.footnote).foregroundStyle(.secondary)
+                Section("券商现金（单独录入）") {
+                    Button {
+                        showingCashEntry = true
+                    } label: {
+                        Label(cashText.isEmpty ? "单独录入券商现金" : "修改券商现金", systemImage: "banknote")
+                    }
+                    .accessibilityIdentifier("ledger.opening.cash.open")
+                    if !cashText.isEmpty {
+                        Text("已录入可用现金：¥\(cashText)")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    } else {
+                        Text("现金单独填写；本页只录入持仓证券。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
                 Section("当前真实持仓") {
                     ForEach($positions) { $position in
@@ -2348,14 +2351,16 @@ struct FInitialLedgerSetupSheet: View {
                             }
                             TextField("6位证券代码", text: $position.instrumentCode)
                                 .keyboardType(.numberPad).focused($inputFocused)
-                            TextField("证券名称", text: $position.name)
+                                .accessibilityIdentifier("ledger.opening.position.code")
+                            TextField("证券名称（自动识别，可修改）", text: $position.name)
                                 .focused($inputFocused)
                             TextField("当前持有份额", text: $position.units)
                                 .keyboardType(.numberPad).focused($inputFocused)
-                            TextField("当前本轮总经济成本（含费用）", text: $position.economicCost)
+                            TextField("每份真实经济成本（含费用）", text: $position.economicCostPerUnit)
                                 .keyboardType(.decimalPad).focused($inputFocused)
-                            TextField("券商展示成本/份（选填）", text: $position.brokerDisplayCost)
-                                .keyboardType(.decimalPad).focused($inputFocused)
+                                .accessibilityIdentifier("ledger.opening.position.unitCost")
+                            Text("总经济成本会按份额 × 每份成本自动计算。")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
                         .accessibilityIdentifier("ledger.opening.position.\(position.id.uuidString)")
@@ -2377,6 +2382,9 @@ struct FInitialLedgerSetupSheet: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("录入现有持仓")
+            .sheet(isPresented: $showingCashEntry) {
+                FInitialCashEntrySheet(cashText: $cashText)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }.disabled(model.writingInitialLedger)
