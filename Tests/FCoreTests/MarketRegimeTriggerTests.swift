@@ -32,6 +32,10 @@ final class MarketRegimeTriggerTests: XCTestCase {
                 synchronizedBenchmarkReturns: benchmarks,
                 benchmarkObservations: crash ? [
                     .init(benchmark: .csiA500, dailyReturn: -0.08, observedAt: now, source: "fixture")
+                ] : [],
+                benchmarkHistories: crash ? [
+                    .init(benchmark: .csiA500, bars: bars, sourceUpdatedAt: now,
+                          source: "fixture-index-history", sessionTimeZoneIdentifier: "Asia/Shanghai")
                 ] : [], benchmarkMapping: mapping),
             now: now)
     }

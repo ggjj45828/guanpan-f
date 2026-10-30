@@ -29,6 +29,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
             FMarketRegimeInput(market: "security:\(code)", securityCode: code,
                 contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
                 source: "fixture-index-feed", bars: bars,
+                benchmarkHistories: [
+                    .init(benchmark: mapping.primaryBenchmark, bars: bars, sourceUpdatedAt: now,
+                          source: "fixture-index-feed-daily-history", sessionTimeZoneIdentifier: "UTC")
+                ],
                 benchmarkObservations: [
                     .init(benchmark: mapping.primaryBenchmark, dailyReturn: 0,
                           observedAt: now, source: "fixture-index-feed")

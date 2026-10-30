@@ -177,10 +177,48 @@ public struct FIndexRegimeSnapshot: Codable, Equatable, Sendable, Identifiable {
     public let trend: String
     public let volatility: String
     public let freshness: String
+    public let sampleCount: Int
     public let observedAt: Date?
     public let source: String?
+    public let dailyReturn: Double?
+    public let movingAverages: [Int: Double]
+    public let return5Sessions: Double?
+    public let return20Sessions: Double?
+    public let drawdown20Sessions: Double?
+    public let realizedVolatility20Sessions: Double?
+    public let factors: [FMarketRegimeFactor]
+    public let reasons: [String]
     public let available: Bool
     public let unavailableReason: String?
+
+    public init(benchmark: FMarketBenchmark, regime: FMarketRegime,
+                riskLevel: FMarketRiskLevel, trend: String, volatility: String,
+                freshness: String, sampleCount: Int, observedAt: Date?, source: String?,
+                dailyReturn: Double? = nil, movingAverages: [Int: Double] = [:],
+                return5Sessions: Double? = nil, return20Sessions: Double? = nil,
+                drawdown20Sessions: Double? = nil, realizedVolatility20Sessions: Double? = nil,
+                factors: [FMarketRegimeFactor] = [], reasons: [String],
+                available: Bool, unavailableReason: String? = nil) {
+        self.benchmark = benchmark
+        self.regime = regime
+        self.riskLevel = riskLevel
+        self.trend = trend
+        self.volatility = volatility
+        self.freshness = freshness
+        self.sampleCount = sampleCount
+        self.observedAt = observedAt
+        self.source = source
+        self.dailyReturn = dailyReturn
+        self.movingAverages = movingAverages
+        self.return5Sessions = return5Sessions
+        self.return20Sessions = return20Sessions
+        self.drawdown20Sessions = drawdown20Sessions
+        self.realizedVolatility20Sessions = realizedVolatility20Sessions
+        self.factors = factors
+        self.reasons = reasons
+        self.available = available
+        self.unavailableReason = unavailableReason
+    }
 }
 
 public enum FQuantStrategyKind: String, Codable, CaseIterable, Hashable, Sendable {
@@ -225,6 +263,27 @@ public struct FMarketBenchmarkObservation: Codable, Equatable, Sendable, Identif
     }
 }
 
+/// Observed daily closing bars for one market index. Source retrieval time is
+/// separate from the last exchange observation so stale history cannot appear current.
+public struct FMarketBenchmarkHistory: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { benchmark.rawValue + "@" + sourceUpdatedAt.timeIntervalSince1970.description }
+    public let benchmark: FMarketBenchmark
+    public let bars: [FMarketRegimeBar]
+    public let sourceUpdatedAt: Date
+    public let source: String
+    public let sessionTimeZoneIdentifier: String
+
+    public init(benchmark: FMarketBenchmark, bars: [FMarketRegimeBar],
+                sourceUpdatedAt: Date, source: String,
+                sessionTimeZoneIdentifier: String = "UTC") {
+        self.benchmark = benchmark
+        self.bars = bars
+        self.sourceUpdatedAt = sourceUpdatedAt
+        self.source = source
+        self.sessionTimeZoneIdentifier = sessionTimeZoneIdentifier
+    }
+}
+
 public struct FMarketRegimeInput: Sendable {
     public let market: String
     public let securityCode: String?
@@ -240,6 +299,7 @@ public struct FMarketRegimeInput: Sendable {
     /// benchmarks remain unavailable and are never synthesized.
     public let synchronizedBenchmarkReturns: [Double]
     public let benchmarkObservations: [FMarketBenchmarkObservation]
+    public let benchmarkHistories: [FMarketBenchmarkHistory]
     public let benchmarkMapping: FMarketBenchmarkMapping?
 
     public init(market: String, securityCode: String? = nil,
@@ -248,6 +308,7 @@ public struct FMarketRegimeInput: Sendable {
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
                 breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
                 benchmarkObservations: [FMarketBenchmarkObservation] = [],
+                benchmarkHistories: [FMarketBenchmarkHistory] = [],
                 benchmarkMapping: FMarketBenchmarkMapping? = nil) {
         self.market = market
         self.securityCode = securityCode
@@ -260,6 +321,7 @@ public struct FMarketRegimeInput: Sendable {
         self.breadthRatio = breadthRatio
         self.synchronizedBenchmarkReturns = synchronizedBenchmarkReturns
         self.benchmarkObservations = benchmarkObservations
+        self.benchmarkHistories = benchmarkHistories
         self.benchmarkMapping = benchmarkMapping
     }
 }
@@ -312,6 +374,8 @@ public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let secondaryBenchmarks: [FMarketBenchmark]
     public let globalSensors: [FMarketBenchmark]
     public let globalRegime: FGlobalRegime
+    /// Per-index classification from timestamped history; nil only for decoding pre-snapshot records.
+    public let indexRegimeSnapshots: [FIndexRegimeSnapshot]?
     public let primaryBenchmark: FMarketBenchmark?
     public let regime: FMarketRegime
     public let riskLevel: FMarketRiskLevel
@@ -365,22 +429,28 @@ public enum FMarketRegimeEngine {
         let vol20 = realizedVolatility(closes, count: 20)
         let volumeExpansion = volumeExpansionRatio(uniqueBars)
         let breadth = input.breadthRatio.flatMap { $0.isFinite && (0...1).contains($0) ? $0 : nil }
-        let freshBenchmarkObservations = input.benchmarkObservations.filter { item in
+        let (indexRegimeSnapshots, historyObservations) = analyzeBenchmarkHistories(
+            input.benchmarkHistories, mapping: input.benchmarkMapping,
+            asOf: input.asOf, now: now, maximumDataAge: maximumDataAge)
+        let freshBenchmarkObservations = (input.benchmarkObservations + historyObservations).filter { item in
             item.dailyReturn.isFinite &&
             !item.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             item.observedAt <= input.asOf && item.observedAt <= now &&
             now.timeIntervalSince(item.observedAt) <= maximumDataAge
         }
         let observedReturns = Dictionary(freshBenchmarkObservations.map { ($0.benchmark, $0.dailyReturn) },
-                                         uniquingKeysWith: { _, latest in latest })
+                                         uniquingKeysWith: { current, candidate in
+                                             candidate.observedAt >= current.observedAt ? candidate : current
+                                         })
         let marketBenchmarkReturns = Array(observedReturns.values)
         let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite) + marketBenchmarkReturns
         let negativeBenchmarks = benchmarkReturns.filter { $0 <= -0.04 }.count
         let mapping = input.benchmarkMapping
         let primaryBenchmark = mapping?.primaryBenchmark
         let requiredBenchmarks = primaryBenchmark.map { [$0] } ?? input.contextKind.requiredBenchmarks
-        let availableBenchmarks = requiredBenchmarks.filter { observedReturns[$0]?.isFinite == true }
-        let unavailableBenchmarks = requiredBenchmarks.filter { observedReturns[$0]?.isFinite != true }
+        let availableHistoryBenchmarks = Set(indexRegimeSnapshots.filter(\.available).map(\.benchmark))
+        let availableBenchmarks = requiredBenchmarks.filter { availableHistoryBenchmarks.contains($0) }
+        let unavailableBenchmarks = requiredBenchmarks.filter { !availableHistoryBenchmarks.contains($0) }
         let marketContextComplete = mapping != nil && input.contextKind != .unclassified && unavailableBenchmarks.isEmpty
         let secondaryBenchmarks = mapping?.secondaryBenchmarks ?? []
         let globalSensors = mapping?.globalSensors ?? []
@@ -554,7 +624,8 @@ public enum FMarketRegimeEngine {
             contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
             secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors,
-            globalRegime: globalRegime, primaryBenchmark: primaryBenchmark, regime: regime,
+            globalRegime: globalRegime, indexRegimeSnapshots: indexRegimeSnapshots,
+            primaryBenchmark: primaryBenchmark, regime: regime,
             riskLevel: confirmedRisk, confidence: confidence, factors: factors,
             reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
             dataAsOf: uniqueBars.last?.timestamp,
@@ -568,6 +639,81 @@ public enum FMarketRegimeEngine {
                 ![.riskOff, .extreme].contains(globalRegime) &&
                 [.bullTrend, .range].contains(regime),
             memory: memory)
+    }
+
+    private static func analyzeBenchmarkHistories(
+        _ histories: [FMarketBenchmarkHistory], mapping: FMarketBenchmarkMapping?,
+        asOf: Date, now: Date, maximumDataAge: TimeInterval
+    ) -> ([FIndexRegimeSnapshot], [FMarketBenchmarkObservation]) {
+        let benchmarks = Set((mapping?.globalSensors ?? []) +
+            (mapping?.secondaryBenchmarks ?? []) +
+            (mapping?.primaryBenchmark.map { [$0] } ?? []) +
+            histories.map(\.benchmark))
+        let latestHistory = Dictionary(histories.map { ($0.benchmark, $0) },
+            uniquingKeysWith: { current, candidate in
+                candidate.sourceUpdatedAt >= current.sourceUpdatedAt ? candidate : current
+            })
+        var snapshots: [FIndexRegimeSnapshot] = []
+        var observations: [FMarketBenchmarkObservation] = []
+        for benchmark in benchmarks.sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let history = latestHistory[benchmark] else {
+                snapshots.append(FIndexRegimeSnapshot(
+                    benchmark: benchmark, regime: .dataUnreliable, riskLevel: .r0Normal,
+                    trend: "unavailable", volatility: "unavailable", freshness: "unavailable",
+                    sampleCount: 0, observedAt: nil, source: nil,
+                    reasons: ["benchmark_history_missing"], available: false,
+                    unavailableReason: "benchmark_history_missing"))
+                continue
+            }
+            let sourceIsValid = !history.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let sourceIsFresh = history.sourceUpdatedAt <= asOf && history.sourceUpdatedAt <= now &&
+                now.timeIntervalSince(history.sourceUpdatedAt) <= maximumDataAge
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: history.sessionTimeZoneIdentifier) ?? .gmt
+            let sortedBars = history.bars
+                .filter { $0.timestamp <= asOf && $0.timestamp <= now && $0.close.isFinite && $0.close > 0 }
+                .sorted { $0.timestamp < $1.timestamp }
+            var bySession: [Date: FMarketRegimeBar] = [:]
+            for bar in sortedBars { bySession[calendar.startOfDay(for: bar.timestamp)] = bar }
+            let bars = bySession.values.sorted { $0.timestamp < $1.timestamp }
+            let reason: String? = !sourceIsValid ? "benchmark_source_missing" :
+                (!sourceIsFresh ? "benchmark_history_stale_or_future" :
+                    (bars.count < 60 ? "benchmark_history_under_60_sessions" : nil))
+            guard let reason else {
+                let result = evaluate(FMarketRegimeInput(
+                    market: "benchmark:\(benchmark.rawValue)", contextKind: .unclassified,
+                    asOf: asOf, sessionTimeZoneIdentifier: history.sessionTimeZoneIdentifier,
+                    sourceUpdatedAt: history.sourceUpdatedAt, source: history.source, bars: bars),
+                    now: now, maximumDataAge: maximumDataAge)
+                let dailyReturn = returnOver(bars.map(\.close), sessions: 1)
+                let observedAt = bars.last?.timestamp
+                snapshots.append(FIndexRegimeSnapshot(
+                    benchmark: benchmark, regime: result.regime, riskLevel: result.riskLevel,
+                    trend: result.regime.displayName,
+                    volatility: result.realizedVolatility20Sessions.map { String(format: "%.4f", $0) } ?? "unavailable",
+                    freshness: "fresh", sampleCount: bars.count, observedAt: observedAt,
+                    source: history.source, dailyReturn: dailyReturn,
+                    movingAverages: result.movingAverages, return5Sessions: result.return5Sessions,
+                    return20Sessions: result.return20Sessions, drawdown20Sessions: result.drawdown20Sessions,
+                    realizedVolatility20Sessions: result.realizedVolatility20Sessions,
+                    factors: result.factors, reasons: result.reasons,
+                    available: result.regime != .dataUnreliable))
+                if let dailyReturn, let observedAt {
+                    observations.append(FMarketBenchmarkObservation(
+                        benchmark: benchmark, dailyReturn: dailyReturn,
+                        observedAt: observedAt, source: history.source))
+                }
+            } else {
+                snapshots.append(FIndexRegimeSnapshot(
+                    benchmark: benchmark, regime: .dataUnreliable, riskLevel: .r0Normal,
+                    trend: "unavailable", volatility: "unavailable",
+                    freshness: sourceIsFresh ? "insufficient_history" : "stale",
+                    sampleCount: bars.count, observedAt: bars.last?.timestamp,
+                    source: history.source, reasons: [reason], available: false,
+                    unavailableReason: reason))
+            }
+        }
+        return (snapshots, observations)
     }
 
     private static func factor(_ key: String, value: Double?, reason: String) -> FMarketRegimeFactor {

@@ -1002,8 +1002,10 @@ final class FHomeModel: ObservableObject {
             let primaryStatus = regime.primaryBenchmark.map { benchmark in
                 regime.unavailableBenchmarks.contains(benchmark) ? "主基准未接通" : "主基准有新鲜数据"
             } ?? "主基准未映射"
+            let indexSnapshots = regime.indexRegimeSnapshots ?? []
+            let availableIndexCount = indexSnapshots.filter(\.available).count
             securityRegimeStatusByCode[code] =
-                "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · 市场：\(regime.contextKind.displayName) · \(primaryStatus)（\(regime.primaryBenchmark?.displayName ?? "无")） · \(regime.globalRegime.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
+                "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · 市场：\(regime.contextKind.displayName) · \(primaryStatus)（\(regime.primaryBenchmark?.displayName ?? "无")） · 指数Regime \(availableIndexCount)/\(indexSnapshots.count) 可用 · \(regime.globalRegime.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
             dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +

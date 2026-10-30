@@ -60,8 +60,24 @@ final class MarketRegimeEngineTests: XCTestCase {
             bars: bars(flat()), benchmarkObservations: sensors, benchmarkMapping: mapping)
         let result = FMarketRegimeEngine.evaluate(input, now: now)
         XCTAssertEqual(result.globalRegime, .riskOff)
-        XCTAssertEqual(result.availableBenchmarks, [.nasdaq100])
-        XCTAssertTrue(result.unavailableBenchmarks.isEmpty)
+        XCTAssertTrue(result.availableBenchmarks.isEmpty)
+        XCTAssertEqual(result.unavailableBenchmarks, [.nasdaq100])
+        XCTAssertEqual(result.indexRegimeSnapshots?.filter(\.available).count, 0)
+    }
+
+    func testSingleDayPrimaryObservationDoesNotReplaceIndexHistory() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture",
+            bars: bars(flat()), benchmarkObservations: [
+                .init(benchmark: .csiA500, dailyReturn: 0.01, observedAt: now, source: "fixture")
+            ], benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        XCTAssertTrue(result.availableBenchmarks.isEmpty)
+        XCTAssertEqual(result.unavailableBenchmarks, [.csiA500])
+        XCTAssertEqual(result.indexRegimeSnapshots?.first(where: { $0.benchmark == .csiA500 })?.unavailableReason,
+                       "benchmark_history_missing")
+        XCTAssertFalse(result.ordinaryTBuyAllowed)
     }
 
     func testMissingPrimaryBenchmarkLeavesMappedMarketObservationOnly() {

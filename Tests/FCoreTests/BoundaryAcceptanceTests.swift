@@ -24,6 +24,10 @@ final class BoundaryAcceptanceTests: XCTestCase {
             FMarketRegimeInput(market: "security:\(code)", securityCode: code,
                 contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
                 source: "acceptance-index-feed", bars: bars,
+                benchmarkHistories: [
+                    .init(benchmark: mapping.primaryBenchmark, bars: bars, sourceUpdatedAt: now,
+                          source: "acceptance-index-feed-daily-history", sessionTimeZoneIdentifier: "UTC")
+                ],
                 benchmarkObservations: [
                     .init(benchmark: mapping.primaryBenchmark, dailyReturn: 0,
                           observedAt: now, source: "acceptance-index-feed")
