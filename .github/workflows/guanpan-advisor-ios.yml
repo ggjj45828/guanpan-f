@@ -34,15 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify NAS readiness and bounded coverage diagnostics
+      - name: Run complete NAS archive and research regression suite
         run: |
           python3 -m unittest -v \
-            Tools.test_minute_service.MinuteServiceTests.test_backfill_status_reads_coverage_projection_without_recomputing_every_day \
-            Tools.test_minute_service.MinuteServiceTests.test_readyz_uses_bounded_archive_probe \
-            Tools.test_minute_service.MinuteServiceTests.test_readyz_fails_closed_when_calendar_does_not_review_current_year
-
-      - name: Verify NAS benchmark daily archive
-        run: python3 -m unittest -v Tools.test_benchmark_history
+            Tools.test_minute_archive \
+            Tools.test_minute_providers \
+            Tools.test_minute_runtime \
+            Tools.test_minute_service \
+            Tools.test_dividend_research \
+            Tools.test_benchmark_history
 
       - name: Verify ledger and Advisor architecture boundaries
         run: python3 Tools/verify_architecture_boundaries.py
