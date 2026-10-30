@@ -175,7 +175,7 @@ public enum FMarketRegimeEngine {
         let crashSignals = [
             ret5.map { $0 <= -0.07 } ?? false,
             drawdown20.map { $0 <= -0.14 } ?? false,
-            vol20.map { $0 >= 0.035 } ?? false,
+            vol20.map { $0 >= 0.35 } ?? false,
             volumeExpansion.map { $0 >= 1.8 } ?? false,
             breadth.map { $0 <= 0.30 } ?? false,
             negativeBenchmarks >= 2
@@ -185,7 +185,7 @@ public enum FMarketRegimeEngine {
         if crashCount >= 3 { candidateRisk = .r4Extreme }
         else if crashCount >= 2 { candidateRisk = .r3Severe }
         else if crashCount == 1 { candidateRisk = .r2High }
-        else if (ret5.map { $0 <= -0.035 } ?? false) || (vol20.map { $0 >= 0.025 } ?? false) {
+        else if (ret5.map { $0 <= -0.035 } ?? false) || (vol20.map { $0 >= 0.25 } ?? false) {
             candidateRisk = .r1Elevated
         } else { candidateRisk = .r0Normal }
 
@@ -203,7 +203,7 @@ public enum FMarketRegimeEngine {
             } ?? false
             if wasRisky && ret5 > 0.025 && !bullishStructure {
                 candidateRegime = .recovery
-            } else if vol20.map({ $0 >= 0.035 }) == true {
+            } else if vol20.map({ $0 >= 0.35 }) == true {
                 candidateRegime = .highVolatility
             } else if candidateRisk >= .r2High {
                 candidateRegime = .riskOff
@@ -293,8 +293,8 @@ public enum FMarketRegimeEngine {
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
             allowedStrategies: strategies,
             observationOnly: [.recovery, .transition, .uncertain, .highVolatility, .riskOff, .extremeRisk, .dataUnreliable].contains(regime),
-            ordinaryTBuyAllowed: dataReliable && confirmedRisk < .r3Severe &&
-                ![.bearTrend, .riskOff, .extremeRisk, .dataUnreliable, .uncertain].contains(regime),
+            ordinaryTBuyAllowed: dataReliable && confirmedRisk < .r2High &&
+                [.bullTrend, .range].contains(regime),
             memory: memory)
     }
 
