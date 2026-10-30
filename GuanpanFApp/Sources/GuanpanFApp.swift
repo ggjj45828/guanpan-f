@@ -1146,8 +1146,12 @@ final class FHomeModel: ObservableObject {
         checkingNASConnection = true
         nasConnectionStatus = "正在检查 NAS 就绪状态…"
         defer { checkingNASConnection = false }
-        do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress) }
-        catch { nasConnectionStatus = FNASReadinessClient.connectionHint(for: error) }
+        do {
+            nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress)
+            Task { await refreshCrossMarketData() }
+        } catch {
+            nasConnectionStatus = FNASReadinessClient.connectionHint(for: error)
+        }
     }
 
     func refreshMarketData(for requestedCodes: [String]? = nil) async {
