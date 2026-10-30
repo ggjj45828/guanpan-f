@@ -2505,6 +2505,9 @@ private extension FDecisionGuardFinding {
         case .missingInvestorProfileRevision(_): return "引用的画像版本不存在"
         case .missingQualifiedResearch(let key): return "缺少合格策略研究：\(key)"
         case .incompleteTradingEvidence(let reason): return reason
+        case .unavailableMarketRegime(let code): return "\(code) 市场状态不可用或不可靠，风险守卫暂停交易"
+        case .extremeMarketRisk(let code): return "\(code) 处于 R4 极端风险，禁止普通买入候选"
+        case .regimeRestrictedTrade(let code): return "\(code) 当前 Regime 不允许普通做T买入候选"
         }
     }
 }

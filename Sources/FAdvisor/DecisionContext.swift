@@ -2,7 +2,7 @@ import Foundation
 import FCore
 
 public enum FContextDataClass: String, Codable, Equatable, Sendable {
-    case quote, intraday, dailyHistory, news, nasResearch, crossMarket
+    case quote, intraday, dailyHistory, news, nasResearch, crossMarket, marketRegime
 }
 
 /// A captured market/research observation. Unavailable data is represented explicitly;
@@ -91,6 +91,7 @@ public extension FContextDataClass {
         case .news: return 24 * 3600
         case .nasResearch: return 7 * 24 * 3600
         case .crossMarket: return 24 * 3600
+        case .marketRegime: return 5 * 24 * 3600
         }
     }
 }
@@ -536,6 +537,9 @@ public enum FDecisionGuardFinding: Codable, Equatable, Hashable, Sendable {
     case missingInvestorProfileRevision(UUID)
     case missingQualifiedResearch(String)
     case incompleteTradingEvidence(String)
+    case unavailableMarketRegime(String)
+    case extremeMarketRisk(String)
+    case regimeRestrictedTrade(String)
 }
 
 public struct FDecisionGuardResult: Codable, Equatable, Sendable {
@@ -596,6 +600,28 @@ public enum FRiskGuard {
             guard let freshQuote = context.freshQuote(for: code, at: now) else {
                 findings.append(.missingFreshQuote(code))
                 return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            let regimeObservation = context.observations
+                .filter { $0.dataClass == .marketRegime && $0.subject == code }
+                .max { $0.capturedAt < $1.capturedAt }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let regimeAssessment = regimeObservation.flatMap { observation -> FMarketRegimeAssessment? in
+                guard observation.isFresh(at: now),
+                      let data = observation.reference?.data(using: .utf8) else { return nil }
+                return try? decoder.decode(FMarketRegimeAssessment.self, from: data)
+            }
+            guard let regimeAssessment, regimeAssessment.securityCode == code,
+                  regimeAssessment.regime != .dataUnreliable else {
+                findings.append(.unavailableMarketRegime(code))
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            if regimeAssessment.riskLevel == .r4Extreme &&
+                [.buy, .dayTrade, .grid].contains(candidate.action) {
+                findings.append(.extremeMarketRisk(code))
+            }
+            if candidate.action == .dayTrade && !regimeAssessment.ordinaryTBuyAllowed {
+                findings.append(.regimeRestrictedTrade(code))
             }
             if !candidate.citedObservationIDs.contains(freshQuote.id) {
                 findings.append(.missingCitedEvidence(freshQuote.id))

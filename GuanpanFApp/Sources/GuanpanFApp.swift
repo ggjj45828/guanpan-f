@@ -786,6 +786,7 @@ final class FHomeModel: ObservableObject {
                     decimalValue: Decimal(feed.articles.count)))
             }
             for code in targetCodes {
+                observations.append(marketRegimeObservation(code: code, capturedAt: contextCaptureTime))
                 if let quote = quotes[code], let price = quote.latestPrice {
                     observations.append(FContextObservation(
                         dataClass: .quote, subject: code, source: quote.source,
@@ -998,6 +999,27 @@ final class FHomeModel: ObservableObject {
             securityRegimeByCode[code] = nil
             securityRegimeStatusByCode[code] = "证券自身状态不可用 · 缺少可信日K"
         }
+    }
+
+    private func marketRegimeObservation(code: String, capturedAt: Date) -> FContextObservation {
+        guard let assessment = securityRegimeByCode[code], let dataAsOf = assessment.dataAsOf else {
+            return FContextObservation(
+                dataClass: .marketRegime, subject: code,
+                source: "FCore deterministic Market Regime Engine",
+                observedAt: nil, capturedAt: capturedAt, decimalValue: nil,
+                unavailableReason: "证券自身 Regime 不可用；没有可信日K或有效样本不足"
+            )
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        let reference = (try? encoder.encode(assessment)).flatMap { String(data: $0, encoding: .utf8) }
+        return FContextObservation(
+            dataClass: .marketRegime, subject: code,
+            source: "FCore deterministic Market Regime Engine",
+            reference: reference, observedAt: dataAsOf, capturedAt: capturedAt,
+            decimalValue: Decimal(assessment.riskLevel.rawValue)
+        )
     }
 
     private func researchSummaryStatus(code: String, evidence: FDecisionResearchEvidence, now: Date) -> String {

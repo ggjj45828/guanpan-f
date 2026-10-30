@@ -125,7 +125,7 @@ public struct FMarketRegimeMemory: Codable, Equatable, Sendable {
     }
 }
 
-public struct FMarketRegimeAssessment: Equatable, Sendable {
+public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let market: String
     public let securityCode: String?
     public let regime: FMarketRegime
