@@ -271,7 +271,27 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "live-provider",
             observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: metadata)
-        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote])
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let regimeBars = (0..<70).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 69) * 86_400), close: 100)
+        }
+        let regime = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+                contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
+                source: "fixture-index-feed", bars: regimeBars,
+                benchmarkObservations: [
+                    .init(benchmark: .csiA500, dailyReturn: 0.002, observedAt: now, source: "fixture-index-feed")
+                ], benchmarkMapping: mapping),
+            now: now)
+        let regimeEncoder = JSONEncoder()
+        regimeEncoder.dateEncodingStrategy = .iso8601
+        let regimeJSON = String(data: try regimeEncoder.encode(regime), encoding: .utf8)!
+        let regimeObservation = FContextObservation(
+            dataClass: .marketRegime, subject: "159352",
+            source: "FCore deterministic Market Regime Engine", reference: regimeJSON,
+            observedAt: regime.dataAsOf, capturedAt: now,
+            decimalValue: Decimal(regime.riskLevel.rawValue))
+        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote, regimeObservation])
         XCTAssertTrue(context.researchEvidence.isEmpty)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest,
             action: .buy, instrumentCode: "159352", units: 10, limitPrice: 1,
