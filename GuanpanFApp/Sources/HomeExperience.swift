@@ -1247,16 +1247,20 @@ struct HomeDestination: View {
                                 .frame(maxWidth: .infinity, minHeight: 64)
                         }
                         Text(model.securityRegimeStatusByCode[code] ?? "证券自身状态：等待真实日K；市场广度等缺失因子不会估算")
+                            .font(.caption).foregroundStyle(.secondary)
                         if let quant = model.localQuantByCode[code] {
-                            Text("本地 Quant：\(quant.summary) · \(quant.strategies.compactMap { item in
-                                item.score.map { "\(item.strategy.rawValue) \(Int($0))" }
-                            }.joined(separator: " / "))")
+                            let strategySummary = quant.strategies.compactMap { item -> String? in
+                                guard let score = item.score else { return nil }
+                                return "\(item.strategy.rawValue) \(Int(score))"
+                            }.joined(separator: " / ")
+                            Text("本地 Quant：\(quant.summary)")
                                 .font(.caption).foregroundStyle(.secondary)
+                            Text(strategySummary.isEmpty ? "策略评分不可用" : strategySummary)
+                                .font(.caption2).foregroundStyle(.secondary)
                             Text((quant.riskReasons + quant.factors.filter { !$0.available }.map { "\($0.key)：\($0.reason)" })
                                 .joined(separator: "；"))
                                 .font(.caption2).foregroundStyle(.secondary).lineLimit(3)
                         }
-                            .font(.caption).foregroundStyle(.secondary)
                         Text(model.dailyKlineStateByCode[code] ?? "数据源：腾讯日 K · 未复权；等待请求")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
