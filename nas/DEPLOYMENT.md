@@ -36,3 +36,10 @@ Official 2026 SSE/SZSE calendar notices:
 
 - SSE: https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml
 - SZSE: https://www.szse.cn/disclosure/notice/general/t20251222_618087.html
+
+
+## Daily benchmark history
+
+The runtime creates `/data/benchmark-history.sqlite3` and starts a separate best-effort background collector for the Shanghai Composite, CSI 300, CSI A500, Nasdaq 100, S&P 500, Nikkei 225, TOPIX, KOSPI, Hang Seng, and VIX. It initially requests up to 730 calendar days and refreshes every six hours. This public Yahoo Finance chart endpoint is not an exchange contract; each instrument's errors are reported independently and do not make the minute service unready.
+
+Read archived rows with `GET /api/v1/benchmark-history?benchmarkId=nasdaq100&startDate=2026-01-01&endDate=2026-10-30`. Supported IDs are `shanghai_composite`, `csi300`, `csi_a500`, `nasdaq100`, `sp500`, `nikkei225`, `topix`, `kospi`, `hang_seng`, and `vix`. An empty archive returns `status=unavailable`; it never generates missing dates. Rows include source timestamp, fetch time, and source label. Keep the existing persistent `/data` volume during image updates.
