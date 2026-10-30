@@ -533,13 +533,14 @@ public enum FMarketRegimeEngine {
             lastEvaluationAt: input.asOf)
 
         return FMarketRegimeAssessment(
-            market: input.market, securityCode: input.securityCode, regime: regime,
-            riskLevel: confirmedRisk, confidence: confidence, factors: factors,
+            market: input.market, securityCode: input.securityCode,
             contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
-            reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
             secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors,
-            globalRegime: globalRegime, primaryBenchmark: primaryBenchmark, dataAsOf: uniqueBars.last?.timestamp,
+            globalRegime: globalRegime, primaryBenchmark: primaryBenchmark, regime: regime,
+            riskLevel: confirmedRisk, confidence: confidence, factors: factors,
+            reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
+            dataAsOf: uniqueBars.last?.timestamp,
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
