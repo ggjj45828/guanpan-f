@@ -79,7 +79,13 @@ class YahooBenchmarkProvider:
                 source_timestamp = datetime.fromtimestamp(int(epoch), timezone.utc)
                 if source_timestamp > now.astimezone(timezone.utc):
                     continue
-                day = source_timestamp.astimezone(zone).date().isoformat()
+                session_date = source_timestamp.astimezone(zone).date()
+                # The provider may return an in-progress daily candle during
+                # that exchange's session. Archive only completed local dates;
+                # otherwise Regime would treat a live partial close as EOD data.
+                if session_date >= now.astimezone(zone).date():
+                    continue
+                day = session_date.isoformat()
                 prices = [opens[index], highs[index], lows[index], closes[index]]
                 if any(v is None or not math.isfinite(float(v)) or float(v) <= 0 for v in prices):
                     continue
