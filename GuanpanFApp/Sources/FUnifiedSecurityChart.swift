@@ -41,8 +41,7 @@ struct FUnifiedSecurityChart: View {
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
                 let minuteDomain = minuteDisplayDomain(series: series, range: visibleRange,
-                                                       zoomScale: displayedZoomScale,
-                                                       window: model.chart.window)
+                                                       zoomScale: displayedZoomScale)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
@@ -351,25 +350,16 @@ struct FUnifiedSecurityChart: View {
     }
 
     private func minuteDisplayDomain(series: FChartSeries, range: Range<Int>,
-                                     zoomScale: CGFloat, window: FChartWindow) -> ClosedRange<Double> {
+                                     zoomScale: CGFloat) -> ClosedRange<Double> {
         guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
-        let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
-        let first = visibleMinutes.min() ?? 0
-        let last = visibleMinutes.max() ?? 1
-        if zoomScale > 1.01 { return first...(max(first + 1, last)) }
-        if case .liveIntraday = window {
-            switch FMainlandTradingCalendar.status(at: Date()) {
-            case .continuous, .lunchBreak:
-                // Keep today's live curve readable during the opening hours;
-                // plotting five minutes against a full-day axis hides it at
-                // the far left. Archived days retain the full-session clock.
-                return first...(max(first + 1, last))
-            case .preOpen, .closed, .unknown:
-                break
-            }
+        if zoomScale > 1.01 {
+            let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
+            let first = visibleMinutes.min() ?? 0
+            let last = visibleMinutes.max() ?? first + 1
+            return first...max(first + 1, last)
         }
-        // Keep live and archived intraday data on the same full-session clock.
-        // At lunch or before the close, the blank afternoon is intentional.
+        // Keep the unzoomed live and archived minute charts anchored to the
+        // complete CN trading session so realtime updates never move the axis.
         return 0...252
     }
 
