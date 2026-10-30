@@ -15,6 +15,37 @@ final class MarketRegimeEngineTests: XCTestCase {
 
     private func flat(_ count: Int = 70) -> [Double] { Array(repeating: 100, count: count) }
 
+    func testBenchmarkMappingKeepsRegionalAndGlobalSensorsSeparate() {
+        let nasdaq = FMarketBenchmarkMapping.resolve(securityCode: "159941")
+        XCTAssertEqual(nasdaq?.market, .usNasdaq100)
+        XCTAssertEqual(nasdaq?.primaryBenchmark, .nasdaq100)
+        XCTAssertTrue(nasdaq?.secondaryBenchmarks.contains(.sp500) == true)
+        XCTAssertFalse(nasdaq?.primaryBenchmark == .sseComposite)
+
+        let a500 = FMarketBenchmarkMapping.resolve(securityCode: "159352")
+        XCTAssertEqual(a500?.primaryBenchmark, .csiA500)
+        XCTAssertEqual(a500?.secondaryBenchmarks, [.csi300, .sseComposite])
+        XCTAssertTrue(a500?.globalSensors.contains(.kospi) == true)
+
+        XCTAssertEqual(FMarketBenchmarkMapping.resolve(securityCode: "513000", instrumentName: "日经ETF")?.primaryBenchmark, .nikkei225)
+        XCTAssertEqual(FMarketBenchmarkMapping.resolve(securityCode: "513330", instrumentName: "恒生ETF")?.primaryBenchmark, .hangSeng)
+        XCTAssertEqual(FMarketBenchmarkMapping.resolve(securityCode: "513770", instrumentName: "韩国KOSPI ETF")?.primaryBenchmark, .kospi)
+    }
+
+    func testMissingPrimaryBenchmarkLeavesMappedMarketObservationOnly() {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let input = FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+            contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture",
+            bars: bars(flat()), benchmarkMapping: mapping)
+        let result = FMarketRegimeEngine.evaluate(input, now: now)
+        XCTAssertEqual(result.requiredBenchmarks, [.csiA500])
+        XCTAssertEqual(result.unavailableBenchmarks, [.csiA500])
+        XCTAssertEqual(result.globalRegime, .uncertain)
+        XCTAssertTrue(result.observationOnly)
+        XCTAssertFalse(result.ordinaryTBuyAllowed)
+        XCTAssertTrue(result.allowedStrategies.isEmpty)
+    }
+
     func testInsufficientOrStaleDataFailsClosedAndMarksUnavailableFactors() {
         let input = FMarketRegimeInput(market: "CN", asOf: now,
             sourceUpdatedAt: now.addingTimeInterval(-10 * 86_400), source: "fixture",
