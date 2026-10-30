@@ -18,7 +18,7 @@ private struct FixedCandidateModel: FAdvisorModelProviding {
 
 final class MarketChartAcceptanceTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Shanghai")!
-    private let now = Date().addingTimeInterval(-120)
+    private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
 
     func testClosedIndexQuoteShowsVerifiedMarketTime() {
         let metadata = FQuoteTemporalMetadata(
@@ -370,32 +370,42 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testResearchToolExecutionBindsProviderEvidenceToRequestAndContextTime() async throws {
-        let context = try contextWithResearchEvidence(evidenceJSON(qualified: true))
+        let capturedAt = Date().addingTimeInterval(-120)
+        let asOf = capturedAt.addingTimeInterval(-120)
+        let generatedAt = capturedAt.addingTimeInterval(-60)
+        let context = try contextWithResearchEvidence(
+            evidenceJSON(qualified: true, asOf: asOf, generatedAt: generatedAt),
+            capturedAt: capturedAt)
         let request = try FAdvisorQuestionRequest(question: "研究159352",
                                                   scope: .instrument("159352"),
-                                                  decisionContext: context, now: now)
+                                                  decisionContext: context, now: capturedAt)
         let call = FAdvisorResearchToolCall(tool: .vwapBreakStudy, securityCode: "159352",
                                             market: "CN", startDate: "2026-10-01",
-                                            endDate: "2026-10-23", asOf: now)
+                                            endDate: "2026-10-23", asOf: asOf)
         let result = try await call.execute(using: FixedResearchProvider(result: context.researchEvidence[0]),
-                                            for: request, now: now)
+                                            for: request, now: capturedAt)
         XCTAssertEqual(result, context.researchEvidence[0])
     }
 
     func testResearchToolAcceptsPostRequestCaptureOnlyWithFrozenAsOf() async throws {
-        let context = try contextWithResearchEvidence(evidenceJSON(qualified: true))
+        let capturedAt = Date().addingTimeInterval(-120)
+        let asOf = capturedAt.addingTimeInterval(-120)
+        let generatedAt = capturedAt.addingTimeInterval(-60)
+        let context = try contextWithResearchEvidence(
+            evidenceJSON(qualified: true, asOf: asOf, generatedAt: generatedAt),
+            capturedAt: capturedAt)
         let request = try FAdvisorQuestionRequest(question: "研究159352",
                                                   scope: .instrument("159352"),
-                                                  decisionContext: context, now: now)
+                                                  decisionContext: context, now: capturedAt)
         let call = FAdvisorResearchToolCall(tool: .vwapBreakStudy, securityCode: "159352",
                                             market: "CN", startDate: "2026-10-01",
-                                            endDate: "2026-10-23", asOf: now)
+                                            endDate: "2026-10-23", asOf: asOf)
         let envelope = context.researchEvidence[0].envelope
         let postRequestEvidence = FDecisionResearchEvidence(
-            envelope: envelope, capturedAt: now.addingTimeInterval(60))
+            envelope: envelope, capturedAt: capturedAt.addingTimeInterval(60))
         let result = try await call.execute(using: FixedResearchProvider(result: postRequestEvidence),
-                                            for: request, now: now)
-        XCTAssertEqual(result.capturedAt, now.addingTimeInterval(60))
+                                            for: request, now: capturedAt)
+        XCTAssertEqual(result.capturedAt, capturedAt.addingTimeInterval(60))
         XCTAssertLessThanOrEqual(result.envelope.observedAt, context.createdAt)
     }
 
@@ -740,22 +750,32 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     private func emptySnapshot() throws -> FReadOnlyLedgerSnapshot {
-        let opening = FAccountOpeningSnapshot(capturedAt: now.addingTimeInterval(-60), cashBalance: 100)
+        try emptySnapshot(capturedAt: now)
+    }
+
+    private func emptySnapshot(capturedAt: Date) throws -> FReadOnlyLedgerSnapshot {
+        let opening = FAccountOpeningSnapshot(capturedAt: capturedAt.addingTimeInterval(-60), cashBalance: 100)
         let book = FAccountBook(openingSnapshot: opening, cashBalance: 100,
-                                updatedAt: now.addingTimeInterval(-60))
-        return try book.readOnlySnapshot(capturedAt: now)
+                                updatedAt: capturedAt.addingTimeInterval(-60))
+        return try book.readOnlySnapshot(capturedAt: capturedAt)
     }
 
     private func contextWithResearchEvidence(_ json: String) throws -> FDecisionContext {
+        try contextWithResearchEvidence(json, capturedAt: now)
+    }
+
+    private func contextWithResearchEvidence(_ json: String, capturedAt: Date) throws -> FDecisionContext {
         let verifiedJSON = recomputedEvidenceJSON(json)
         let envelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: Data(verifiedJSON.utf8))
-        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [],
-                                       researchEvidence: [FDecisionResearchEvidence(envelope: envelope, capturedAt: now)])
-        try context.validate(now: now)
+        let context = FDecisionContext(snapshot: try emptySnapshot(capturedAt: capturedAt), observations: [],
+                                       researchEvidence: [FDecisionResearchEvidence(envelope: envelope, capturedAt: capturedAt)])
+        try context.validate(now: capturedAt)
         return context
     }
 
-    private func evidenceJSON(qualified: Bool) -> String {
+    private func evidenceJSON(qualified: Bool, asOf: Date? = nil, generatedAt: Date? = nil) -> String {
+        let asOfText = asOf.map { ISO8601DateFormatter().string(from: $0) } ?? "2026-10-23T07:58:00Z"
+        let generatedAtText = generatedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "2026-10-23T07:59:00Z"
         let metrics: [String: Any] = [
             "evidenceState": qualified ? "available_for_review" : "insufficient_independent_days",
             "trainingDays": qualified ? 24 : 4,
@@ -767,8 +787,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
             "schemaVersion": 1, "methodologyVersion": "minute-research-1",
             "evidenceId": String(repeating: "a", count: 64), "securityCode": "159352", "market": "CN",
             "range": ["start": "2026-10-01", "end": "2026-10-23"],
-            "asOf": ISO8601DateFormatter().string(from: now.addingTimeInterval(-120)),
-            "generatedAt": ISO8601DateFormatter().string(from: now.addingTimeInterval(-60)),
+            "asOf": asOfText, "generatedAt": generatedAtText,
             "timezone": "Asia/Shanghai", "sessionCoverage": ["complete": 20, "partial": 1, "missing": 2],
             "qualifiedIndependentDays": qualified ? 28 : 4, "minimumQuality": 90, "sources": ["fixture-provider"],
             "evidence": ["vwapBreak": ["windows": ["5": metrics]],
