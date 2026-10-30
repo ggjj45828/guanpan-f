@@ -42,7 +42,8 @@ class BenchmarkHistoryTests(unittest.TestCase):
 
     def test_rejects_invalid_identity_ohlc_and_naive_timestamps(self):
         for row in (self.row(benchmarkId="made_up"), self.row(high=19800),
-                    self.row(fetchedAt="2026-10-30T14:00:00")):
+                    self.row(fetchedAt="2026-10-30T14:00:00"),
+                    self.row(sourceTimestamp="2026-10-30T15:00:00+00:00")):
             with self.subTest(row=row), self.assertRaises(BenchmarkHistoryError):
                 self.archive.ingest([row])
 
@@ -58,7 +59,7 @@ class BenchmarkHistoryTests(unittest.TestCase):
             def __exit__(self, *_args): return None
             def read(self, _limit): return json.dumps(payload).encode()
         with patch("nas.fminute.benchmark_history.urlopen", return_value=Response()):
-            provider = YahooBenchmarkProvider(clock=lambda: datetime(2026, 10, 30, tzinfo=timezone.utc))
+            provider = YahooBenchmarkProvider(clock=lambda: datetime(2026, 10, 31, tzinfo=timezone.utc))
             rows = provider.fetch("nasdaq100")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["close"], 104.0)
