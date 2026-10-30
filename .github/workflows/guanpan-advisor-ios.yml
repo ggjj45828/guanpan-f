@@ -180,6 +180,23 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
           unzip -t ../观盘max.ipa
 
+      - name: Package F NAS deployment source
+        if: success()
+        run: |
+          mkdir -p build
+          printf 'source_revision=%s\n' "$GITHUB_SHA" > NAS-REVISION.txt
+          zip -qr build/F-NAS-Deployment-Package.zip nas Tools/test_minute_service.py NAS-REVISION.txt
+          unzip -l build/F-NAS-Deployment-Package.zip
+
+      - name: Upload F NAS deployment package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: f-nas-deployment-package
+          path: build/F-NAS-Deployment-Package.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload iOS build artifacts
         if: always()
         uses: actions/upload-artifact@v4
