@@ -1235,7 +1235,7 @@ struct HomeDestination: View {
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt,
                                                               reference: model.marketReferenceByCode[code]),
-                        height: 640)
+                        height: 460)
                     .padding(.horizontal, -8)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -1251,7 +1251,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 620)
+                                height: 460)
                             .padding(.horizontal, -8)
                         } else {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
@@ -1301,7 +1301,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt,
                                                                              daily: model.dailyKlineByCode[code]),
-                                height: 640)
+                                height: 460)
                             .padding(.horizontal, -8)
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
                                 .font(.caption2).foregroundStyle(.secondary)
