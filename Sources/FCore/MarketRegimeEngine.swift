@@ -276,6 +276,9 @@ public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let requiredBenchmarks: [FMarketBenchmark]
     public let availableBenchmarks: [FMarketBenchmark]
     public let unavailableBenchmarks: [FMarketBenchmark]
+    public let secondaryBenchmarks: [FMarketBenchmark]
+    public let globalSensors: [FMarketBenchmark]
+    public let globalRegime: FGlobalRegime
     public let regime: FMarketRegime
     public let riskLevel: FMarketRiskLevel
     /// Evidence-strength score, not a forecast or probability of profit.
@@ -480,7 +483,9 @@ public enum FMarketRegimeEngine {
             riskLevel: confirmedRisk, confidence: confidence, factors: factors,
             contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
-            reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\\($0.rawValue)" },\n            secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors, globalRegime: globalRegime, dataAsOf: uniqueBars.last?.timestamp,
+            reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\($0.rawValue)" },
+            secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors,
+            globalRegime: globalRegime, dataAsOf: uniqueBars.last?.timestamp,
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
