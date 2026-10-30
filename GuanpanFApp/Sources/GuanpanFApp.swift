@@ -1261,7 +1261,6 @@ private enum FQuoteHTTPClient {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.isLenient = false
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        let fetchedDay = Calendar(identifier: .gregorian).dateComponents(in: timeZone, from: Date())
         let fetchedAt = Date()
         let expectedDay = formatter.string(from: fetchedAt).prefix(10)
         var byTimestamp: [Date: FMinuteSample] = [:]
@@ -1282,7 +1281,6 @@ private enum FQuoteHTTPClient {
            fetchedAt.timeIntervalSince(latest) > 300 {
             throw FMarketDataError.staleOrWrongSession
         }
-        _ = fetchedDay
         return try FCurrentIntradaySnapshot(
             securityCode: code,
             samples: samples,
