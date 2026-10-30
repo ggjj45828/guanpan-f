@@ -217,7 +217,8 @@ public struct FMarketRegimeInput: Sendable {
                 contextKind: FMarketContextKind = .unclassified, asOf: Date,
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
                 breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
-                benchmarkReturns: [FMarketBenchmark: Double] = [:],\n                benchmarkMapping: FMarketBenchmarkMapping? = nil) {
+                benchmarkReturns: [FMarketBenchmark: Double] = [:],
+                benchmarkMapping: FMarketBenchmarkMapping? = nil) {
         self.market = market
         self.securityCode = securityCode
         self.contextKind = contextKind
