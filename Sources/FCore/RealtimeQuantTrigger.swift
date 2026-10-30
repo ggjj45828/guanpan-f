@@ -135,6 +135,8 @@ public struct FQuantRealtimeAssessment: Equatable, Sendable {
     public let validUntil: Date?
     public let invalidationPrice: Decimal?
     public let quoteTimestamp: Date?
+    public let marketRegime: FMarketRegime?
+    public let marketRiskLevel: FMarketRiskLevel?
     /// When quote quality/session pauses monitoring, persist this state and
     /// pass it back as `previousOperationalState` after the pause clears.
     public let resumeState: FRealtimeTriggerState?
@@ -152,6 +154,7 @@ public enum FRealtimeQuantTrigger {
                                  previousState: FRealtimeTriggerState = .waiting,
                                  previousPlanID: UUID? = nil,
                                  previousOperationalState: FRealtimeTriggerState? = nil,
+                                 marketContext: FMarketRegimeAssessment? = nil,
                                  now: Date = Date(),
                                  maximumQuoteAge: TimeInterval = defaultMaximumQuoteAge,
                                  approachDistance: Decimal = defaultApproachDistance)
@@ -163,54 +166,80 @@ public enum FRealtimeQuantTrigger {
         guard now.timeIntervalSince1970.isFinite, maximumQuoteAge.isFinite,
               maximumQuoteAge >= 0, approachDistance >= 0,
               NSDecimalNumber(decimal: approachDistance).doubleValue.isFinite else {
-            return assessment(plan: plan, quote: quote, state: .paused,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                               reasons: ["invalid_evaluation_parameters"], confidence: 0,
                               resumeState: operationalState)
         }
 
         guard let plan else {
-            return assessment(plan: nil, quote: quote, state: .waiting,
+            return assessment(plan: nil, quote: quote, marketContext: marketContext, state: .waiting,
                               reasons: ["no_candidate_plan"], confidence: 0)
         }
 
         if operationalState == .filled || operationalState == .invalidated ||
             operationalState == .expired || operationalState == .leftZone {
-            return assessment(plan: plan, quote: quote, state: operationalState,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: operationalState,
                               reasons: ["terminal_plan_state"], confidence: 0)
         }
         guard quote.securityCode == plan.securityCode else {
-            return assessment(plan: plan, quote: quote, state: .paused,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                               reasons: ["quote_plan_security_mismatch"], confidence: 0,
                               resumeState: operationalState)
         }
         if now >= plan.validUntil {
-            return assessment(plan: plan, quote: quote, state: .expired,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .expired,
                               reasons: ["plan_expired"], confidence: 0)
         }
         if now < plan.validFrom {
-            return assessment(plan: plan, quote: quote, state: .waiting,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .waiting,
                               reasons: ["plan_not_yet_valid"], confidence: 0)
         }
         guard quote.temporalMetadata.freshness(at: now, maximumAge: maximumQuoteAge) == .fresh,
               let quoteTimestamp = quote.temporalMetadata.quoteTimestamp else {
-            return assessment(plan: plan, quote: quote, state: .paused,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                               reasons: ["quote_stale_or_unverified"], confidence: 0,
                               resumeState: operationalState)
         }
         guard quote.temporalMetadata.marketSessionStatus == .continuous else {
-            return assessment(plan: plan, quote: quote, state: .paused,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                               reasons: ["market_not_in_continuous_session"], confidence: 0,
                               resumeState: operationalState)
         }
 
+        if let marketContext {
+            if let contextCode = marketContext.securityCode, contextCode != quote.securityCode {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["market_context_security_mismatch"], confidence: 0,
+                                  resumeState: operationalState)
+            }
+            if marketContext.regime == .dataUnreliable {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["DATA_UNRELIABLE"], confidence: 0,
+                                  resumeState: operationalState)
+            }
+            if marketContext.riskLevel == .r4Extreme &&
+                (plan.direction == .buy || plan.direction == .tBuy) {
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: ["EXTREME_MARKET_RISK"], confidence: 0,
+                                  resumeState: operationalState)
+            }
+            if plan.direction == .tBuy && !marketContext.ordinaryTBuyAllowed {
+                let reason = marketContext.regime == .bearTrend
+                    ? "BEAR_REGIME_T_BUY_RESTRICTED" : "MARKET_REGIME_T_BUY_RESTRICTED"
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                                  reasons: [reason], confidence: 0,
+                                  resumeState: operationalState)
+            }
+        }
+
         if let invalidationPrice = plan.invalidationPrice,
            (plan.direction.approachesFromAbove ? quote.price <= invalidationPrice : quote.price >= invalidationPrice) {
-            return assessment(plan: plan, quote: quote, state: .invalidated,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .invalidated,
                               reasons: ["plan_invalidation_price_crossed"], confidence: 100)
         }
 
         if quote.price >= plan.lowerPrice && quote.price <= plan.upperPrice {
-            return assessment(plan: plan, quote: quote, state: .triggered,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .triggered,
                               reasons: ["price_inside_plan_zone"], confidence: 100)
         }
 
@@ -218,42 +247,43 @@ public enum FRealtimeQuantTrigger {
             if quote.price > plan.upperPrice {
                 let nearUpperBound = quote.price <= plan.upperPrice * (1 + approachDistance)
                 if operationalState == .triggered {
-                    return assessment(plan: plan, quote: quote, state: .leftZone,
+                    return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .leftZone,
                                       reasons: ["price_left_trigger_zone"], confidence: 100)
                 }
-                return assessment(plan: plan, quote: quote,
+                return assessment(plan: plan, quote: quote, marketContext: marketContext,
                                   state: nearUpperBound ? .approaching : .waiting,
                                   reasons: [nearUpperBound ? "approaching_buy_zone" : "waiting_above_buy_zone"],
                                   confidence: 100)
             }
             if operationalState == .approaching || operationalState == .triggered {
-                return assessment(plan: plan, quote: quote, state: .leftZone,
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .leftZone,
                                   reasons: ["price_crossed_below_buy_zone_without_observed_fill"], confidence: 100)
             }
-            return assessment(plan: plan, quote: quote, state: .waiting,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .waiting,
                               reasons: ["price_below_buy_zone"], confidence: 100)
         }
 
         if quote.price < plan.lowerPrice {
             let nearLowerBound = quote.price >= plan.lowerPrice * (1 - approachDistance)
             if operationalState == .triggered {
-                return assessment(plan: plan, quote: quote, state: .leftZone,
+                return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .leftZone,
                                   reasons: ["price_left_trigger_zone"], confidence: 100)
             }
-            return assessment(plan: plan, quote: quote,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext,
                               state: nearLowerBound ? .approaching : .waiting,
                               reasons: [nearLowerBound ? "approaching_sell_zone" : "waiting_below_sell_zone"],
                               confidence: 100)
         }
         if operationalState == .approaching || operationalState == .triggered {
-            return assessment(plan: plan, quote: quote, state: .leftZone,
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .leftZone,
                               reasons: ["price_crossed_above_sell_zone_without_observed_fill"], confidence: 100)
         }
-        return assessment(plan: plan, quote: quote, state: .waiting,
+        return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .waiting,
                           reasons: ["price_above_sell_zone"], confidence: 100)
     }
 
     private static func assessment(plan: FQuantTriggerPlan?, quote: FQuantQuoteSnapshot,
+                                   marketContext: FMarketRegimeAssessment?,
                                    state: FRealtimeTriggerState, reasons: [String],
                                    confidence: Int,
                                    resumeState: FRealtimeTriggerState? = nil) -> FQuantRealtimeAssessment {
@@ -291,6 +321,7 @@ public enum FRealtimeQuantTrigger {
             suggestedQuantity: plan?.suggestedQuantity, validUntil: plan?.validUntil,
             invalidationPrice: plan?.invalidationPrice,
             quoteTimestamp: quote.temporalMetadata.quoteTimestamp,
+            marketRegime: marketContext?.regime, marketRiskLevel: marketContext?.riskLevel,
             resumeState: resumeState)
     }
 }
