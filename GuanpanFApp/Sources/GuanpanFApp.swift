@@ -977,7 +977,8 @@ final class FHomeModel: ObservableObject {
                     volume: NSDecimalNumber(decimal: bar.volume).doubleValue
                 )
             }
-            let mapping = FMarketBenchmarkMapping.resolve(securityCode: code)
+            let instrumentName = holdings.first(where: { $0.instrumentCode == code })?.name
+            let mapping = FMarketBenchmarkMapping.resolve(securityCode: code, instrumentName: instrumentName)
             let regime = FMarketRegimeEngine.evaluate(
                 FMarketRegimeInput(
                     market: "security:\(code)", securityCode: code,
