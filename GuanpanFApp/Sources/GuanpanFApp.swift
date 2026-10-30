@@ -979,6 +979,10 @@ final class FHomeModel: ObservableObject {
             }
             let instrumentName = holdings.first(where: { $0.instrumentCode == code })?.name
             let mapping = FMarketBenchmarkMapping.resolve(securityCode: code, instrumentName: instrumentName)
+            let regimeMemoryKey = "guanpan.f.market-regime.\(code).\(mapping?.primaryBenchmark.rawValue ?? "unmapped")"
+            let previousRegimeMemory = UserDefaults.standard.data(forKey: regimeMemoryKey).flatMap {
+                try? JSONDecoder().decode(FMarketRegimeMemory.self, from: $0)
+            }
             let regime = FMarketRegimeEngine.evaluate(
                 FMarketRegimeInput(
                     market: "security:\(code)", securityCode: code,
@@ -986,9 +990,13 @@ final class FHomeModel: ObservableObject {
                     sourceUpdatedAt: snapshot.fetchedAt, source: snapshot.source, bars: regimeBars,
                     benchmarkMapping: mapping
                 ),
+                previous: previousRegimeMemory,
                 now: evaluatedAt
             )
             securityRegimeByCode[code] = regime
+            if let encodedMemory = try? JSONEncoder().encode(regime.memory) {
+                UserDefaults.standard.set(encodedMemory, forKey: regimeMemoryKey)
+            }
             let availableFactors = regime.factors.filter(\.available).count
             let dataTime = regime.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
             let primaryStatus = regime.primaryBenchmark.map { benchmark in
