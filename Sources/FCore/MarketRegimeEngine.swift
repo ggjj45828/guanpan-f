@@ -76,7 +76,7 @@ public enum FMarketContextKind: String, Codable, CaseIterable, Hashable, Sendabl
 }
 
 public enum FMarketBenchmark: String, Codable, CaseIterable, Hashable, Sendable {
-    case sseComposite, csi300, csiA500, nasdaq100, nikkei225, kospi, hangSeng
+    case sseComposite, csi300, csiA500, nasdaq100, sp500, nikkei225, topix, kospi, hangSeng, vix
 
     public var displayName: String {
         switch self {
@@ -84,11 +84,93 @@ public enum FMarketBenchmark: String, Codable, CaseIterable, Hashable, Sendable 
         case .csi300: return "沪深300"
         case .csiA500: return "中证A500"
         case .nasdaq100: return "纳斯达克100"
+        case .sp500: return "标普500"
         case .nikkei225: return "日经225"
+        case .topix: return "TOPIX"
         case .kospi: return "韩国KOSPI"
         case .hangSeng: return "恒生指数"
+        case .vix: return "VIX"
         }
     }
+}
+
+/// Shared primary/secondary/global sensor mapping for one security.
+/// Mapping declares relationships only; it never implies a sensor has usable data.
+public struct FMarketBenchmarkMapping: Codable, Equatable, Sendable {
+    public let securityID: String
+    public let market: FMarketContextKind
+    public let primaryBenchmark: FMarketBenchmark
+    public let secondaryBenchmarks: [FMarketBenchmark]
+    public let globalSensors: [FMarketBenchmark]
+    public let supportsIOPV: Bool
+    public let currency: String
+    public let tradingSession: String
+
+    public init(securityID: String, market: FMarketContextKind, primaryBenchmark: FMarketBenchmark,
+                secondaryBenchmarks: [FMarketBenchmark] = [], globalSensors: [FMarketBenchmark] = [],
+                supportsIOPV: Bool, currency: String, tradingSession: String) {
+        self.securityID = securityID
+        self.market = market
+        self.primaryBenchmark = primaryBenchmark
+        self.secondaryBenchmarks = Array(Set(secondaryBenchmarks)).filter { $0 != primaryBenchmark }
+            .sorted { $0.rawValue < $1.rawValue }
+        self.globalSensors = Array(Set(globalSensors)).sorted { $0.rawValue < $1.rawValue }
+        self.supportsIOPV = supportsIOPV
+        self.currency = currency
+        self.tradingSession = tradingSession
+    }
+
+    public static func resolve(securityCode: String, instrumentName: String? = nil) -> FMarketBenchmarkMapping? {
+        let name = (instrumentName ?? "").lowercased()
+        let global: [FMarketBenchmark] = [.nasdaq100, .sp500, .hangSeng, .nikkei225, .kospi, .vix]
+        func mapping(_ market: FMarketContextKind, _ primary: FMarketBenchmark,
+                     _ secondary: [FMarketBenchmark], _ currency: String, _ session: String) -> Self {
+            Self(securityID: securityCode, market: market, primaryBenchmark: primary,
+                 secondaryBenchmarks: secondary, globalSensors: global,
+                 supportsIOPV: securityCode.hasPrefix("15") || securityCode.hasPrefix("51") || securityCode.hasPrefix("56"),
+                 currency: currency, tradingSession: session)
+        }
+        if securityCode == "159941" || name.contains("纳指") || name.contains("nasdaq") {
+            return mapping(.usNasdaq100, .nasdaq100, [.sp500], "CNY", "CN-A-share-session")
+        }
+        if name.contains("日经") || name.contains("nikkei") || name.contains("日本") {
+            return mapping(.japan, .nikkei225, [.topix], "CNY", "CN-A-share-session")
+        }
+        if name.contains("kospi") || name.contains("韩国") {
+            return mapping(.korea, .kospi, [], "CNY", "CN-A-share-session")
+        }
+        if name.contains("恒生") || name.contains("港股") || name.contains("hang seng") {
+            return mapping(.hongKong, .hangSeng, [], "CNY", "CN-A-share-session")
+        }
+        if securityCode == "159352" || name.contains("a500") || name.contains("中证a500") {
+            return mapping(.chinaAshare, .csiA500, [.csi300, .sseComposite], "CNY", "CN-A-share-session")
+        }
+        if name.contains("沪深300") || name.contains("csi 300") {
+            return mapping(.chinaAshare, .csi300, [.sseComposite], "CNY", "CN-A-share-session")
+        }
+        if name.contains("上证") || name.contains("sse") {
+            return mapping(.chinaAshare, .sseComposite, [.csi300, .csiA500], "CNY", "CN-A-share-session")
+        }
+        return nil
+    }
+}
+
+public enum FGlobalRegime: String, Codable, CaseIterable, Sendable {
+    case riskOn, neutral, riskOff, extreme, uncertain
+}
+
+public struct FIndexRegimeSnapshot: Codable, Equatable, Sendable, Identifiable {
+    public var id: String { benchmark.rawValue }
+    public let benchmark: FMarketBenchmark
+    public let regime: FMarketRegime
+    public let riskLevel: FMarketRiskLevel
+    public let trend: String
+    public let volatility: String
+    public let freshness: String
+    public let observedAt: Date?
+    public let source: String?
+    public let available: Bool
+    public let unavailableReason: String?
 }
 
 public enum FQuantStrategyKind: String, Codable, CaseIterable, Hashable, Sendable {
@@ -135,7 +217,7 @@ public struct FMarketRegimeInput: Sendable {
                 contextKind: FMarketContextKind = .unclassified, asOf: Date,
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
                 breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
-                benchmarkReturns: [FMarketBenchmark: Double] = [:]) {
+                benchmarkReturns: [FMarketBenchmark: Double] = [:],\n                benchmarkMapping: FMarketBenchmarkMapping? = nil) {
         self.market = market
         self.securityCode = securityCode
         self.contextKind = contextKind
@@ -249,14 +331,20 @@ public enum FMarketRegimeEngine {
         let marketBenchmarkReturns = input.benchmarkReturns.values.filter(\.isFinite)
         let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite) + marketBenchmarkReturns
         let negativeBenchmarks = benchmarkReturns.filter { $0 <= -0.04 }.count
-        let requiredBenchmarks = input.contextKind.requiredBenchmarks
-        let availableBenchmarks = requiredBenchmarks.filter {
-            input.benchmarkReturns[$0]?.isFinite == true
-        }
-        let unavailableBenchmarks = requiredBenchmarks.filter {
-            input.benchmarkReturns[$0]?.isFinite != true
-        }
-        let marketContextComplete = input.contextKind != .unclassified && unavailableBenchmarks.isEmpty
+        let mapping = input.benchmarkMapping
+        let primaryBenchmark = mapping?.primaryBenchmark
+        let requiredBenchmarks = primaryBenchmark.map { [$0] } ?? input.contextKind.requiredBenchmarks
+        let availableBenchmarks = requiredBenchmarks.filter { input.benchmarkReturns[$0]?.isFinite == true }
+        let unavailableBenchmarks = requiredBenchmarks.filter { input.benchmarkReturns[$0]?.isFinite != true }
+        let marketContextComplete = mapping != nil && input.contextKind != .unclassified && unavailableBenchmarks.isEmpty
+        let secondaryBenchmarks = mapping?.secondaryBenchmarks ?? []
+        let globalSensors = mapping?.globalSensors ?? []
+        let allMappedSensors = Set(requiredBenchmarks + secondaryBenchmarks + globalSensors)
+        let unavailableMappedSensors = allMappedSensors.filter { input.benchmarkReturns[$0]?.isFinite != true }.sorted { $0.rawValue < $1.rawValue }
+        let globalAvailable = globalSensors.compactMap { input.benchmarkReturns[$0] }.filter(\\.isFinite)
+        let globalRegime: FGlobalRegime = globalAvailable.isEmpty ? .uncertain :
+            (globalAvailable.filter { $0 <= -0.04 }.count >= 3 ? .riskOff :
+             (globalAvailable.filter { $0 >= 0.02 }.count >= 3 ? .riskOn : .neutral))
 
         let factors = [
             factor("trend_MA20_60", value: ma20.flatMap { a in ma60.map { a / $0 - 1 } },
@@ -392,7 +480,7 @@ public enum FMarketRegimeEngine {
             riskLevel: confirmedRisk, confidence: confidence, factors: factors,
             contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
             availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
-            reasons: reasons + benchmarkReasons, dataAsOf: uniqueBars.last?.timestamp,
+            reasons: reasons + benchmarkReasons + unavailableMappedSensors.map { "sensor_unavailable_\\($0.rawValue)" },\n            secondaryBenchmarks: secondaryBenchmarks, globalSensors: globalSensors, globalRegime: globalRegime, dataAsOf: uniqueBars.last?.timestamp,
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
