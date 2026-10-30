@@ -18,6 +18,8 @@ on:
       - 'Sources/**'
       - 'Tests/**'
       - 'GuanpanFApp/**'
+      - 'nas/**'
+      - 'Tools/test_benchmark_history.py'
       - '.github/workflows/guanpan-advisor-ios.yml'
 
 permissions:
@@ -38,6 +40,9 @@ jobs:
             Tools.test_minute_service.MinuteServiceTests.test_backfill_status_reads_coverage_projection_without_recomputing_every_day \
             Tools.test_minute_service.MinuteServiceTests.test_readyz_uses_bounded_archive_probe \
             Tools.test_minute_service.MinuteServiceTests.test_readyz_fails_closed_when_calendar_does_not_review_current_year
+
+      - name: Verify NAS benchmark daily archive
+        run: python3 -m unittest -v Tools.test_benchmark_history
 
       - name: Show Apple toolchain
         run: |
