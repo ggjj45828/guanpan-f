@@ -129,6 +129,23 @@ def make_handler(service: MinuteArchiveService):
                                                                 "last_calendar_cycle", {"status": "not_configured"})})
                     return
                 query = self._query()
+                if parsed.path == "/api/v1/benchmark-history":
+                    _only_parameters(query, {"benchmarkId", "startDate", "endDate"})
+                    if "benchmarkId" not in query:
+                        raise ServiceError("benchmarkId is required")
+                    archive = getattr(service, "benchmark_archive", None)
+                    if archive is None:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE, {
+                            "benchmarkId": query["benchmarkId"], "status": "unavailable",
+                            "reason": "benchmark_archive_not_configured", "sampleCount": 0, "bars": []})
+                        return
+                    start = _parse_date(query["startDate"]) if "startDate" in query else None
+                    end = _parse_date(query["endDate"]) if "endDate" in query else None
+                    result = archive.history(query["benchmarkId"], start, end)
+                    worker = getattr(service, "benchmark_worker", None)
+                    result["collector"] = getattr(worker, "status", {"status": "not_configured"})
+                    self._json(HTTPStatus.OK, result)
+                    return
                 if parsed.path == "/api/v1/minute-history":
                     required = {"securityCode", "market", "tradingDate"}
                     _only_parameters(query, required | {"availableAsOf", "minimumQuality"})
