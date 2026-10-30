@@ -690,3 +690,17 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | Ledger写入边界 | 搜索并检查FConfirmedLedgerWriter调用上下文 | 调用集中在明确用户确认的账户/成本/成交/费用修正；Candidate关联在成交后；仅静态结论 | 当前HEAD测试和真实成交E2E |
 | 新闻实网 | 真实HTTP尝试 | 本环境本机代理127.0.0.1:7890拒绝连接；端点实测失败于本地代理层，不能判断服务器可达性 | Apple CI后用iPhone网络实测Tonghuashun JSON与新闻关联 |
 | 新闻证据边界 | 源码/提示词审阅 | 市场标题仅背景，只有明确证券代码匹配才作为个股新闻；缺失不由模型补造 | DeepSeek引用Observation实测 |
+
+
+## 2026-10-30 Run 102 actual execution evidence
+
+| Requirement | Actual result | Status |
+|---|---|---|
+| FCore tests | 165 executed / 165 passed / 0 failed | Passed on source SHA `6c969079ac7499602ee9a8469b057f061d133e08` |
+| XcodeGen | Project generation successful | Passed |
+| iOS Device Build | Successful | Passed |
+| iOS Simulator Build | Successful | Passed |
+| App UI XCTest | 4 executed / 4 passed / 0 failed | Automated UI tests passed; not manual visual acceptance |
+| Screenshots / IPA | Screenshot export, unsigned IPA validation/package and artifact upload succeeded; artifact `12945537710` | Passed |
+| Tonghuashun / NAS / DeepSeek real E2E | No live provider/device verification in this run | External Pending |
+| Simulator visual / iPhone Air | CI screenshots were exported but not manually reviewed; no physical-device test | External Pending |

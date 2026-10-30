@@ -744,3 +744,12 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Ledger writer调用人工抽查集中在明确的用户确认成本/费用/现金修正、初始真实账户录入和成交确认流程；Candidate与真实Ledger仍分开。该项仅为静态源码审阅，自动测试与真实成交E2E仍待当前SHA验证。
 - 当前开发Windows环境没有Swift/Xcode；本地到新闻端点网络测试被127.0.0.1:7890代理拒绝，不能据此声称端点坏或好。远端最新代码与本地源文件存在差异，已选择在远端当前树上做段落级更新，不以本地整文件覆盖。
 - 当前状态：实现已编码，Apple编译/测试待当前提交执行；同花顺真实HTTP与iPhone实网E2E、NAS链路、视觉验收均未由此静态扫描证明。
+
+
+## 2026-10-30 Run 102 Apple CI closeout
+
+- Source commit `6c969079ac7499602ee9a8469b057f061d133e08` (Run 102, attempt 1) completed successfully. FCore XCTest: 165/165 passed; XcodeGen passed; iOS Device Build passed; Simulator Build passed; App UI XCTest: 4/4 passed; screenshot export passed; unsigned IPA package/ZIP validation passed; artifact upload passed.
+- Run 101 first attempt was cancelled before runner startup with no build logs. Its retry reached the device build and exposed one real compile error: the newly added `invalidAIEndpoint` enum case was missing from `FAdvisorLiveError.errorDescription`'s exhaustive switch. Added the diagnostic case in `6c969079`; Run 102 then compiled successfully.
+- Artifact `12945537710`, name `guanpan-f-ios-build-evidence`, contains `GuanpanFApp/build/观盘max.ipa` and CI evidence. Artifact expires 2026-11-13.
+- This CI proves build/tests/package only. It does not prove Tonghuashun live access, real news relevance, DeepSeek citation E2E, NAS exact-date history connectivity, manual Simulator visual review, or iPhone Air/device UX.
+- News source remains a candidate public Tonghuashun webpage endpoint; this environment's proxy prevented a live request. NAS history screenshot previously showed HTTP 200 with an incompatible payload and legacy fallback 404; deployment/API contract still needs device/service-side validation.
