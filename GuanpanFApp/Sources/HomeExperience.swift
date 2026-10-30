@@ -2278,23 +2278,36 @@ struct FInitialLedgerSetupSheet: View {
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
         guard !positions.isEmpty else { return nil }
-        let parsed = positions.compactMap { draft -> FInitialLedgerPositionInput? in
-            guard draft.instrumentCode.utf8.count == 6,
-                  draft.instrumentCode.utf8.allSatisfy({ (48...57).contains($0) }),
-                  let units = Int64(draft.units), units > 0,
-                  let costPerUnit = Decimal(string: draft.economicCostPerUnit, locale: Locale(identifier: "en_US_POSIX")),
-                  costPerUnit >= 0,
-                  !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            let totalEconomicCost = costPerUnit * Decimal(units)
-            guard !totalEconomicCost.isNaN, totalEconomicCost >= 0 else { return nil }
-            return FInitialLedgerPositionInput(instrumentCode: draft.instrumentCode,
-                                               name: draft.name, units: units,
-                                               economicCost: totalEconomicCost,
-                                               brokerDisplayCostPerUnit: nil)
+        var parsed: [FInitialLedgerPositionInput] = []
+        for draft in positions {
+            guard let position = parsePosition(draft) else { return nil }
+            parsed.append(position)
         }
-        guard parsed.count == positions.count,
-              Set(parsed.map(\.instrumentCode)).count == parsed.count else { return nil }
+        let codes = parsed.map { $0.instrumentCode }
+        guard Set(codes).count == parsed.count else { return nil }
         return parsed
+    }
+
+    private func parsePosition(_ draft: FInitialLedgerPositionDraft) -> FInitialLedgerPositionInput? {
+        let code = draft.instrumentCode
+        guard code.utf8.count == 6,
+              code.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
+        guard let units = Int64(draft.units), units > 0 else { return nil }
+        guard let costPerUnit = Decimal(
+            string: draft.economicCostPerUnit,
+            locale: Locale(identifier: "en_US_POSIX")
+        ), costPerUnit >= 0 else { return nil }
+        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let totalEconomicCost = costPerUnit * Decimal(units)
+        guard !totalEconomicCost.isNaN, totalEconomicCost >= 0 else { return nil }
+        return FInitialLedgerPositionInput(
+            instrumentCode: code,
+            name: name,
+            units: units,
+            economicCost: totalEconomicCost,
+            brokerDisplayCostPerUnit: nil
+        )
     }
 
     private var canSave: Bool {
@@ -2508,6 +2521,33 @@ struct FManualLedgerFillSheet: View {
                 Button("确认真实成交并更新账本", role: .destructive) { model.confirmManualLedgerFill() }
                 Button("返回检查", role: .cancel) { }
             } message: { Text("只登记你填写的成交事实，不会下单。确认后现金、持仓、成本、盈亏和成交流水将更新。") }
+        }
+    }
+}
+
+private struct FInitialCashEntrySheet: View {
+    @Binding var cashText: String
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("券商当前可用现金") {
+                    TextField("当前可用现金", text: $cashText)
+                        .keyboardType(.decimalPad)
+                        .focused($inputFocused)
+                        .accessibilityIdentifier("ledger.opening.cash")
+                    Text("现金单独录入，不会和持仓份额或成本混在一起。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("录入券商现金")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
         }
     }
 }
