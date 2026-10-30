@@ -114,6 +114,7 @@ def make_handler(service: MinuteArchiveService):
                     status = HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE
                     self._json(status, {"status": "ready" if ready else "not_ready",
                                         "archive": archive_status,
+                                        "archiveCheck": "schema_and_tables_only",
                                         "configuredMarkets": configured_markets,
                                         "calendar": calendar_status,
                                         "calendarErrors": calendar_errors,
