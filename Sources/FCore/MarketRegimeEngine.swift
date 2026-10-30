@@ -212,6 +212,7 @@ public struct FMarketRegimeInput: Sendable {
     /// benchmarks remain unavailable and are never synthesized.
     public let synchronizedBenchmarkReturns: [Double]
     public let benchmarkReturns: [FMarketBenchmark: Double]
+    public let benchmarkMapping: FMarketBenchmarkMapping?
 
     public init(market: String, securityCode: String? = nil,
                 contextKind: FMarketContextKind = .unclassified, asOf: Date,
@@ -229,6 +230,7 @@ public struct FMarketRegimeInput: Sendable {
         self.breadthRatio = breadthRatio
         self.synchronizedBenchmarkReturns = synchronizedBenchmarkReturns
         self.benchmarkReturns = benchmarkReturns
+        self.benchmarkMapping = benchmarkMapping
     }
 }
 
