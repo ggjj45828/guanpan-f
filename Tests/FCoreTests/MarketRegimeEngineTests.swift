@@ -54,13 +54,16 @@ final class MarketRegimeEngineTests: XCTestCase {
     }
 
     func testOrdinaryRegimeChangeWaitsForConfirmationSessions() {
+        let prices = (0..<50).map { 100 - Double($0) * 0.1 } +
+            (0..<20).map { 95.2 + Double($0) * 0.75 }
         let input = FMarketRegimeInput(market: "CN", asOf: now,
-            sourceUpdatedAt: now, source: "fixture", bars: bars(flat()), breadthRatio: 0.5)
+            sourceUpdatedAt: now, source: "fixture", bars: bars(prices), breadthRatio: 0.5)
         let previous = FMarketRegimeMemory(confirmedRegime: .range, confirmedRiskLevel: .r0Normal,
             lastEvaluationAt: now.addingTimeInterval(-86_400))
         let result = FMarketRegimeEngine.evaluate(input, previous: previous, now: now)
         XCTAssertEqual(result.regime, .range)
-        XCTAssertNil(result.memory.pendingRegime)
+        XCTAssertEqual(result.memory.pendingRegime, .bullTrend)
+        XCTAssertEqual(result.memory.pendingRegimeSessions, 1)
     }
 }
 
