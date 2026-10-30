@@ -588,6 +588,7 @@ class MinuteArchiveService:
                     f"SELECT security_code,trading_date,status,observed_count "
                     f"FROM session_coverage WHERE market=? AND security_code IN ({codes}) "
                     f"AND trading_date IN ({date_slots})", parameters).fetchall()
+            with self._connect() as db:
                 task_rows = db.execute(
                     f"SELECT security_code,trading_date,status FROM backfill_task "
                     f"WHERE market=? AND security_code IN ({codes}) AND trading_date IN ({date_slots})",
