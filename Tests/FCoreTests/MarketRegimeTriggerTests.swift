@@ -24,10 +24,15 @@ final class MarketRegimeTriggerTests: XCTestCase {
             FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - closes.count + 1) * 86_400),
                              close: close, volume: volumes.isEmpty ? nil : volumes[index])
         }
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
         return FMarketRegimeEngine.evaluate(
-            FMarketRegimeInput(market: "CN", securityCode: "159352", asOf: now,
-                sourceUpdatedAt: now, source: "fixture", bars: bars,
-                breadthRatio: breadth, synchronizedBenchmarkReturns: benchmarks),
+            FMarketRegimeInput(market: "CN", securityCode: "159352",
+                contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
+                source: "fixture", bars: bars, breadthRatio: breadth,
+                synchronizedBenchmarkReturns: benchmarks,
+                benchmarkObservations: crash ? [
+                    .init(benchmark: .csiA500, dailyReturn: -0.08, observedAt: now, source: "fixture")
+                ] : [], benchmarkMapping: mapping),
             now: now)
     }
 
@@ -56,6 +61,22 @@ final class MarketRegimeTriggerTests: XCTestCase {
         XCTAssertEqual(result.reasonCodes, ["EXTREME_MARKET_RISK"])
         XCTAssertEqual(result.marketRegime, .extremeRisk)
         XCTAssertEqual(result.marketRiskLevel, .r4Extreme)
+    }
+
+    func testMissingPrimaryBenchmarkBlocksRealtimeCandidate() throws {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
+        let bars = (0..<70).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 69) * 86_400), close: 100)
+        }
+        let context = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "CN", securityCode: "159352", contextKind: mapping.market,
+                asOf: now, sourceUpdatedAt: now, source: "fixture", bars: bars,
+                benchmarkMapping: mapping), now: now)
+        let result = FRealtimeQuantTrigger.evaluate(plan: try plan(), quote: try quote(),
+                                                     marketContext: context, now: now)
+        XCTAssertEqual(context.regime, .range)
+        XCTAssertEqual(result.state, .paused)
+        XCTAssertEqual(result.reasonCodes, ["PRIMARY_BENCHMARK_UNAVAILABLE"])
     }
 
     func testUnreliableMarketContextFailsClosed() throws {
