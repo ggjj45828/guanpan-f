@@ -82,6 +82,8 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var archiveRefreshStateByCode: [String: String] = [:]
     @Published private(set) var dailyKlineByCode: [String: FDailyKlineSnapshot] = [:]
     @Published private(set) var dailyKlineStateByCode: [String: String] = [:]
+    @Published private(set) var securityRegimeByCode: [String: FMarketRegimeAssessment] = [:]
+    @Published private(set) var securityRegimeStatusByCode: [String: String] = [:]
     @Published var selectedHistoryDate = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: Date()) ?? Date()
     @Published private(set) var refreshingMarketCodes: Set<String> = []
     @Published private(set) var selectedInstrumentCode: String?
@@ -963,6 +965,29 @@ final class FHomeModel: ObservableObject {
         do {
             let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code)
             dailyKlineByCode[code] = snapshot
+            let evaluatedAt = Date()
+            let regimeBars = snapshot.bars.map { bar in
+                FMarketRegimeBar(
+                    timestamp: bar.tradingDate,
+                    close: NSDecimalNumber(decimal: bar.close).doubleValue,
+                    open: NSDecimalNumber(decimal: bar.open).doubleValue,
+                    high: NSDecimalNumber(decimal: bar.high).doubleValue,
+                    low: NSDecimalNumber(decimal: bar.low).doubleValue,
+                    volume: NSDecimalNumber(decimal: bar.volume).doubleValue
+                )
+            }
+            let regime = FMarketRegimeEngine.evaluate(
+                FMarketRegimeInput(
+                    market: "security:\(code)", securityCode: code, asOf: evaluatedAt,
+                    sourceUpdatedAt: snapshot.fetchedAt, source: snapshot.source, bars: regimeBars
+                ),
+                now: evaluatedAt
+            )
+            securityRegimeByCode[code] = regime
+            let availableFactors = regime.factors.filter(\.available).count
+            let dataTime = regime.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
+            securityRegimeStatusByCode[code] =
+                "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
             dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
@@ -970,6 +995,8 @@ final class FHomeModel: ObservableObject {
         } catch {
             dailyKlineStateByCode[code] = "日 K 不可用 · \(error.localizedDescription)"
             dailyKlineByCode[code] = nil
+            securityRegimeByCode[code] = nil
+            securityRegimeStatusByCode[code] = "证券自身状态不可用 · 缺少可信日K"
         }
     }
 

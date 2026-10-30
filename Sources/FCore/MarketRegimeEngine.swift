@@ -3,11 +3,36 @@ import Foundation
 public enum FMarketRegime: String, Codable, CaseIterable, Equatable, Sendable {
     case bullTrend, bearTrend, range, highVolatility, riskOff, extremeRisk
     case recovery, transition, uncertain, dataUnreliable
+
+    public var displayName: String {
+        switch self {
+        case .bullTrend: return "上升趋势"
+        case .bearTrend: return "下降趋势"
+        case .range: return "震荡"
+        case .highVolatility: return "高波动"
+        case .riskOff: return "风险升高"
+        case .extremeRisk: return "极端风险"
+        case .recovery: return "修复阶段"
+        case .transition: return "趋势转换"
+        case .uncertain: return "证据冲突"
+        case .dataUnreliable: return "数据不足/不可靠"
+        }
+    }
 }
 
 public enum FMarketRiskLevel: Int, Codable, CaseIterable, Comparable, Sendable {
     case r0Normal = 0, r1Elevated = 1, r2High = 2, r3Severe = 3, r4Extreme = 4
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .r0Normal: return "R0 正常"
+        case .r1Elevated: return "R1 风险升高"
+        case .r2High: return "R2 高风险"
+        case .r3Severe: return "R3 严重风险"
+        case .r4Extreme: return "R4 极端风险"
+        }
+    }
 }
 
 public enum FQuantStrategyKind: String, Codable, CaseIterable, Hashable, Sendable {

@@ -1246,6 +1246,8 @@ struct HomeDestination: View {
                                 .font(.caption).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, minHeight: 64)
                         }
+                        Text(model.securityRegimeStatusByCode[code] ?? "证券自身状态：等待真实日K；市场广度等缺失因子不会估算")
+                            .font(.caption).foregroundStyle(.secondary)
                         Text(model.dailyKlineStateByCode[code] ?? "数据源：腾讯日 K · 未复权；等待请求")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
