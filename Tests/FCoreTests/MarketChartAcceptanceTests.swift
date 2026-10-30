@@ -18,7 +18,7 @@ private struct FixedCandidateModel: FAdvisorModelProviding {
 
 final class MarketChartAcceptanceTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Shanghai")!
-    private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
+    private let now = Date().addingTimeInterval(-120)
 
     func testClosedIndexQuoteShowsVerifiedMarketTime() {
         let metadata = FQuoteTemporalMetadata(
@@ -767,7 +767,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
             "schemaVersion": 1, "methodologyVersion": "minute-research-1",
             "evidenceId": String(repeating: "a", count: 64), "securityCode": "159352", "market": "CN",
             "range": ["start": "2026-10-01", "end": "2026-10-23"],
-            "asOf": "2026-10-23T07:58:00Z", "generatedAt": "2026-10-23T07:59:00Z",
+            "asOf": ISO8601DateFormatter().string(from: now.addingTimeInterval(-120)),
+            "generatedAt": ISO8601DateFormatter().string(from: now.addingTimeInterval(-60)),
             "timezone": "Asia/Shanghai", "sessionCoverage": ["complete": 20, "partial": 1, "missing": 2],
             "qualifiedIndependentDays": qualified ? 28 : 4, "minimumQuality": 90, "sources": ["fixture-provider"],
             "evidence": ["vwapBreak": ["windows": ["5": metrics]],
