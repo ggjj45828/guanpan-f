@@ -53,6 +53,7 @@ enum FAdvisorLiveError: Error, LocalizedError {
         case .invalidNASResponse: return "NAS Research Evidence 响应无法校验。"
         case let .nasNotReady(status): return "NAS 尚未就绪（HTTP \(status)）。"
         case let .aiHTTPStatus(status): return "在线 AI 请求失败（HTTP \(status)）。"
+        case .invalidAIEndpoint: return "在线 AI 服务地址无效；未发送请求。"
         case .emptyAIResponse: return "在线 AI 没有返回完整结果；未生成候选计划。"
         case .invalidAIResponse: return "在线 AI 返回结构不完整或引用了无效数据；已拒绝该结果。"
         case .credentialStorageFailed: return "密钥无法安全保存到本机 Keychain。"
