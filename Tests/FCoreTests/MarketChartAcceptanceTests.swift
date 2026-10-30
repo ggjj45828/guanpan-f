@@ -20,6 +20,28 @@ final class MarketChartAcceptanceTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Shanghai")!
     private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
 
+    private func marketRegimeObservation(code: String) throws -> FContextObservation {
+        let mapping = FMarketBenchmarkMapping.resolve(securityCode: code)!
+        let bars = (0..<70).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 69) * 86_400), close: 100)
+        }
+        let assessment = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:\(code)", securityCode: code,
+                contextKind: mapping.market, asOf: now, sourceUpdatedAt: now,
+                source: "fixture-index-feed", bars: bars,
+                benchmarkObservations: [
+                    .init(benchmark: mapping.primaryBenchmark, dailyReturn: 0,
+                          observedAt: now, source: "fixture-index-feed")
+                ], benchmarkMapping: mapping), now: now)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let reference = String(data: try encoder.encode(assessment), encoding: .utf8)!
+        return FContextObservation(dataClass: .marketRegime, subject: code,
+            source: "FCore deterministic Market Regime Engine", reference: reference,
+            observedAt: assessment.dataAsOf, capturedAt: now,
+            decimalValue: Decimal(assessment.riskLevel.rawValue))
+    }
+
     func testClosedIndexQuoteShowsVerifiedMarketTime() {
         let metadata = FQuoteTemporalMetadata(
             quoteTimestamp: ISO8601DateFormatter().date(from: "2026-10-23T07:00:00Z"),
@@ -310,8 +332,9 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "fixture",
             observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: metadata)
-        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote],
-                                       researchEvidence: researchContext.researchEvidence)
+        let context = FDecisionContext(snapshot: try emptySnapshot(),
+            observations: [quote, try marketRegimeObservation(code: "159352")],
+            researchEvidence: researchContext.researchEvidence)
         let grid = FCandidateRecommendation(accountDigest: context.accountDigest, action: .grid,
             instrumentCode: "159352", units: 10, limitPrice: 1, rationale: "网格候选",
             citedObservationIDs: [quote.id],
@@ -332,8 +355,9 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let freshQuote = FContextObservation(dataClass: .quote, subject: "159352", source: "fixture",
             observedAt: dayTradeMetadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: dayTradeMetadata)
-        let dayTradeContext = FDecisionContext(snapshot: positionSnapshot, observations: [freshQuote],
-                                               researchEvidence: researchContext.researchEvidence)
+        let dayTradeContext = FDecisionContext(snapshot: positionSnapshot,
+            observations: [freshQuote, try marketRegimeObservation(code: "159352")],
+            researchEvidence: researchContext.researchEvidence)
         let dayTrade = FCandidateRecommendation(accountDigest: dayTradeContext.accountDigest,
             action: .dayTrade, instrumentCode: "159352", units: 1,
             limitPrice: 1, estimatedFee: Decimal(string: "0.20")!, rationale: "保守做T候选",
