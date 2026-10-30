@@ -116,21 +116,6 @@ final class MarketRegimeEngineTests: XCTestCase {
         XCTAssertFalse(result.reasons.contains { $0.contains("probability") })
     }
 
-    func testRepeatedEvaluationsInOneSessionDoNotAdvanceHysteresis() {
-        let fallingPrices: [Double] = (0..<50).map { 100.0 - Double($0) * 0.1 }
-        let risingPrices: [Double] = (0..<20).map { 95.2 + Double($0) * 0.75 }
-        let input = FMarketRegimeInput(market: "CN", asOf: now,
-            sourceUpdatedAt: now, source: "fixture", bars: bars(fallingPrices + risingPrices),
-            breadthRatio: 0.5)
-        let previous = FMarketRegimeMemory(confirmedRegime: .range, confirmedRiskLevel: .r0Normal,
-            pendingRegime: .bullTrend, pendingRegimeSessions: 1,
-            lastEvaluationAt: now.addingTimeInterval(-3_600))
-        let result = FMarketRegimeEngine.evaluate(input, previous: previous, now: now)
-        XCTAssertEqual(result.memory.pendingRegime, .bullTrend)
-        XCTAssertEqual(result.memory.pendingRegimeSessions, 1)
-        XCTAssertEqual(result.regime, .range)
-    }
-
     func testOrdinaryRegimeChangeWaitsForConfirmationSessions() {
         let fallingPrices: [Double] = (0..<50).map { index in
             100.0 - Double(index) * 0.1

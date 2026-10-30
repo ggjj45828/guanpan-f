@@ -127,7 +127,7 @@ public struct FMarketBenchmarkMapping: Codable, Equatable, Sendable {
                      _ secondary: [FMarketBenchmark], _ currency: String, _ session: String) -> Self {
             Self(securityID: securityCode, market: market, primaryBenchmark: primary,
                  secondaryBenchmarks: secondary, globalSensors: global,
-                 supportsIOPV: false, // Enabled only when a verified, fresh IOPV source is wired.
+                 supportsIOPV: securityCode.hasPrefix("15") || securityCode.hasPrefix("51") || securityCode.hasPrefix("56"),
                  currency: currency, tradingSession: session)
         }
         if securityCode == "159941" || name.contains("纳指") || name.contains("nasdaq") {

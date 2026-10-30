@@ -81,7 +81,7 @@ def make_handler(service: MinuteArchiveService):
                 return
             try:
                 if parsed.path == "/readyz":
-                    archive_status = service.archive.integrity_check()
+                    archive_status = service.archive.readiness_check()
                     configured_markets = sorted(set(service.calendars) & set(service.providers))
                     calendar_status = {}
                     calendar_errors = {}

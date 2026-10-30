@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from nas.fminute.archive import ArchiveError, MarketSession, MinuteArchive, MinuteBar, ProviderOutOfCoverage
 from nas.fminute.service import (
@@ -545,6 +546,39 @@ class MinuteServiceTests(unittest.TestCase):
             self.assertFalse(research["rawMinuteBarsIncluded"])
             self.assertIsNone(research["tradePlan"])
             connection.close()
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            server.server_close()
+
+    def test_backfill_status_reads_coverage_projection_without_recomputing_every_day(self):
+        session = self.sessions[-1]
+        self.archive.ingest(make_bars(session, fetched_at=self.clock()), mode="backfill")
+        self.archive.evaluate_session("159352", session, evaluated_at=self.clock())
+        with patch.object(self.archive, "diagnostics", side_effect=AssertionError("full diagnostics called")):
+            status = self.service.backfill_status(
+                ["159352"], "CN", through=session.trading_date, sessions_back=1)
+        self.assertEqual(status["plannedTasks"], 1)
+        self.assertEqual(status["complete"], 1)
+        self.assertEqual(status["coveragePercent"], 100.0)
+        self.assertEqual(status["earliestRealHistoryDate"], session.trading_date.isoformat())
+
+    def test_readyz_uses_bounded_archive_probe(self):
+        self.calendar.supported_years = (datetime.now().year,)
+        handler = make_handler(self.service)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with patch.object(self.archive, "integrity_check",
+                              side_effect=AssertionError("full integrity scan called")):
+                connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
+                connection.request("GET", "/readyz")
+                response = connection.getresponse()
+                payload = json.loads(response.read())
+                connection.close()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(payload["archive"], "ok")
         finally:
             server.shutdown()
             thread.join(timeout=2)

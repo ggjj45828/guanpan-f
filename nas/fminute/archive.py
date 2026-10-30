@@ -822,6 +822,29 @@ class MinuteArchive:
         finally:
             os.close(descriptor)
 
+    def readiness_check(self) -> str:
+        """Perform bounded metadata checks suitable for frequent health probes.
+
+        Full PRAGMA integrity_check and row validation belong in backup/maintenance
+        workflows; scanning the archive on every HTTP readiness request can block
+        clients as the database grows.
+        """
+        required_tables = {"minute_bar", "minute_observation", "session_coverage", "collection_log"}
+        try:
+            with self._connect() as db:
+                row = db.execute(
+                    "SELECT value FROM archive_meta WHERE key='schema_version'").fetchone()
+                if row is None:
+                    raise ArchiveError("archive schema version metadata is missing")
+                self._validate_schema_version(row[0])
+                tables = {item[0] for item in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+                if not required_tables.issubset(tables):
+                    raise ArchiveError("archive is missing required tables")
+            return "ok"
+        except sqlite3.DatabaseError as exc:
+            raise ArchiveError("archive readiness check failed: " + str(exc)) from exc
+
     def integrity_check(self) -> str:
         try:
             with self._connect() as db:

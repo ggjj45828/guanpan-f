@@ -574,17 +574,31 @@ class MinuteArchiveService:
         sessions = sessions[-sessions_back:]
         counters = {key: 0 for key in ("complete", "partial", "missing", "outOfProviderCoverage",
                                         "retryable", "permanentUnavailable")}
+        planned_tasks = len(sessions) * len(unique)
         real_dates: set[str] = set()
         archive_states: dict[tuple[str, str], str] = {}
-        for code in unique:
-            diag = self.archive.diagnostics(code, market, sessions, evaluated_at=self.clock())
-            for row in diag["days"]:
-                archive_states[(code, row["trading_date"])] = row["status"]
-                if row.get("count", 0) > 0: real_dates.add(row["trading_date"])
-        planned_tasks = len(sessions) * len(unique)
-        with self._connect() as db:
-            rows = db.execute("SELECT security_code,trading_date,status FROM backfill_task WHERE market=?", (market,)).fetchall()
-        task_states = {(row["security_code"], row["trading_date"]): row["status"] for row in rows}
+        task_states: dict[tuple[str, str], str] = {}
+        if sessions:
+            codes = ",".join("?" for _ in unique)
+            dates = [session.trading_date.isoformat() for session in sessions]
+            date_slots = ",".join("?" for _ in dates)
+            parameters = (market, *unique, *dates)
+            with self.archive._connect() as db:
+                coverage_rows = db.execute(
+                    f"SELECT security_code,trading_date,status,observed_count "
+                    f"FROM session_coverage WHERE market=? AND security_code IN ({codes}) "
+                    f"AND trading_date IN ({date_slots})", parameters).fetchall()
+                task_rows = db.execute(
+                    f"SELECT security_code,trading_date,status FROM backfill_task "
+                    f"WHERE market=? AND security_code IN ({codes}) AND trading_date IN ({date_slots})",
+                    parameters).fetchall()
+            for row in coverage_rows:
+                key = (row["security_code"], row["trading_date"])
+                archive_states[key] = row["status"]
+                if row["observed_count"] > 0:
+                    real_dates.add(row["trading_date"])
+            task_states = {(row["security_code"], row["trading_date"]): row["status"]
+                           for row in task_rows}
         for code in unique:
             for session in sessions:
                 key = (code, session.trading_date.isoformat())
