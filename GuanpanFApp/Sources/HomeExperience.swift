@@ -2318,79 +2318,67 @@ struct FInitialLedgerSetupSheet: View {
         return true
     }
 
+    private var cashEntrySection: some View {
+        Section("券商现金（单独录入）") {
+            Button {
+                showingCashEntry = true
+            } label: {
+                Label(cashText.isEmpty ? "单独录入券商现金" : "修改券商现金", systemImage: "banknote")
+            }
+            .accessibilityIdentifier("ledger.opening.cash.open")
+            Text(cashText.isEmpty ? "现金单独填写；本页只录入持仓证券。" : "已录入可用现金：¥\(cashText)")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    private var positionsSection: some View {
+        Section("当前真实持仓") {
+            ForEach($positions) { $position in
+                let positionID = position.id
+                let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
+                FInitialLedgerPositionRow(
+                    draft: $position,
+                    ordinal: ordinal,
+                    canRemove: positions.count > 1,
+                    model: model
+                ) {
+                    positions.removeAll { $0.id == positionID }
+                }
+            }
+            Button {
+                positions.append(FInitialLedgerPositionDraft())
+            } label: {
+                Label("再添加一只证券", systemImage: "plus")
+            }
+            .accessibilityIdentifier("ledger.opening.position.add")
+        }
+    }
+
+    private var confirmationSection: some View {
+        Section("确认快照") {
+            TextField("确认说明（必填）", text: $confirmationNote, axis: .vertical)
+                .lineLimit(2...4).focused($inputFocused)
+            Text("录入的份额与成本将作为今天的账本起点；由于没有导入前成交流水，App会明确标注更早的历史盈亏不可完整统计。保存后不能用此表覆盖账本。")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var ledgerStatusSection: some View {
+        if !model.ledgerWriteStatus.isEmpty {
+            Section("状态") {
+                Text(model.ledgerWriteStatus).font(.footnote)
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("券商现金（单独录入）") {
-                    Button {
-                        showingCashEntry = true
-                    } label: {
-                        Label(cashText.isEmpty ? "单独录入券商现金" : "修改券商现金", systemImage: "banknote")
-                    }
-                    .accessibilityIdentifier("ledger.opening.cash.open")
-                    if !cashText.isEmpty {
-                        Text("已录入可用现金：¥\(cashText)")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    } else {
-                        Text("现金单独填写；本页只录入持仓证券。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-                Section("当前真实持仓") {
-                    ForEach($positions) { $position in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("证券 \(positions.firstIndex(where: { $0.id == position.id }).map { $0 + 1 } ?? 1)")
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                if positions.count > 1 {
-                                    Button("移除", role: .destructive) {
-                                        positions.removeAll { $0.id == position.id }
-                                    }
-                                    .font(.caption)
-                                }
-                            }
-                            TextField("6位证券代码", text: $position.instrumentCode)
-                                .keyboardType(.numberPad).focused($inputFocused)
-                                .accessibilityIdentifier("ledger.opening.position.code")
-                                .onChange(of: position.instrumentCode) { _, code in
-                                    position.name = ""
-                                    guard code.utf8.count == 6,
-                                          code.utf8.allSatisfy({ (48...57).contains($0) }) else { return }
-                                    Task { @MainActor in
-                                        if let name = await model.lookupInstrumentName(code: code),
-                                           position.instrumentCode == code {
-                                            position.name = name
-                                        }
-                                    }
-                                }
-                            TextField("证券名称（自动识别，可修改）", text: $position.name)
-                                .focused($inputFocused)
-                            TextField("当前持有份额", text: $position.units)
-                                .keyboardType(.numberPad).focused($inputFocused)
-                            TextField("每份真实经济成本（含费用）", text: $position.economicCostPerUnit)
-                                .keyboardType(.decimalPad).focused($inputFocused)
-                                .accessibilityIdentifier("ledger.opening.position.unitCost")
-                            Text("总经济成本会按份额 × 每份成本自动计算。")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                        .accessibilityIdentifier("ledger.opening.position.\(position.id.uuidString)")
-                    }
-                    Button { positions.append(FInitialLedgerPositionDraft()) } label: {
-                        Label("再添加一只证券", systemImage: "plus")
-                    }
-                    .accessibilityIdentifier("ledger.opening.position.add")
-                }
-                Section("确认快照") {
-                    TextField("确认说明（必填）", text: $confirmationNote, axis: .vertical)
-                        .lineLimit(2...4).focused($inputFocused)
-                    Text("录入的份额与成本将作为今天的账本起点；由于没有导入前成交流水，App会明确标注更早的历史盈亏不可完整统计。保存后不能用此表覆盖账本。")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                if !model.ledgerWriteStatus.isEmpty {
-                    Section("状态") { Text(model.ledgerWriteStatus).font(.footnote) }
-                }
+                cashEntrySection
+                positionsSection
+                confirmationSection
+                ledgerStatusSection
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("录入现有持仓")
@@ -2420,6 +2408,54 @@ struct FInitialLedgerSetupSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct FInitialLedgerPositionRow: View {
+    @Binding var draft: FInitialLedgerPositionDraft
+    let ordinal: Int
+    let canRemove: Bool
+    @ObservedObject var model: FHomeModel
+    let remove: () -> Void
+    @FocusState private var inputFocused: Bool
+
+    private func updateName(for code: String) async {
+        guard code.utf8.count == 6,
+              code.utf8.allSatisfy({ (48...57).contains($0) }),
+              let name = await model.lookupInstrumentName(code: code),
+              draft.instrumentCode == code else { return }
+        draft.name = name
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("证券 \(ordinal)").font(.subheadline.weight(.semibold))
+                Spacer()
+                if canRemove {
+                    Button("移除", role: .destructive, action: remove)
+                        .font(.caption)
+                }
+            }
+            TextField("6位证券代码", text: $draft.instrumentCode)
+                .keyboardType(.numberPad).focused($inputFocused)
+                .accessibilityIdentifier("ledger.opening.position.code")
+                .onChange(of: draft.instrumentCode) { _, code in
+                    draft.name = ""
+                    Task { await updateName(for: code) }
+                }
+            TextField("证券名称（自动识别，可修改）", text: $draft.name)
+                .focused($inputFocused)
+            TextField("当前持有份额", text: $draft.units)
+                .keyboardType(.numberPad).focused($inputFocused)
+            TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
+                .keyboardType(.decimalPad).focused($inputFocused)
+                .accessibilityIdentifier("ledger.opening.position.unitCost")
+            Text("总经济成本会按份额 × 每份成本自动计算。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+        .accessibilityIdentifier("ledger.opening.position.\(draft.id.uuidString)")
     }
 }
 private extension FDecisionAction {
