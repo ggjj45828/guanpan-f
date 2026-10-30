@@ -722,17 +722,25 @@ final class FHomeModel: ObservableObject {
                 for code in targetCodes { newsFailureByCode[code] = failure }
                 newsStatus = "新闻暂不可用 · \(failure)"
             }
+            let researchCheckedAt = Date()
             let researchByCode = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
-                nasResearchEvidenceByCode[code].map { (code, $0) }
+                guard let cached = nasResearchEvidenceByCode[code],
+                      cached.isUsableForAI(contextCreatedAt: researchCheckedAt, now: researchCheckedAt) else {
+                    return nil
+                }
+                return (code, cached)
             })
             var researchFailureByCode: [String: String] = [:]
             for code in targetCodes where researchByCode[code] == nil {
-                researchFailureByCode[code] = "NAS历史研究摘要尚不可用；本次顾问不等待NAS，继续基于其他上下文分析"
+                researchFailureByCode[code] = "历史Quant研究摘要暂不可用。"
             }
             if !researchByCode.isEmpty {
-                nasResearchStatus = "\(researchByCode.count)/\(targetCodes.count) 只标的有可用 NAS 历史研究摘要"
+                nasResearchStatus = targetCodes.compactMap { code in
+                    guard let evidence = researchByCode[code] else { return nil }
+                    return researchSummaryStatus(code: code, evidence: evidence, now: researchCheckedAt)
+                }.joined(separator: "；")
             } else {
-                nasResearchStatus = "NAS历史研究摘要暂不可用 · 不阻塞本次顾问分析"
+                nasResearchStatus = "历史Quant研究摘要暂不可用。顾问继续分析，不等待NAS。"
             }
             Task { await refreshNASResearchEvidence(for: targetCodes) }
 
@@ -964,10 +972,16 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    private func researchSummaryStatus(code: String, evidence: FDecisionResearchEvidence, now: Date) -> String {
+        let envelope = evidence.envelope
+        let ageHours = max(0, Int(now.timeIntervalSince(envelope.observedAt) / 3_600))
+        return "\(code) · researchGeneratedAt \(envelope.generatedAt) · dataRange \(envelope.range.start)→\(envelope.range.end) · sampleCount \(envelope.qualifiedIndependentDays)独立交易日 · strategyVersion 未提供 · freshness 有效/\(ageHours)小时前"
+    }
+
     private func refreshNASResearchEvidence(for codes: [String]) async {
         let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
         guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
-            nasResearchStatus = "NAS历史研究摘要不可用 · 未配置；不影响实时Quant或顾问分析"
+            nasResearchStatus = "历史Quant研究摘要暂不可用。未配置NAS；顾问继续分析。"
             return
         }
         let pending = codes.filter { !refreshingNASResearchCodes.contains($0) }
@@ -992,10 +1006,15 @@ final class FHomeModel: ObservableObject {
                 }
             }
         }
-        let available = codes.filter { nasResearchEvidenceByCode[$0] != nil }.count
-        nasResearchStatus = available > 0
-            ? "\(available)/\(codes.count) 只标的的历史研究摘要已缓存，可辅助后续顾问分析"
-            : "NAS历史研究摘要暂不可用 · 本次和实时Quant不等待NAS"
+        let checkedAt = Date()
+        let usable = codes.compactMap { code -> String? in
+            guard let evidence = nasResearchEvidenceByCode[code],
+                  evidence.isUsableForAI(contextCreatedAt: checkedAt, now: checkedAt) else { return nil }
+            return researchSummaryStatus(code: code, evidence: evidence, now: checkedAt)
+        }
+        nasResearchStatus = usable.isEmpty
+            ? "历史Quant研究摘要暂不可用。顾问继续分析，不等待NAS。"
+            : usable.joined(separator: "；")
     }
 
     func configureAndTestNAS(baseAddress: String) async {
