@@ -35,6 +35,62 @@ public enum FMarketRiskLevel: Int, Codable, CaseIterable, Comparable, Sendable {
     }
 }
 
+public enum FMarketContextKind: String, Codable, CaseIterable, Hashable, Sendable {
+    case chinaAshare, usNasdaq100, japan, korea, hongKong, unclassified
+
+    public var displayName: String {
+        switch self {
+        case .chinaAshare: return "A股市场"
+        case .usNasdaq100: return "美股纳指100"
+        case .japan: return "日本市场"
+        case .korea: return "韩国市场"
+        case .hongKong: return "香港市场"
+        case .unclassified: return "对应市场未识别"
+        }
+    }
+
+    public var requiredBenchmarks: [FMarketBenchmark] {
+        switch self {
+        case .chinaAshare: return [.sseComposite, .csi300, .csiA500]
+        case .usNasdaq100: return [.nasdaq100]
+        case .japan: return [.nikkei225]
+        case .korea: return [.kospi]
+        case .hongKong: return [.hangSeng]
+        case .unclassified: return []
+        }
+    }
+
+    public static func infer(securityCode: String, instrumentName: String? = nil) -> Self {
+        let name = (instrumentName ?? "").lowercased()
+        if securityCode == "159941" || name.contains("纳指") || name.contains("nasdaq") {
+            return .usNasdaq100
+        }
+        if name.contains("日经") || name.contains("nikkei") || name.contains("日本") { return .japan }
+        if name.contains("kospi") || name.contains("韩国") { return .korea }
+        if name.contains("恒生") || name.contains("港股") || name.contains("hang seng") { return .hongKong }
+        if securityCode == "159352" || name.contains("a500") || name.contains("中证a500") {
+            return .chinaAshare
+        }
+        return .unclassified
+    }
+}
+
+public enum FMarketBenchmark: String, Codable, CaseIterable, Hashable, Sendable {
+    case sseComposite, csi300, csiA500, nasdaq100, nikkei225, kospi, hangSeng
+
+    public var displayName: String {
+        switch self {
+        case .sseComposite: return "上证指数"
+        case .csi300: return "沪深300"
+        case .csiA500: return "中证A500"
+        case .nasdaq100: return "纳斯达克100"
+        case .nikkei225: return "日经225"
+        case .kospi: return "韩国KOSPI"
+        case .hangSeng: return "恒生指数"
+        }
+    }
+}
+
 public enum FQuantStrategyKind: String, Codable, CaseIterable, Hashable, Sendable {
     case meanReversion, trendPullback, vwapDeviation, maStructure, premiumIOPV
 }
@@ -63,6 +119,7 @@ public struct FMarketRegimeBar: Codable, Equatable, Sendable {
 public struct FMarketRegimeInput: Sendable {
     public let market: String
     public let securityCode: String?
+    public let contextKind: FMarketContextKind
     public let asOf: Date
     public let sourceUpdatedAt: Date?
     public let source: String?
@@ -72,18 +129,23 @@ public struct FMarketRegimeInput: Sendable {
     /// Returns from separately observed, synchronized benchmarks. Missing
     /// benchmarks remain unavailable and are never synthesized.
     public let synchronizedBenchmarkReturns: [Double]
+    public let benchmarkReturns: [FMarketBenchmark: Double]
 
-    public init(market: String, securityCode: String? = nil, asOf: Date,
+    public init(market: String, securityCode: String? = nil,
+                contextKind: FMarketContextKind = .unclassified, asOf: Date,
                 sourceUpdatedAt: Date?, source: String?, bars: [FMarketRegimeBar],
-                breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = []) {
+                breadthRatio: Double? = nil, synchronizedBenchmarkReturns: [Double] = [],
+                benchmarkReturns: [FMarketBenchmark: Double] = [:]) {
         self.market = market
         self.securityCode = securityCode
+        self.contextKind = contextKind
         self.asOf = asOf
         self.sourceUpdatedAt = sourceUpdatedAt
         self.source = source
         self.bars = bars
         self.breadthRatio = breadthRatio
         self.synchronizedBenchmarkReturns = synchronizedBenchmarkReturns
+        self.benchmarkReturns = benchmarkReturns
     }
 }
 
@@ -128,6 +190,10 @@ public struct FMarketRegimeMemory: Codable, Equatable, Sendable {
 public struct FMarketRegimeAssessment: Codable, Equatable, Sendable {
     public let market: String
     public let securityCode: String?
+    public let contextKind: FMarketContextKind
+    public let requiredBenchmarks: [FMarketBenchmark]
+    public let availableBenchmarks: [FMarketBenchmark]
+    public let unavailableBenchmarks: [FMarketBenchmark]
     public let regime: FMarketRegime
     public let riskLevel: FMarketRiskLevel
     /// Evidence-strength score, not a forecast or probability of profit.
@@ -180,8 +246,17 @@ public enum FMarketRegimeEngine {
         let vol20 = realizedVolatility(closes, count: 20)
         let volumeExpansion = volumeExpansionRatio(uniqueBars)
         let breadth = input.breadthRatio.flatMap { $0.isFinite && (0...1).contains($0) ? $0 : nil }
-        let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite)
+        let marketBenchmarkReturns = input.benchmarkReturns.values.filter(\.isFinite)
+        let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite) + marketBenchmarkReturns
         let negativeBenchmarks = benchmarkReturns.filter { $0 <= -0.04 }.count
+        let requiredBenchmarks = input.contextKind.requiredBenchmarks
+        let availableBenchmarks = requiredBenchmarks.filter {
+            input.benchmarkReturns[$0]?.isFinite == true
+        }
+        let unavailableBenchmarks = requiredBenchmarks.filter {
+            input.benchmarkReturns[$0]?.isFinite != true
+        }
+        let marketContextComplete = input.contextKind != .unclassified && unavailableBenchmarks.isEmpty
 
         let factors = [
             factor("trend_MA20_60", value: ma20.flatMap { a in ma60.map { a / $0 - 1 } },
@@ -300,6 +375,9 @@ public enum FMarketRegimeEngine {
         let reasons = reasonList(regime: regime, risk: confirmedRisk, drawdown: drawdown20,
                                  volatility: vol20, breadth: breadth, crashCount: crashCount,
                                  pending: pendingRegime)
+        let benchmarkReasons = input.contextKind == .unclassified
+            ? ["market_context_unclassified"]
+            : unavailableBenchmarks.map { "benchmark_unavailable_\($0.rawValue)" }
         let usableFactorCount = factors.filter(\.available).count
         let confidence = dataReliable ? min(100, 35 + usableFactorCount * 8) : 0
         let strategies = strategyPolicy(regime: regime, risk: confirmedRisk, reliable: dataReliable)
@@ -312,13 +390,16 @@ public enum FMarketRegimeEngine {
         return FMarketRegimeAssessment(
             market: input.market, securityCode: input.securityCode, regime: regime,
             riskLevel: confirmedRisk, confidence: confidence, factors: factors,
-            reasons: reasons, dataAsOf: uniqueBars.last?.timestamp,
+            contextKind: input.contextKind, requiredBenchmarks: requiredBenchmarks,
+            availableBenchmarks: availableBenchmarks, unavailableBenchmarks: unavailableBenchmarks,
+            reasons: reasons + benchmarkReasons, dataAsOf: uniqueBars.last?.timestamp,
             movingAverages: [20: ma20, 60: ma60, 120: ma120, 250: ma250].compactMapValues { $0 },
             return5Sessions: ret5, return20Sessions: ret20, drawdown20Sessions: drawdown20,
             realizedVolatility20Sessions: vol20, volumeExpansion: volumeExpansion,
-            allowedStrategies: strategies,
-            observationOnly: [.recovery, .transition, .uncertain, .highVolatility, .riskOff, .extremeRisk, .dataUnreliable].contains(regime),
-            ordinaryTBuyAllowed: dataReliable && confirmedRisk < .r2High &&
+            allowedStrategies: marketContextComplete ? strategies : [],
+            observationOnly: !marketContextComplete ||
+                [.recovery, .transition, .uncertain, .highVolatility, .riskOff, .extremeRisk, .dataUnreliable].contains(regime),
+            ordinaryTBuyAllowed: dataReliable && marketContextComplete && confirmedRisk < .r2High &&
                 [.bullTrend, .range].contains(regime),
             memory: memory)
     }
