@@ -1598,6 +1598,7 @@ private enum FIndexBenchmarkHTTPClient {
             let low: Double
             let close: Double
             let volume: Double?
+            let sourceTimestamp: String
             let fetchedAt: String
             let source: String
         }
@@ -1672,7 +1673,10 @@ private enum FIndexBenchmarkHTTPClient {
         for row in payload.bars {
             guard previousTradingDate.map({ $0 < row.tradingDate }) ?? true,
                   let localDate = dateFormatter.date(from: row.tradingDate),
+                  let sourceTimestamp = parseTimestamp(row.sourceTimestamp),
                   let fetchedAt = parseTimestamp(row.fetchedAt),
+                  sourceTimestamp <= fetchedAt, fetchedAt <= Date(),
+                  dateFormatter.string(from: sourceTimestamp) == row.tradingDate,
                   [row.open, row.high, row.low, row.close].allSatisfy({ $0.isFinite && $0 > 0 }),
                   row.high >= max(row.open, row.low, row.close),
                   row.low <= min(row.open, row.high, row.close),
