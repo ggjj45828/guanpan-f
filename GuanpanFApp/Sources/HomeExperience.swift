@@ -2352,6 +2352,17 @@ struct FInitialLedgerSetupSheet: View {
                             TextField("6位证券代码", text: $position.instrumentCode)
                                 .keyboardType(.numberPad).focused($inputFocused)
                                 .accessibilityIdentifier("ledger.opening.position.code")
+                                .onChange(of: position.instrumentCode) { _, code in
+                                    position.name = ""
+                                    guard code.utf8.count == 6,
+                                          code.utf8.allSatisfy({ (48...57).contains($0) }) else { return }
+                                    Task { @MainActor in
+                                        if let name = await model.lookupInstrumentName(code: code),
+                                           position.instrumentCode == code {
+                                            position.name = name
+                                        }
+                                    }
+                                }
                             TextField("证券名称（自动识别，可修改）", text: $position.name)
                                 .focused($inputFocused)
                             TextField("当前持有份额", text: $position.units)
