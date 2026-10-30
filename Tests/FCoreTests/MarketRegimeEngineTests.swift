@@ -52,7 +52,8 @@ final class MarketRegimeEngineTests: XCTestCase {
         let sensors: [FMarketBenchmarkObservation] = [
             .init(benchmark: .nasdaq100, dailyReturn: -0.05, observedAt: now, source: "fixture"),
             .init(benchmark: .sp500, dailyReturn: -0.05, observedAt: now, source: "fixture"),
-            .init(benchmark: .hangSeng, dailyReturn: -0.05, observedAt: now, source: "fixture")
+            .init(benchmark: .hangSeng, dailyReturn: -0.05, observedAt: now, source: "fixture"),
+            .init(benchmark: .nikkei225, dailyReturn: -0.05, observedAt: now, source: "fixture")
         ]
         let input = FMarketRegimeInput(market: "security:159941", securityCode: "159941",
             contextKind: mapping.market, asOf: now, sourceUpdatedAt: now, source: "fixture",
