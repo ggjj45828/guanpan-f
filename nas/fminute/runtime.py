@@ -8,6 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .archive import MinuteArchive
+from .benchmark_history import BenchmarkArchive, BenchmarkHistoryWorker
 from .calendar import Mainland2026Calendar
 from .calendar_sync import CalendarStore, OfficialCalendarSync
 from .providers import EastmoneyMinuteHistoryProvider, TencentCurrentMinuteProvider
@@ -100,6 +101,7 @@ class MinuteRuntimeWorker:
         self.last_cycle: dict = {"status": "not_started"}
         self.last_backfill_cycle: dict = {"status": "not_started"}
         self.last_calendar_cycle: dict = {"status": "not_started"}
+        self.benchmark_worker = getattr(service, "benchmark_worker", None)
 
     def start(self) -> None:
         if any(thread.is_alive() for thread in self._threads):
@@ -121,6 +123,8 @@ class MinuteRuntimeWorker:
         self.last_cycle = {"status": "degraded" if startup_errors else "starting",
                            "startupErrors": startup_errors}
         self._stop.clear()
+        if self.benchmark_worker is not None:
+            self.benchmark_worker.start()
         self._threads = [
             threading.Thread(target=self._run_realtime, name="f-minute-realtime", daemon=True),
             threading.Thread(target=self._run_backfill, name="f-minute-backfill", daemon=True),
@@ -133,6 +137,8 @@ class MinuteRuntimeWorker:
 
     def stop(self) -> None:
         self._stop.set()
+        if self.benchmark_worker is not None:
+            self.benchmark_worker.stop()
         for thread in self._threads:
             thread.join(timeout=5)
 
@@ -237,6 +243,9 @@ def build_service() -> MinuteArchiveService:
         {"CN": calendar},
         {"CN": (EastmoneyMinuteHistoryProvider(), TencentCurrentMinuteProvider())},
     )
+    benchmark_archive = BenchmarkArchive(data_dir / "benchmark-history.sqlite3")
+    service.benchmark_archive = benchmark_archive
+    service.benchmark_worker = BenchmarkHistoryWorker(benchmark_archive)
     service.runtime_worker = MinuteRuntimeWorker(service, _configured_securities(),
                                                  calendar_sync=calendar_sync)
     return service
