@@ -1423,8 +1423,10 @@ private struct CrossMarketOverview: View {
                 Button {
                     Task { await model.refreshCrossMarketData() }
                 } label: {
-                    Label("刷新指数数据", systemImage: "arrow.clockwise")
+                    Label(model.isRefreshingCrossMarketData ? "正在刷新指数…" : "刷新指数数据",
+                          systemImage: model.isRefreshingCrossMarketData ? "hourglass" : "arrow.clockwise")
                 }
+                .disabled(model.isRefreshingCrossMarketData)
             }
             Section("跨市场指数与风险状态") {
                 ForEach(model.crossMarketBenchmarks, id: \.rawValue) { benchmark in

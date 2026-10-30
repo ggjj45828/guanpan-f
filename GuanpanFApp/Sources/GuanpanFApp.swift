@@ -87,6 +87,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var localQuantByCode: [String: FLocalQuantAssessment] = [:]
     @Published private(set) var benchmarkHistoryByID: [String: FMarketBenchmarkHistory] = [:]
     @Published private(set) var benchmarkStatusByID: [String: String] = [:]
+    @Published private(set) var isRefreshingCrossMarketData = false
     @Published private(set) var benchmarkSnapshotByID: [String: FIndexRegimeSnapshot] = [:]
     @Published var selectedHistoryDate = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: Date()) ?? Date()
     @Published private(set) var refreshingMarketCodes: Set<String> = []
@@ -973,6 +974,9 @@ final class FHomeModel: ObservableObject {
     }
 
     func refreshCrossMarketData() async {
+        guard !isRefreshingCrossMarketData else { return }
+        isRefreshingCrossMarketData = true
+        defer { isRefreshingCrossMarketData = false }
         let benchmarks = FMarketBenchmark.allCases
         await withTaskGroup(of: (FMarketBenchmark, FMarketBenchmarkHistory?, String?).self) { group in
             for benchmark in benchmarks {
