@@ -307,6 +307,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
                 source: "fixture-index-feed", bars: regimeBars,
                 benchmarkObservations: [
                     .init(benchmark: .csiA500, dailyReturn: 0.002, observedAt: now, source: "fixture-index-feed")
+                ],
+                benchmarkHistories: [
+                    .init(benchmark: .csiA500, bars: regimeBars, sourceUpdatedAt: now,
+                          source: "fixture-index-feed-daily-history", sessionTimeZoneIdentifier: "UTC")
                 ], benchmarkMapping: mapping),
             now: now)
         let regimeEncoder = JSONEncoder()
