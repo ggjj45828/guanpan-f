@@ -438,10 +438,11 @@ public enum FMarketRegimeEngine {
             item.observedAt <= input.asOf && item.observedAt <= now &&
             now.timeIntervalSince(item.observedAt) <= maximumDataAge
         }
-        let observedReturns = Dictionary(freshBenchmarkObservations.map { ($0.benchmark, $0.dailyReturn) },
-                                         uniquingKeysWith: { current, candidate in
-                                             candidate.observedAt >= current.observedAt ? candidate : current
-                                         })
+        let latestObservations = Dictionary(freshBenchmarkObservations.map { ($0.benchmark, $0) },
+            uniquingKeysWith: { current, candidate in
+                candidate.observedAt >= current.observedAt ? candidate : current
+            })
+        let observedReturns = latestObservations.mapValues(\.dailyReturn)
         let marketBenchmarkReturns = Array(observedReturns.values)
         let benchmarkReturns = input.synchronizedBenchmarkReturns.filter(\.isFinite) + marketBenchmarkReturns
         let negativeBenchmarks = benchmarkReturns.filter { $0 <= -0.04 }.count
