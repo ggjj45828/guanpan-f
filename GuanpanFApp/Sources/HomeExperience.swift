@@ -2440,7 +2440,7 @@ private struct FInitialLedgerPositionRow: View {
             TextField("6位证券代码", text: $draft.instrumentCode)
                 .keyboardType(.numberPad).focused($inputFocused)
                 .accessibilityIdentifier("ledger.opening.position.code")
-                .onChange(of: draft.instrumentCode) { _, code in
+                .onChange(of: draft.instrumentCode) { code in
                     draft.name = ""
                     Task { await updateName(for: code) }
                 }
