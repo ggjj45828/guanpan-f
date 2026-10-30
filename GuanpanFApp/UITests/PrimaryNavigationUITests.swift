@@ -67,6 +67,25 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachScreenshot("08-settings", app: app)
     }
 
+
+    func testCrossMarketPageExplainsNASArchivedIndexHistory() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let crossMarketLink = app.staticTexts["跨市场与研究"]
+        XCTAssertTrue(crossMarketLink.waitForExistence(timeout: 5))
+        crossMarketLink.tap()
+
+        XCTAssertTrue(app.navigationBars["跨市场脉搏"].waitForExistence(timeout: 5))
+        let explanation = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "指数历史从 NAS 日线归档读取")
+        ).firstMatch
+        XCTAssertTrue(explanation.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["跨市场指数与风险状态"].exists)
+        XCTAssertTrue(app.buttons["刷新指数数据"].exists)
+        attachScreenshot("12-cross-market-nas-archive", app: app)
+    }
+
     func testAdvisorExplainsUnavailableOnlineService() {
         let app = XCUIApplication()
         app.launch()
