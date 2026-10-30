@@ -978,10 +978,11 @@ final class FHomeModel: ObservableObject {
         isRefreshingCrossMarketData = true
         defer { isRefreshingCrossMarketData = false }
         let benchmarks = FMarketBenchmark.allCases
+        let nasBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
         await withTaskGroup(of: (FMarketBenchmark, FMarketBenchmarkHistory?, String?).self) { group in
             for benchmark in benchmarks {
                 group.addTask {
-                    do { return (benchmark, try await FIndexBenchmarkHTTPClient.fetchHistory(benchmark), nil) }
+                    do { return (benchmark, try await FIndexBenchmarkHTTPClient.fetchHistory(benchmark, baseAddress: nasBaseAddress), nil) }
                     catch { return (benchmark, nil, error.localizedDescription) }
                 }
             }
@@ -1589,79 +1590,107 @@ private enum FQuoteHTTPClient {
 }
 
 private enum FIndexBenchmarkHTTPClient {
-    private struct Instrument {
-        let ticker: String
-        let timeZone: String
+    private struct ArchiveResponse: Decodable {
+        struct Bar: Decodable {
+            let tradingDate: String
+            let open: Double
+            let high: Double
+            let low: Double
+            let close: Double
+            let volume: Double?
+            let fetchedAt: String
+            let source: String
+        }
+        let benchmarkId: String
+        let status: String
+        let reason: String?
+        let sampleCount: Int
+        let timezone: String
+        let bars: [Bar]
     }
 
-    private static func instrument(_ benchmark: FMarketBenchmark) -> Instrument {
+    private static func archiveID(_ benchmark: FMarketBenchmark) -> String {
         switch benchmark {
-        case .sseComposite: Instrument(ticker: "000001.SS", timeZone: "Asia/Shanghai")
-        case .csi300: Instrument(ticker: "000300.SS", timeZone: "Asia/Shanghai")
-        case .csiA500: Instrument(ticker: "000510.SS", timeZone: "Asia/Shanghai")
-        case .nasdaq100: Instrument(ticker: "^NDX", timeZone: "America/New_York")
-        case .sp500: Instrument(ticker: "^GSPC", timeZone: "America/New_York")
-        case .nikkei225: Instrument(ticker: "^N225", timeZone: "Asia/Tokyo")
-        case .topix: Instrument(ticker: "^TOPX", timeZone: "Asia/Tokyo")
-        case .kospi: Instrument(ticker: "^KS11", timeZone: "Asia/Seoul")
-        case .hangSeng: Instrument(ticker: "^HSI", timeZone: "Asia/Hong_Kong")
-        case .vix: Instrument(ticker: "^VIX", timeZone: "America/New_York")
+        case .sseComposite: "shanghai_composite"
+        case .csi300: "csi300"
+        case .csiA500: "csi_a500"
+        case .nasdaq100: "nasdaq100"
+        case .sp500: "sp500"
+        case .nikkei225: "nikkei225"
+        case .topix: "topix"
+        case .kospi: "kospi"
+        case .hangSeng: "hang_seng"
+        case .vix: "vix"
         }
     }
 
-    static func fetchHistory(_ benchmark: FMarketBenchmark) async throws -> FMarketBenchmarkHistory {
-        let instrument = instrument(benchmark)
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-"))
-        guard let escapedTicker = instrument.ticker.addingPercentEncoding(withAllowedCharacters: allowed),
-              var components = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(escapedTicker)") else {
-            throw FMarketDataError.invalidPayload
+    private static func parseTimestamp(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) { return date }
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return standard.date(from: value)
+    }
+
+    static func fetchHistory(_ benchmark: FMarketBenchmark, baseAddress: String) async throws -> FMarketBenchmarkHistory {
+        guard let base = FNASReadinessClient.validateAddress(baseAddress),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            throw NSError(domain: "FNASBenchmarkHistory", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "未配置有效 NAS 地址；指数历史从 NAS 归档读取。"])
         }
-        components.queryItems = [URLQueryItem(name: "range", value: "2y"),
-                                 URLQueryItem(name: "interval", value: "1d"),
-                                 URLQueryItem(name: "events", value: "history")]
+        components.path = "/api/v1/benchmark-history"
+        components.queryItems = [URLQueryItem(name: "benchmarkId", value: archiveID(benchmark))]
         guard let url = components.url else { throw FMarketDataError.invalidPayload }
-        var request = URLRequest(url: url, timeoutInterval: 12)
+        var request = URLRequest(url: url, timeoutInterval: 20)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let chart = root["chart"] as? [String: Any],
-              let results = chart["result"] as? [[String: Any]], let result = results.first,
-              let timestamps = result["timestamp"] as? [NSNumber],
-              let indicators = result["indicators"] as? [String: Any],
-              let quotes = indicators["quote"] as? [[String: Any]], let quote = quotes.first,
-              let closes = quote["close"] as? [Any], closes.count == timestamps.count else {
-            throw FMarketDataError.invalidPayload
+        guard let http = response as? HTTPURLResponse else { throw FMarketDataError.invalidPayload }
+        guard (200..<300).contains(http.statusCode) else {
+            throw NSError(domain: "FNASBenchmarkHistory", code: http.statusCode,
+                          userInfo: [NSLocalizedDescriptionKey: "NAS 指数历史接口返回 HTTP \(http.statusCode)。"])
         }
-        let opens = quote["open"] as? [Any] ?? []
-        let highs = quote["high"] as? [Any] ?? []
-        let lows = quote["low"] as? [Any] ?? []
-        let volumes = quote["volume"] as? [Any] ?? []
-        let zone = TimeZone(identifier: instrument.timeZone) ?? .gmt
+        let payload = try JSONDecoder().decode(ArchiveResponse.self, from: data)
+        guard payload.benchmarkId == archiveID(benchmark), payload.status == "available",
+              payload.sampleCount == payload.bars.count else {
+            throw NSError(domain: "FNASBenchmarkHistory", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "NAS 指数历史暂不可用：\(payload.reason ?? payload.status)。"])
+        }
+        guard let zone = TimeZone(identifier: payload.timezone) else { throw FMarketDataError.invalidPayload }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = calendar
+        dateFormatter.timeZone = zone
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.isLenient = false
         var bars: [FMarketRegimeBar] = []
-        for index in timestamps.indices {
-            guard !(closes[index] is NSNull), let close = (closes[index] as? NSNumber)?.doubleValue,
-                  close.isFinite, close > 0 else { continue }
-            let timestamp = Date(timeIntervalSince1970: timestamps[index].doubleValue)
-            guard timestamp <= Date() else { continue }
-            func number(_ values: [Any]) -> Double? {
-                guard index < values.count, !(values[index] is NSNull),
-                      let value = (values[index] as? NSNumber)?.doubleValue,
-                      value.isFinite, value > 0 else { return nil }
-                return value
+        var fetchedDates: [Date] = []
+        var previousTradingDate: String?
+        var source: String?
+        for row in payload.bars {
+            guard previousTradingDate.map({ $0 < row.tradingDate }) ?? true,
+                  let localDate = dateFormatter.date(from: row.tradingDate),
+                  let fetchedAt = parseTimestamp(row.fetchedAt),
+                  [row.open, row.high, row.low, row.close].allSatisfy({ $0.isFinite && $0 > 0 }),
+                  row.high >= max(row.open, row.low, row.close),
+                  row.low <= min(row.open, row.high, row.close),
+                  row.volume.map({ $0.isFinite && $0 >= 0 }) ?? true,
+                  !row.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw FMarketDataError.invalidPayload
             }
-            bars.append(FMarketRegimeBar(timestamp: calendar.startOfDay(for: timestamp), close: close,
-                open: number(opens), high: number(highs), low: number(lows), volume: number(volumes)))
+            previousTradingDate = row.tradingDate
+            fetchedDates.append(fetchedAt)
+            source = source ?? row.source
+            guard source == row.source else { throw FMarketDataError.invalidPayload }
+            bars.append(FMarketRegimeBar(timestamp: calendar.startOfDay(for: localDate), close: row.close,
+                open: row.open, high: row.high, low: row.low, volume: row.volume))
         }
-        let unique = Dictionary(bars.map { ($0.timestamp, $0) }, uniquingKeysWith: { _, latest in latest })
-            .values.sorted { $0.timestamp < $1.timestamp }
-        guard unique.count >= 60, unique.count <= 520 else { throw FMarketDataError.invalidPayload }
-        let fetchedAt = Date()
-        return FMarketBenchmarkHistory(benchmark: benchmark, bars: unique,
-            sourceUpdatedAt: fetchedAt, source: "Yahoo Finance public chart \(instrument.ticker)",
-            sessionTimeZoneIdentifier: instrument.timeZone)
+        guard bars.count >= 60, bars.count <= 520, let updatedAt = fetchedDates.max(),
+              let source else { throw FMarketDataError.invalidPayload }
+        return FMarketBenchmarkHistory(benchmark: benchmark, bars: bars,
+            sourceUpdatedAt: updatedAt, source: "NAS archived · \(source)",
+            sessionTimeZoneIdentifier: payload.timezone)
     }
 }
