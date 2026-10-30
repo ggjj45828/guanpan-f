@@ -63,7 +63,10 @@ public enum FLocalQuantEngine {
         }
         guard let daily, daily.securityCode == securityCode,
               daily.fetchedAt <= now, now.timeIntervalSince(daily.fetchedAt) <= maximumDailyAge,
-              daily.bars.count >= 60 else {
+              daily.bars.count >= 60,
+              let latestDailyObservation = daily.bars.last?.tradingDate,
+              latestDailyObservation <= now,
+              now.timeIntervalSince(latestDailyObservation) <= maximumDailyAge else {
             return unavailable(securityCode, now, "真实日K缺失、过期或不足60个交易日",
                                quoteTimestamp: quote.quoteTimestamp, quoteSource: quote.source)
         }

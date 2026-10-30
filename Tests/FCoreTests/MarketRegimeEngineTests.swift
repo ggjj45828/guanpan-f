@@ -99,6 +99,18 @@ final class MarketRegimeEngineTests: XCTestCase {
         XCTAssertTrue(result.ordinaryTBuyAllowed)
     }
 
+    func testFreshFetchCannotMakeStaleSecurityBarsReliable() {
+        let staleBars = bars(flat(), start: now.addingTimeInterval(-80 * 86_400))
+        let result = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "security:159352", securityCode: "159352",
+                contextKind: .chinaAshare, asOf: now, sourceUpdatedAt: now, source: "fresh-fetch",
+                bars: staleBars), now: now)
+        XCTAssertEqual(result.regime, .dataUnreliable)
+        XCTAssertEqual(result.dataAsOf, staleBars.last?.timestamp)
+        XCTAssertEqual(result.confidence, 0)
+        XCTAssertFalse(result.ordinaryTBuyAllowed)
+    }
+
     func testFreshFetchCannotMakeStaleBenchmarkBarsAvailable() {
         let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
         let staleBars = bars(flat(), start: now.addingTimeInterval(-80 * 86_400))

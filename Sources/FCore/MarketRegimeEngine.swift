@@ -419,8 +419,13 @@ public enum FMarketRegimeEngine {
             .values.sorted { $0.timestamp < $1.timestamp }
         let closes = uniqueBars.map(\.close)
         let validIdentity = !input.market.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let latestSecurityObservationIsFresh = uniqueBars.last.map { bar in
+            bar.timestamp <= input.asOf && bar.timestamp <= now &&
+            now.timeIntervalSince(bar.timestamp) <= maximumDataAge
+        } ?? false
         let dataReliable = validIdentity && sourceIsValid && sourceIsFresh && closes.count >= 60 &&
-            input.asOf <= now && (previous == nil || previous!.lastEvaluationAt <= input.asOf)
+            latestSecurityObservationIsFresh && input.asOf <= now &&
+            (previous == nil || previous!.lastEvaluationAt <= input.asOf)
 
         let ma20 = averageTail(closes, count: 20)
         let ma60 = averageTail(closes, count: 60)

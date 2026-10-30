@@ -59,6 +59,20 @@ final class FLocalQuantEngineTests: XCTestCase {
         XCTAssertTrue(result.strategies.isEmpty)
     }
 
+    func testRecentDownloadCannotMakeStaleDailyBarsUsable() throws {
+        let (quote, daily, regime) = try snapshot()
+        let staleBars = daily.bars.map { bar in
+            FDailyBar(tradingDate: bar.tradingDate.addingTimeInterval(-10 * 86_400),
+                open: bar.open, close: bar.close, high: bar.high, low: bar.low, volume: bar.volume)
+        }
+        let staleDaily = try FDailyKlineSnapshot(securityCode: "159352", bars: staleBars,
+            fetchedAt: now, source: "fixture-current-retrieval-stale-bars", adjustment: "不复权")
+        let result = FLocalQuantEngine.evaluate(securityCode: "159352",
+            quote: quote, daily: staleDaily, marketRegime: regime, now: now)
+        XCTAssertEqual(result.readiness, .unavailable)
+        XCTAssertEqual(result.riskReasons, ["真实日K缺失、过期或不足60个交易日"])
+    }
+
     func testMissingPrimaryRegimeHistoryFailsClosed() throws {
         let (quote, daily, _) = try snapshot()
         let mapping = FMarketBenchmarkMapping.resolve(securityCode: "159352")!
