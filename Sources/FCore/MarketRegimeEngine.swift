@@ -372,7 +372,7 @@ public enum FMarketRegimeEngine {
         let globalSensors = mapping?.globalSensors ?? []
         let allMappedSensors = Set(requiredBenchmarks + secondaryBenchmarks + globalSensors)
         let unavailableMappedSensors = allMappedSensors.filter { observedReturns[$0]?.isFinite != true }.sorted { $0.rawValue < $1.rawValue }
-        let globalAvailable = globalSensors.compactMap { observedReturns[$0] }.filter(\\.isFinite)
+        let globalAvailable = globalSensors.compactMap { observedReturns[$0] }.filter(\.isFinite)
         let globalRegime: FGlobalRegime = globalAvailable.isEmpty ? .uncertain :
             (globalAvailable.filter { $0 <= -0.04 }.count >= 3 ? .riskOff :
              (globalAvailable.filter { $0 >= 0.02 }.count >= 3 ? .riskOn : .neutral))
