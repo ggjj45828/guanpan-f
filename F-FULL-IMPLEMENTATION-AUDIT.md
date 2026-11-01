@@ -1176,6 +1176,11 @@ Ledger event-order follow-up validation: 247 locally importable Python tests pas
 - 接入multi-market路由、/readyz和历史API归档状态、iPhone允许时区/来源策略与KR Market Regime证据策略。Naver常见`YYYY.MM.DD`与`YYYYMMDD`两类日期均有解析回归；不可信实时报价标签不能冒充历史来源。
 - 接口未公开稳定契约，本机无外网访问，当前只验证fixtures和源码连接；NAS实网可用性、覆盖长度与实际交易日必须在部署后核验。不得把代码接入描述为已验证真实历史数据。
 
+## 2026-11-02 首批CI失败修复
+
+- 首批推送`9273dd3`触发的NAS/Python run成功；iOS Swift package compile 因`MarketQuoteCache.loadAll`默认参数引用`Self`、`LedgerHistoryProjection`现金流水闭包漏写`return`、`MarketRegimeEngine.qualifiedBenchmarks`闭包输出类型无法推断而失败。已分别改为具体类型静态常量、显式return、显式闭包参数/返回类型。
+- 指数/Regime/历史接线相关55项Python回归、compileall、架构边界与diff检查通过。修复后的Apple编译需下个iOS Actions run确认。
+
 ## 2026-11-01 用户图表高度反馈
 
 - 参考截图显示证券详情纵向图表占屏过高。详情实时分时、日K、NAS历史分钟及紧凑行情图统一设为320pt；图表增加稳定可访问性标识，UI测试对详情实时图和日K图高度设上限，并更新源码合同与B-058追踪。

@@ -53,7 +53,7 @@ public actor FMarketQuoteCache {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    public func loadAll(at now: Date = Date(), maximumAge: TimeInterval = Self.maximumAge)
+    public func loadAll(at now: Date = Date(), maximumAge: TimeInterval = FMarketQuoteCache.maximumAge)
         -> [FCurrentIntradaySnapshot] {
         guard now.timeIntervalSince1970.isFinite, maximumAge.isFinite, maximumAge >= 0,
               let files = try? fileManager.contentsOfDirectory(at: directory,

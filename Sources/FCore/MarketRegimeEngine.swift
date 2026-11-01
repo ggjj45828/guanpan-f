@@ -554,8 +554,10 @@ public enum FMarketRegimeEngine {
             now.timeIntervalSince(item.capturedAt) <= min(maximumDataAge, maximumBenchmarkAge)
         }
         let groupedByMarket = Dictionary(grouping: valid, by: \.marketCode)
-        let latestByMarket = groupedByMarket.compactMap { marketCode, candidates in
-            guard let newestObservationAt = candidates.map(\.observedAt).max() else { return nil }
+        let latestByMarket: [FMarketRegimeBenchmarkObservation] = groupedByMarket.compactMap { entry
+            -> FMarketRegimeBenchmarkObservation? in
+            let candidates = entry.value
+            guard let newestObservationAt = candidates.map({ $0.observedAt }).max() else { return nil }
             let newest = candidates.filter { $0.observedAt == newestObservationAt }
             guard Set(newest.map(\.sessionReturn)).count == 1,
                   Set(newest.compactMap(\.sessionStartAt)).count == 1 else { return nil }

@@ -3,6 +3,7 @@
 ## 当前源树状态覆盖（2026-11-01；优先于下方历史记录）
 
 - 2026-11-01 韩股历史指数接入：NAS增设Naver KOSPI日线provider，独立于iPhone实时报价，支持Naver常见日期格式、过滤当日未完成bar、校验OHLCV，并接入日线归档、iPhone可信来源门与KR Regime；新增路由、解析和API回归。Naver历史端点为未签约公开接口，本机无法实网验证，须由NAS部署后的实际请求确认可用性与覆盖。提交推送授权已给出，每次最多两个Actions run；当前尚未提交。
+- 2026-11-02 首批推送后的CI审查：GitHub NAS/Python run成功；iOS Swift package compile失败，发现三个独立问题：缓存默认参数引用`Self`、Ledger现金流水map闭包漏`return`、Regime字典分组`compactMap`无法推断类型。已修复源码；55项指数/Regime/接线回归、Python编译、架构边界检查和差异检查通过。Windows无Swift/Xcode，需新一轮iOS Actions执行确认编译；下一次推送仍遵守最多两个run。
 - 2026-11-01 用户图表反馈续审：详情分时、日K、NAS历史分钟及行情卡片图表统一从400/360pt收至320pt；新增稳定可访问性标识、UI高度验收及源码合同。Home/追踪合同30/30通过；全量Python发现293项、291项通过，2项因缺PyYAML无法导入；`git diff --check`通过。Swift/XCTest与Simulator不可用，尚无截图视觉确认。B-058已更新；未提交/推送。
 - 2026-11-01 Local Quant 输入信任续审：确认盘中因子只在共享报价时效/来源门通过且处于连续交易时段时计算；证券日K来源与时点、Regime市场身份/数据时点、映射指数身份/获取时间及IOPV来源均有独立门控。未确认可绕过路径。Local Quant、Regime、报价信任与追踪聚焦合同30/30通过；Swift/XCTest未执行；未提交/推送。
 - 2026-11-01 Ledger金额与每日盈亏续审：复核真实成交回放、数量溢出、成本移除、费用更正、每日已实现盈亏及T配对；运算结果在账本余额核对或报表聚合处失败关闭，未确认金额错算路径。账户费用、Ledger并发写、每日盈亏、Shadow成交关联及追踪合同16/16通过；Swift/XCTest未执行；未提交/推送。

@@ -308,7 +308,7 @@ enum FLedgerHistoryProjection {
             case .some(.cashReconciliation): kind = .cashReconciliation
             case .none: kind = movement.amount > 0 ? .deposit : .withdrawal
             }
-            Event(sequence: movement.sequence, date: movement.occurredAt,
+            return Event(sequence: movement.sequence, date: movement.occurredAt,
                   kind: kind, code: nil, name: nil,
                   sourceFillID: nil, units: nil, price: nil, fee: 0, effectiveFee: nil,
                   delta: movement.amount,
