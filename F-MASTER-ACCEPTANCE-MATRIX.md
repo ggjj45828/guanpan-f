@@ -748,3 +748,7 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 
 - 第三轮 iOS CI 的 FCore 源文件已编译；测试目标因 6 处 throwing FAccountBook 未加 `try`、2 处 CandidateShadowSnapshot 参数顺序错误、3 处 FConfirmedFill 未传 `fee`、1 处抛错的 priceRange 调用未加 `try` 而中断。
 - 上述调用已修正。Windows 环境无 Swift/Xcode，仍须等待下一轮 Apple runner 编译和测试结果；未把它标记为已构建通过。
+
+## 2026-11-02 Risk Guard 溢出用例路径校正（等待 Actions）
+
+第四轮 iOS CI 已编译并运行测试；唯一失败是持久化边界大测试中的 Risk Guard 溢出断言。测试给出的 `Int64.max` 委托量超过场内基金单笔上限，实际命中交易规则拒绝，未进入 Decimal 乘法。现改为合法最大委托量和 `1e126` 价格，使限价仍满足千分位规则、名义金额乘法超出 Decimal 范围，从而验证溢出会 fail closed。下一轮 Actions 确认前保持待验证状态。

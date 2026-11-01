@@ -449,3 +449,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 2026-11-01 每日成交摘要身份校验：解码后的FDailyTradeSummary.isValid此前只要求证券代码非空且无首尾空格，未执行F账本的6位ASCII数字规则；伪造summary身份可能进入DecisionContext日已实现盈亏聚合。现要求exact 6 ASCII digits，新增短码/全角数字/字母代码解码回归并更新B-018。security daily P&L与追踪合同6/6通过，XCTest未在本机执行；无提交/推送。
 
 - 2026-11-02 iOS Actions第三轮定位：FCore生产源码已通过编译，失败发生在 XCTest 源码编译；修复 CandidateShadowScorecardTests 中 throwing FAccountBook 构造、CandidateSnapshot 参数顺序，以及 LedgerSchemaTests 缺少 fee 和 MarketChartAcceptanceTests 缺少 try。Apple XCTest需由下一轮 Actions 确认。
+
+- 2026-11-02 iOS Actions第四轮：Swift测试目标已成功编译并执行；一项风险防护断言失败，因为用例的Int64.max委托份额先被单笔上限规则拒绝，没有覆盖Decimal乘法溢出。已将输入改为合法最大委托份额与超大价格，确保实际经过checkedTradeUsage溢出分支；等待下一轮Apple Actions验证。

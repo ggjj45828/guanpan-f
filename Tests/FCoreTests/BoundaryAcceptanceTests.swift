@@ -1017,10 +1017,11 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let quoteSnapshot = try makeBook().readOnlySnapshot(capturedAt: now)
         let riskContext = FDecisionContext(snapshot: quoteSnapshot,
             observations: [quote, riskQualification, riskRegime], strategyQualificationGrants: [riskGrant])
-        let oversizedPrice = try XCTUnwrap(Decimal(string: "1e120"))
+        let oversizedPrice = try XCTUnwrap(Decimal(string: "1e126"))
         let overflowingCandidate = FCandidateRecommendation(
             accountDigest: riskContext.accountDigest, action: .buy, instrumentCode: "159352",
-            units: Int64.max, limitPrice: oversizedPrice, rationale: "超界算术必须拒绝",
+            units: FMainlandFundTradingRules.maximumOrderUnits, limitPrice: oversizedPrice,
+            rationale: "超界算术必须拒绝",
             citedObservationIDs: [quote.id, riskQualification.id, riskRegime.id])
         let overflowGuard = FRiskGuard.evaluate(overflowingCandidate, in: riskContext, now: now)
         XCTAssertFalse(overflowGuard.allowedForReview)
