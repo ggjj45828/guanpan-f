@@ -147,7 +147,7 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
                 decisionLayers: [FCandidateShadowLayerAction]? = nil,
                 marketRegime: String? = nil, maxChaseDistance: Decimal? = nil,
                 finalAction: FDecisionAction? = nil, guardAllowed: Bool = false,
-                maxQuoteAgeSeconds: Int(FQuoteTemporalMetadata.defaultMaximumAge)) throws {
+                maxQuoteAgeSeconds: Int = Int(FQuoteTemporalMetadata.defaultMaximumAge)) throws {
         guard candidate.accountDigest == context.accountDigest,
               context.createdAt.timeIntervalSince1970.isFinite,
               candidate.units.map({ $0 > 0 }) ?? true,
@@ -490,15 +490,16 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
                 from: outcomeReference, to: item.price) else { return nil }
             return directional ? raw : -raw
         }
-        let directionalMoves = trigger.flatMap { _ in outcomeReference }.flatMap { base in
-            directional.map { favorableDirection in
-                market.filter { $0.quoteTimestamp >= outcomeAnchor }.compactMap {
-                    guard let change = FCandidateShadowDecimalMath.relativeChange(
-                        from: base, to: $0.price) else { return nil }
-                    return change * (favorableDirection ? Decimal(1) : Decimal(-1))
-                }
+        let directionalMoves: [Decimal]
+        if trigger != nil, let base = outcomeReference, let favorableDirection = directional {
+            directionalMoves = market.filter { $0.quoteTimestamp >= outcomeAnchor }.compactMap { item in
+                guard let change = FCandidateShadowDecimalMath.relativeChange(
+                    from: base, to: item.price) else { return nil }
+                return change * (favorableDirection ? Decimal(1) : Decimal(-1))
             }
-        } ?? []
+        } else {
+            directionalMoves = []
+        }
         return FCandidateShadowEvaluation(status: status, executionStatus: execution,
             evaluatedLayer: .deepSeekAdvisor,
             dataQuality: market.isEmpty ? (allMarket.isEmpty ? .insufficient : .staleObserved) : .freshVerified,

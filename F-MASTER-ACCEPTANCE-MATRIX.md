@@ -6,7 +6,7 @@
 - 数据星图中心摘要与真实资产导航节点的重复可访问性标识已拆分；十主题UI用例加上角色唯一性、四节点可点击和中心无重叠断言。源码合同通过，Simulator验证仍待执行。
 - 本地Quant现有八类描述性因子观察、来源/时点/质量理由和三类策略准备状态，已进入Advisor只读上下文；它尚未生成交易信号、价格区间、份额、Candidate或生产资格票据。NAS验证签发链、策略组合、持续行情评估、Trigger生产接线、状态持久化/通知仍未闭环，资产变化Candidate继续fail-closed。
 - 八类跨市场实时指数行情已编码；NAS历史K线现增加Naver公开网页接口的KOSPI日线provider，并接入iPhone历史来源信任与KR Regime。解析/路由/API回归覆盖；该未签约接口尚未NAS实网验证，不能据此声称已具备真实覆盖或稳定可用性。
-- 2026-11-02 `9273dd3` 的 NAS/Python Actions 成功；iOS Swift package compile 暴露三处源码错误并已本地修复。当前修复尚待下一轮 Apple CI；本机无Swift/Xcode。
+- 2026-11-02 两批 NAS/Python Actions 成功；iOS Swift package compile 连续暴露的源码错误已修复两轮，仍待第三轮 Apple CI 确认；本机无Swift/Xcode。
 - 全量145行追踪表结构连续不代表功能全部完成。NAS部署、真实行情/新闻/DeepSeek、Apple构建与截图、真机视觉、跨市场交易日历和实际策略效果仍需分别验收。本轮无提交或推送。
 
 - Regime核心现对有效历史区间内的非有限/非正收盘价、负成交量、部分OHLCV字段和矛盾OHLC失败关闭，factor与reason均明确报告异常；as-of之后的未来坏bar仍被忽略。回归已定义，Apple XCTest未执行。

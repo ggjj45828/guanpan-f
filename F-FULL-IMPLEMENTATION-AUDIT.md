@@ -1181,6 +1181,11 @@ Ledger event-order follow-up validation: 247 locally importable Python tests pas
 - 首批推送`9273dd3`触发的NAS/Python run成功；iOS Swift package compile 因`MarketQuoteCache.loadAll`默认参数引用`Self`、`LedgerHistoryProjection`现金流水闭包漏写`return`、`MarketRegimeEngine.qualifiedBenchmarks`闭包输出类型无法推断而失败。已分别改为具体类型静态常量、显式return、显式闭包参数/返回类型。
 - 指数/Regime/历史接线相关55项Python回归、compileall、架构边界与diff检查通过。修复后的Apple编译需下个iOS Actions run确认。
 
+## 2026-11-02 第二轮Apple编译问题修复
+
+- 第二轮iOS Actions仍在Swift package compile失败，并暴露继续向下编译才出现的错误：`ResearchEvidence.swift`未导入FCore而引用来源信任策略；`CandidateShadowScorecard`新增参数缺少类型默认值声明且嵌套optional directional moves推断成Any；`DecisionContext`对必填String日期使用`.map`导致迭代Character。均已修改，待第三轮Apple CI验证。
+- 同SHA的NAS/Python run通过；本机仍不能运行Swift/Xcode，不能将本地静态修改当作Apple构建通过。
+
 ## 2026-11-01 用户图表高度反馈
 
 - 参考截图显示证券详情纵向图表占屏过高。详情实时分时、日K、NAS历史分钟及紧凑行情图统一设为320pt；图表增加稳定可访问性标识，UI测试对详情实时图和日K图高度设上限，并更新源码合同与B-058追踪。

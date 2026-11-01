@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FCore
 
 /// Dividend factor providers are not yet connected to a verified source in this
 /// app. Keep the set explicit so evidence remains unavailable until a real

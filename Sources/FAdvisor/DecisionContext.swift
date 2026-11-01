@@ -351,12 +351,10 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
             let dailyMark = Self.dailyMark(for: code, observations: capturedObservations,
                                            tradingDate: capturedDailyTradeSummaryDate,
                                            asOf: capturedAt)
-            let openingPositionIsKnown = capturedDailyTradeSummaryDate.map { tradingDate in
-                FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
-                    openingSnapshotCapturedAt: snapshot.openingSnapshotCapturedAt,
-                    securityCode: code, openingPositionCodes: snapshot.openingPositionCodes,
-                    tradingDate: tradingDate)
-            } ?? false
+            let openingPositionIsKnown = FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+                openingSnapshotCapturedAt: snapshot.openingSnapshotCapturedAt,
+                securityCode: code, openingPositionCodes: snapshot.openingPositionCodes,
+                tradingDate: capturedDailyTradeSummaryDate)
             return FDecisionInstrumentPnL(instrumentCode: code, history: historyByCode[code],
                                           holding: holdingByCode[code], daily: dailyByCode[code],
                                           dailySummaryDate: capturedDailyTradeSummaryDate,
