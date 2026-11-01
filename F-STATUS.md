@@ -451,3 +451,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 2026-11-02 iOS Actions第三轮定位：FCore生产源码已通过编译，失败发生在 XCTest 源码编译；修复 CandidateShadowScorecardTests 中 throwing FAccountBook 构造、CandidateSnapshot 参数顺序，以及 LedgerSchemaTests 缺少 fee 和 MarketChartAcceptanceTests 缺少 try。Apple XCTest需由下一轮 Actions 确认。
 
 - 2026-11-02 iOS Actions第四轮：Swift测试目标已成功编译并执行；一项风险防护断言失败，因为用例的Int64.max委托份额先被单笔上限规则拒绝，没有覆盖Decimal乘法溢出。已将输入改为合法最大委托份额与超大价格，确保实际经过checkedTradeUsage溢出分支；等待下一轮Apple Actions验证。
+
+- 第五轮 iOS CI 同一用例断言仍失败；将测试行情价同步到待测限价，避免“买入限价高于最新价”的追价门提前返回，继续确认 Decimal 溢出拒绝路径。

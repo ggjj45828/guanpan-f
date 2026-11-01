@@ -1007,7 +1007,7 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let quote = FContextObservation(dataClass: .quote, subject: "159352",
                                         source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                         observedAt: riskQuoteMetadata.quoteTimestamp,
-                                        capturedAt: now, decimalValue: 1,
+                                        capturedAt: now, decimalValue: Decimal(string: "1e126")!,
                                         quoteTemporalMetadata: riskQuoteMetadata)
         let riskQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
             securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3", evaluatedAt: now))
