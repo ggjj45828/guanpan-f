@@ -743,3 +743,8 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 - Market Regime门控现令证券自身R3/R4风险立即关闭策略许可；Local Quant不再因仍保留Bull/Range确认标签而报告策略准备可用。新增2项Swift回归定义和源码合同，Market Regime/Local Quant/Advisor/追踪合同50/50通过；Apple XCTest未执行。
 
 - Regime历史bar现拒绝非有限时间戳（包括负无穷），否则该输入可能参与长期均线并被误判可靠。新增Swift回归定义，聚焦合同26/26通过；Swift/XCTest未执行。
+
+## 2026-11-02 XCTest 调用点修复（等待 Actions）
+
+- 第三轮 iOS CI 的 FCore 源文件已编译；测试目标因 6 处 throwing FAccountBook 未加 `try`、2 处 CandidateShadowSnapshot 参数顺序错误、3 处 FConfirmedFill 未传 `fee`、1 处抛错的 priceRange 调用未加 `try` 而中断。
+- 上述调用已修正。Windows 环境无 Swift/Xcode，仍须等待下一轮 Apple runner 编译和测试结果；未把它标记为已构建通过。

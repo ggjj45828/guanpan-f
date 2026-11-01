@@ -107,7 +107,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let fill = FConfirmedFill(id: fillID, sequence: 1, tradedAt: fillTime,
             instrumentCode: "159352", side: .buy, units: 100, price: 1.10, fee: 0,
             userConfirmation: .init(confirmedAt: fillTime, confirmationNote: "用户确认成交"))
-        let ledger = FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
+        let ledger = try FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 890, positions: [FPosition(instrumentCode: "159352", name: "测试ETF",
                 units: 100, bookCost: 110, acquiredAt: fillTime)], fills: [fill],
             updatedAt: fillTime).readOnlySnapshot(capturedAt: base.addingTimeInterval(11))
@@ -120,7 +120,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         XCTAssertThrowsError(try record.appendConfirmedExecution(FCandidateShadowFillLink(
             confirmedFillID: fillID, linkedAt: fillTime, units: 99), ledgerSnapshot: ledger),
             "关联份额必须等于账本实际成交份额")
-        let otherAccountLedger = FAccountBook(accountID: UUID(),
+        let otherAccountLedger = try FAccountBook(accountID: UUID(),
             openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 890, positions: [FPosition(instrumentCode: "159352", name: "测试ETF",
                 units: 100, bookCost: 110, acquiredAt: fillTime)], fills: [fill],
@@ -131,7 +131,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let otherSecurityFill = FConfirmedFill(id: fillID, sequence: 1, tradedAt: fillTime,
             instrumentCode: "510300", side: .buy, units: 100, price: 1.10, fee: 0,
             userConfirmation: .init(confirmedAt: fillTime, confirmationNote: "用户确认成交"))
-        let otherSecurityLedger = FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
+        let otherSecurityLedger = try FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 890, positions: [FPosition(instrumentCode: "510300", name: "另一ETF",
                 units: 100, bookCost: 110, acquiredAt: fillTime)], fills: [otherSecurityFill],
             updatedAt: fillTime).readOnlySnapshot(capturedAt: base.addingTimeInterval(11))
@@ -144,7 +144,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
             userConfirmation: .init(confirmedAt: fillTime, confirmationNote: "用户确认成交"))
         let sellOpeningPosition = FPosition(instrumentCode: "159352", name: "测试ETF",
             units: 200, bookCost: 220, acquiredAt: base)
-        let wrongSideLedger = FAccountBook(
+        let wrongSideLedger = try FAccountBook(
             openingSnapshot: .init(capturedAt: base, cashBalance: 890, positions: [sellOpeningPosition]),
             cashBalance: 1_000, positions: [FPosition(instrumentCode: "159352", name: "测试ETF",
                 units: 100, bookCost: 110, acquiredAt: base)], fills: [sellFill],
@@ -156,7 +156,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let futureFill = FConfirmedFill(sequence: 1, tradedAt: futureFillTime,
             instrumentCode: "159352", side: .buy, units: 100, price: 1.10, fee: 0,
             userConfirmation: .init(confirmedAt: futureFillTime, confirmationNote: "用户确认成交"))
-        let futureLedger = FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
+        let futureLedger = try FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 890, positions: [FPosition(instrumentCode: "159352", name: "测试ETF",
                 units: 100, bookCost: 110, acquiredAt: futureFillTime)], fills: [futureFill],
             updatedAt: futureFillTime).readOnlySnapshot(capturedAt: base.addingTimeInterval(11))
@@ -199,7 +199,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
             review: FCandidateShadowExecutionReview(
                 reviewedAt: base.addingTimeInterval(10), note: "已确认没有执行"))
 
-        let emptyLedger = FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
+        let emptyLedger = try FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 1_000, updatedAt: base).readOnlySnapshot(capturedAt: base)
         XCTAssertThrowsError(try archive.appendConfirmedExecution(candidateID: candidate.id,
             link: FCandidateShadowFillLink(confirmedFillID: UUID(),
@@ -429,7 +429,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let zone = try FShadowPriceZone(lower: 1, upper: maximum)
         let snapshot = try FCandidateShadowSnapshot(candidate: candidate, context: context,
             advisorConclusion: "等待", targetPriceZone: zone,
-            maxChaseDistance: maximum, validUntil: base.addingTimeInterval(3_600))
+            validUntil: base.addingTimeInterval(3_600), maxChaseDistance: maximum)
         var record = FCandidateShadowRecord(snapshot: snapshot)
         try record.appendMarketObservation(quote("1.104", at: 60))
 
@@ -442,7 +442,7 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let zone = try FShadowPriceZone(lower: 1.103, upper: 1.105)
         let snapshot = try FCandidateShadowSnapshot(candidate: candidate, context: context,
             advisorConclusion: "等待反弹", targetPriceZone: zone,
-            maxChaseDistance: Decimal(string: "0.01"), validUntil: base.addingTimeInterval(3_600))
+            validUntil: base.addingTimeInterval(3_600), maxChaseDistance: Decimal(string: "0.01"))
         var record = FCandidateShadowRecord(snapshot: snapshot)
         try record.appendMarketObservation(quote("1.104", at: 60))
         try record.appendMarketObservation(quote("1.080", at: 120))

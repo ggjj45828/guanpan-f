@@ -447,3 +447,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 2026-11-01 RealtimeTrigger Regime时序门控：此前只验证Regime dataAsOf，未验证滞后/未来的memory.lastEvaluationAt，未来记忆仍可能通过候选触发门。现同时要求记忆时点有限、≥dataAsOf、≤当前时点且不旧于5日，并验证confidence范围。新增Swift回归；Market Regime/Local Quant/追踪合同28/28通过，架构边界及diff检查通过。XCTest未在本机执行；无提交/推送。
 
 - 2026-11-01 每日成交摘要身份校验：解码后的FDailyTradeSummary.isValid此前只要求证券代码非空且无首尾空格，未执行F账本的6位ASCII数字规则；伪造summary身份可能进入DecisionContext日已实现盈亏聚合。现要求exact 6 ASCII digits，新增短码/全角数字/字母代码解码回归并更新B-018。security daily P&L与追踪合同6/6通过，XCTest未在本机执行；无提交/推送。
+
+- 2026-11-02 iOS Actions第三轮定位：FCore生产源码已通过编译，失败发生在 XCTest 源码编译；修复 CandidateShadowScorecardTests 中 throwing FAccountBook 构造、CandidateSnapshot 参数顺序，以及 LedgerSchemaTests 缺少 fee 和 MarketChartAcceptanceTests 缺少 try。Apple XCTest需由下一轮 Actions 确认。

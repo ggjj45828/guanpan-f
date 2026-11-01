@@ -306,7 +306,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
                 price: Decimal.greatestFiniteMagnitude)]),
             quality: .complete, temporalMetadata: metadata)
 
-        XCTAssertNil(FChartOverlayModel(chart: chart).priceRange())
+        XCTAssertNil(try FChartOverlayModel(chart: chart).priceRange())
     }
 
     func testDailyMovingAverageAvoidsIntermediateDecimalOverflow() throws {

@@ -677,7 +677,7 @@ final class LedgerSchemaTests: XCTestCase {
 
     func testDecodedDailyTradeSummaryRejectsAmountWithoutMatchingSideQuantity() throws {
         let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
-            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            instrumentCode: "159352", side: .buy, units: 10, price: 1, fee: 0,
             userConfirmation: confirmation())
         let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [fill], asOf: now).first)
         XCTAssertTrue(summary.isValid(asOf: now))
@@ -700,7 +700,7 @@ final class LedgerSchemaTests: XCTestCase {
 
     func testDecodedDailyTradeSummaryRequiresSixASCIIDigitSecurityIdentity() throws {
         let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
-            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            instrumentCode: "159352", side: .buy, units: 10, price: 1, fee: 0,
             userConfirmation: confirmation())
         let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [fill], asOf: now).first)
         let encoded = try JSONEncoder().encode(summary)
@@ -719,7 +719,7 @@ final class LedgerSchemaTests: XCTestCase {
         var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
             updatedAt: now.addingTimeInterval(-300))
         let buy = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
-            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            instrumentCode: "159352", side: .buy, units: 10, price: 1, fee: 0,
             userConfirmation: confirmation())
         book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
         let context = FDecisionContext(snapshot: try book.readOnlySnapshot(capturedAt: now), observations: [])
