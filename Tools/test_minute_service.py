@@ -1,11 +1,9 @@
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
-from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
+from decimal import Decimal
 from pathlib import Path
 import json
 import sqlite3
-import threading
 import tempfile
 import unittest
 
@@ -14,7 +12,12 @@ from nas.fminute.service import (
     BackfillPriority, BackfillQueueFull, MinuteArchiveService, ServiceError,
 )
 from nas.fminute.http_api import make_handler
-from nas.fminute.evidence import ResearchEvidenceEnvelope
+from nas.fminute.evidence import ResearchEvidenceEnvelope, _epoch_millis
+from nas.fminute.research import (
+    build_morning_selloff_recovery_evidence, build_vwap_break_evidence,
+    replay_grid_spacing_evidence,
+)
+from Tools.http_test_harness import dispatch_json
 
 UTC = timezone.utc
 
@@ -382,20 +385,26 @@ class MinuteServiceTests(unittest.TestCase):
 
     def test_research_endpoint_returns_compact_fail_closed_evidence(self):
         session = self.sessions[0]
-        self.archive.ingest(make_bars(session, fetched_at=self.clock()), mode="backfill")
+        self.archive.ingest(make_bars(session, fetched_at=self.clock(),
+                                      source="Tencent Finance minute/query (public web endpoint)"),
+                            mode="backfill")
         result = self.service.get_research_evidence(
-            "159352", "CN", session.trading_date, session.trading_date,
+            "159352", "CN", session.trading_date - timedelta(days=10), session.trading_date,
             as_of=self.clock(), minimum_independent_days=2)
         self.assertEqual(result["qualifiedIndependentDays"], 1)
+        self.assertEqual(result["dataRange"], {
+            "start": session.trading_date.isoformat(), "end": session.trading_date.isoformat()})
+        self.assertNotEqual(result["dataRange"], result["range"])
         self.assertEqual(result["evidence"]["vwapBreak"]["windows"]["5"]["evidenceState"],
                          "insufficient_independent_days")
         self.assertFalse(result["rawMinuteBarsIncluded"])
         self.assertIsNone(result["tradePlan"])
-        self.assertEqual(result["schemaVersion"], 1)
-        self.assertEqual(result["methodologyVersion"], "minute-research-1")
+        self.assertEqual(result["schemaVersion"], 2)
+        self.assertEqual(result["methodologyVersion"], "minute-research-2")
+        self.assertIsNone(result["strategyVersion"])
         self.assertTrue(result["evidenceId"])
         repeated = self.service.get_research_evidence(
-            "159352", "CN", session.trading_date, session.trading_date,
+            "159352", "CN", session.trading_date - timedelta(days=10), session.trading_date,
             as_of=self.clock(), minimum_independent_days=2)
         self.assertEqual(result["evidenceId"], repeated["evidenceId"])
         self.assertIn("limitations", result)
@@ -405,9 +414,23 @@ class MinuteServiceTests(unittest.TestCase):
         self.assertTrue(all("sessions" not in item and "sessionCount" in item
                             for item in result["evidence"]["gridSpacingReplay"]["spacings"].values()))
 
+    def test_research_builders_reject_boolean_sample_thresholds(self):
+        with self.assertRaises(ArchiveError):
+            build_vwap_break_evidence([], research_as_of=self.clock(),
+                                      minimum_independent_days=True)
+        with self.assertRaises(ArchiveError):
+            build_morning_selloff_recovery_evidence(
+                [], research_as_of=self.clock(), minimum_out_of_sample_days=True)
+        with self.assertRaises(ArchiveError):
+            replay_grid_spacing_evidence(
+                [], research_as_of=self.clock(), spacing_percentages=[Decimal("1")],
+                maximum_monthly_concentration=True)
+
     def test_research_evidence_contract_rejects_raw_data_and_trade_plans(self):
         session = self.sessions[0]
-        self.archive.ingest(make_bars(session, fetched_at=self.clock()), mode="backfill")
+        self.archive.ingest(make_bars(session, fetched_at=self.clock(),
+                                      source="Tencent Finance minute/query (public web endpoint)"),
+                            mode="backfill")
         evidence = self.service.get_research_evidence(
             "159352", "CN", session.trading_date, session.trading_date, as_of=self.clock())
         internal = {"securityCode": evidence["securityCode"], "market": evidence["market"],
@@ -431,22 +454,122 @@ class MinuteServiceTests(unittest.TestCase):
         valid_no_data = ResearchEvidenceEnvelope.create(internal, generated_at=self.clock())
         self.assertEqual(valid_no_data.sources, ())
 
+    def test_research_evidence_accepts_only_one_training_selected_grid_holdout(self):
+        now = self.clock()
+        selected = {"evidenceState": "available_for_review", "selectedByTraining": True,
+                    "headlinePopulation": "out_of_sample", "trainingDays": 20,
+                    "outOfSampleDays": 5, "maxMonthlySampleShare": 0.5,
+                    "maximumMonthlySampleShare": 0.5, "outOfSample": {"days": 5}}
+        withheld = {"evidenceState": "not_selected_by_training", "selectedByTraining": False,
+                    "outOfSample": None}
+        payload = {"securityCode": "159352", "market": "CN",
+                   "range": {"start": "2026-10-01", "end": "2026-10-31"},
+                   "dataRange": {"start": "2026-10-01", "end": "2026-10-31"},
+                   "asOf": now.isoformat(), "timezone": "Asia/Shanghai",
+                   "sessionCoverage": {"complete": 25}, "qualifiedIndependentDays": 25,
+                   "minimumQuality": 90,
+                   "sources": ["Tencent Finance minute/query (public web endpoint)"],
+                   "researchEvidence": {"gridSpacingReplay": {
+                       "selectedSpacing": "1", "spacings": {"1": selected, "2": withheld}}},
+                   "rawMinuteBarsIncluded": False, "tradePlan": None}
+        self.assertEqual(ResearchEvidenceEnvelope.create(payload, generated_at=now).qualified_independent_days,
+                         25)
+
+        payload["researchEvidence"]["gridSpacingReplay"]["spacings"]["2"] = dict(selected)
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(payload, generated_at=now)
+
     def test_research_evidence_id_covers_quality_and_eligibility_metadata(self):
         payload = {"securityCode": "159352", "market": "CN",
                    "range": {"start": "2026-10-20", "end": "2026-10-22"},
-                   "asOf": "2026-10-25T02:00:00Z", "sessionCoverage": {"complete": 3},
+                   "dataRange": {"start": "2026-10-21", "end": "2026-10-22"},
+                   "asOf": "2026-10-25T02:00:00Z", "timezone": "Asia/Shanghai",
+                   "sessionCoverage": {"complete": 30},
                    "qualifiedIndependentDays": 3, "minimumQuality": 90,
-                   "sources": ["fixture"],
+                   "sources": ["Tencent Finance minute/query (public web endpoint)"],
                    "researchEvidence": {"vwapBreak": {"evidenceState": "insufficient_independent_days"}},
                    "rawMinuteBarsIncluded": False, "tradePlan": None}
         first = ResearchEvidenceEnvelope.create(payload, generated_at=self.clock())
         for field, changed in (("qualifiedIndependentDays", 25), ("minimumQuality", 80),
-                               ("sessionCoverage", {"complete": 2, "partial": 1}),
-                               ("sources", ["other-source"])):
+                               ("dataRange", {"start": "2026-10-20", "end": "2026-10-22"}),
+                               ("strategyVersion", "mean-reversion-v3"),
+                               ("sessionCoverage", {"complete": 30, "partial": 1}),
+                               ("sources", ["Eastmoney push2his 1-minute kline (public web endpoint)"])):
             altered = dict(payload)
             altered[field] = changed
             candidate = ResearchEvidenceEnvelope.create(altered, generated_at=self.clock())
             self.assertNotEqual(first.evidence_id, candidate.evidence_id, field)
+
+    def test_research_evidence_rejects_coerced_types_and_inconsistent_coverage(self):
+        payload = {"securityCode": "159352", "market": "CN",
+                   "range": {"start": "2026-10-20", "end": "2026-10-22"},
+                   "asOf": "2026-10-25T02:00:00Z", "timezone": "Asia/Shanghai",
+                   "sessionCoverage": {"complete": 3},
+                   "qualifiedIndependentDays": 3, "minimumQuality": 90, "sources": ["Tencent Finance minute/query (public web endpoint)"],
+                   "researchEvidence": {"vwapBreak": {"metric": 0.5}},
+                   "rawMinuteBarsIncluded": False, "tradePlan": None}
+        for field, malformed in (("securityCode", 159352), ("market", 1),
+                                 ("minimumQuality", True), ("minimumQuality", 90.5),
+                                 ("qualifiedIndependentDays", "3"),
+                                 ("qualifiedIndependentDays", 3.5),
+                                 ("timezone", 8), ("timezone", " "),
+                                 ("timezone", "Mars/Olympus_Mons")):
+            with self.subTest(field=field, malformed=malformed):
+                with self.assertRaises(ArchiveError):
+                    ResearchEvidenceEnvelope.create(
+                        dict(payload, **{field: malformed}), generated_at=self.clock())
+
+        noncanonical_date = dict(payload, range={"start": "20261020", "end": "2026-10-22"})
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(noncanonical_date, generated_at=self.clock())
+        inconsistent_coverage = dict(payload, sessionCoverage={"complete": 2})
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(inconsistent_coverage, generated_at=self.clock())
+        boolean_coverage = dict(payload, sessionCoverage={"complete": True})
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(boolean_coverage, generated_at=self.clock())
+        missing_timezone = dict(payload)
+        missing_timezone.pop("timezone")
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(missing_timezone, generated_at=self.clock())
+
+    def test_qualified_minute_research_rejects_unknown_provider_source(self):
+        payload = {"securityCode": "159352", "market": "CN",
+                   "range": {"start": "2026-10-20", "end": "2026-10-23"},
+                   "dataRange": {"start": "2026-10-22", "end": "2026-10-23"},
+                   "asOf": "2026-10-25T02:00:00Z", "timezone": "Asia/Shanghai",
+                   "sessionCoverage": {"complete": 25},
+                   "qualifiedIndependentDays": 25, "minimumQuality": 90,
+                   "sources": ["unverified-provider"],
+                   "researchEvidence": {"vwapBreak": {"evidenceState": "available_for_review"}},
+                   "rawMinuteBarsIncluded": False, "tradePlan": None}
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(payload, generated_at=self.clock())
+
+    def test_qualified_research_requires_actual_data_range_inside_requested_range(self):
+        payload = {"securityCode": "159352", "market": "CN",
+                   "range": {"start": "2026-10-20", "end": "2026-10-23"},
+                   "dataRange": {"start": "2026-10-22", "end": "2026-10-23"},
+                   "asOf": "2026-10-25T02:00:00Z", "timezone": "Asia/Shanghai",
+                   "sessionCoverage": {"complete": 30},
+                   "qualifiedIndependentDays": 25, "minimumQuality": 90, "sources": ["Tencent Finance minute/query (public web endpoint)"],
+                   "researchEvidence": {"vwapBreak": {"evidenceState": "available_for_review"}},
+                   "rawMinuteBarsIncluded": False, "tradePlan": None}
+        valid = ResearchEvidenceEnvelope.create(payload, generated_at=self.clock())
+        self.assertEqual(valid.data_start_date.isoformat(), "2026-10-22")
+        self.assertEqual(valid.data_end_date.isoformat(), "2026-10-23")
+        self.assertIsNone(valid.strategy_version)
+
+        missing = dict(payload)
+        missing.pop("dataRange")
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(missing, generated_at=self.clock())
+        outside = dict(payload, dataRange={"start": "2026-10-19", "end": "2026-10-29"})
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(outside, generated_at=self.clock())
+        blank_version = dict(payload, strategyVersion=" ")
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(blank_version, generated_at=self.clock())
 
     def test_research_evidence_digest_canonicalizes_integral_float_encoding(self):
         payload = {"securityCode": "159352", "market": "CN",
@@ -459,6 +582,28 @@ class MinuteServiceTests(unittest.TestCase):
         payload["researchEvidence"] = {"vwapBreak": {"metric": 1}}
         as_float = ResearchEvidenceEnvelope.create(payload, generated_at=self.clock())
         self.assertEqual(as_integer.evidence_id, as_float.evidence_id)
+
+    def test_research_epoch_milliseconds_use_half_away_from_zero_rounding(self):
+        self.assertEqual(_epoch_millis(datetime.fromisoformat(
+            "2026-10-25T02:00:00.000500+00:00")), 1_792_893_600_001)
+        self.assertEqual(_epoch_millis(datetime.fromisoformat(
+            "2026-10-25T02:00:00.002500+00:00")), 1_792_893_600_003)
+        self.assertEqual(_epoch_millis(datetime.fromisoformat(
+            "1969-12-31T23:59:59.999500+00:00")), -1)
+
+    def test_research_evidence_has_fixed_cross_language_half_millisecond_digest(self):
+        payload = {"securityCode": "159352", "market": "CN",
+                   "range": {"start": "2026-10-01", "end": "2026-10-31"},
+                   "asOf": "2026-10-25T02:00:00.000500Z",
+                   "sessionCoverage": {"complete": 1},
+                   "qualifiedIndependentDays": 0, "minimumQuality": 90, "sources": [],
+                   "researchEvidence": {"vwapBreak": {"metric": 0.5}},
+                   "rawMinuteBarsIncluded": False, "tradePlan": None}
+        generated_at = datetime.fromisoformat("2026-10-25T02:00:00.001500+00:00")
+        result = ResearchEvidenceEnvelope.create(payload, generated_at=generated_at)
+
+        self.assertEqual(result.evidence_id,
+                         "462be406477951375097389d057533a3cae5733e498d4d1e18cdfd799dd6aff2")
 
     def test_research_evidence_id_covers_generated_time_and_timezone(self):
         payload = {"securityCode": "159352", "market": "CN",
@@ -475,7 +620,7 @@ class MinuteServiceTests(unittest.TestCase):
         self.assertNotEqual(first.evidence_id, later.evidence_id)
         self.assertNotEqual(first.evidence_id, other_zone.evidence_id)
 
-    def test_dividend_quality_evidence_is_accepted_as_distinct_research_family(self):
+    def test_dividend_quality_evidence_requires_a_configured_provider(self):
         payload = {"securityCode": "563020", "market": "CN",
                    "range": {"start": "2026-10-01", "end": "2026-10-23"},
                    "asOf": "2026-10-23T07:58:00Z", "sessionCoverage": {},
@@ -483,10 +628,9 @@ class MinuteServiceTests(unittest.TestCase):
                    "sources": ["dividend-provider"],
                    "researchEvidence": {"dividendQuality": {"evidenceState": "evidence_available"}},
                    "rawMinuteBarsIncluded": False, "tradePlan": None}
-        envelope = ResearchEvidenceEnvelope.create(
-            payload, generated_at=datetime(2026, 10, 23, 8, tzinfo=UTC))
-        self.assertIn("dividendQuality", envelope.to_dict()["evidence"])
-        self.assertEqual(envelope.qualified_independent_days, 0)
+        with self.assertRaises(ArchiveError):
+            ResearchEvidenceEnvelope.create(
+                payload, generated_at=datetime(2026, 10, 23, 8, tzinfo=UTC))
 
     def test_research_evidence_obeys_fetched_at_as_of_cutoff(self):
         session = self.sessions[0]
@@ -504,141 +648,176 @@ class MinuteServiceTests(unittest.TestCase):
 
     def test_http_api_serves_date_specific_history_and_diagnostics_without_token(self):
         session = self.sessions[0]
-        self.archive.ingest(make_bars(session, fetched_at=self.clock()), mode="backfill")
+        self.archive.ingest(make_bars(session, fetched_at=self.clock(),
+                                      source="Tencent Finance minute/query (public web endpoint)"),
+                            mode="backfill")
         handler = make_handler(self.service)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20")
-            response = connection.getresponse()
-            payload = json.loads(response.read())
-            self.assertEqual(response.status, 200)
-            self.assertEqual(payload["tradingDate"], "2026-10-20")
-            self.assertEqual(len(payload["bars"]), 4)
-            self.assertEqual(payload["bars"][0]["securityCode"], "159352")
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20&unexpected=1")
-            unknown_parameter = connection.getresponse()
-            self.assertEqual(unknown_parameter.status, 400)
-            unknown_parameter.read()
-            connection.request("GET", "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-W43-2")
-            invalid_date = connection.getresponse()
-            self.assertEqual(invalid_date.status, 400)
-            invalid_date.read()
-            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN")
-            diagnostics = json.loads(connection.getresponse().read())
-            self.assertEqual(diagnostics["firstMinuteDate"], "2026-10-20")
-            self.assertEqual(diagnostics["days"][0]["tradingDate"], "2026-10-20")
-            self.assertEqual(diagnostics["missingDaysScope"], "recordedCoverageOnly")
-            self.assertTrue(diagnostics["missingDaysMayBeUnderstated"])
-            connection.request("GET", "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN&startDate=2026-10-20&endDate=2026-10-22")
-            ranged_diagnostics = json.loads(connection.getresponse().read())
-            self.assertEqual(ranged_diagnostics["missingDaysScope"], "requestedCalendarRange")
-            self.assertFalse(ranged_diagnostics["missingDaysMayBeUnderstated"])
-            self.assertEqual(ranged_diagnostics["missingDays"], 2)
-            research_url = ("/api/v1/minute-history/research?securityCode=159352&market=CN"
-                            "&startDate=2026-10-20&endDate=2026-10-20"
-                            "&asOf=2026-10-25T02:00:00Z&minimumIndependentDays=20")
-            connection.request("GET", research_url)
-            research = json.loads(connection.getresponse().read())
-            self.assertFalse(research["rawMinuteBarsIncluded"])
-            self.assertIsNone(research["tradePlan"])
-            connection.close()
-        finally:
-            server.shutdown()
-            thread.join(timeout=2)
-            server.server_close()
+        status, payload = dispatch_json(
+            handler, "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["tradingDate"], "2026-10-20")
+        self.assertEqual(len(payload["bars"]), 4)
+        self.assertEqual(payload["bars"][0]["securityCode"], "159352")
+        self.assertEqual(payload["coverage"]["status"], payload["status"])
+        self.assertEqual(payload["coverage"]["expectedCount"], len(payload["bars"]))
+        self.assertEqual(payload["coverage"]["observedCount"], len(payload["bars"]))
+        self.assertEqual(payload["coverage"]["missingTimestamps"], [])
+        self.assertTrue(payload["coverage"]["qualityPassed"])
+        self.assertTrue(payload["coverage"]["completenessPassed"])
+        self.assertTrue(payload["coverage"]["volumePassed"])
+
+        status, _ = dispatch_json(
+            handler, "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-10-20&unexpected=1")
+        self.assertEqual(status, 400)
+        status, _ = dispatch_json(
+            handler, "/api/v1/minute-history?securityCode=159352&market=CN&tradingDate=2026-W43-2")
+        self.assertEqual(status, 400)
+        status, diagnostics = dispatch_json(
+            handler, "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN")
+        self.assertEqual(status, 200)
+        self.assertEqual(diagnostics["firstMinuteDate"], "2026-10-20")
+        self.assertEqual(diagnostics["days"][0]["tradingDate"], "2026-10-20")
+        self.assertEqual(diagnostics["missingDaysScope"], "recordedCoverageOnly")
+        self.assertTrue(diagnostics["missingDaysMayBeUnderstated"])
+        status, ranged_diagnostics = dispatch_json(
+            handler, "/api/v1/minute-history/diagnostics?securityCode=159352&market=CN"
+                    "&startDate=2026-10-20&endDate=2026-10-22")
+        self.assertEqual(status, 200)
+        self.assertEqual(ranged_diagnostics["missingDaysScope"], "requestedCalendarRange")
+        self.assertFalse(ranged_diagnostics["missingDaysMayBeUnderstated"])
+        self.assertEqual(ranged_diagnostics["missingDays"], 2)
+        research_url = ("/api/v1/minute-history/research?securityCode=159352&market=CN"
+                        "&startDate=2026-10-20&endDate=2026-10-20"
+                        "&asOf=2026-10-25T02:00:00Z&minimumIndependentDays=20")
+        status, research = dispatch_json(handler, research_url)
+        self.assertEqual(status, 200)
+        self.assertFalse(research["rawMinuteBarsIncluded"])
+        self.assertIsNone(research["tradePlan"])
 
     def test_readyz_fails_closed_when_calendar_does_not_review_current_year(self):
         handler = make_handler(self.service)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
-            connection.request("GET", "/readyz")
-            unsupported = connection.getresponse()
-            unsupported_payload = json.loads(unsupported.read())
-            self.assertEqual(unsupported.status, 503)
-            self.assertEqual(unsupported_payload["status"], "not_ready")
-            self.assertEqual(unsupported_payload["calendar"]["CN"]["supportedYears"], [])
+        status, unsupported = dispatch_json(handler, "/readyz")
+        self.assertEqual(status, 503)
+        self.assertEqual(unsupported["status"], "not_ready")
+        self.assertEqual(unsupported["calendar"]["CN"]["supportedYears"], [])
 
-            current_year = datetime.now().year
-            self.calendar.supported_years = (current_year,)
-            connection.request("GET", "/readyz")
-            supported = connection.getresponse()
-            supported_payload = json.loads(supported.read())
-            self.assertEqual(supported.status, 200)
-            self.assertEqual(supported_payload["calendar"]["CN"]["currentYear"], current_year)
+        current_year = datetime.now().year
+        self.calendar.supported_years = (current_year,)
+        status, supported = dispatch_json(handler, "/readyz")
+        self.assertEqual(status, 200)
+        self.assertEqual(supported["calendar"]["CN"]["currentYear"], current_year)
 
-            class CorruptCalendar:
-                timezone_name = "Asia/Shanghai"
+        class CorruptCalendar:
+            timezone_name = "Asia/Shanghai"
 
-                @property
-                def supported_years(self):
-                    raise RuntimeError("corrupt calendar store")
+            @property
+            def supported_years(self):
+                raise RuntimeError("corrupt calendar store")
 
-            self.service.calendars["CN"] = CorruptCalendar()
-            connection.request("GET", "/readyz")
-            corrupt = connection.getresponse()
-            corrupt_payload = json.loads(corrupt.read())
-            self.assertEqual(corrupt.status, 503)
-            self.assertEqual(corrupt_payload["calendarErrors"]["CN"], "RuntimeError")
-            connection.close()
-        finally:
-            server.shutdown()
-            thread.join(timeout=2)
-            server.server_close()
+        self.service.calendars["CN"] = CorruptCalendar()
+        status, corrupt = dispatch_json(handler, "/readyz")
+        self.assertEqual(status, 503)
+        self.assertEqual(corrupt["calendarErrors"]["CN"], "RuntimeError")
+
+    def test_readyz_uses_bounded_readiness_check_not_full_integrity_scan(self):
+        current_year = datetime.now().year
+        self.calendar.supported_years = (current_year,)
+        self.archive.integrity_check = lambda: (_ for _ in ()).throw(
+            AssertionError("/readyz must not scan every archived row"))
+        status, payload = dispatch_json(make_handler(self.service), "/readyz")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["archive"], "ok")
+
+    def test_readyz_keeps_history_coverage_recalculation_on_separate_endpoint(self):
+        current_year = datetime.now().year
+        self.calendar.supported_years = (current_year,)
+        calls = []
+        original_status = self.service.backfill_status
+
+        def tracked_status(*args, **kwargs):
+            calls.append(True)
+            return original_status(*args, **kwargs)
+
+        self.service.backfill_status = tracked_status
+        self.service.runtime_worker = type("Worker", (), {
+            "securities": ("159352",),
+            "worker_snapshot": lambda self, _name: {"status": "idle"},
+        })()
+        handler = make_handler(self.service)
+        status, readiness = dispatch_json(handler, "/readyz")
+        self.assertEqual(status, 200)
+        self.assertNotIn("backfillStatus", readiness)
+        self.assertEqual(calls, [])
+
+        status, details = dispatch_json(handler, "/api/v1/backfill-status")
+        self.assertEqual(status, 200)
+        self.assertIn("CN", details["backfillStatus"])
+        self.assertEqual(calls, [True])
+
+    def test_readyz_does_not_enumerate_all_security_daily_history(self):
+        current_year = datetime.now().year
+        self.calendar.supported_years = (current_year,)
+        self.service.index_daily_history = type("DailyHistory", (), {
+            "status": lambda self: {"status": "observed", "indexes": {}},
+            "security_status": lambda self: (_ for _ in ()).throw(
+                AssertionError("security history inventory is a separate request")),
+        })()
+        status, payload = dispatch_json(make_handler(self.service), "/readyz")
+        self.assertEqual(status, 200)
+        self.assertIn("indexDailyHistory", payload)
+        self.assertNotIn("securityDailyHistory", payload)
+
+        status, details = dispatch_json(make_handler(self.service), "/api/v1/daily-history-status")
+        self.assertEqual(status, 503)
+        self.assertEqual(details["status"], "unavailable")
+
+    def test_archive_readiness_check_checks_schema_without_full_integrity_scan(self):
+        self.assertEqual(self.archive.readiness_check(), "ok")
+        self.assertEqual(self.archive.integrity_check(), "ok")
+
+    def test_readyz_reports_archive_failure_as_service_unavailable(self):
+        self.archive.readiness_check = lambda: (_ for _ in ()).throw(
+            ArchiveError("archive is unavailable"))
+        status, payload = dispatch_json(make_handler(self.service), "/readyz")
+        self.assertEqual(status, 503)
+        self.assertEqual(payload["status"], "not_ready")
+        self.assertEqual(payload["archive"], "unavailable")
+        self.assertEqual(payload["error"], "ArchiveError")
 
     def test_http_backfill_endpoint_validates_and_enqueues_explicit_priority(self):
         handler = make_handler(self.service)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            connection = HTTPConnection("127.0.0.1", server.server_port, timeout=2)
-            body = json.dumps({"securityCode": "159352", "market": "CN",
-                               "startDate": "2026-10-20", "endDate": "2026-10-20",
-                               "priority": "holding"})
-            connection.request("POST", "/api/v1/minute-history/backfill", body,
-                               {"Content-Type": "application/json", "Content-Length": str(len(body))})
-            response = connection.getresponse()
-            payload = json.loads(response.read())
-            self.assertEqual(response.status, 202)
-            self.assertEqual(payload["priority"], "holding")
-            self.assertEqual(self.service.queue_count(), 1)
+        body = json.dumps({"securityCode": "159352", "market": "CN",
+                           "startDate": "2026-10-20", "endDate": "2026-10-20",
+                           "priority": "holding"})
+        status, payload = dispatch_json(handler, "/api/v1/minute-history/backfill",
+                                        method="POST", body=body,
+                                        headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 202)
+        self.assertEqual(payload["priority"], "holding")
+        self.assertEqual(self.service.queue_count(), 1)
 
-            malformed = json.dumps({"securityCode": 159352, "market": "CN",
-                                    "startDate": "2026-10-20", "endDate": "2026-10-20",
-                                    "priority": "holding"})
-            connection.request("POST", "/api/v1/minute-history/backfill", malformed,
-                               {"Content-Type": "application/json"})
-            invalid_type = connection.getresponse()
-            self.assertEqual(invalid_type.status, 400)
-            invalid_type.read()
-            duplicate_key = ('{"securityCode":"159352","market":"CN",'
-                             '"startDate":"2026-10-20","endDate":"2026-10-20",'
-                             '"priority":"holding","priority":"benchmark"}')
-            connection.request("POST", "/api/v1/minute-history/backfill", duplicate_key,
-                               {"Content-Type": "application/json"})
-            duplicate = connection.getresponse()
-            self.assertEqual(duplicate.status, 400)
-            duplicate.read()
-            non_finite = ('{"securityCode":"159352","market":"CN",'
-                          '"startDate":"2026-10-20","endDate":"2026-10-20",'
-                          '"priority":"holding","extra":NaN}')
-            connection.request("POST", "/api/v1/minute-history/backfill", non_finite,
-                               {"Content-Type": "application/json"})
-            invalid_constant = connection.getresponse()
-            self.assertEqual(invalid_constant.status, 400)
-            invalid_constant.read()
-            self.assertEqual(self.service.queue_count(), 1)
-            connection.close()
-        finally:
-            server.shutdown()
-            thread.join(timeout=2)
-            server.server_close()
+        malformed = json.dumps({"securityCode": 159352, "market": "CN",
+                                "startDate": "2026-10-20", "endDate": "2026-10-20",
+                                "priority": "holding"})
+        status, _ = dispatch_json(handler, "/api/v1/minute-history/backfill",
+                                  method="POST", body=malformed,
+                                  headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 400)
+        duplicate_key = ('{"securityCode":"159352","market":"CN",'
+                         '"startDate":"2026-10-20","endDate":"2026-10-20",'
+                         '"priority":"holding","priority":"benchmark"}')
+        status, _ = dispatch_json(handler, "/api/v1/minute-history/backfill",
+                                  method="POST", body=duplicate_key,
+                                  headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 400)
+        non_finite = ('{"securityCode":"159352","market":"CN",'
+                      '"startDate":"2026-10-20","endDate":"2026-10-20",'
+                      '"priority":"holding","extra":NaN}')
+        status, _ = dispatch_json(handler, "/api/v1/minute-history/backfill",
+                                  method="POST", body=non_finite,
+                                  headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.service.queue_count(), 1)
 
     def test_invalid_history_request_fails_closed_without_substituting_today(self):
         missing = self.service.get_history("159352", "CN", date(2026, 10, 19))

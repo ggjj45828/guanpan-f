@@ -46,6 +46,7 @@
   <section aria-labelledby="healthTitle">
     <div class="section-title"><h2 id="healthTitle">服务与采集状态</h2><span id="healthUpdated" class="subtle">尚未读取</span></div>
     <div id="healthCards" class="cards"><div class="empty">正在读取 /readyz…</div></div>
+    <div id="backfillCards" class="cards"><div class="empty">历史分钟覆盖状态稍后读取</div></div>
     <details><summary>查看原始状态与错误信息</summary><pre id="healthRaw">等待读取</pre></details>
   </section>
 
@@ -123,19 +124,6 @@
         if (markets.length) $("market").innerHTML = markets.map(m => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join("");
         const calendarText = markets.map(m => `${m}: ${payload.calendar?.[m]?.supportedYears?.join(", ") || "无可用年份"}`).join("；") || "未配置市场";
         const providers = markets.flatMap(m => payload.providerNames?.[m] || []).join("；") || "无已配置来源";
-        const backfillCards = markets.flatMap(m => {
-          const state = payload.backfillStatus?.[m];
-          if (!state || state.status === "unavailable") return [card(`${m} 历史分钟覆盖`, state?.error || "状态不可用", "degraded")];
-          const providers = (state.providerCoverage || []).map(item =>
-            `${item.provider}: ${item.coverageStart || "最早未知"} → ${item.coverageEnd || (item.currentSessionOnly ? "仅当前交易日" : "最新未知")}（${item.coverageEvidence}）`).join("；") || "无可用provider";
-          return [
-            card(`${m} 历史分钟计划 / 完整`, `${state.plannedSessions}交易日 · ${state.securityCount || 0}只证券 / ${state.plannedTasks ?? state.plannedSessions}个任务 · 完整 ${state.complete} · coverage ${state.coveragePercent}%`),
-            card(`${m} Partial / Missing`, `${state.partial} / ${state.missing}`),
-            card(`${m} Retryable / 永久不可用 / 范围外`, `${state.retryable} / ${state.permanentUnavailable} / ${state.outOfProviderCoverage}`),
-            card(`${m} 实际归档日期`, `${state.earliestRealHistoryDate || "无"} → ${state.latestRealHistoryDate || "无"}`),
-            card(`${m} provider 覆盖声明`, providers)
-          ];
-        });
         $("healthCards").innerHTML = [
           card("服务状态", `${statusLabel(payload.status)} · HTTP ${response.status}`, payload.status),
           card("归档数据库", statusLabel(payload.archive), payload.archive),
@@ -143,14 +131,36 @@
           card("分钟来源", providers),
           workerCard("实时采集 worker", payload.realtimeWorker),
           workerCard("历史补采 worker", payload.backfillWorker),
-          ...backfillCards,
           card("日历同步", `${statusLabel(payload.calendarSync?.status)}${payload.calendarSync?.error ? " · " + payload.calendarSync.error : ""}`, payload.calendarSync?.status)
         ].join("");
         $("healthRaw").textContent = JSON.stringify(payload, null, 2);
         $("healthUpdated").textContent = `更新于 ${new Date().toLocaleString()}`;
+        void refreshBackfillStatus();
       } catch (error) {
         $("healthCards").innerHTML = `<div class="empty error">读取 /readyz 失败：${escapeHTML(error.message)}。请确认本机能访问 NAS 地址。</div>`;
         $("healthRaw").textContent = String(error);
+      }
+    }
+    async function refreshBackfillStatus() {
+      $("backfillCards").innerHTML = '<div class="empty">正在读取历史分钟覆盖状态…</div>';
+      try {
+        const {payload} = await getJSON("/api/v1/backfill-status");
+        const states = payload.backfillStatus || {};
+        const backfillCards = Object.entries(states).flatMap(([market, state]) => {
+          if (!state || state.status === "unavailable") return [card(`${market} 历史分钟覆盖`, state?.error || "状态不可用", "degraded")];
+          const providers = (state.providerCoverage || []).map(item =>
+            `${item.provider}: ${item.coverageStart || "最早未知"} → ${item.coverageEnd || (item.currentSessionOnly ? "仅当前交易日" : "最新未知")}（${item.coverageEvidence}）`).join("；") || "无可用provider";
+          return [
+            card(`${market} 历史分钟计划 / 完整`, `${state.plannedSessions}交易日 · ${state.securityCount || 0}只证券 / ${state.plannedTasks ?? state.plannedSessions}个任务 · 完整 ${state.complete} · coverage ${state.coveragePercent}%`),
+            card(`${market} Partial / Missing`, `${state.partial} / ${state.missing}`),
+            card(`${market} Retryable / 永久不可用 / 范围外`, `${state.retryable} / ${state.permanentUnavailable} / ${state.outOfProviderCoverage}`),
+            card(`${market} 实际归档日期`, `${state.earliestRealHistoryDate || "无"} → ${state.latestRealHistoryDate || "无"}`),
+            card(`${market} provider 覆盖声明`, providers)
+          ];
+        });
+        $("backfillCards").innerHTML = backfillCards.length ? backfillCards.join("") : '<div class="empty">没有配置历史补采 worker</div>';
+      } catch (error) {
+        $("backfillCards").innerHTML = `<div class="empty error">历史分钟覆盖状态读取失败：${escapeHTML(error.message)}</div>`;
       }
     }
     function drawPrices(bars) {

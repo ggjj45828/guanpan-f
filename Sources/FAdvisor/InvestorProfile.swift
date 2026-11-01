@@ -47,7 +47,7 @@ public enum FInvestorProfileValue: Codable, Equatable, Sendable {
     fileprivate var isValid: Bool {
         switch self {
         case .text(let value): return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .decimal(let value): return !value.isNaN
+        case .decimal(let value): return value.isFinite
         case .integer, .boolean: return true
         }
     }
@@ -86,7 +86,7 @@ public struct FInvestorProfileRevision: Codable, Equatable, Sendable, Identifiab
     }
 
     public func validate(now: Date = Date()) throws {
-        guard value.isValid, !confidence.isNaN, confidence >= 0, confidence <= 1,
+        guard value.isValid, confidence.isFinite, confidence >= 0, confidence <= 1,
               FInvestorProfileValidation.nonBlank(explanation),
               sourceReference.map(FInvestorProfileValidation.nonBlank) ?? true,
               FInvestorProfileValidation.plausible(updatedAt, now: now),
@@ -134,6 +134,7 @@ public enum FInvestorProfileError: Error, Equatable, Sendable {
     case duplicateRevision(UUID)
     case invalidProfile
     case explicitResetRequired
+    case explicitAttributeClearRequired
 }
 
 /// A versioned, explainable profile. It ranks and phrases recommendations only;
@@ -228,6 +229,14 @@ public struct FInvestorProfile: Codable, Equatable, Sendable {
             attributes[index].revisions.removeAll { $0.source != .explicit }
         }
         attributes.removeAll(where: { $0.revisions.isEmpty })
+    }
+
+    /// Removing a user-authored preference is destructive and requires a
+    /// separate confirmation from the UI. Other attributes remain intact.
+    public mutating func clear(_ key: FInvestorProfileAttributeKey,
+                               userConfirmed: Bool) throws {
+        guard userConfirmed else { throw FInvestorProfileError.explicitAttributeClearRequired }
+        attributes.removeAll { $0.key == key }
     }
 
     /// Full reset is an explicit user action because it removes user-authored preferences.

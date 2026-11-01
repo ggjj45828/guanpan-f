@@ -2,7 +2,25 @@ import Foundation
 import FCore
 
 public enum FContextDataClass: String, Codable, Equatable, Sendable {
-    case quote, intraday, dailyHistory, news, nasResearch, crossMarket
+    case quote, previousClose, intraday, iopv, dailyHistory, news, nasResearch, crossMarket, quantState
+}
+
+enum FDecisionFinancialMath {
+    static func sum(_ values: [Decimal]) -> Decimal? {
+        var total = Decimal.zero
+        for value in values {
+            guard value.isFinite else { return nil }
+            total += value
+            guard total.isFinite else { return nil }
+        }
+        return total
+    }
+
+    static func add(_ lhs: Decimal, _ rhs: Decimal) -> Decimal? {
+        guard lhs.isFinite, rhs.isFinite else { return nil }
+        let total = lhs + rhs
+        return total.isFinite ? total : nil
+    }
 }
 
 /// A captured market/research observation. Unavailable data is represented explicitly;
@@ -40,9 +58,9 @@ public struct FContextObservation: Codable, Equatable, Sendable, Identifiable {
     public func validate(now: Date = Date()) throws {
         let explicitUnavailable = decimalValue == nil &&
             FDecisionContextValidation.nonBlank(unavailableReason ?? "")
-        let availableValue = decimalValue.map { !$0.isNaN } ?? false
+        let availableValue = decimalValue.map { $0.isFinite } ?? false
         let validObservedValue = decimalValue.map {
-            (dataClass == .quote || dataClass == .intraday) ? $0 > 0 : true
+            (dataClass == .quote || dataClass == .previousClose || dataClass == .intraday) ? $0 > 0 : true
         } ?? true
         let validObservationTime: Bool
         if let observedAt {
@@ -57,10 +75,21 @@ public struct FContextObservation: Codable, Equatable, Sendable, Identifiable {
                                                    capturedAt: capturedAt) &&
                 ($0.timestampTrust != .unavailable || decimalValue == nil)
         } ?? true
+        let validIOPV = dataClass != .iopv ||
+            (source == FMarketQuoteTrustPolicy.tencentReferenceSource &&
+             subject.utf8.count == 6 && subject.utf8.allSatisfy { (48...57).contains($0) } &&
+             reference == "method=(ETF价格/IOPV-1)*100;unit=percent" &&
+             decimalValue.map { $0.isFinite && $0 > -100 } == true)
+        let validPreviousClose = dataClass != .previousClose ||
+            (FMarketQuoteTrustPolicy.isTrustedReferenceSource(source) &&
+             subject.utf8.count == 6 && subject.utf8.allSatisfy { (48...57).contains($0) })
         guard FDecisionContextValidation.nonBlank(subject),
               FDecisionContextValidation.nonBlank(source),
+              (dataClass != .news || !availableValue ||
+                (FNewsTrustPolicy.isTrustedProvider(source) &&
+                 FDecisionContextValidation.nonBlank(reference ?? ""))),
               FDecisionContextValidation.plausible(capturedAt, now: now),
-              validObservationTime, validQuoteMetadata,
+              validObservationTime, validQuoteMetadata, validIOPV, validPreviousClose,
               availableValue || explicitUnavailable, validObservedValue,
               !(availableValue && unavailableReason != nil) else {
             throw FDecisionContextError.invalidObservation(id)
@@ -85,12 +114,15 @@ public struct FContextObservation: Codable, Equatable, Sendable, Identifiable {
 public extension FContextDataClass {
     var maximumAge: TimeInterval {
         switch self {
-        case .quote: return 120
+        case .quote: return FQuoteTemporalMetadata.defaultMaximumAge
+        case .previousClose: return 15 * 60
         case .intraday: return 90
+        case .iopv: return 90
         case .dailyHistory: return 36 * 3600
         case .news: return 24 * 3600
         case .nasResearch: return 7 * 24 * 3600
         case .crossMarket: return 24 * 3600
+        case .quantState: return 36 * 3600
         }
     }
 }
@@ -176,7 +208,8 @@ public struct FDecisionInstrumentPnL: Codable, Equatable, Sendable, Identifiable
 
     fileprivate init(instrumentCode: String, history: FInstrumentHistorySnapshot?,
                      holding: FReadOnlyPositionSnapshot?, daily: FDailyTradeSummary?,
-                     dailySummaryDate: String?, quotePrice: Decimal?) {
+                     dailySummaryDate: String?, quotePrice: Decimal?,
+                     previousClose: Decimal?, endOfDayUnits: Int64) {
         self.instrumentCode = instrumentCode
         let active = history?.episodes.last(where: \.isActive)
         let episodeHistoryComplete = active?.historyIsComplete ?? true
@@ -188,9 +221,16 @@ public struct FDecisionInstrumentPnL: Codable, Equatable, Sendable, Identifiable
         let episodeRealized = active?.netRealizedProfit
         let historyComplete = history?.lifetimeHistoryIsComplete ?? true
         let lifetimeRealized = history?.lifetimeRealizedProfit ?? .zero
-        let closedRealized = history?.episodes.filter { $0.closedAt != nil }
-            .reduce(Decimal.zero) { $0 + $1.netRealizedProfit } ?? .zero
-        securityDailyPnL = nil // No validated previous-close/opening-quantity pair is captured yet.
+        let closedRealized = FDecisionFinancialMath.sum(
+            history?.episodes.filter { $0.closedAt != nil }.map(\.netRealizedProfit) ?? [])
+        if let dailySummaryDate, let previousClose, let quotePrice {
+            securityDailyPnL = try? FSecurityPnLCalculator.dailySecurityPnL(
+                securityCode: instrumentCode, tradingDate: dailySummaryDate,
+                previousClose: previousClose, trades: daily,
+                endOfDayUnits: endOfDayUnits, currentPrice: quotePrice)
+        } else {
+            securityDailyPnL = nil
+        }
         dailyRealizedTradingPnL = dailySummaryDate == nil ? nil :
             (daily?.dailyRealizedTradingPnL ?? .zero)
         let dailyT: Decimal? = if dailySummaryDate == nil {
@@ -211,7 +251,7 @@ public struct FDecisionInstrumentPnL: Codable, Equatable, Sendable, Identifiable
         currentEpisodeUnrealizedPnL = active == nil ? nil : unrealized
         currentEpisodeTotalPnL = if episodeHistoryComplete,
                                    let episodeRealized, let episodeUnrealized = unrealized {
-            episodeRealized + episodeUnrealized
+            FDecisionFinancialMath.add(episodeRealized, episodeUnrealized)
         } else { nil }
         securityLifetimeHistoryIsComplete = historyComplete
         securityLifetimeRealizedPnL = historyComplete ? lifetimeRealized : nil
@@ -219,7 +259,7 @@ public struct FDecisionInstrumentPnL: Codable, Equatable, Sendable, Identifiable
         let lifetimeUnrealized: Decimal? = active == nil ? .zero : unrealized
         securityLifetimeUnrealizedPnL = lifetimeUnrealized
         securityLifetimeTotalPnL = if historyComplete, let lifetimeUnrealized {
-            lifetimeRealized + lifetimeUnrealized
+            FDecisionFinancialMath.add(lifetimeRealized, lifetimeUnrealized)
         } else { nil }
         brokerDisplayCostPerUnit = holding?.brokerDisplayCostPerUnit
         episodeEconomicCostPerUnit = if let active, active.currentUnits > 0 {
@@ -237,14 +277,18 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     public let cashBalance: Decimal
     public let holdings: [FDecisionHoldingSnapshot]
     public let observations: [FContextObservation]
+    /// Provenance for the imported opening position baseline. Nil only in legacy contexts.
+    public let openingSnapshotCapturedAt: Date?
+    public let openingPositionCodes: Set<String>
+    let strategyQualificationGrants: [FQuantStrategyQualificationGrant]
     /// Read-only, per-security facts derived from confirmed fills on the captured
     /// CN trading date. No raw Ledger records or mutation API are exposed here.
     /// A non-nil date with an empty summary list means the Ledger confirms no fills
     /// for that date; nil is reserved for legacy contexts without this projection.
     public let dailyTradeSummaryDate: String?
     public let dailyTradeSummaries: [FDailyTradeSummary]
-    /// Deterministic sum of the per-security realized P/L facts; nil means no
-    /// confirmed fills were captured for this trading date.
+    /// Deterministic sum of the per-security realized P/L facts; nil means either
+    /// no fills were captured or the nonempty sum is not representable as Decimal.
     public let dailyPortfolioRealizedPnL: Decimal?
     /// Per-security P&L facts are calculated before serialization. Daily total and T
     /// values remain unavailable until their required market marks / explicit tags exist.
@@ -258,6 +302,14 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
     public init(id: UUID = UUID(), snapshot: FReadOnlyLedgerSnapshot,
                 observations: [FContextObservation],
                 researchEvidence: [FDecisionResearchEvidence] = []) {
+        self.init(id: id, snapshot: snapshot, observations: observations,
+                  researchEvidence: researchEvidence, strategyQualificationGrants: [])
+    }
+
+    init(id: UUID = UUID(), snapshot: FReadOnlyLedgerSnapshot,
+         observations: [FContextObservation],
+         researchEvidence: [FDecisionResearchEvidence] = [],
+         strategyQualificationGrants: [FQuantStrategyQualificationGrant]) {
         let capturedAt = snapshot.capturedAt
         let capturedDailyTradeSummaryDate = snapshot.dailyTradeSummaryDate
         let capturedObservations = observations
@@ -273,10 +325,12 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
                                      brokerDisplayCostUpdatedAt: $0.brokerDisplayCostUpdatedAt)
         }
         self.observations = observations
+        openingSnapshotCapturedAt = snapshot.openingSnapshotCapturedAt
+        openingPositionCodes = snapshot.openingPositionCodes
+        self.strategyQualificationGrants = strategyQualificationGrants
         dailyTradeSummaryDate = capturedDailyTradeSummaryDate
         dailyTradeSummaries = snapshot.dailyTradeSummaries
-        dailyPortfolioRealizedPnL = snapshot.dailyTradeSummaries.isEmpty ? nil :
-            snapshot.dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }
+        dailyPortfolioRealizedPnL = FDailyTradeSummary.aggregateRealizedPnL(snapshot.dailyTradeSummaries)
         self.researchEvidence = Self.deduplicatedResearchEvidence(researchEvidence)
         positionHistory = snapshot.instrumentHistories.map(FDecisionPositionHistory.init)
             .sorted { $0.instrumentCode < $1.instrumentCode }
@@ -291,17 +345,30 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         let dailyByCode = Dictionary(uniqueKeysWithValues: snapshot.dailyTradeSummaries.map { ($0.securityCode, $0) })
         let codes = Set(historyByCode.keys).union(holdingByCode.keys).union(dailyByCode.keys)
         instrumentPnLFacts = codes.sorted().map { code in
-            let price = capturedObservations.filter { $0.dataClass == .quote && $0.subject == code }
+            let quoteObservation = capturedObservations.filter { $0.dataClass == .quote && $0.subject == code }
                 .filter { $0.isFresh(at: capturedAt) }
-                .max { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }?.decimalValue
+                .max { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }
+            let dailyMark = Self.dailyMark(for: code, observations: capturedObservations,
+                                           tradingDate: capturedDailyTradeSummaryDate,
+                                           asOf: capturedAt)
+            let openingPositionIsKnown = capturedDailyTradeSummaryDate.map { tradingDate in
+                FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+                    openingSnapshotCapturedAt: snapshot.openingSnapshotCapturedAt,
+                    securityCode: code, openingPositionCodes: snapshot.openingPositionCodes,
+                    tradingDate: tradingDate)
+            } ?? false
             return FDecisionInstrumentPnL(instrumentCode: code, history: historyByCode[code],
                                           holding: holdingByCode[code], daily: dailyByCode[code],
-                                          dailySummaryDate: capturedDailyTradeSummaryDate, quotePrice: price)
+                                          dailySummaryDate: capturedDailyTradeSummaryDate,
+                                          quotePrice: quoteObservation?.decimalValue,
+                                          previousClose: openingPositionIsKnown ? dailyMark?.previousClose : nil,
+                                          endOfDayUnits: holdingByCode[code]?.units ?? 0)
         }
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, accountID, accountDigest, cashBalance, holdings, observations
+        case openingSnapshotCapturedAt, openingPositionCodes
         case dailyTradeSummaryDate, dailyTradeSummaries, dailyPortfolioRealizedPnL, instrumentPnLFacts, researchEvidence
         case positionHistory, recentPositionEpisodes, positionEpisodeHistoryIsTruncated
     }
@@ -316,6 +383,9 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         cashBalance = try values.decode(Decimal.self, forKey: .cashBalance)
         holdings = try values.decode([FDecisionHoldingSnapshot].self, forKey: .holdings)
         observations = try values.decode([FContextObservation].self, forKey: .observations)
+        openingSnapshotCapturedAt = try values.decodeIfPresent(Date.self, forKey: .openingSnapshotCapturedAt)
+        openingPositionCodes = try values.decodeIfPresent(Set<String>.self, forKey: .openingPositionCodes) ?? []
+        strategyQualificationGrants = []
         dailyTradeSummaryDate = try values.decodeIfPresent(String.self, forKey: .dailyTradeSummaryDate)
         dailyTradeSummaries = try values.decodeIfPresent([FDailyTradeSummary].self,
                                                         forKey: .dailyTradeSummaries) ?? []
@@ -328,6 +398,28 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         positionHistory = try values.decodeIfPresent([FDecisionPositionHistory].self, forKey: .positionHistory) ?? []
         recentPositionEpisodes = try values.decodeIfPresent([FDecisionPositionEpisode].self, forKey: .recentPositionEpisodes) ?? []
         positionEpisodeHistoryIsTruncated = try values.decodeIfPresent(Bool.self, forKey: .positionEpisodeHistoryIsTruncated) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(createdAt, forKey: .createdAt)
+        try values.encode(accountID, forKey: .accountID)
+        try values.encode(accountDigest, forKey: .accountDigest)
+        try values.encode(cashBalance, forKey: .cashBalance)
+        try values.encode(holdings, forKey: .holdings)
+        try values.encode(observations, forKey: .observations)
+        try values.encodeIfPresent(openingSnapshotCapturedAt, forKey: .openingSnapshotCapturedAt)
+        try values.encode(openingPositionCodes, forKey: .openingPositionCodes)
+        try values.encodeIfPresent(dailyTradeSummaryDate, forKey: .dailyTradeSummaryDate)
+        try values.encode(dailyTradeSummaries, forKey: .dailyTradeSummaries)
+        try values.encodeIfPresent(dailyPortfolioRealizedPnL, forKey: .dailyPortfolioRealizedPnL)
+        try values.encode(instrumentPnLFacts, forKey: .instrumentPnLFacts)
+        try values.encode(researchEvidence, forKey: .researchEvidence)
+        try values.encode(positionHistory, forKey: .positionHistory)
+        try values.encode(recentPositionEpisodes, forKey: .recentPositionEpisodes)
+        try values.encode(positionEpisodeHistoryIsTruncated, forKey: .positionEpisodeHistoryIsTruncated)
+        // The runtime authorization grant is deliberately never serialized.
     }
 
     public static func capture(from reader: any FLedgerSnapshotReading,
@@ -343,43 +435,50 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
 
     public func validate(now: Date = Date()) throws {
         let expectedDailyTradeSummaryDate = try? FDailyTradeSummary.tradingDate(for: createdAt)
+        let securityDailyPnLIsConsistent = instrumentPnLFacts.allSatisfy { fact in
+            fact.securityDailyPnL == derivedSecurityDailyPnL(for: fact)
+        }
         guard FDecisionContextValidation.plausible(createdAt, now: now),
               FDecisionContextValidation.digest(accountDigest),
-              !cashBalance.isNaN, cashBalance >= 0,
+              (openingSnapshotCapturedAt.map { $0.timeIntervalSince1970.isFinite && $0 <= createdAt } ?? true),
+              openingPositionCodes.allSatisfy({
+                  $0.utf8.count == 6 && $0.utf8.allSatisfy({ (48...57).contains($0) })
+              }),
+              cashBalance.isFinite, cashBalance >= 0,
               Set(holdings.map(\.instrumentCode)).count == holdings.count,
-              holdings.allSatisfy({ $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 &&
-                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true) }),
+              holdings.allSatisfy({ $0.units > 0 && $0.bookCost.isFinite && $0.bookCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { $0.isFinite && $0 >= 0 } ?? true) }),
               Set(observations.map(\.id)).count == observations.count,
               (dailyTradeSummaryDate == expectedDailyTradeSummaryDate ||
                (dailyTradeSummaryDate == nil && dailyTradeSummaries.isEmpty && dailyPortfolioRealizedPnL == nil)),
               Set(dailyTradeSummaries.map(\.id)).count == dailyTradeSummaries.count,
               dailyTradeSummaries.allSatisfy({ $0.isValid(asOf: createdAt) }),
-              dailyPortfolioRealizedPnL == (dailyTradeSummaries.isEmpty ? nil :
-                  dailyTradeSummaries.reduce(Decimal.zero) { $0 + $1.realizedPnL }),
+              dailyPortfolioRealizedPnL == FDailyTradeSummary.aggregateRealizedPnL(dailyTradeSummaries),
+              securityDailyPnLIsConsistent,
               Set(instrumentPnLFacts.map(\.instrumentCode)).count == instrumentPnLFacts.count,
               instrumentPnLFacts.allSatisfy({
                   FDecisionContextValidation.nonBlank($0.instrumentCode) &&
-                  ($0.securityLifetimeRealizedPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.securityDailyPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.dailyRealizedTradingPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.dailyTContribution.map { !$0.isNaN } ?? true) &&
-                  ($0.cumulativeTContribution.map { !$0.isNaN } ?? true) &&
-                  ($0.closedEpisodesRealizedPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.currentEpisodeRealizedPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.currentEpisodeUnrealizedPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.currentEpisodeTotalPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.securityLifetimeUnrealizedPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.securityLifetimeTotalPnL.map { !$0.isNaN } ?? true) &&
-                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true) &&
-                  ($0.episodeEconomicCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true)
+                  ($0.securityLifetimeRealizedPnL.map { $0.isFinite } ?? true) &&
+                  ($0.securityDailyPnL.map { $0.isFinite } ?? true) &&
+                  ($0.dailyRealizedTradingPnL.map { $0.isFinite } ?? true) &&
+                  ($0.dailyTContribution.map { $0.isFinite } ?? true) &&
+                  ($0.cumulativeTContribution.map { $0.isFinite } ?? true) &&
+                  ($0.closedEpisodesRealizedPnL.map { $0.isFinite } ?? true) &&
+                  ($0.currentEpisodeRealizedPnL.map { $0.isFinite } ?? true) &&
+                  ($0.currentEpisodeUnrealizedPnL.map { $0.isFinite } ?? true) &&
+                  ($0.currentEpisodeTotalPnL.map { $0.isFinite } ?? true) &&
+                  ($0.securityLifetimeUnrealizedPnL.map { $0.isFinite } ?? true) &&
+                  ($0.securityLifetimeTotalPnL.map { $0.isFinite } ?? true) &&
+                  ($0.brokerDisplayCostPerUnit.map { $0.isFinite && $0 >= 0 } ?? true) &&
+                  ($0.episodeEconomicCostPerUnit.map { $0.isFinite && $0 >= 0 } ?? true)
               }),
               Set(positionHistory.map(\.instrumentCode)).count == positionHistory.count,
               Set(recentPositionEpisodes.map(\.id)).count == recentPositionEpisodes.count,
               recentPositionEpisodes.count <= 64,
-              positionHistory.allSatisfy({ $0.episodeCount >= 0 && !$0.lifetimeRealizedProfit.isNaN }),
+              positionHistory.allSatisfy({ $0.episodeCount >= 0 && $0.lifetimeRealizedProfit.isFinite }),
               recentPositionEpisodes.allSatisfy({ $0.episodeNumber > 0 && $0.openingUnits >= 0 &&
-                  $0.currentUnits >= 0 && !$0.currentBookCost.isNaN && $0.currentBookCost >= 0 &&
-                  !$0.netRealizedProfit.isNaN && FDecisionContextValidation.nonBlank($0.instrumentCode) &&
+                  $0.currentUnits >= 0 && $0.currentBookCost.isFinite && $0.currentBookCost >= 0 &&
+                  $0.netRealizedProfit.isFinite && FDecisionContextValidation.nonBlank($0.instrumentCode) &&
                   FDecisionContextValidation.nonBlank($0.instrumentName) }),
               Set(researchEvidence.map(\.id)).count == researchEvidence.count else {
             if let duplicate = Dictionary(grouping: researchEvidence, by: \.id)
@@ -400,6 +499,47 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
         guard try JSONEncoder().encode(researchEvidence).count <= 262_144 else {
             throw FDecisionContextError.researchEvidencePayloadTooLarge
         }
+    }
+
+    private func derivedSecurityDailyPnL(for fact: FDecisionInstrumentPnL) -> Decimal? {
+        guard let dailyTradeSummaryDate,
+              let openingSnapshotCapturedAt,
+              FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+                  openingSnapshotCapturedAt: openingSnapshotCapturedAt,
+                  securityCode: fact.instrumentCode,
+                  openingPositionCodes: openingPositionCodes,
+                  tradingDate: dailyTradeSummaryDate),
+              let mark = Self.dailyMark(for: fact.instrumentCode, observations: observations,
+                                        tradingDate: dailyTradeSummaryDate, asOf: createdAt) else {
+            return nil
+        }
+        let endOfDayUnits = holdings.first(where: { $0.instrumentCode == fact.instrumentCode })?.units ?? 0
+        let trades = dailyTradeSummaries.first(where: { $0.securityCode == fact.instrumentCode })
+        return try? FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: fact.instrumentCode, tradingDate: dailyTradeSummaryDate,
+            previousClose: mark.previousClose, trades: trades,
+            endOfDayUnits: endOfDayUnits, currentPrice: mark.currentPrice)
+    }
+
+    private static func dailyMark(for code: String, observations: [FContextObservation],
+                                  tradingDate: String?, asOf: Date)
+        -> (currentPrice: Decimal, previousClose: Decimal)? {
+        guard let tradingDate,
+              let quote = observations.filter({
+                  $0.dataClass == .quote && $0.subject == code && $0.isFresh(at: asOf)
+              }).max(by: { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }),
+              let quoteTime = quote.observedAt, let currentPrice = quote.decimalValue,
+              let previousClose = observations.filter({
+                  $0.dataClass == .previousClose && $0.subject == code &&
+                  FMarketQuoteTrustPolicy.isTrustedReferenceSource($0.source) && $0.isFresh(at: asOf)
+              }).max(by: { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }),
+              let previousCloseTime = previousClose.observedAt,
+              let previousCloseValue = previousClose.decimalValue else { return nil }
+        let synchronizationGap = abs(quoteTime.timeIntervalSince(previousCloseTime))
+        guard synchronizationGap.isFinite, synchronizationGap <= FContextDataClass.previousClose.maximumAge,
+              (try? FDailyTradeSummary.tradingDate(for: quoteTime)) == tradingDate,
+              (try? FDailyTradeSummary.tradingDate(for: previousCloseTime)) == tradingDate else { return nil }
+        return (currentPrice, previousCloseValue)
     }
 
     public func usableResearchEvidence(at now: Date = Date()) -> [FDecisionResearchEvidence] {
@@ -456,6 +596,187 @@ public struct FDecisionContext: Codable, Equatable, Sendable {
 
     public func holdingUnits(for code: String) -> Int64 {
         holdings.first(where: { $0.instrumentCode == code })?.units ?? 0
+    }
+}
+
+/// Canonical, per-security authorization evidence emitted only after a local
+/// strategy package passes its qualification gate. It is an input to Risk Guard,
+/// not an AI-generated confidence score.
+enum FQuantStrategyQualificationEvidence {
+    static let source = "F Local Quant Strategy Qualification"
+
+    static func observation(securityCode: String, regime: FMarketRegime, strategyID: String,
+                            strategyVersion: String, evaluatedAt: Date) -> FContextObservation? {
+        guard validSecurityCode(securityCode), validToken(strategyID), validToken(strategyVersion),
+              evaluatedAt.timeIntervalSince1970.isFinite else { return nil }
+        return FContextObservation(
+            dataClass: .quantState, subject: "strategy-qualification:\(securityCode)",
+            source: source,
+            reference: "regime=\(regime.rawValue);strategyID=\(strategyID);strategyVersion=\(strategyVersion);qualification=qualified",
+            observedAt: evaluatedAt, capturedAt: evaluatedAt, decimalValue: 1)
+    }
+
+    static func isQualified(_ observation: FContextObservation,
+                            for securityCode: String, regime: FMarketRegime, at now: Date) -> Bool {
+        guard validSecurityCode(securityCode), observation.dataClass == .quantState,
+              observation.subject == "strategy-qualification:\(securityCode)",
+              observation.source == source, observation.decimalValue == 1,
+              observation.unavailableReason == nil, observation.isFresh(at: now),
+              let reference = observation.reference else { return false }
+        let fields = reference.split(separator: ";", omittingEmptySubsequences: false)
+        guard fields.count == 4 else { return false }
+        let values = fields.compactMap { field -> (String, String)? in
+            let pair = field.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2 else { return nil }
+            return (String(pair[0]), String(pair[1]))
+        }
+        guard values.count == 4 else { return false }
+        let metadata = Dictionary(values, uniquingKeysWith: { _, _ in "" })
+        guard metadata.count == 4,
+              metadata["regime"] == regime.rawValue,
+              let strategyID = metadata["strategyID"], validToken(strategyID),
+              let version = metadata["strategyVersion"], validToken(version) else { return false }
+        return metadata["qualification"] == "qualified"
+    }
+
+    private static func validSecurityCode(_ value: String) -> Bool {
+        value.utf8.count == 6 && value.utf8.allSatisfy { (48...57).contains($0) }
+    }
+
+    private static func validToken(_ value: String) -> Bool {
+        !value.isEmpty && value.utf8.count <= 64 && value.utf8.allSatisfy {
+            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) ||
+                $0 == 45 || $0 == 46 || $0 == 95
+        }
+    }
+}
+
+/// Runtime-only capability proving that trusted FAdvisor code verified the
+/// corresponding qualification observation. It is deliberately not Codable and
+/// cannot be supplied through the public DecisionContext initializer.
+struct FQuantStrategyQualificationGrant: Equatable, Sendable {
+    let securityCode: String
+    let regime: FMarketRegime
+    let strategyID: String
+    let strategyVersion: String
+    let observationID: UUID
+    let evaluatedAt: Date
+
+    init(securityCode: String, regime: FMarketRegime, strategyID: String, strategyVersion: String,
+         observationID: UUID, evaluatedAt: Date) {
+        self.securityCode = securityCode
+        self.regime = regime
+        self.strategyID = strategyID
+        self.strategyVersion = strategyVersion
+        self.observationID = observationID
+        self.evaluatedAt = evaluatedAt
+    }
+
+    func authorizes(_ observation: FContextObservation, securityCode: String,
+                    regime: FMarketRegime, at now: Date) -> Bool {
+        self.securityCode == securityCode && self.regime == regime && observation.id == observationID &&
+            observation.observedAt == evaluatedAt && observation.capturedAt == evaluatedAt &&
+            evaluatedAt <= now && now.timeIntervalSince(evaluatedAt) <= FContextDataClass.quantState.maximumAge &&
+            FQuantStrategyQualificationEvidence.isQualified(observation, for: securityCode,
+                                                            regime: regime, at: now) &&
+            observation.reference == "regime=\(regime.rawValue);strategyID=\(strategyID);strategyVersion=\(strategyVersion);qualification=qualified"
+    }
+}
+
+private struct FDecisionMarketRegimeEvidence {
+    let observation: FContextObservation
+    let regime: FMarketRegime
+    let risk: FMarketRiskLevel
+    var allowedStrategies: Set<FQuantStrategyKind> {
+        FMarketRegimeEngine.allowedStrategies(for: regime, riskLevel: risk,
+                                               reliable: regime != .dataUnreliable)
+    }
+
+    static func find(in observations: [FContextObservation], securityCode: String,
+                     at now: Date) -> FDecisionMarketRegimeEvidence? {
+        let candidates = observations.filter { observation in
+            observation.dataClass == .quantState &&
+            observation.subject == securityCode && observation.source == "FCore Market Regime Engine" &&
+            observation.isFresh(at: now)
+        }
+        // Conflicting snapshots must not be resolved by array order. The caller
+        // must capture one canonical regime observation per security.
+        guard candidates.count == 1, let observation = candidates.first,
+              let reference = observation.reference else { return nil }
+        var fields: [String: String] = [:]
+        var malformed = false
+        for component in reference.split(separator: ";", omittingEmptySubsequences: false) {
+            let pair = component.trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2 else { continue }
+            let key = String(pair[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if ["regime", "risk", "confidence", "dataAsOf"].contains(key) {
+                guard fields[key] == nil else { malformed = true; break }
+                fields[key] = String(pair[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        guard !malformed,
+              let rawRegime = fields["regime"],
+              let regime = FMarketRegime(rawValue: rawRegime),
+              let rawRisk = fields["risk"], let riskValue = Int(rawRisk),
+              let risk = FMarketRiskLevel(rawValue: riskValue),
+              let confidence = observation.decimalValue,
+              confidence.isFinite, confidence >= 0, confidence <= 100,
+              let rawDataAsOf = fields["dataAsOf"],
+              let dataAsOf = ISO8601DateFormatter().date(from: rawDataAsOf),
+              let observationTime = observation.observedAt,
+              dataAsOf <= observationTime, dataAsOf <= observation.capturedAt,
+              dataAsOf <= now, now.timeIntervalSince(dataAsOf) <= 5 * 86_400 else { return nil }
+        return FDecisionMarketRegimeEvidence(observation: observation, regime: regime, risk: risk)
+    }
+}
+
+private struct FDecisionMappedBenchmarkEvidence {
+    let observation: FContextObservation
+    let regime: FMarketRegime
+    let risk: FMarketRiskLevel
+    var allowedStrategies: Set<FQuantStrategyKind> {
+        FMarketRegimeEngine.allowedStrategies(for: regime, riskLevel: risk,
+                                               reliable: regime != .dataUnreliable)
+    }
+
+    static func find(in observations: [FContextObservation], securityCode: String,
+                     mapping: FMarketIndexSecurityMapping, at now: Date)
+        -> FDecisionMappedBenchmarkEvidence? {
+        let candidates = observations.filter {
+            $0.dataClass == .quantState && $0.subject == "mapped-index:\(securityCode)" &&
+                $0.source == "F Verified Issuer Index Mapping + NAS Daily Regime"
+        }
+        guard candidates.count == 1, let observation = candidates.first,
+              observation.isFresh(at: now), let reference = observation.reference else { return nil }
+        var fields: [String: String] = [:]
+        for component in reference.split(separator: ";", omittingEmptySubsequences: false) {
+            let pair = component.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2 else { continue }
+            let key = String(pair[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if ["indexCode", "mappingSource", "mapping", "contextRole", "regime", "risk",
+                "dataAsOf", "not_strategy_qualification"].contains(key) {
+                guard fields[key] == nil else { return nil }
+                fields[key] = String(pair[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        guard fields["indexCode"] == mapping.indexCode,
+              fields["mappingSource"] == mapping.sourceURL,
+              fields["mapping"] == "issuer_benchmark",
+              fields["contextRole"] == "benchmark_only",
+              fields["not_strategy_qualification"] == "true",
+              let rawRegime = fields["regime"],
+              let regime = FMarketRegime(rawValue: rawRegime), regime != .dataUnreliable,
+              let rawRisk = fields["risk"], let risk = Int(rawRisk),
+              let riskLevel = FMarketRiskLevel(rawValue: risk),
+              let rawAsOf = fields["dataAsOf"],
+              let dataAsOf = ISO8601DateFormatter().date(from: rawAsOf),
+              let observedAt = observation.observedAt,
+              dataAsOf <= observedAt, dataAsOf <= observation.capturedAt, dataAsOf <= now,
+              now.timeIntervalSince(dataAsOf) <= 5 * 86_400,
+              let confidence = observation.decimalValue,
+              confidence.isFinite, (0...100).contains(confidence) else { return nil }
+        return FDecisionMappedBenchmarkEvidence(observation: observation, regime: regime, risk: riskLevel)
     }
 }
 
@@ -583,15 +904,62 @@ public enum FRiskGuard {
         catch { return FDecisionGuardResult(allowedForReview: false, findings: [.invalidContext]) }
         if candidate.accountDigest != context.accountDigest { findings.append(.accountChanged) }
         if !FDecisionContextValidation.nonBlank(candidate.rationale) || candidate.estimatedFee < 0 ||
-            candidate.estimatedFee.isNaN { findings.append(.invalidCandidate) }
+            !candidate.estimatedFee.isFinite { findings.append(.invalidCandidate) }
 
         let isAssetChanging = [.buy, .sell, .dayTrade, .grid].contains(candidate.action)
         if isAssetChanging {
             guard let code = candidate.instrumentCode,
                   let units = candidate.units, units > 0,
-                  let price = candidate.limitPrice, price > 0, !price.isNaN else {
+                  let price = candidate.limitPrice, price > 0, price.isFinite else {
                 findings.append(.invalidCandidate)
                 return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            let holdingUnits = context.holdingUnits(for: code)
+            let validUnits: Bool
+            switch candidate.action {
+            case .sell:
+                validUnits = FMainlandFundTradingRules.isValidSellUnits(units, currentHolding: holdingUnits)
+            case .buy, .dayTrade, .grid:
+                validUnits = FMainlandFundTradingRules.isValidBuyUnits(units)
+            default:
+                validUnits = false
+            }
+            guard validUnits, FMainlandFundTradingRules.isValidLimitPrice(price) else {
+                findings.append(.incompleteTradingEvidence(
+                    "(code)委托不符合场内基金规则：买入份额须为100的整数倍；卖出可按100的整数倍或一次卖出全部剩余份额；限价须按0.001元递增"))
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            guard let regimeEvidence = FDecisionMarketRegimeEvidence.find(
+                in: context.observations, securityCode: code, at: now) else {
+                findings.append(.incompleteTradingEvidence(
+                    "\(code) 缺少新鲜、同标的且可验证的 Market Regime 与风险状态"))
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            let qualification = context.strategyQualificationGrants
+                .filter { $0.securityCode == code && $0.regime == regimeEvidence.regime }
+                .compactMap { grant in
+                    context.observations.first {
+                        grant.authorizes($0, securityCode: code, regime: regimeEvidence.regime, at: now)
+                    }
+                }
+                .first
+            guard let qualification else {
+                findings.append(.incompleteTradingEvidence(
+                    "\(code) 缺少新鲜、合格且版本可追溯的本地 Quant 策略资格证据"))
+                return FDecisionGuardResult(allowedForReview: false, findings: findings)
+            }
+            if !candidate.citedObservationIDs.contains(qualification.id) {
+                findings.append(.missingCitedEvidence(qualification.id))
+            }
+            let isBuyIntent = candidate.action == .buy || candidate.action == .dayTrade || candidate.action == .grid
+            if isBuyIntent {
+                guard let strategyID = qualification.reference.flatMap({ strategyID(in: $0) }),
+                      let strategy = FQuantStrategyKind(qualificationID: strategyID),
+                      regimeEvidence.allowedStrategies.contains(strategy) else {
+                    findings.append(.incompleteTradingEvidence(
+                        "Market Regime=\(regimeEvidence.regime.rawValue) 不允许该资格凭证对应的策略；拒绝买入候选"))
+                    return FDecisionGuardResult(allowedForReview: false, findings: findings)
+                }
             }
             guard let freshQuote = context.freshQuote(for: code, at: now) else {
                 findings.append(.missingFreshQuote(code))
@@ -599,6 +967,47 @@ public enum FRiskGuard {
             }
             if !candidate.citedObservationIDs.contains(freshQuote.id) {
                 findings.append(.missingCitedEvidence(freshQuote.id))
+            }
+            if !candidate.citedObservationIDs.contains(regimeEvidence.observation.id) {
+                findings.append(.missingCitedEvidence(regimeEvidence.observation.id))
+            }
+            if let iopv = context.observations.filter({
+                $0.dataClass == .iopv && $0.subject == code && $0.isFresh(at: now)
+            }).max(by: { ($0.observedAt ?? .distantPast) < ($1.observedAt ?? .distantPast) }),
+               !candidate.citedObservationIDs.contains(iopv.id) {
+                findings.append(.missingCitedEvidence(iopv.id))
+            }
+            let buyIntent = candidate.action == .buy || candidate.action == .dayTrade || candidate.action == .grid
+            if buyIntent, let mapping = FMarketIndexSecurityMappingRegistry.mapping(for: code) {
+                guard let mappedBenchmark = FDecisionMappedBenchmarkEvidence.find(
+                    in: context.observations, securityCode: code, mapping: mapping, at: now) else {
+                    findings.append(.incompleteTradingEvidence(
+                        "\(code) 已映射到\(mapping.indexName)，但对应市场Regime缺失、过期或来源不匹配；暂停普通买入候选"))
+                    return FDecisionGuardResult(allowedForReview: false, findings: findings)
+                }
+                if !candidate.citedObservationIDs.contains(mappedBenchmark.observation.id) {
+                    findings.append(.missingCitedEvidence(mappedBenchmark.observation.id))
+                }
+                if let strategyID = qualification.reference.flatMap({ strategyID(in: $0) }),
+                   let strategy = FQuantStrategyKind(qualificationID: strategyID),
+                   !mappedBenchmark.allowedStrategies.contains(strategy) {
+                    findings.append(.incompleteTradingEvidence(
+                        "对应市场\(mapping.indexName) Regime=\(mappedBenchmark.regime.rawValue) 不允许该资格凭证对应的策略；拒绝买入候选"))
+                }
+                if mappedBenchmark.risk >= .r3Severe ||
+                    [.riskOff, .extremeRisk, .uncertain, .dataUnreliable].contains(mappedBenchmark.regime) {
+                    findings.append(.incompleteTradingEvidence(
+                        "对应市场\(mapping.indexName) Regime=\(mappedBenchmark.regime.rawValue)、风险R\(mappedBenchmark.risk.rawValue)；暂停普通买入候选"))
+                }
+            }
+            if buyIntent, let currentPrice = freshQuote.decimalValue, price > currentPrice {
+                findings.append(.incompleteTradingEvidence(
+                    "买入限价高于最新成交价；为避免追价，候选必须等待价格进入计划区"))
+            }
+            if buyIntent && (regimeEvidence.risk >= .r3Severe ||
+                [.riskOff, .extremeRisk, .uncertain, .dataUnreliable].contains(regimeEvidence.regime)) {
+                findings.append(.incompleteTradingEvidence(
+                    "Market Regime=\(regimeEvidence.regime.rawValue), risk=R\(regimeEvidence.risk.rawValue)；暂停普通买入候选"))
             }
             if candidate.action == .sell || candidate.action == .dayTrade {
                 if units > context.holdingUnits(for: code) { findings.append(.insufficientUnits) }
@@ -628,9 +1037,18 @@ public enum FRiskGuard {
         var fee = fee
         var usage = Decimal.zero
         guard NSDecimalAdd(&usage, &notionalForAddition, &fee, .plain) == .noError,
-              !usage.isNaN else { return nil }
+              usage.isFinite else { return nil }
         return usage
     }
+}
+
+private func strategyID(in reference: String) -> String? {
+    let values = reference.split(separator: ";", omittingEmptySubsequences: false).compactMap { part -> String? in
+        let pair = part.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        guard pair.count == 2, pair[0] == "strategyID" else { return nil }
+        return String(pair[1])
+    }
+    return values.count == 1 ? values[0] : nil
 }
 
 public enum FAIGuard {

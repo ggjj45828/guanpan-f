@@ -1,5 +1,7 @@
 import SwiftUI
 import Foundation
+import CoreFoundation
+import CryptoKit
 import FCore
 import FAdvisor
 import FLedgerWrite
@@ -38,6 +40,64 @@ struct FTencentMarketReference: Equatable {
     let fetchedAt: Date
     let providerInstrumentType: String?
     let source: String
+
+    func hasTrustedTimestamp(at now: Date = Date()) -> Bool {
+        let valuesAreValid = latestPrice.isFinite && latestPrice > 0 &&
+            previousClose.isFinite && previousClose > 0 &&
+            (iopv.map { $0.isFinite && $0 > 0 } ?? true) &&
+            (premiumPercent.map { $0.isFinite && $0 > -100 } ?? true)
+        let timesAreValid = observedAt.timeIntervalSince1970.isFinite &&
+            fetchedAt.timeIntervalSince1970.isFinite && now.timeIntervalSince1970.isFinite &&
+            observedAt <= fetchedAt && fetchedAt <= now
+        let identityIsValid = securityCode.utf8.count == 6 &&
+            securityCode.utf8.allSatisfy { (48...57).contains($0) } &&
+            !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return valuesAreValid && timesAreValid && identityIsValid
+    }
+
+    func hasFreshIOPV(at now: Date = Date()) -> Bool {
+        guard hasFreshReference(at: now), iopv != nil else { return false }
+        let age = now.timeIntervalSince(observedAt)
+        return age.isFinite && age >= 0 && age <= FContextDataClass.iopv.maximumAge
+    }
+
+    func hasFreshReference(at now: Date = Date()) -> Bool {
+        guard hasTrustedTimestamp(at: now) else { return false }
+        let age = now.timeIntervalSince(observedAt)
+        return age.isFinite && age >= 0 && age <= 900
+    }
+}
+
+struct FMarketIndexQuote: Identifiable, Equatable, Sendable {
+    var id: String { code }
+    let code: String
+    let name: String
+    let market: String
+    let timeZoneIdentifier: String
+    let latestPrice: Decimal?
+    let changePercent: Decimal?
+    let observedAt: Date?
+    let fetchedAt: Date?
+    let source: String?
+    let marketStatus: String?
+    let unavailableReason: String?
+
+    var hasNumericQuote: Bool { latestPrice != nil && changePercent != nil }
+    var isAvailable: Bool {
+        guard hasNumericQuote, let observedAt, let fetchedAt, unavailableReason == nil,
+              FMarketQuoteTrustPolicy.isTrusted(source),
+              observedAt.timeIntervalSince1970.isFinite, fetchedAt.timeIntervalSince1970.isFinite else {
+            return false
+        }
+        return observedAt <= fetchedAt
+    }
+
+    func freshness(at now: Date) -> FQuoteFreshness {
+        guard isAvailable, let observedAt, let fetchedAt else { return .unverified }
+        return FQuoteTemporalMetadata(quoteTimestamp: observedAt, fetchedAt: fetchedAt,
+                                      source: source, timestampTrust: .verifiedExchangeTimestamp,
+                                      marketSessionStatus: .unknown).freshness(at: now)
+    }
 }
 
 typealias FHomeLedgerState = FHomeLedgerAvailability
@@ -77,6 +137,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var marketReferenceByCode: [String: FTencentMarketReference] = [:]
     @Published private(set) var marketReferenceStateByCode: [String: String] = [:]
     private var refreshingReferenceCodes: Set<String> = []
+    private var marketRefreshTasks: [String: Task<Void, Never>] = [:]
     @Published private(set) var marketRefreshStateByCode: [String: String] = [:]
     @Published private(set) var archivedIntradayByCode: [String: FNASArchivedIntraday] = [:]
     @Published private(set) var archiveRefreshStateByCode: [String: String] = [:]
@@ -84,6 +145,15 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var dailyKlineStateByCode: [String: String] = [:]
     @Published private(set) var securityRegimeByCode: [String: FMarketRegimeAssessment] = [:]
     @Published private(set) var securityRegimeStatusByCode: [String: String] = [:]
+    private var regimeMemoryByCode: [String: FMarketRegimeMemory] = [:]
+    @Published private(set) var marketIndexQuotes: [FMarketIndexQuote] = FMarketIndexHTTPClient.emptyCatalog
+    @Published private(set) var refreshingMarketIndices = false
+    @Published private(set) var marketIndicesUpdatedAt: Date?
+    @Published private(set) var marketIndicesError: String?
+    @Published private(set) var marketIndexRegimesByCode: [String: FMarketRegimeAssessment] = [:]
+    @Published private(set) var marketIndexRegimeFetchedAtByCode: [String: Date] = [:]
+    @Published private(set) var marketIndexRegimeStatusByCode: [String: String] = FMarketIndexHTTPClient.regimeStatusCatalog
+    @Published private(set) var refreshingMarketIndexRegimes = false
     @Published var selectedHistoryDate = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: Date()) ?? Date()
     @Published private(set) var refreshingMarketCodes: Set<String> = []
     @Published private(set) var selectedInstrumentCode: String?
@@ -91,9 +161,18 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var checkingNASConnection = false
     @Published private(set) var nasResearchStatus = "尚未请求"
     @Published private(set) var nasResearchEvidenceByCode: [String: FDecisionResearchEvidence] = [:]
-    private var refreshingNASResearchCodes: Set<String> = []
+    private var nasDataSourceKey: String?
+    private var nasDataGeneration: UInt64 = 0
+    private var refreshingNASResearchCodes: [String: UInt64] = [:]
+    private var cachedNewsFeed: FNewsFeed?
+    private var newsRefreshTask: Task<Void, Never>?
+    private var newsLastAttemptAt: Date?
     @Published private(set) var newsStatus = "尚未请求"
     @Published private(set) var aiKeyStatus = "未配置 DeepSeek API Key"
+    @Published private(set) var investorProfile = FInvestorProfile()
+    @Published private(set) var investorProfileStatus = "正在读取本机画像"
+    @Published private(set) var loadingInvestorProfile = true
+    @Published private(set) var savingInvestorProfile = false
     @Published private(set) var advisorStatus = "尚未开始分析"
     @Published private(set) var candidateShadowJournalStatus = "建议成绩单尚未记录"
     @Published private(set) var candidateShadowSummary: FCandidateShadowSummary?
@@ -140,8 +219,10 @@ final class FHomeModel: ObservableObject {
     private var pendingCandidate: FCandidateRecommendation?
     private var pendingCandidateScope: FAdvisorEntryScope?
     private var ledgerStore: FAccountBookStore?
+    private var marketQuoteCache: FMarketQuoteCache?
     private var decisionMemoryStore: FDecisionMemoryStore?
     private var investorProfileStore: FInvestorProfileStore?
+    private var investorProfileDigest: String?
     private var decisionContextStore: FDecisionContextStore?
     private var candidateShadowJournalStore: FCandidateShadowJournalStore?
     var latestLedgerSnapshot: FReadOnlyLedgerSnapshot?
@@ -156,6 +237,8 @@ final class FHomeModel: ObservableObject {
         }
         let store = FAccountBookStore(fileURL: support.appendingPathComponent("f-real-ledger.json"))
         ledgerStore = store
+        marketQuoteCache = try? FMarketQuoteCache(
+            directory: support.appendingPathComponent("f-market-quote-cache", isDirectory: true))
         let advisorDirectory = support.appendingPathComponent("f-advisor", isDirectory: true)
         decisionMemoryStore = FDecisionMemoryStore(directory: advisorDirectory)
         investorProfileStore = FInvestorProfileStore(directory: advisorDirectory)
@@ -163,8 +246,25 @@ final class FHomeModel: ObservableObject {
         candidateShadowJournalStore = FCandidateShadowJournalStore(directory: advisorDirectory)
         aiKeyStatus = (try? FAdvisorAIKeychain.read()) == nil
             ? "未配置 DeepSeek API Key" : "DeepSeek Key 已保存在本机 Keychain"
+        if let marketQuoteCache {
+            Task { await restoreCachedMarketQuotes(from: marketQuoteCache) }
+        }
         Task { await loadLedger(from: store) }
         Task { await refreshCandidateShadowSummary() }
+        Task { await loadInvestorProfile() }
+    }
+
+    private func restoreCachedMarketQuotes(from cache: FMarketQuoteCache) async {
+        for snapshot in await cache.loadAll() {
+            if let current = marketDataByCode[snapshot.securityCode],
+               current.quoteTimestamp > snapshot.quoteTimestamp ||
+                (current.quoteTimestamp == snapshot.quoteTimestamp && current.fetchedAt >= snapshot.fetchedAt) {
+                continue
+            }
+            marketDataByCode[snapshot.securityCode] = snapshot
+            marketRefreshStateByCode[snapshot.securityCode] =
+                "本机缓存 · 仅供离线查看 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .abbreviated, time: .standard)) · 获取于 \(snapshot.fetchedAt.formatted(date: .abbreviated, time: .standard))"
+        }
     }
 
     func refreshCandidateShadowSummary(now: Date = Date()) async {
@@ -223,6 +323,57 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    func securityDailyPnL(for code: String, at now: Date = Date()) -> Decimal? {
+        guard let snapshot = latestLedgerSnapshot,
+              let tradingDate = snapshot.dailyTradeSummaryDate,
+              (try? FDailyTradeSummary.tradingDate(for: now)) == tradingDate,
+              (try? FDailyTradeSummary.tradingDate(for: snapshot.capturedAt)) == tradingDate,
+              let quote = marketDataByCode[code], quote.freshness(at: now) == .fresh,
+              let currentPrice = quote.latestPrice,
+              let reference = marketReferenceByCode[code], reference.hasFreshReference(at: now),
+              let quoteDate = try? FDailyTradeSummary.tradingDate(for: quote.quoteTimestamp),
+              let referenceDate = try? FDailyTradeSummary.tradingDate(for: reference.observedAt),
+              quoteDate == tradingDate, referenceDate == tradingDate,
+              FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+                  openingSnapshotCapturedAt: snapshot.openingSnapshotCapturedAt,
+                  securityCode: code, openingPositionCodes: snapshot.openingPositionCodes,
+                  tradingDate: tradingDate) else { return nil }
+        let synchronizedGap = abs(quote.quoteTimestamp.timeIntervalSince(reference.observedAt))
+        guard synchronizedGap.isFinite, synchronizedGap <= 15 * 60 else { return nil }
+        let endingUnits = snapshot.positions.first(where: { $0.instrumentCode == code })?.units ?? 0
+        let trades = snapshot.dailyTradeSummaries.first(where: { $0.securityCode == code })
+        return try? FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: code, tradingDate: tradingDate,
+            previousClose: reference.previousClose, trades: trades,
+            endOfDayUnits: endingUnits, currentPrice: currentPrice)
+    }
+
+    var portfolioSecurityDailyPnL: Decimal? {
+        portfolioSecurityDailyPnL(at: Date())
+    }
+
+    func portfolioSecurityDailyPnL(at now: Date) -> Decimal? {
+        guard ledgerState == .available, let snapshot = latestLedgerSnapshot else { return nil }
+        let codes = Set(snapshot.positions.map(\.instrumentCode))
+            .union(snapshot.dailyTradeSummaries.map(\.securityCode))
+        var total = Decimal.zero
+        for code in codes {
+            guard let value = securityDailyPnL(for: code, at: now) else { return nil }
+            total += value
+            guard total.isFinite else { return nil }
+        }
+        return total
+    }
+
+    func portfolioMarketValuation(at now: Date)
+        -> Result<FPortfolioMarketValuation, FPortfolioMarketValuationUnavailableReason> {
+        guard ledgerState == .available, let snapshot = latestLedgerSnapshot else {
+            return .failure(.ledgerUnavailable)
+        }
+        return FPortfolioMarketValuationCalculator.calculate(
+            ledger: snapshot, quotes: marketDataByCode, at: now)
+    }
+
     func askAdvisor(instrumentCode: String? = nil) {
         guard !isAskingAdvisor else { return }
         Task { await runAdvisorQuestion(instrumentCode: instrumentCode) }
@@ -261,7 +412,7 @@ final class FHomeModel: ObservableObject {
     func confirmBrokerDisplayCost(instrumentCode: String, costText: String, note: String) async {
         guard let store = ledgerStore,
               let cost = Decimal(string: costText.trimmingCharacters(in: .whitespacesAndNewlines),
-                                 locale: Locale(identifier: "en_US_POSIX")), cost >= 0,
+                                 locale: Locale(identifier: "en_US_POSIX")), cost.isFinite, cost >= 0,
               !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             ledgerWriteStatus = "请输入有效的券商单位成本和本次修正说明。"
             return
@@ -316,7 +467,7 @@ final class FHomeModel: ObservableObject {
         guard let store = ledgerStore,
               let enteredAmount = Decimal(string: cashAdjustmentAmountText.trimmingCharacters(in: .whitespacesAndNewlines),
                                            locale: Locale(identifier: "en_US_POSIX")),
-              !enteredAmount.isNaN, enteredAmount > 0,
+              enteredAmount.isFinite, enteredAmount > 0,
               !cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             cashAdjustmentStatus = "请填写正数金额、原因和确认说明。增加或减少方向由选择器指定。"
@@ -340,7 +491,8 @@ final class FHomeModel: ObservableObject {
                 confirmationNote: cashAdjustmentConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines))
             let movement = FCashMovement(
                 sequence: lastSequence + 1, occurredAt: now, amount: amount,
-                reason: "其他费用/现金对账：\(cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines))",
+                category: cashAdjustmentAddsCash ? .cashReconciliation : .accountExpense,
+                reason: "\(cashAdjustmentAddsCash ? "现金对账" : "账户级杂费")：\(cashAdjustmentReason.trimmingCharacters(in: .whitespacesAndNewlines))",
                 userConfirmation: confirmation)
             let writer = FConfirmedLedgerWriter(store: store)
             _ = try await writer.confirmCashMovement(movement, now: now)
@@ -349,7 +501,9 @@ final class FHomeModel: ObservableObject {
             pendingCandidateScope = nil
             advisorResult = nil
             showingCashAdjustment = false
-            cashAdjustmentStatus = "现金对账差额已追加；证券持仓、成本及盈亏未改变。旧AI候选已失效。"
+            cashAdjustmentStatus = cashAdjustmentAddsCash
+                ? "现金对账差额已追加；证券持仓、成本及盈亏未改变。旧AI候选已失效。"
+                : "账户级杂费已记入现金流水；未归属到证券成本或证券盈亏。旧AI候选已失效。"
         } catch {
             cashAdjustmentStatus = "现金对账差额未保存：\(error.localizedDescription)"
         }
@@ -358,7 +512,8 @@ final class FHomeModel: ObservableObject {
     private func writeFeeCorrection() async {
         guard let store = ledgerStore, let fillID = feeCorrectionFillID,
               let correctedFee = Decimal(string: correctedFeeText.trimmingCharacters(in: .whitespacesAndNewlines),
-                                          locale: Locale(identifier: "en_US_POSIX")), correctedFee >= 0,
+                                          locale: Locale(identifier: "en_US_POSIX")), correctedFee.isFinite,
+              correctedFee >= 0,
               !feeCorrectionReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !feeCorrectionConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             ledgerWriteStatus = "请填写有效的修正后手续费、差额原因和确认说明。"
@@ -403,14 +558,14 @@ final class FHomeModel: ObservableObject {
             return false
         }
         guard let cash = Decimal(string: cashText.trimmingCharacters(in: .whitespacesAndNewlines),
-                                 locale: Locale(identifier: "en_US_POSIX")), cash >= 0,
+                                 locale: Locale(identifier: "en_US_POSIX")), cash.isFinite, cash >= 0,
               !positions.isEmpty,
               positions.allSatisfy({
                   $0.instrumentCode.utf8.count == 6 &&
                   $0.instrumentCode.utf8.allSatisfy { (48...57).contains($0) } &&
                   !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                  $0.units > 0 && $0.economicCost >= 0 &&
-                  ($0.brokerDisplayCostPerUnit.map { $0 >= 0 } ?? true)
+                  $0.units > 0 && $0.economicCost.isFinite && $0.economicCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { $0.isFinite && $0 >= 0 } ?? true)
               }), Set(positions.map(\.instrumentCode)).count == positions.count,
               !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             ledgerWriteStatus = "请填写有效现金、至少一只证券、唯一代码、正份额、真实成本和确认说明。"
@@ -452,9 +607,9 @@ final class FHomeModel: ObservableObject {
               let units = Int64(actualFillUnitsText.trimmingCharacters(in: .whitespacesAndNewlines)),
               units > 0,
               let price = Decimal(string: actualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines),
-                                  locale: Locale(identifier: "en_US_POSIX")), price > 0,
+                                  locale: Locale(identifier: "en_US_POSIX")), price.isFinite, price > 0,
               let fee = Decimal(string: actualFillFeeText.trimmingCharacters(in: .whitespacesAndNewlines),
-                                locale: Locale(identifier: "en_US_POSIX")), fee >= 0,
+                                locale: Locale(identifier: "en_US_POSIX")), fee.isFinite, fee >= 0,
               !actualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !ledgerConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             ledgerWriteStatus = "请填写有效的实际成交份额、价格、手续费、证券名称和确认说明。"
@@ -511,7 +666,7 @@ final class FHomeModel: ObservableObject {
                                         actualFillTCycleID.trimmingCharacters(in: .whitespacesAndNewlines))
             let writer = FConfirmedLedgerWriter(store: store)
             _ = try await writer.confirmFill(fill, instrumentName: actualFillInstrumentName,
-                                             now: now)
+                                             expectedLedgerDigest: candidate.accountDigest, now: now)
             if let candidateShadowJournalStore {
                 do {
                     let link = try FCandidateShadowFillLink(confirmedFillID: fill.id,
@@ -575,8 +730,8 @@ final class FHomeModel: ObservableObject {
               manualFillInstrumentCode.utf8.allSatisfy({ (48...57).contains($0) }),
               !manualFillInstrumentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let units = Int64(manualFillUnitsText.trimmingCharacters(in: .whitespacesAndNewlines)), units > 0,
-              let price = Decimal(string: manualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), price > 0,
-              let fee = Decimal(string: manualFillFeeText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), fee >= 0,
+              let price = Decimal(string: manualFillPriceText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), price.isFinite, price > 0,
+              let fee = Decimal(string: manualFillFeeText.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")), fee.isFinite, fee >= 0,
               !manualFillConfirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             ledgerWriteStatus = "请填写六位证券代码、名称、正份额、真实成交价、实际费用和确认说明。"
             return
@@ -639,6 +794,85 @@ final class FHomeModel: ObservableObject {
         }
     }
 
+    func saveExplicitInvestorPreference(_ key: FInvestorProfileAttributeKey,
+                                        value rawValue: String) async {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else {
+            investorProfileStatus = "偏好内容不能为空"
+            return
+        }
+        guard !loadingInvestorProfile, !savingInvestorProfile,
+              let store = investorProfileStore else {
+            investorProfileStatus = "画像尚未就绪，暂不能保存"
+            return
+        }
+        savingInvestorProfile = true
+        defer { savingInvestorProfile = false }
+        let now = Date()
+        var updated = investorProfile
+        let prior = updated.attribute(key)?.current(at: now)
+        let revision = FInvestorProfileRevision(
+            value: .text(String(value.prefix(240))), confidence: 1,
+            source: .explicit, updatedAt: now,
+            explanation: "用户在设置页明确录入或修正",
+            sourceReference: "settings.explicit-preference",
+            supersedesRevisionID: prior?.source == .explicit ? prior?.id : nil)
+        do {
+            _ = try updated.record(revision, for: key, now: now)
+            investorProfileDigest = try await store.save(updated,
+                expectedPriorDigest: investorProfileDigest, now: now)
+            investorProfile = updated
+            investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
+        } catch {
+            investorProfileStatus = "画像保存失败：\(error.localizedDescription)"
+            await loadInvestorProfile()
+        }
+    }
+
+    func clearInvestorProfileAttribute(_ key: FInvestorProfileAttributeKey) async {
+        guard !loadingInvestorProfile, !savingInvestorProfile,
+              let store = investorProfileStore else {
+            investorProfileStatus = "画像尚未就绪，暂不能清除"
+            return
+        }
+        savingInvestorProfile = true
+        defer { savingInvestorProfile = false }
+        let now = Date()
+        var updated = investorProfile
+        do {
+            try updated.clear(key, userConfirmed: true)
+            investorProfileDigest = try await store.save(updated,
+                expectedPriorDigest: investorProfileDigest, now: now)
+            investorProfile = updated
+            investorProfileStatus = "已清除该项画像；其他偏好和账本不变"
+        } catch {
+            investorProfileStatus = "画像清除失败：\(error.localizedDescription)"
+            await loadInvestorProfile()
+        }
+    }
+
+    private func loadInvestorProfile() async {
+        guard let store = investorProfileStore else {
+            loadingInvestorProfile = false
+            investorProfileStatus = "本机画像存储不可用"
+            return
+        }
+        loadingInvestorProfile = true
+        defer { loadingInvestorProfile = false }
+        do {
+            let now = Date()
+            let loaded = try await store.load(now: now) ?? FInvestorProfile()
+            let digest = try await store.currentDigest(now: now)
+            investorProfile = loaded
+            investorProfileDigest = digest
+            investorProfileStatus = loaded.attributes.isEmpty
+                ? "尚未录入个人偏好；顾问不会自行猜测"
+                : "已读取 \(loaded.attributes.count) 项本机画像偏好"
+        } catch {
+            investorProfileStatus = "本机画像读取失败：\(error.localizedDescription)"
+        }
+    }
+
     private func runAdvisorQuestion(instrumentCode requestedCode: String?) async {
         let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { advisorStatus = FAdvisorLiveError.noQuestion.localizedDescription; return }
@@ -677,8 +911,7 @@ final class FHomeModel: ObservableObject {
         // question itself does not identify a security.
         let explicitQuestionCode = unheldNumericCode ?? mentionedByCode?.instrumentCode ?? mentionedByName?.instrumentCode
         let focusCode = portfolioIntent ? nil : (explicitQuestionCode ?? requestedCode)
-        if let focusCode,
-           (focusCode.count != 6 || !focusCode.allSatisfy(\.isNumber)) {
+        if let focusCode, !Self.isValidSixDigitSecurityCode(focusCode) {
             advisorStatus = FAdvisorLiveError.invalidInstrument.localizedDescription
             return
         }
@@ -687,23 +920,22 @@ final class FHomeModel: ObservableObject {
         if let focusCode { scope = .instrument(focusCode) } else { scope = .portfolio }
         isAskingAdvisor = true
         advisorStatus = focusCode == nil
-            ? "正在读取真实持仓并刷新组合行情；NAS研究摘要可选，不阻塞顾问…"
-            : "正在读取真实持仓并刷新目标证券行情；NAS研究摘要可选，不阻塞顾问…"
+            ? "正在读取真实持仓并刷新组合行情；仅使用本机已有NAS研究摘要，不等待NAS…"
+            : "正在读取真实持仓并刷新目标证券行情；仅使用本机已有NAS研究摘要，不等待NAS…"
         defer { isAskingAdvisor = false }
 
         do {
             let apiKey = try FAdvisorAIKeychain.read()
+            refreshNewsFeedInBackground(for: targetCodes)
             await refreshMarketData(for: targetCodes)
             let quotes = Dictionary(uniqueKeysWithValues: targetCodes.compactMap { code in
                 marketDataByCode[code].map { (code, $0) }
             })
             var newsByCode: [String: FNewsFeed] = [:]
             var newsFailureByCode: [String: String] = [:]
-            var marketNewsFeed: FNewsFeed?
-            newsStatus = "正在读取同花顺财经近24小时快讯…"
-            do {
-                let feed = try await FNewsClient.fetchLatest()
-                marketNewsFeed = feed
+            let newsCheckedAt = Date()
+            let marketNewsFeed = cachedNewsFeed?.recent(at: newsCheckedAt)
+            if let feed = marketNewsFeed {
                 for code in targetCodes {
                     let matched = feed.articlesAssociated(with: code)
                     if !matched.isEmpty {
@@ -716,14 +948,20 @@ final class FHomeModel: ObservableObject {
                             : "取得市场快讯，但来源未提供与该证券代码的直接关联"
                     }
                 }
-                newsStatus = feed.articles.isEmpty
-                    ? "同花顺新闻暂不可用 · 最近24小时无可验证快讯"
-                    : "\(FNewsClient.providerName) · \(feed.articles.count) 条市场快讯 · \(newsByCode.count)/\(targetCodes.count) 个标的有直接关联 · 不关联的标的不作个股归因"
-            } catch {
-                let failure = error.localizedDescription
-                for code in targetCodes { newsFailureByCode[code] = failure }
-                newsStatus = "新闻暂不可用 · \(failure)"
+            } else {
+                for code in targetCodes {
+                    newsFailureByCode[code] = "没有新鲜的已缓存新闻；本轮不等待新闻源"
+                }
             }
+            if let marketNewsFeed {
+                newsStatus = newsFeedStatus(marketNewsFeed, targetCodes: targetCodes)
+            } else if newsRefreshTask != nil {
+                newsStatus = "新闻后台更新中；本轮分析不等待新闻源"
+            } else {
+                newsStatus = "新闻缓存暂不可用；本轮不等待新闻源"
+            }
+            let researchBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            let researchGeneration = synchronizeNASDataSource(baseAddress: researchBaseAddress)
             let researchCheckedAt = Date()
             let usableResearchEntries: [(String, FDecisionResearchEvidence)] = targetCodes.compactMap { code in
                 guard let cached = nasResearchEvidenceByCode[code],
@@ -732,7 +970,7 @@ final class FHomeModel: ObservableObject {
                 }
                 return (code, cached)
             }
-            let researchByCode = Dictionary(uniqueKeysWithValues: usableResearchEntries)
+            var researchByCode = Dictionary(uniqueKeysWithValues: usableResearchEntries)
             var researchFailureByCode: [String: String] = [:]
             for code in targetCodes where researchByCode[code] == nil {
                 researchFailureByCode[code] = "历史Quant研究摘要暂不可用。"
@@ -745,10 +983,22 @@ final class FHomeModel: ObservableObject {
             } else {
                 nasResearchStatus = "历史Quant研究摘要暂不可用。顾问继续分析，不等待NAS。"
             }
-            Task { await refreshNASResearchEvidence(for: targetCodes) }
+            Task {
+                await refreshNASResearchEvidence(for: targetCodes,
+                                                 baseAddress: researchBaseAddress,
+                                                 expectedGeneration: researchGeneration)
+            }
 
             guard let ledgerStore else { throw FAdvisorLiveError.noRealLedger }
             let contextCaptureTime = Date()
+            let currentResearchBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            let currentResearchGeneration = synchronizeNASDataSource(baseAddress: currentResearchBaseAddress)
+            if currentResearchGeneration != researchGeneration {
+                researchByCode.removeAll()
+                researchFailureByCode = Dictionary(uniqueKeysWithValues:
+                    targetCodes.map { ($0, "历史Quant研究摘要暂不可用。NAS 地址已更改，正在重新获取。") })
+                nasResearchStatus = "NAS 地址已更改；旧地址研究摘要已作废，顾问继续分析。"
+            }
             guard let freshLedger = try await ledgerStore.readLedgerSnapshot(now: contextCaptureTime),
                   freshLedger.ledgerDigest == initial.ledgerDigest else {
                 throw FAdvisorLiveError.ledgerChangedDuringAnalysis
@@ -769,6 +1019,155 @@ final class FHomeModel: ObservableObject {
             var evidence: [FDecisionResearchEvidence] = []
             var quoteStatuses: [String] = []
             var researchStatuses: [String] = []
+            for code in targetCodes {
+                if let regime = securityRegimeByCode[code], regime.regime != .dataUnreliable,
+                   Self.isMarketRegimeDataFresh(regime, at: contextCaptureTime),
+                   let snapshot = dailyKlineByCode[code],
+                   snapshot.fetchedAt <= contextCaptureTime,
+                   contextCaptureTime.timeIntervalSince(snapshot.fetchedAt) <= FContextDataClass.quantState.maximumAge {
+                    let factorSummary = regime.factors.map { factor -> String in
+                        guard factor.available, let value = factor.value else { return "\(factor.key)=Unavailable" }
+                        return "\(factor.key)=\(value)"
+                    }.joined(separator: ",")
+                    let dataAsOf = regime.dataAsOf.map { ISO8601DateFormatter().string(from: $0) } ?? "Unavailable"
+                    let reference = "regime=\(regime.regime.rawValue); risk=\(regime.riskLevel.rawValue); confidence=\(regime.confidence); dataAsOf=\(dataAsOf); source=\(snapshot.source); factors=\(factorSummary)"
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: code, source: "FCore Market Regime Engine",
+                        reference: String(reference.prefix(4_000)), observedAt: snapshot.fetchedAt,
+                        capturedAt: contextCaptureTime, decimalValue: Decimal(regime.confidence)))
+                } else {
+                    let localStatus = securityRegimeStatusByCode[code] ?? "尚未计算证券自身 Regime"
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: code, source: "FCore Market Regime Engine",
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: "证券自身 Regime 不可用（\(localStatus)）；Local Quant 策略资格不可用，资产变化候选会被硬门槛阻止。"))
+                }
+
+                let localQuantSource = "FCore Local Quant Engine · observation only"
+                if let quote = quotes[code] ?? marketDataByCode[code] {
+                    let iopv = marketReferenceByCode[code].flatMap { reference -> FIOPVObservation? in
+                        guard reference.securityCode == code, reference.hasFreshIOPV(at: contextCaptureTime),
+                              let value = reference.iopv else { return nil }
+                        return try? FIOPVObservation(securityCode: code, value: value,
+                            observedAt: reference.observedAt, fetchedAt: reference.fetchedAt,
+                            source: reference.source, quality: .complete)
+                    }
+                    if let reference = marketReferenceByCode[code],
+                       reference.securityCode == code,
+                       reference.source == FMarketQuoteTrustPolicy.tencentReferenceSource,
+                       reference.hasFreshIOPV(at: contextCaptureTime),
+                       let iopvValue = reference.iopv,
+                       let premium = Self.iopvPremiumPercent(price: reference.latestPrice, iopv: iopvValue) {
+                        observations.append(FContextObservation(
+                            dataClass: .iopv, subject: code, source: reference.source,
+                            reference: "method=(ETF价格/IOPV-1)*100;unit=percent",
+                            observedAt: reference.observedAt, capturedAt: contextCaptureTime,
+                            decimalValue: premium))
+                    }
+                    let assessment = FLocalQuantEngine.evaluate(
+                        quote: quote, dailyHistory: dailyKlineByCode[code],
+                        regime: securityRegimeByCode[code], iopv: iopv,
+                        sessionStatus: sessionStatus,
+                        mappedBenchmarkRegime: FMarketIndexSecurityMappingRegistry.mapping(for: code)
+                            .flatMap { marketIndexRegimesByCode[$0.indexCode] },
+                        mappedBenchmarkFetchedAt: FMarketIndexSecurityMappingRegistry.mapping(for: code)
+                            .flatMap { marketIndexRegimeFetchedAtByCode[$0.indexCode] },
+                        mappedBenchmarkIndexCode: FMarketIndexSecurityMappingRegistry.mapping(for: code)?.indexCode,
+                        now: contextCaptureTime)
+                    let factorFacts = assessment.factors.map { factor in
+                        let value = factor.value.map(String.init) ?? "Unavailable"
+                        let score = factor.directionalScore.map(String.init) ?? "Unavailable"
+                        let observedAt = factor.observedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "Unavailable"
+                        let supportingDataAsOf = factor.supportingDataAsOf.map {
+                            ISO8601DateFormatter().string(from: $0)
+                        } ?? "Unavailable"
+                        let source = factor.source ?? "Unavailable"
+                        let reason = factor.unavailableReason.map { ";reason=\($0)" } ?? ""
+                        let quality = factor.qualityNote.map { ";quality=\($0)" } ?? ""
+                        return "\(factor.kind.rawValue)=\(value);directionalScore=\(score);observedAt=\(observedAt);supportingDataAsOf=\(supportingDataAsOf);source=\(source)\(quality)\(reason)"
+                    }.joined(separator: "|")
+                    let strategyFacts = assessment.strategies.map {
+                        "\($0.strategy.rawValue)=\($0.readiness.rawValue);qualified=\($0.qualified);reason=\($0.reasonCode)"
+                    }.joined(separator: "|")
+                    let quoteTimestamp = assessment.quoteTimestamp.map {
+                        ISO8601DateFormatter().string(from: $0)
+                    } ?? "Unavailable"
+                    let regimeName = assessment.marketRegime?.rawValue ?? "Unavailable"
+                    let riskName = assessment.riskLevel.map { String($0.rawValue) } ?? "Unavailable"
+                    let benchmarkCode = assessment.benchmarkIndexCode ?? "NotMapped"
+                    let benchmarkRegime = assessment.benchmarkRegime?.rawValue ?? "Unavailable"
+                    let benchmarkRisk = assessment.benchmarkRiskLevel.map { String($0.rawValue) } ?? "Unavailable"
+                    let availableFactorCount = assessment.factors.filter(\.isAvailable).count
+                    let benchmarkReason = assessment.benchmarkUnavailableReason ?? "none"
+                    let reference = "version=observation-only-v1;quoteFreshness=\(assessment.quoteFreshness.rawValue);quoteTimestamp=\(quoteTimestamp);regime=\(regimeName);risk=\(riskName);benchmarkIndex=\(benchmarkCode);benchmarkRegime=\(benchmarkRegime);benchmarkRisk=\(benchmarkRisk);benchmarkReason=\(benchmarkReason);disposition=\(assessment.disposition.rawValue);candidatePlanGenerated=\(assessment.candidatePlanGenerated);availableFactorCount=\(availableFactorCount);reasonCodes=\(assessment.reasonCodes.joined(separator: ","));factors=[\(factorFacts)];strategies=[\(strategyFacts)]"
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: "local-quant:\(code)",
+                        source: localQuantSource, reference: String(reference.prefix(4_000)),
+                        observedAt: assessment.evaluatedAt, capturedAt: contextCaptureTime,
+                        decimalValue: Decimal(availableFactorCount)))
+                } else {
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: "local-quant:\(code)", source: localQuantSource,
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: "本次请求没有实时分钟快照，无法形成Local Quant因子观察。"))
+                }
+            }
+            let freshIndexRegimeCodes = marketIndexRegimesByCode.keys.sorted().filter { code in
+                guard let fetchedAt = marketIndexRegimeFetchedAtByCode[code],
+                      let regime = marketIndexRegimesByCode[code], regime.regime != .dataUnreliable,
+                      let dataAsOf = regime.dataAsOf, dataAsOf <= fetchedAt,
+                      Self.isMarketRegimeDataFresh(regime, at: contextCaptureTime) else { return false }
+                return fetchedAt <= contextCaptureTime &&
+                    contextCaptureTime.timeIntervalSince(fetchedAt) <= FContextDataClass.quantState.maximumAge
+            }
+            let freshIndexRegimeSet = Set(freshIndexRegimeCodes)
+            for code in freshIndexRegimeCodes {
+                guard let regime = marketIndexRegimesByCode[code],
+                      let fetchedAt = marketIndexRegimeFetchedAtByCode[code] else { continue }
+                let dataAsOf = regime.dataAsOf.map { ISO8601DateFormatter().string(from: $0) } ?? "Unavailable"
+                let reference = "indexCode=\(code); regime=\(regime.regime.rawValue); risk=\(regime.riskLevel.rawValue); confidence=\(regime.confidence); dataAsOf=\(dataAsOf); securityMapping=Unavailable"
+                observations.append(FContextObservation(
+                    dataClass: .quantState, subject: "index:\(code)", source: "F NAS index daily history + FCore Market Regime Engine",
+                    reference: reference, observedAt: fetchedAt, capturedAt: contextCaptureTime,
+                    decimalValue: Decimal(regime.confidence)))
+            }
+            for code in FMarketIndexHTTPClient.indexCodes where !freshIndexRegimeSet.contains(code) {
+                observations.append(FContextObservation(
+                    dataClass: .quantState, subject: "index:\(code)",
+                    source: "F NAS index daily history + FCore Market Regime Engine",
+                    observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                    unavailableReason: "\(marketIndexRegimeStatusByCode[code] ?? "尚未读取该指数Regime")；不等待 NAS，也不推断该指数与持仓证券的对应关系。"))
+            }
+            for code in targetCodes {
+                guard let mapping = FMarketIndexSecurityMappingRegistry.mapping(for: code) else { continue }
+                let mappedRegime = marketIndexRegimesByCode[mapping.indexCode]
+                let fetchedAt = marketIndexRegimeFetchedAtByCode[mapping.indexCode]
+                if let regime = mappedRegime, regime.regime != .dataUnreliable,
+                   Self.isMarketRegimeDataFresh(regime, at: contextCaptureTime),
+                   let dataAsOf = regime.dataAsOf, let fetchedAt,
+                   dataAsOf <= fetchedAt, fetchedAt <= contextCaptureTime,
+                   contextCaptureTime.timeIntervalSince(fetchedAt) <= FContextDataClass.quantState.maximumAge {
+                    let dataAsOf = regime.dataAsOf.map { ISO8601DateFormatter().string(from: $0) } ?? "Unavailable"
+                    let reference = "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.regime.rawValue);risk=\(regime.riskLevel.rawValue);confidence=\(regime.confidence);dataAsOf=\(dataAsOf);not_strategy_qualification=true"
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: "mapped-index:\(code)",
+                        source: "F Verified Issuer Index Mapping + NAS Daily Regime",
+                        reference: reference, observedAt: fetchedAt, capturedAt: contextCaptureTime,
+                        decimalValue: Decimal(regime.confidence)))
+                } else {
+                    observations.append(FContextObservation(
+                        dataClass: .quantState, subject: "mapped-index:\(code)",
+                        source: "F Verified Issuer Index Mapping + NAS Daily Regime",
+                        observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                        unavailableReason: "\(mapping.indexName)已由基金发行方确认是该ETF基准，但对应新鲜历史Regime暂不可用；本记录不代替ETF自身行情/IOPV/溢价/流动性，也不构成策略资格。"))
+                }
+            }
+            for code in targetCodes {
+                observations.append(FContextObservation(
+                    dataClass: .quantState, subject: "risk-gate:\(code)", source: "F App Local Quant / Risk Gate",
+                    observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
+                    unavailableReason: "Local Quant因子观察已接入，但NAS验证策略参数包及资格尚未接入；BUY/SELL/T_BUY/T_SELL候选当前会被硬门槛阻止。其余候选仍会经过确定性 Risk Guard 与 AI Guard。"))
+            }
             if let feed = marketNewsFeed, !feed.articles.isEmpty,
                let latestPublishedAt = feed.articles.map(\.publishedAt).max() {
                 let payload = FNewsEvidencePayload(
@@ -786,25 +1185,44 @@ final class FHomeModel: ObservableObject {
                     decimalValue: Decimal(feed.articles.count)))
             }
             for code in targetCodes {
-                if let quote = quotes[code], let price = quote.latestPrice {
+                let cachedQuote = quotes[code]
+                if let reference = marketReferenceByCode[code],
+                   reference.hasFreshReference(at: contextCaptureTime) {
+                    observations.append(FContextObservation(
+                        dataClass: .previousClose, subject: code, source: reference.source,
+                        reference: "前收=\(reference.previousClose);时点=\(reference.observedAt.ISO8601Format())",
+                        observedAt: reference.observedAt, capturedAt: contextCaptureTime,
+                        decimalValue: reference.previousClose))
+                }
+                let quoteMetadata = cachedQuote.map { quote in
+                    FQuoteTemporalMetadata(
+                        quoteTimestamp: quote.quoteTimestamp, fetchedAt: quote.fetchedAt,
+                        source: quote.source, timestampTrust: .verifiedExchangeTimestamp,
+                        marketSessionStatus: sessionStatus)
+                }
+                if let quote = cachedQuote, let price = quote.latestPrice,
+                   let quoteMetadata, quoteMetadata.freshness(at: contextCaptureTime) == .fresh {
                     observations.append(FContextObservation(
                         dataClass: .quote, subject: code, source: quote.source,
                         reference: quote.source, observedAt: quote.quoteTimestamp,
                         capturedAt: min(contextCaptureTime, quote.fetchedAt), decimalValue: price,
-                        quoteTemporalMetadata: FQuoteTemporalMetadata(
-                            quoteTimestamp: quote.quoteTimestamp, fetchedAt: quote.fetchedAt,
-                            source: quote.source, timestampTrust: .verifiedExchangeTimestamp,
-                            marketSessionStatus: sessionStatus)))
+                        quoteTemporalMetadata: quoteMetadata))
                     quoteStatuses.append("\(code) ¥\(price) · \(quote.source) · 行情时 \(quote.quoteTimestamp.formatted(date: .abbreviated, time: .standard)) · 获取于 \(quote.fetchedAt.formatted(date: .abbreviated, time: .standard)) · \(sessionStatus.displayName)")
                 } else {
+                    let unavailableReason: String
+                    if let quote = cachedQuote {
+                        unavailableReason = "缓存行情已过期或时点未验证 · \(quote.source) · 行情时间 \(quote.quoteTimestamp.formatted(date: .abbreviated, time: .standard))"
+                    } else {
+                        unavailableReason = marketRefreshStateByCode[code] ?? "行情未返回有效分钟点"
+                    }
                     observations.append(FContextObservation(
                         dataClass: .quote, subject: code, source: FTencentMinuteParser.source,
                         observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
-                        unavailableReason: marketRefreshStateByCode[code] ?? "行情未返回有效分钟点",
+                        unavailableReason: unavailableReason,
                         quoteTemporalMetadata: FQuoteTemporalMetadata(
                             quoteTimestamp: nil, fetchedAt: nil, source: FTencentMinuteParser.source,
                             timestampTrust: .unavailable, marketSessionStatus: sessionStatus)))
-                    quoteStatuses.append("\(code) 行情不可用 · \(marketRefreshStateByCode[code] ?? "未返回分钟点")")
+                    quoteStatuses.append("\(code) 行情不可用 · \(unavailableReason)")
                 }
                 if let feed = newsByCode[code], let latestPublishedAt = feed.articles.map(\.publishedAt).max() {
                     let payload = FNewsEvidencePayload(
@@ -863,20 +1281,7 @@ final class FHomeModel: ObservableObject {
             let provider = FDeepSeekCandidateProvider(apiKey: apiKey)
             let modelAssessment = try await FAdvisorDecisionPipeline(model: provider).assess(
                 request: request, context: context, now: contextCaptureTime)
-            var guardFindings = modelAssessment.guardResult.findings
-            let requiresRealtimeQuant = [.buy, .sell, .dayTrade, .grid]
-                .contains(modelAssessment.candidate.action)
-            if requiresRealtimeQuant {
-                guardFindings.append(.incompleteTradingEvidence(
-                    "本地 Quant Engine 尚未接入；当前不会放行资产变化 Candidate"))
-            }
-            let uniqueGuardFindings = Array(Set(guardFindings)).sorted {
-                String(describing: $0) < String(describing: $1)
-            }
-            let assessment = FAdvisorDecisionAssessment(
-                candidate: modelAssessment.candidate,
-                guardResult: FDecisionGuardResult(allowedForReview: uniqueGuardFindings.isEmpty,
-                                                  findings: uniqueGuardFindings))
+            let assessment = modelAssessment
             let completedAt = Date()
             guard let ledgerAfterModel = try await ledgerStore.readLedgerSnapshot(now: completedAt),
                   ledgerAfterModel.ledgerDigest == freshLedger.ledgerDigest else {
@@ -944,26 +1349,47 @@ final class FHomeModel: ObservableObject {
 
     func loadArchivedIntraday(for code: String) async {
         let day = selectedHistoryDate
+        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        let generation = synchronizeNASDataSource(baseAddress: baseAddress)
         archiveRefreshStateByCode[code] = "正在查询 NAS 历史分时…"
         do {
-            let base = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
             let archive = try await FNASHistoricalMinuteClient.fetch(
-                baseAddress: base, securityCode: code, tradingDate: day)
+                baseAddress: baseAddress, securityCode: code, tradingDate: day)
+            let currentBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            guard synchronizeNASDataSource(baseAddress: currentBaseAddress) == generation else { return }
             guard Calendar.current.isDate(selectedHistoryDate, inSameDayAs: day) else { return }
+            if let current = archivedIntradayByCode[code],
+               current.tradingDate == archive.tradingDate,
+               current.fetchedAt > archive.fetchedAt {
+                archiveRefreshStateByCode[code] = "较旧的 NAS 响应已忽略；保留更新归档。"
+                return
+            }
             archivedIntradayByCode[code] = archive
             archiveRefreshStateByCode[code] = archive.samples.isEmpty
                 ? "\(archive.tradingDate) · NAS 无归档分钟点（\(archive.coverageStatus)）"
                 : "\(archive.tradingDate) · \(archive.coverageSummary) · 来源 \(archive.sourceSummary)"
         } catch {
+            guard synchronizeNASDataSource(
+                baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            ) == generation else { return }
             archiveRefreshStateByCode[code] = "NAS 历史分时不可用 · \(error.localizedDescription)"
             archivedIntradayByCode[code] = nil
         }
     }
 
     func refreshDailyKline(for code: String) async {
-        dailyKlineStateByCode[code] = "正在请求腾讯未复权日 K…"
+        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        let generation = synchronizeNASDataSource(baseAddress: baseAddress)
+        dailyKlineStateByCode[code] = "正在通过 NAS 读取证券历史日 K…"
         do {
-            let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code)
+            let snapshot = try await FNASecurityDailyHistoryClient.fetch(
+                baseAddress: baseAddress, securityCode: code)
+            let currentBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            guard synchronizeNASDataSource(baseAddress: currentBaseAddress) == generation else { return }
+            if let current = dailyKlineByCode[code], current.fetchedAt > snapshot.fetchedAt {
+                dailyKlineStateByCode[code] = "较旧的 NAS 响应已忽略；保留更新日 K。"
+                return
+            }
             dailyKlineByCode[code] = snapshot
             let evaluatedAt = Date()
             let regimeBars = snapshot.bars.map { bar in
@@ -976,13 +1402,20 @@ final class FHomeModel: ObservableObject {
                     volume: NSDecimalNumber(decimal: bar.volume).doubleValue
                 )
             }
+            let previousMemory = regimeMemoryByCode[code] ?? loadRegimeMemory(for: code)
             let regime = FMarketRegimeEngine.evaluate(
                 FMarketRegimeInput(
                     market: "security:\(code)", securityCode: code, asOf: evaluatedAt,
                     sourceUpdatedAt: snapshot.fetchedAt, source: snapshot.source, bars: regimeBars
-                ),
+                ), previous: previousMemory,
                 now: evaluatedAt
             )
+            if regime.regime != .dataUnreliable {
+                regimeMemoryByCode[code] = regime.memory
+                if let data = try? JSONEncoder().encode(regime.memory) {
+                    UserDefaults.standard.set(data, forKey: regimeMemoryKey(for: code))
+                }
+            }
             securityRegimeByCode[code] = regime
             let availableFactors = regime.factors.filter(\.available).count
             let dataTime = regime.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
@@ -990,9 +1423,12 @@ final class FHomeModel: ObservableObject {
                 "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
-            dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
+            dailyKlineStateByCode[code] = "\(count) 个 NAS 归档真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
                 (missing.isEmpty ? "" : " · MA\(missing.map { String($0) }.joined(separator: "/"))样本不足")
         } catch {
+            guard synchronizeNASDataSource(
+                baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            ) == generation else { return }
             dailyKlineStateByCode[code] = "日 K 不可用 · \(error.localizedDescription)"
             dailyKlineByCode[code] = nil
             securityRegimeByCode[code] = nil
@@ -1003,18 +1439,105 @@ final class FHomeModel: ObservableObject {
     private func researchSummaryStatus(code: String, evidence: FDecisionResearchEvidence, now: Date) -> String {
         let envelope = evidence.envelope
         let ageHours = max(0, Int(now.timeIntervalSince(envelope.observedAt) / 3_600))
-        return "\(code) · researchGeneratedAt \(envelope.generatedAt) · dataRange \(envelope.range.start)→\(envelope.range.end) · sampleCount \(envelope.qualifiedIndependentDays)独立交易日 · strategyVersion 未提供 · freshness 有效/\(ageHours)小时前"
+        let dataRange = envelope.dataRange.map { "\($0.start)→\($0.end)" } ?? "Unavailable"
+        let strategyVersion = envelope.strategyVersion ?? "Unavailable"
+        return "\(code) · researchGeneratedAt \(envelope.generatedAt) · dataRange \(dataRange) · sampleCount \(envelope.qualifiedIndependentDays)独立交易日 · strategyVersion \(strategyVersion) · methodologyVersion \(envelope.methodologyVersion) · freshness 有效/\(ageHours)小时前"
     }
 
-    private func refreshNASResearchEvidence(for codes: [String]) async {
-        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+    private func regimeMemoryKey(for code: String) -> String {
+        let endpoint = nasDataSourceKey ?? "unconfigured"
+        let namespace = SHA256.hash(data: Data(endpoint.utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        return "guanpan.f.regime.memory.v2.\(namespace).\(code)"
+    }
+
+    private static func isMarketRegimeDataFresh(_ assessment: FMarketRegimeAssessment, at now: Date) -> Bool {
+        guard let dataAsOf = assessment.dataAsOf,
+              dataAsOf.timeIntervalSince1970.isFinite,
+              dataAsOf <= now else { return false }
+        return now.timeIntervalSince(dataAsOf) <= 5 * 86_400
+    }
+
+    private func loadRegimeMemory(for code: String) -> FMarketRegimeMemory? {
+        guard let data = UserDefaults.standard.data(forKey: regimeMemoryKey(for: code)),
+              let memory = try? JSONDecoder().decode(FMarketRegimeMemory.self, from: data) else {
+            return nil
+        }
+        regimeMemoryByCode[code] = memory
+        return memory
+    }
+
+    private func synchronizeNASDataSource(baseAddress: String) -> UInt64 {
+        let endpointKey = nasResearchEndpointKey(for: baseAddress)
+        guard endpointKey != nasDataSourceKey else { return nasDataGeneration }
+        nasDataSourceKey = endpointKey
+        nasDataGeneration &+= 1
+        nasResearchEvidenceByCode.removeAll()
+        refreshingNASResearchCodes.removeAll()
+        var archiveCodes = Set(archiveRefreshStateByCode.keys)
+        archiveCodes.formUnion(archivedIntradayByCode.keys)
+        if let selectedInstrumentCode { archiveCodes.insert(selectedInstrumentCode) }
+        archivedIntradayByCode.removeAll()
+        for code in archiveCodes {
+            archiveRefreshStateByCode[code] = "NAS 地址已更改；请重新读取历史分钟。"
+        }
+        var dailyCodes = Set(dailyKlineStateByCode.keys)
+        dailyCodes.formUnion(dailyKlineByCode.keys)
+        dailyCodes.formUnion(holdings.map(\.instrumentCode))
+        if let selectedInstrumentCode { dailyCodes.insert(selectedInstrumentCode) }
+        dailyKlineByCode.removeAll()
+        for code in dailyCodes {
+            dailyKlineStateByCode[code] = "NAS 地址已更改；请重新读取证券日 K。"
+        }
+        securityRegimeByCode.removeAll()
+        securityRegimeStatusByCode.removeAll()
+        marketIndexRegimesByCode.removeAll()
+        marketIndexRegimeFetchedAtByCode.removeAll()
+        marketIndexRegimeStatusByCode = FMarketIndexHTTPClient.indexCodes.reduce(into: [:]) {
+            $0[$1] = endpointKey == nil
+                ? "历史 Regime 不可用 · 未配置有效 NAS 地址"
+                : "NAS 地址已更改；需要重新读取指数历史"
+        }
+        regimeMemoryByCode.removeAll()
+        nasResearchStatus = endpointKey == nil
+            ? "历史Quant研究摘要暂不可用。未配置有效 NAS 地址。"
+            : "NAS 地址已更改；历史研究摘要与历史状态正在刷新。"
+        return nasDataGeneration
+    }
+
+    func nasAddressDidChange(_ baseAddress: String) {
+        let previousKey = nasDataSourceKey
+        _ = synchronizeNASDataSource(baseAddress: baseAddress)
+        guard previousKey != nasDataSourceKey else { return }
+        nasConnectionStatus = FNASReadinessClient.validateAddress(baseAddress) == nil
+            ? "NAS 地址无效；历史数据暂不可用。"
+            : "NAS 地址已更改；请保存并测试连接。"
+    }
+
+    private func nasResearchEndpointKey(for baseAddress: String) -> String? {
+        FNASReadinessClient.validateAddress(baseAddress).flatMap { url in
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+            components.scheme = components.scheme?.lowercased()
+            components.host = components.host?.lowercased()
+            components.path = ""
+            components.query = nil
+            components.fragment = nil
+            return components.string
+        }
+    }
+
+    private func refreshNASResearchEvidence(for codes: [String], baseAddress: String,
+                                            expectedGeneration: UInt64) async {
+        let currentBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        guard synchronizeNASDataSource(baseAddress: currentBaseAddress) == expectedGeneration,
+              nasResearchEndpointKey(for: baseAddress) == nasDataSourceKey else { return }
         guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
             nasResearchStatus = "历史Quant研究摘要暂不可用。未配置NAS；顾问继续分析。"
             return
         }
-        let pending = codes.filter { !refreshingNASResearchCodes.contains($0) }
+        let pending = codes.filter { refreshingNASResearchCodes[$0] != expectedGeneration }
         guard !pending.isEmpty else { return }
-        for code in pending { refreshingNASResearchCodes.insert(code) }
+        for code in pending { refreshingNASResearchCodes[code] = expectedGeneration }
         await withTaskGroup(of: (String, FDecisionResearchEvidence?).self) { group in
             for code in pending {
                 group.addTask {
@@ -1028,12 +1551,20 @@ final class FHomeModel: ObservableObject {
                 }
             }
             for await (code, evidence) in group {
-                refreshingNASResearchCodes.remove(code)
+                if refreshingNASResearchCodes[code] == expectedGeneration {
+                    refreshingNASResearchCodes.removeValue(forKey: code)
+                }
+                guard synchronizeNASDataSource(
+                    baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+                ) == expectedGeneration else { continue }
                 if let evidence {
                     nasResearchEvidenceByCode[code] = evidence
                 }
             }
         }
+        guard synchronizeNASDataSource(
+            baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        ) == expectedGeneration else { return }
         let checkedAt = Date()
         let usable = codes.compactMap { code -> String? in
             guard let evidence = nasResearchEvidenceByCode[code],
@@ -1045,7 +1576,63 @@ final class FHomeModel: ObservableObject {
             : usable.joined(separator: "；")
     }
 
+    private func newsFeedStatus(_ feed: FNewsFeed, targetCodes: [String]) -> String {
+        let associatedCount = targetCodes.filter { !$0.isEmpty && !feed.articlesAssociated(with: $0).isEmpty }.count
+        let fetched = feed.fetchedAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(feed.provider) · 缓存 \(feed.articles.count) 条 · \(associatedCount)/\(targetCodes.count) 个标的有直接关联 · 获取于 \(fetched) · 不关联的标的不作个股归因"
+    }
+
+    private func refreshNewsFeedInBackground(for targetCodes: [String]) {
+        let now = Date()
+        guard !targetCodes.isEmpty else {
+            newsStatus = "当前没有目标证券，跳过证券关联快讯"
+            return
+        }
+        if newsRefreshTask != nil {
+            if cachedNewsFeed?.recent(at: now) == nil {
+                newsStatus = "新闻后台更新中；本轮分析不等待新闻源"
+            }
+            return
+        }
+        if let lastAttempt = newsLastAttemptAt, now.timeIntervalSince(lastAttempt) < 120 {
+            if cachedNewsFeed?.recent(at: now) == nil {
+                newsStatus = "新闻源最近没有可用快讯；本轮继续分析，稍后再试"
+            }
+            return
+        }
+        newsLastAttemptAt = now
+        if cachedNewsFeed?.recent(at: now) == nil {
+            newsStatus = "新闻后台更新中；本轮分析不等待新闻源"
+        }
+        newsRefreshTask = Task { [weak self] in
+            do {
+                let fetchedFeed = try await FNewsClient.fetchLatest()
+                guard let self else { return }
+                let completedAt = Date()
+                let priorFreshFeed = self.cachedNewsFeed?.recent(at: completedAt)
+                self.cachedNewsFeed = FNewsFeedCachePolicy.replacement(
+                    existing: self.cachedNewsFeed, received: fetchedFeed, at: completedAt)
+                if let recent = fetchedFeed.recent(at: completedAt) {
+                    self.newsStatus = self.newsFeedStatus(recent, targetCodes: targetCodes)
+                } else if let priorFreshFeed {
+                    self.newsStatus = "\(self.newsFeedStatus(priorFreshFeed, targetCodes: targetCodes)) · 新响应无有效快讯，保留原缓存"
+                } else {
+                    self.newsStatus = "新闻源已响应，但没有近24小时的有效快讯"
+                }
+            } catch {
+                guard let self else { return }
+                if let recent = self.cachedNewsFeed?.recent(at: Date()) {
+                    self.newsStatus = "\(self.newsFeedStatus(recent, targetCodes: targetCodes)) · 后台更新失败：\(error.localizedDescription)"
+                } else {
+                    self.newsStatus = "新闻后台更新失败 · \(error.localizedDescription)"
+                }
+            }
+            self?.newsRefreshTask = nil
+        }
+    }
+
     func configureAndTestNAS(baseAddress: String) async {
+        let generation = synchronizeNASDataSource(baseAddress: baseAddress)
         guard FNASReadinessClient.validateAddress(baseAddress) != nil else {
             nasConnectionStatus = FNASConnectionError.invalidAddress.localizedDescription
             return
@@ -1053,58 +1640,98 @@ final class FHomeModel: ObservableObject {
         checkingNASConnection = true
         nasConnectionStatus = "正在检查 NAS 就绪状态…"
         defer { checkingNASConnection = false }
-        do { nasConnectionStatus = try await FNASReadinessClient.check(baseAddress: baseAddress) }
-        catch { nasConnectionStatus = FNASReadinessClient.connectionHint(for: error) }
+        do {
+            let status = try await FNASReadinessClient.check(baseAddress: baseAddress)
+            guard synchronizeNASDataSource(
+                baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            ) == generation else { return }
+            nasConnectionStatus = status
+        } catch {
+            guard synchronizeNASDataSource(
+                baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+            ) == generation else { return }
+            nasConnectionStatus = FNASReadinessClient.connectionHint(for: error)
+        }
+    }
+
+    func refreshMarketIndices() async {
+        guard !refreshingMarketIndices else { return }
+        refreshingMarketIndices = true
+        marketIndicesError = nil
+        defer { refreshingMarketIndices = false }
+        let quotes = await FMarketIndexHTTPClient.fetchAll()
+        marketIndexQuotes = quotes
+        marketIndicesUpdatedAt = Date()
+        let availableCount = quotes.filter(\.isAvailable).count
+        if availableCount == 0 {
+            marketIndicesError = "指数行情源当前均未返回有效数据；未使用 NAS 或缓存值代替实时行情。"
+        } else if availableCount < quotes.count {
+            marketIndicesError = "部分指数暂不可用；各项显示自己的来源与时间状态。"
+        }
+    }
+
+    func refreshHistoricalIndexRegimes() async {
+        guard !refreshingMarketIndexRegimes else { return }
+        refreshingMarketIndexRegimes = true
+        var retryForChangedNAS = false
+        defer {
+            refreshingMarketIndexRegimes = false
+            if retryForChangedNAS {
+                Task { await refreshHistoricalIndexRegimes() }
+            }
+        }
+        marketIndexRegimeStatusByCode = FMarketIndexHTTPClient.indexCodes.reduce(into: [:]) {
+            $0[$1] = "正在更新已完成交易日的指数 Regime…"
+        }
+        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        let generation = synchronizeNASDataSource(baseAddress: baseAddress)
+        let previous = Dictionary(uniqueKeysWithValues: FMarketIndexHTTPClient.indexCodes.compactMap { code in
+            (regimeMemoryByCode[code] ?? loadRegimeMemory(for: code)).map { (code, $0) }
+        })
+        let result = await FMarketIndexHTTPClient.fetchDailyRegimes(previous: previous,
+                                                                     nasBaseAddress: baseAddress)
+        let currentBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
+        guard synchronizeNASDataSource(baseAddress: currentBaseAddress) == generation else {
+            marketIndexRegimeStatusByCode = FMarketIndexHTTPClient.indexCodes.reduce(into: [:]) {
+                $0[$1] = "NAS 地址已更改；旧地址指数结果已丢弃，正在重读。"
+            }
+            retryForChangedNAS = true
+            return
+        }
+        marketIndexRegimesByCode = result.assessments
+        marketIndexRegimeFetchedAtByCode = result.fetchedAtByCode
+        marketIndexRegimeStatusByCode = result.statuses
+        for (code, assessment) in result.assessments where assessment.regime != .dataUnreliable {
+            regimeMemoryByCode[code] = assessment.memory
+            if let data = try? JSONEncoder().encode(assessment.memory) {
+                UserDefaults.standard.set(data, forKey: regimeMemoryKey(for: code))
+            }
+        }
+    }
+
+    private static func isValidSixDigitSecurityCode(_ code: String) -> Bool {
+        let bytes = code.utf8
+        return bytes.count == 6 && bytes.allSatisfy { (48...57).contains($0) }
     }
 
     func refreshMarketData(for requestedCodes: [String]? = nil) async {
         let codes = Set(requestedCodes ?? (holdings.map(\.instrumentCode) + [selectedInstrumentCode].compactMap { $0 }))
-            .filter { $0.count == 6 && $0.allSatisfy(\.isNumber) }
+            .filter { Self.isValidSixDigitSecurityCode($0) }
             .sorted()
-        let pending = codes.filter { !refreshingMarketCodes.contains($0) }
-        guard !pending.isEmpty else { return }
-        for code in pending {
+        guard !codes.isEmpty else { return }
+        for code in codes where marketRefreshTasks[code] == nil {
             refreshingMarketCodes.insert(code)
             marketRefreshStateByCode[code] = "正在请求实时分时…"
+            marketRefreshTasks[code] = Task { await performMarketRefresh(for: code) }
         }
-        await withTaskGroup(of: (String, FCurrentIntradaySnapshot?, String?).self) { group in
-            for code in pending {
-                group.addTask {
-                    do { return (code, try await FQuoteHTTPClient.fetchCurrentMinutes(code: code), nil) }
-                    catch { return (code, nil, error.localizedDescription) }
-                }
-            }
-            for await (code, snapshot, error) in group {
-                refreshingMarketCodes.remove(code)
-                if let snapshot {
-                    if let old = marketDataByCode[code],
-                       old.quoteTimestamp > snapshot.quoteTimestamp {
-                        marketRefreshStateByCode[code] = "上游数据较旧 · 保留较新图表缓存"
-                    } else {
-                        marketDataByCode[code] = snapshot
-                        marketRefreshStateByCode[code] = "已更新 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
-                    }
-                    if let candidateShadowJournalStore,
-                       let price = snapshot.latestPrice, price > 0 {
-                        do {
-                            let observation = try FCandidateShadowMarketObservation(
-                                securityCode: code, price: price,
-                                quoteTimestamp: snapshot.quoteTimestamp, capturedAt: snapshot.fetchedAt,
-                                source: snapshot.source, timestampTrust: .verifiedExchangeTimestamp,
-                                sessionStatus: FMainlandTradingCalendar.status(at: snapshot.fetchedAt))
-                            try await candidateShadowJournalStore.appendMarketObservation(observation)
-                        } catch {
-                            candidateShadowJournalStatus = "行情更新成功；建议影子行情未记录 · \(error.localizedDescription)"
-                        }
-                    }
-                } else {
-                    marketRefreshStateByCode[code] = "更新失败 · \(error ?? "来源没有返回数据")"
-                }
-            }
-        }
+        // UI refresh and Advisor may request the same code concurrently. Both
+        // callers await the shared fetch so Advisor never races ahead with an
+        // older cached quote merely because another request is already active.
+        let activeTasks = codes.compactMap { marketRefreshTasks[$0] }
+        for task in activeTasks { await task.value }
         // Reference fields (previous close / ETF IOPV) are refreshed separately:
         // a slow or unavailable auxiliary quote must never hold up the live minute chart.
-        for code in pending where !refreshingReferenceCodes.contains(code) {
+        for code in codes where !refreshingReferenceCodes.contains(code) {
             refreshingReferenceCodes.insert(code)
             Task {
                 defer { refreshingReferenceCodes.remove(code) }
@@ -1118,6 +1745,61 @@ final class FHomeModel: ObservableObject {
                     marketReferenceByCode.removeValue(forKey: code)
                     marketReferenceStateByCode[code] = error.localizedDescription
                 }
+            }
+        }
+    }
+
+    private func performMarketRefresh(for code: String) async {
+        defer {
+            refreshingMarketCodes.remove(code)
+            marketRefreshTasks.removeValue(forKey: code)
+        }
+        do {
+            let snapshot = try await FQuoteHTTPClient.fetchCurrentMinutes(code: code)
+            let isNewerThanCache = marketDataByCode[code].map {
+                $0.quoteTimestamp <= snapshot.quoteTimestamp
+            } ?? true
+            guard isNewerThanCache else {
+                marketRefreshStateByCode[code] = "上游数据较旧 · 保留较新图表缓存"
+                return
+            }
+            marketDataByCode[code] = snapshot
+            marketRefreshStateByCode[code] = "已更新 · 行情时间 \(snapshot.quoteTimestamp.formatted(date: .omitted, time: .standard))"
+            if let marketQuoteCache {
+                Task { [weak self] in
+                    do {
+                        try await marketQuoteCache.save(snapshot)
+                        guard let self, self.marketDataByCode[code]?.fetchedAt == snapshot.fetchedAt,
+                              self.marketRefreshStateByCode[code]?.hasPrefix("已更新") == true else { return }
+                        self.marketRefreshStateByCode[code] =
+                            (self.marketRefreshStateByCode[code] ?? "已更新") + " · 已保存本机缓存"
+                    } catch {
+                        guard let self, self.marketDataByCode[code]?.fetchedAt == snapshot.fetchedAt,
+                              self.marketRefreshStateByCode[code]?.hasPrefix("已更新") == true else { return }
+                        self.marketRefreshStateByCode[code] = "已更新但本机缓存保存失败 · \(error.localizedDescription)"
+                    }
+                }
+            } else {
+                marketRefreshStateByCode[code] += " · 本机离线缓存不可用"
+            }
+            if let candidateShadowJournalStore,
+               let price = snapshot.latestPrice, price > 0 {
+                do {
+                    let observation = try FCandidateShadowMarketObservation(
+                        securityCode: code, price: price,
+                        quoteTimestamp: snapshot.quoteTimestamp, capturedAt: snapshot.fetchedAt,
+                        source: snapshot.source, timestampTrust: .verifiedExchangeTimestamp,
+                        sessionStatus: FMainlandTradingCalendar.status(at: snapshot.fetchedAt))
+                    try await candidateShadowJournalStore.appendMarketObservation(observation)
+                } catch {
+                    candidateShadowJournalStatus = "行情更新成功；建议影子行情未记录 · \(error.localizedDescription)"
+                }
+            }
+        } catch {
+            if let cached = marketDataByCode[code] {
+                marketRefreshStateByCode[code] = "更新失败 · 保留本机最近报价供离线查看 · 行情时间 \(cached.quoteTimestamp.formatted(date: .abbreviated, time: .standard)) · \(error.localizedDescription)"
+            } else {
+                marketRefreshStateByCode[code] = "更新失败 · \(error.localizedDescription)"
             }
         }
     }
@@ -1149,6 +1831,7 @@ final class FHomeModel: ObservableObject {
     }
 
     func autoRefreshMarketData() async {
+        guard FMainlandTradingCalendar.status(at: Date()) == .continuous else { return }
         let codes = Array(Set(holdings.map(\.instrumentCode) + watchlistCodes +
             [selectedInstrumentCode].compactMap { $0 })).sorted()
         guard !codes.isEmpty else { return }
@@ -1254,15 +1937,325 @@ struct FHomeRoot: View {
                 }
         }
         .background(theme.background.ignoresSafeArea())
-        .environment(\.colorScheme, .light)
         .toolbarBackground(theme.manifest.tokens.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(theme == .dashboard ? .dark : .light, for: .navigationBar)
         .tint(theme.accent)
     }
 }
 
 private enum FPrimaryTab: Hashable { case home, market, advisor, assets, settings }
+
+private enum FMarketIndexHTTPClient {
+    private struct Definition: Sendable {
+        let code: String
+        let name: String
+        let market: String
+        let timeZone: String
+        let provider: String
+    }
+
+    private static let definitions = [
+        Definition(code: "sh000001", name: "上证指数", market: "中国", timeZone: "Asia/Shanghai", provider: "Tencent"),
+        Definition(code: "sz399001", name: "深证成指", market: "中国", timeZone: "Asia/Shanghai", provider: "Tencent"),
+        Definition(code: "sh000300", name: "沪深300", market: "中国", timeZone: "Asia/Shanghai", provider: "Tencent"),
+        Definition(code: "sh000510", name: "中证A500", market: "中国", timeZone: "Asia/Shanghai", provider: "Tencent"),
+        Definition(code: "sz399006", name: "创业板指", market: "中国", timeZone: "Asia/Shanghai", provider: "Tencent"),
+        Definition(code: "usNDX", name: "纳斯达克100", market: "美国", timeZone: "America/New_York", provider: "Tencent"),
+        Definition(code: "int_nikkei", name: "日经225", market: "日本", timeZone: "Asia/Tokyo", provider: "Nikkei Indexes"),
+        Definition(code: "KOSPI", name: "KOSPI", market: "韩国", timeZone: "Asia/Seoul", provider: "Naver"),
+        Definition(code: "hkHSI", name: "恒生指数", market: "香港", timeZone: "Asia/Hong_Kong", provider: "Tencent")
+    ]
+
+    static let emptyCatalog = definitions.map {
+        FMarketIndexQuote(code: $0.code, name: $0.name, market: $0.market,
+                          timeZoneIdentifier: $0.timeZone, latestPrice: nil,
+                          changePercent: nil, observedAt: nil, fetchedAt: nil,
+                          source: nil, marketStatus: nil, unavailableReason: "尚未读取")
+    }
+
+    static let indexCodes = definitions.map(\.code)
+    static let regimeStatusCatalog = Dictionary(uniqueKeysWithValues: definitions.map {
+        ($0.code, "历史 Regime 尚未读取")
+    })
+
+    private struct DailyRegimeResult: Sendable {
+        let code: String
+        let history: FNASArchivedIndexDaily?
+        let previous: FMarketRegimeMemory?
+        let status: String
+    }
+
+    static func fetchDailyRegimes(previous: [String: FMarketRegimeMemory], nasBaseAddress: String) async
+        -> (assessments: [String: FMarketRegimeAssessment], statuses: [String: String], fetchedAtByCode: [String: Date]) {
+        var assessments: [String: FMarketRegimeAssessment] = [:]
+        var statuses = regimeStatusCatalog
+        var fetchedAtByCode: [String: Date] = [:]
+        var results: [DailyRegimeResult] = []
+        let historical = definitions.filter { ["Tencent", "Nikkei Indexes", "Naver"].contains($0.provider) }
+        await withTaskGroup(of: DailyRegimeResult.self) { group in
+            for definition in definitions where !["Tencent", "Nikkei Indexes", "Naver"].contains(definition.provider) {
+                group.addTask {
+                    DailyRegimeResult(code: definition.code, history: nil, previous: nil,
+                        status: "当前公开源未提供已验证的跨市场指数日K；Regime 暂不可用")
+                }
+            }
+            for definition in historical {
+                let memory = previous[definition.code]
+                group.addTask {
+                    await fetchDailyRegime(for: definition, nasBaseAddress: nasBaseAddress,
+                                           previous: memory)
+                }
+            }
+            for await result in group {
+                results.append(result)
+            }
+        }
+        // Evaluate every index against one capture time. Peers are derived only
+        // from completed NAS archive bars and retain their own exchange timestamp,
+        // retrieval time, and provider identity. The core filters market, source,
+        // freshness, duplicate and session synchronization mismatches.
+        let evaluationTime = Date()
+        for result in results.sorted(by: { $0.code < $1.code }) {
+            statuses[result.code] = result.status
+            guard let history = result.history else { continue }
+            fetchedAtByCode[result.code] = history.fetchedAt
+            let benchmarks = results.compactMap { peer -> FMarketRegimeBenchmarkObservation? in
+                guard peer.code != result.code, let peerHistory = peer.history,
+                      peerHistory.bars.count >= 2,
+                      let previousBar = peerHistory.bars.dropLast().last,
+                      let latestBar = peerHistory.bars.last,
+                      previousBar.close.isFinite, previousBar.close > 0,
+                      latestBar.close.isFinite, latestBar.close > 0 else { return nil }
+                let sessionReturn = latestBar.close / previousBar.close - 1
+                guard sessionReturn.isFinite, (-1...1).contains(sessionReturn) else { return nil }
+                return FMarketRegimeBenchmarkObservation(
+                    marketContext: "index:\(result.code)", marketCode: peer.code,
+                    observedAt: latestBar.timestamp, sessionStartAt: previousBar.timestamp,
+                    capturedAt: peerHistory.fetchedAt,
+                    source: peerHistory.source, sessionReturn: sessionReturn)
+            }
+            let assessment = FMarketRegimeEngine.evaluate(
+                FMarketRegimeInput(market: "index:\(result.code)", asOf: evaluationTime,
+                    sourceUpdatedAt: history.fetchedAt, source: history.source,
+                    bars: history.bars, benchmarkObservations: benchmarks),
+                previous: result.previous, now: evaluationTime)
+            assessments[result.code] = assessment
+            let newestDate = assessment.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
+            statuses[result.code] = assessment.regime == .dataUnreliable
+                ? "历史 Regime 不可用 · \(history.bars.count) 根已完成日K · 最近数据 \(newestDate) · 数据不足或过旧"
+                : "历史 Regime \(assessment.regime.displayName) · \(assessment.riskLevel.displayName) · \(assessment.confidence)/100 · \(newestDate) 截止"
+        }
+        return (assessments, statuses, fetchedAtByCode)
+    }
+
+    private static func fetchDailyRegime(for definition: Definition, nasBaseAddress: String,
+                                         previous: FMarketRegimeMemory?) async -> DailyRegimeResult {
+        do {
+            let history = try await FNASIndexDailyHistoryClient.fetch(
+                baseAddress: nasBaseAddress, indexCode: definition.code)
+            return DailyRegimeResult(code: definition.code, history: history,
+                                     previous: previous, status: "历史日K已读取")
+        } catch {
+            return DailyRegimeResult(code: definition.code, history: nil, previous: previous,
+                status: "历史 Regime 暂不可用 · \(error.localizedDescription)")
+        }
+    }
+
+    static func fetchAll() async -> [FMarketIndexQuote] {
+        async let tencent = fetchTencentIndices()
+        async let sina = fetchSinaNikkei()
+        async let naver = fetchNaverKospi()
+        let results = await (tencent, sina, naver)
+        let quotes = results.0.merging(results.1) { _, latest in latest }
+            .merging(results.2) { _, latest in latest }
+        return definitions.map { quotes[$0.code] ?? unavailable($0, reason: "来源没有返回报价") }
+    }
+
+    private static func fetchTencentIndices() async -> [String: FMarketIndexQuote] {
+        let selected = definitions.filter { $0.provider == "Tencent" }
+        let symbols = selected.map(\.code).joined(separator: ",")
+        guard var components = URLComponents(string: "https://qt.gtimg.cn/") else {
+            return Dictionary(uniqueKeysWithValues: selected.map { ($0.code, unavailable($0, reason: "Tencent 地址无效")) })
+        }
+        components.queryItems = [URLQueryItem(name: "q", value: symbols)]
+        guard let url = components.url else {
+            return Dictionary(uniqueKeysWithValues: selected.map { ($0.code, unavailable($0, reason: "Tencent 地址无效")) })
+        }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Accept")
+        request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        do {
+            let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw FMarketDataError.invalidPayload
+            }
+            let responseText = String(decoding: data, as: UTF8.self)
+            let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                throw FMarketDataError.invalidPayload
+            }
+            var payloads: [String: String] = [:]
+            let fullRange = NSRange(responseText.startIndex..., in: responseText)
+            for match in regex.matches(in: responseText, range: fullRange) {
+                guard let codeRange = Range(match.range(at: 1), in: responseText),
+                      let bodyRange = Range(match.range(at: 2), in: responseText) else { continue }
+                payloads[String(responseText[codeRange])] = String(responseText[bodyRange])
+            }
+            let fetchedAt = Date()
+            return Dictionary(uniqueKeysWithValues: selected.map { definition in
+                guard let body = payloads[definition.code] else {
+                    return (definition.code, unavailable(definition, reason: "Tencent 没有返回该指数"))
+                }
+                let fields = body.split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+                guard fields.count > 32,
+                      let price = decimal(fields[3]), price > 0,
+                      let changePercent = decimal(fields[32]) else {
+                    return (definition.code, unavailable(definition, reason: "Tencent 指数响应字段无效"))
+                }
+                let observedAt = fields.count > 30 ? parseTencentTimestamp(fields[30], timeZone: definition.timeZone) : nil
+                guard observedAt.map({ $0 <= fetchedAt }) ?? true else {
+                    return (definition.code, unavailable(definition, reason: "Tencent 指数时间戳在未来"))
+                }
+                if let observedAt, fetchedAt.timeIntervalSince(observedAt) > 72 * 60 * 60 {
+                    return (definition.code, unavailable(definition, reason: "Tencent 指数行情时点已超过72小时"))
+                }
+                return (definition.code, FMarketIndexQuote(
+                    code: definition.code, name: definition.name, market: definition.market,
+                    timeZoneIdentifier: definition.timeZone, latestPrice: price,
+                    changePercent: changePercent, observedAt: observedAt, fetchedAt: fetchedAt,
+                    source: FMarketQuoteTrustPolicy.tencentReferenceSource, marketStatus: nil,
+                    unavailableReason: observedAt == nil ? "供应商未提供可识别的指数行情时点" : nil))
+            })
+        } catch {
+            return Dictionary(uniqueKeysWithValues: selected.map {
+                ($0.code, unavailable($0, reason: "Tencent 指数行情不可用：\(error.localizedDescription)"))
+            })
+        }
+    }
+
+    private static func fetchSinaNikkei() async -> [String: FMarketIndexQuote] {
+        guard let definition = definitions.first(where: { $0.code == "int_nikkei" }),
+              let url = URL(string: "https://hq.sinajs.cn/list=int_nikkei") else { return [:] }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("text/plain; charset=GBK", forHTTPHeaderField: "Accept")
+        request.setValue("https://finance.sina.com.cn/", forHTTPHeaderField: "Referer")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw FMarketDataError.invalidPayload
+            }
+            let text = String(decoding: data, as: UTF8.self)
+            let pattern = #"hq_str_int_nikkei="([^"]*)""#
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let range = Range(match.range(at: 1), in: text) else {
+                throw FMarketDataError.invalidPayload
+            }
+            let fields = text[range].split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            guard fields.count >= 4, let price = decimal(fields[1]), price > 0,
+                  let changePercent = decimal(fields[3]) else { throw FMarketDataError.invalidPayload }
+            let quote = FMarketIndexQuote(
+                code: definition.code, name: definition.name, market: definition.market,
+                timeZoneIdentifier: definition.timeZone, latestPrice: price,
+                changePercent: changePercent, observedAt: nil, fetchedAt: Date(),
+                source: FMarketQuoteTrustPolicy.sinaIndexSource, marketStatus: nil,
+                unavailableReason: "Sina 未提供可验证的指数行情时点；仅作行情观察，不进入 Regime/Quant")
+            return [definition.code: quote]
+        } catch {
+            return [definition.code: unavailable(definition,
+                reason: "日经指数行情不可用：\(error.localizedDescription)")]
+        }
+    }
+
+    private static func fetchNaverKospi() async -> [String: FMarketIndexQuote] {
+        guard let definition = definitions.first(where: { $0.code == "KOSPI" }),
+              let url = URL(string: "https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI") else { return [:] }
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rows = root["datas"] as? [[String: Any]],
+                  let item = rows.first, item["itemCode"] as? String == "KOSPI",
+                  let price = decimal(item["closePriceRaw"]), price > 0,
+                  let changePercent = decimal(item["fluctuationsRatioRaw"]) else {
+                throw FMarketDataError.invalidPayload
+            }
+            let observedAt = (item["localTradedAt"] as? String).flatMap(parseISO8601)
+            let fetchedAt = Date()
+            guard observedAt.map({ $0 <= fetchedAt }) ?? false else {
+                throw FMarketDataError.invalidPayload
+            }
+            guard let observedAt, fetchedAt.timeIntervalSince(observedAt) <= 72 * 60 * 60 else {
+                return [definition.code: unavailable(definition, reason: "KOSPI 指数行情时点已超过72小时或缺失")]
+            }
+            let status = item["marketStatus"] as? String
+            return [definition.code: FMarketIndexQuote(
+                code: definition.code, name: definition.name, market: definition.market,
+                timeZoneIdentifier: definition.timeZone, latestPrice: price,
+                changePercent: changePercent, observedAt: observedAt, fetchedAt: fetchedAt,
+                source: FMarketQuoteTrustPolicy.naverIndexSource, marketStatus: status,
+                unavailableReason: nil)]
+        } catch {
+            return [definition.code: unavailable(definition,
+                reason: "KOSPI 行情不可用：\(error.localizedDescription)")]
+        }
+    }
+
+    private static func unavailable(_ definition: Definition, reason: String) -> FMarketIndexQuote {
+        FMarketIndexQuote(code: definition.code, name: definition.name, market: definition.market,
+                          timeZoneIdentifier: definition.timeZone, latestPrice: nil,
+                          changePercent: nil, observedAt: nil, fetchedAt: nil,
+                          source: definition.provider, marketStatus: nil, unavailableReason: reason)
+    }
+
+    private static func iopvPremiumPercent(price: Decimal, iopv: Decimal) -> Decimal? {
+        guard price.isFinite, price > 0, iopv.isFinite, iopv > 0 else { return nil }
+        var price = price
+        var iopv = iopv
+        var ratio = Decimal.zero
+        guard NSDecimalDivide(&ratio, &price, &iopv, .plain) == .noError else { return nil }
+        var one = Decimal(1)
+        var premium = Decimal.zero
+        guard NSDecimalSubtract(&premium, &ratio, &one, .plain) == .noError else { return nil }
+        var hundred = Decimal(100)
+        var percent = Decimal.zero
+        guard NSDecimalMultiply(&percent, &premium, &hundred, .plain) == .noError,
+              percent.isFinite else { return nil }
+        return percent
+    }
+
+    private static func decimal(_ raw: Any?) -> Decimal? {
+        let text: String
+        if let value = raw as? String {
+            text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ",", with: "")
+        } else if let value = raw as? NSNumber {
+            guard CFGetTypeID(value) != CFBooleanGetTypeID() else { return nil }
+            text = value.stringValue
+        } else {
+            return nil
+        }
+        guard let number = Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")),
+              number.isFinite, NSDecimalNumber(decimal: number).doubleValue.isFinite else { return nil }
+        return number
+    }
+
+    private static func parseISO8601(_ raw: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+
+    private static func parseTencentTimestamp(_ raw: String, timeZone: String) -> Date? {
+        FMarketIndexTimestamp.parse(raw, timeZoneIdentifier: timeZone)
+    }
+}
 
 private enum FQuoteProviderError: LocalizedError {
     case bothProvidersFailed(tencent: String, eastmoney: String)
@@ -1308,7 +2301,7 @@ private enum FQuoteHTTPClient {
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
         request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FMarketDataError.invalidPayload
         }
@@ -1334,7 +2327,7 @@ private enum FQuoteHTTPClient {
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue("https://quote.eastmoney.com/", forHTTPHeaderField: "Referer")
         request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FMarketDataError.invalidPayload
         }
@@ -1361,6 +2354,7 @@ private enum FQuoteHTTPClient {
                   let stamp = formatter.date(from: fields[0]),
                   stamp <= fetchedAt,
                   !fields[0].hasSuffix("09:30"),
+                  FMainlandTradingCalendar.isContinuousSessionTime(at: stamp, timeZone: timeZone),
                   let price = Decimal(string: fields[1], locale: Locale(identifier: "en_US_POSIX")),
                   price > 0 else { continue }
             byTimestamp[stamp] = FMinuteSample(timestamp: stamp, price: price)
@@ -1376,25 +2370,8 @@ private enum FQuoteHTTPClient {
             samples: samples,
             quoteTimestamp: latest,
             fetchedAt: fetchedAt,
-            source: "Eastmoney push2 实时分钟（Tencent 备用源）"
+            source: FMarketQuoteTrustPolicy.eastmoneyMinuteSource
         )
-    }
-
-    static func fetchDailyKline(code: String) async throws -> FDailyKlineSnapshot {
-        let symbol = try FTencentMinuteParser.symbol(for: code)
-        guard var components = URLComponents(string: "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get") else {
-            throw FMarketDataError.invalidPayload
-        }
-        components.queryItems = [URLQueryItem(name: "param", value: "\(symbol),day,,,300,")]
-        guard let url = components.url else { throw FMarketDataError.invalidPayload }
-        var request = URLRequest(url: url, timeoutInterval: 10)
-        request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
-        request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw FMarketDataError.invalidPayload
-        }
-        return try FTencentDailyKlineParser.parse(data, securityCode: code, fetchedAt: Date())
     }
 
     static func fetchMarketReference(code: String) async throws -> FTencentMarketReference {
@@ -1405,19 +2382,16 @@ private enum FQuoteHTTPClient {
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Accept")
         request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FMarketDataError.invalidPayload
         }
-        let text = String(decoding: data, as: UTF8.self)
-        let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let bodyRange = Range(match.range(at: 2), in: text) else { throw FMarketDataError.invalidPayload }
-        let fields = text[bodyRange].split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+        let fields = try FTencentTextQuoteParser.fields(data, expectedSymbol: symbol)
         guard fields.count > 30,
-              let price = Decimal(string: fields[3], locale: Locale(identifier: "en_US_POSIX")), price > 0,
-              let previousClose = Decimal(string: fields[4], locale: Locale(identifier: "en_US_POSIX")), previousClose > 0,
+              let price = Decimal(string: fields[3], locale: Locale(identifier: "en_US_POSIX")),
+              price.isFinite, price > 0,
+              let previousClose = Decimal(string: fields[4], locale: Locale(identifier: "en_US_POSIX")),
+              previousClose.isFinite, previousClose > 0,
               let observedAt = parseTencentTimestamp(fields[30]) else { throw FMarketDataError.invalidPayload }
         let instrumentType = fields.count > 61 ? fields[61].trimmingCharacters(in: .whitespacesAndNewlines).uppercased() : nil
         // Tencent occasionally omits the instrument-type field for ETFs. Match
@@ -1425,18 +2399,18 @@ private enum FQuoteHTTPClient {
         // intraday IOPV/premium semantics.
         let isETF = instrumentType == "ETF" || isTencentETFCode(code)
         let rawIOPV = isETF && fields.count > 78 ? parseTencentDecimal(fields[78]) : nil
-        let iopv = rawIOPV.flatMap { $0 > 0 ? $0 : nil }
+        let iopv = rawIOPV.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         let premium = isETF && fields.count > 77 ? parseTencentDecimal(fields[77]) : nil
-        let validPremium = premium.flatMap { $0 > -100 ? $0 : nil }
+        let validPremium = premium.flatMap { $0.isFinite && $0 > -100 ? $0 : nil }
         let now = Date()
-        guard observedAt <= now.addingTimeInterval(60) else {
+        guard observedAt <= now else {
             throw FMarketDataError.staleOrWrongSession
         }
         return FTencentMarketReference(securityCode: code, latestPrice: price,
                                        previousClose: previousClose, iopv: iopv,
                                        premiumPercent: validPremium, observedAt: observedAt,
                                        fetchedAt: now, providerInstrumentType: instrumentType,
-                                       source: "Tencent qt.gtimg.cn")
+                                       source: FMarketQuoteTrustPolicy.tencentReferenceSource)
     }
 
     static func fetchInstrumentName(code: String) async throws -> String {
@@ -1447,16 +2421,11 @@ private enum FQuoteHTTPClient {
         var request = URLRequest(url: url, timeoutInterval: 8)
         request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Accept")
         request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 128_000)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw FMarketDataError.invalidPayload
         }
-        let text = String(decoding: data, as: UTF8.self)
-        let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let bodyRange = Range(match.range(at: 2), in: text) else { throw FMarketDataError.invalidPayload }
-        let fields = text[bodyRange].split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+        let fields = try FTencentTextQuoteParser.fields(data, expectedSymbol: symbol)
         guard fields.count > 1 else { throw FMarketDataError.invalidPayload }
         let name = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw FMarketDataError.invalidPayload }
@@ -1474,6 +2443,7 @@ private enum FQuoteHTTPClient {
             .replacingOccurrences(of: ",", with: "")
             .replacingOccurrences(of: "%", with: "")
         return Decimal(string: value, locale: Locale(identifier: "en_US_POSIX"))
+            .flatMap { $0.isFinite ? $0 : nil }
     }
 
     private static func parseTencentTimestamp(_ raw: String) -> Date? {

@@ -633,10 +633,10 @@ class MinuteArchive:
             target = None
             with temporary.open("r+b") as stream:
                 os.fsync(stream.fileno())
-            # Publish without replacing a prior backup. The temporary is in
-            # the same directory, so the hard link is an atomic no-clobber move.
-            os.link(temporary, destination)
-            temporary.unlink()
+            # Publish without replacing a prior backup. On POSIX, a hard link
+            # is an atomic no-clobber publish. Windows rename is also atomic
+            # and, unlike link creation, works on filesystems that deny hardlinks.
+            self._publish_no_clobber(temporary, destination)
             self._fsync_directory(destination.parent)
             return self._logical_digest(destination)
         except FileExistsError as exc:
@@ -680,9 +680,9 @@ class MinuteArchive:
             target = None
             with temporary.open("r+b") as stream:
                 os.fsync(stream.fileno())
-            # Hard-link publication is atomic and fails if the destination already exists.
-            os.link(temporary, destination)
-            temporary.unlink()
+            # Never replace an existing restore target. Use the platform's
+            # atomic no-clobber primitive for this same-directory temporary.
+            cls._publish_no_clobber(temporary, destination)
             cls._fsync_directory(destination.parent)
         except FileExistsError as exc:
             if target is not None:
@@ -815,7 +815,21 @@ class MinuteArchive:
             connection.close()
 
     @staticmethod
+    def _publish_no_clobber(temporary: Path, destination: Path) -> None:
+        if os.name == "nt":
+            # os.rename on Windows fails if destination already exists.
+            os.rename(temporary, destination)
+        else:
+            os.link(temporary, destination)
+            temporary.unlink()
+
+    @staticmethod
     def _fsync_directory(path: Path) -> None:
+        # Windows does not support opening directories as fsyncable file
+        # descriptors. File contents were fsynced before publication; retain
+        # directory fsync on POSIX where the platform supports it.
+        if os.name == "nt":
+            return
         descriptor = os.open(path, os.O_RDONLY)
         try:
             os.fsync(descriptor)
@@ -829,6 +843,35 @@ class MinuteArchive:
             return "ok"
         except sqlite3.DatabaseError as exc:
             raise ArchiveError("archive integrity check failed: " + str(exc)) from exc
+
+    def readiness_check(self) -> str:
+        """Check that the archive can serve requests without rescanning its history.
+
+        Full integrity and row validation runs during archive startup and through
+        the explicit integrity_check operation. Repeating that unbounded scan on
+        every /readyz poll makes health checks slower as the archive grows.
+        """
+        required_tables = {"minute_bar", "minute_observation", "session_coverage", "collection_log"}
+        try:
+            db = sqlite3.connect(
+                self.path.resolve().as_uri() + "?mode=ro", uri=True,
+                timeout=1, isolation_level=None)
+            try:
+                db.execute("PRAGMA query_only=ON")
+                row = db.execute(
+                    "SELECT value FROM archive_meta WHERE key='schema_version'").fetchone()
+                if row is None:
+                    raise ArchiveError("archive schema version metadata is missing")
+                self._validate_schema_version(row[0])
+                tables = {item[0] for item in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+                if not required_tables.issubset(tables):
+                    raise ArchiveError("archive is missing required tables")
+                return "ok"
+            finally:
+                db.close()
+        except sqlite3.DatabaseError as exc:
+            raise ArchiveError("archive is unavailable: " + str(exc)) from exc
 
 
 @dataclass(frozen=True)

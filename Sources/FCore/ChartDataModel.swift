@@ -104,10 +104,31 @@ public struct FChartDataModel: Equatable, Sendable {
             return value.isConsistent(source: source, observedAt: value.quoteTimestamp,
                                       capturedAt: fetchedAt)
         } ?? (count == 0)
+        let seriesValuesAreValid = series.map { values in
+            switch values {
+            case let .minute(samples):
+                guard let fetchedAt = metadata?.fetchedAt,
+                      fetchedAt.timeIntervalSince1970.isFinite else { return false }
+                return samples.allSatisfy { sample in
+                    sample.timestamp.timeIntervalSince1970.isFinite && sample.timestamp <= fetchedAt &&
+                    Self.isFinite(sample.price) && sample.price > 0 &&
+                    (sample.volume.map { Self.isFinite($0) && $0 >= 0 } ?? true)
+                }
+            case let .daily(bars):
+                guard let fetchedAt = metadata?.fetchedAt,
+                      fetchedAt.timeIntervalSince1970.isFinite else { return false }
+                return bars.allSatisfy { bar in
+                    bar.tradingDate.timeIntervalSince1970.isFinite && bar.tradingDate <= fetchedAt &&
+                    [bar.open, bar.close, bar.high, bar.low, bar.volume].allSatisfy(Self.isFinite) &&
+                    bar.low > 0 && bar.volume >= 0 && bar.high >= max(bar.open, bar.close) &&
+                    bar.low <= min(bar.open, bar.close) && bar.high >= bar.low
+                }
+            }
+        } ?? true
         guard securityCode.count == 6, securityCode.utf8.count == 6,
               securityCode.utf8.allSatisfy({ (48...57).contains($0) }),
               windowMatchesSeries, ordered, qualityMatchesCount, metadataIsConsistent,
-              (count == 0 || hasMetadata), liveTimeIsVerified else {
+              (count == 0 || hasMetadata), liveTimeIsVerified, seriesValuesAreValid else {
             throw FMarketDataError.invalidPayload
         }
         self.securityCode = securityCode
@@ -115,6 +136,10 @@ public struct FChartDataModel: Equatable, Sendable {
         self.series = series
         self.quality = quality
         self.temporalMetadata = temporalMetadata
+    }
+
+    private static func isFinite(_ value: Decimal) -> Bool {
+        value.isFinite
     }
 }
 
@@ -136,9 +161,12 @@ public struct FIOPVObservation: Equatable, Sendable {
         default: qualityHasReason = true
         }
         let timesOrdered: Bool
-        if let observedAt, let fetchedAt { timesOrdered = observedAt <= fetchedAt }
+        if let observedAt, let fetchedAt {
+            timesOrdered = observedAt.timeIntervalSince1970.isFinite &&
+                fetchedAt.timeIntervalSince1970.isFinite && observedAt <= fetchedAt
+        }
         else { timesOrdered = false }
-        let validAvailable = !unavailable && qualityHasReason && value.map { $0 > 0 && !$0.isNaN } == true &&
+        let validAvailable = !unavailable && qualityHasReason && value.map { $0 > 0 && $0.isFinite } == true &&
             timesOrdered && source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         let validUnavailable = unavailable && value == nil && observedAt == nil &&
             fetchedAt == nil && source == nil && FChartDataQuality.nonBlank(quality.reason)
@@ -180,7 +208,8 @@ public struct FChartPriceOverlay: Equatable, Sendable {
 
     public init(securityCode: String, kind: FChartOverlayKind, points: [FChartOverlayPoint], quality: FChartDataQuality,
                 source: String?, fetchedAt: Date?) throws {
-        let ordered = zip(points, points.dropFirst()).allSatisfy { $0.0.timestamp < $0.1.timestamp }
+        let ordered = points.allSatisfy { $0.timestamp.timeIntervalSince1970.isFinite } &&
+            zip(points, points.dropFirst()).allSatisfy { $0.0.timestamp < $0.1.timestamp }
         let unavailable: Bool
         if case .unavailable(_) = quality { unavailable = true } else { unavailable = false }
         let validUnavailable = unavailable && points.isEmpty && FChartDataQuality.nonBlank(quality.reason)
@@ -190,8 +219,9 @@ public struct FChartPriceOverlay: Equatable, Sendable {
         default: qualityHasReason = true
         }
         let validAvailable = !unavailable && qualityHasReason && !points.isEmpty && ordered &&
-            points.allSatisfy { $0.value > 0 && !$0.value.isNaN } &&
-            source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false && fetchedAt != nil
+            points.allSatisfy { $0.value > 0 && $0.value.isFinite } &&
+            source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
+            fetchedAt?.timeIntervalSince1970.isFinite == true
         guard securityCode.count == 6, securityCode.utf8.count == 6,
               securityCode.utf8.allSatisfy({ (48...57).contains($0) }),
               validAvailable || validUnavailable else {
@@ -214,6 +244,14 @@ public struct FChartOverlayModel: Equatable, Sendable {
     public let chart: FChartDataModel
     public let priceOverlays: [FChartPriceOverlay]
     public let iopv: FIOPVObservation?
+
+    /// IOPV is a current quote reference, never a historical time series.
+    /// Keep it out of archived-minute and daily charts so it cannot imply
+    /// historical availability or distort their visible price scale.
+    public var liveIOPV: FIOPVObservation? {
+        guard case .liveIntraday = chart.window else { return nil }
+        return iopv
+    }
 
     public init(chart: FChartDataModel, priceOverlays: [FChartPriceOverlay] = [],
                 iopv: FIOPVObservation? = nil) throws {
@@ -252,13 +290,20 @@ public struct FChartOverlayModel: Equatable, Sendable {
                 .filter { visibleTimes.isEmpty || visibleTimes.contains($0.timestamp) }
                 .map(\.value)
         }
-        if let iopv, iopv.isAvailable, let value = iopv.value {
+        if let iopv = liveIOPV, iopv.isAvailable, let value = iopv.value {
             values.append(value)
         }
         guard let low = values.min(), let high = values.max() else { return nil }
         let span = high - low
         let padding = max(span / 20, max(abs(low), abs(high)) / 10_000)
-        return (low - padding)...(high + padding)
+        let maximumFiniteValue = Decimal.greatestFiniteMagnitude
+        guard span.isFinite, padding.isFinite, padding >= 0,
+              high <= maximumFiniteValue - padding else { return nil }
+        let lowerBound = low - padding
+        let upperBound = high + padding
+        guard lowerBound.isFinite, upperBound.isFinite,
+              lowerBound <= upperBound else { return nil }
+        return lowerBound...upperBound
     }
 
     private func basePrices(indices: Range<Int>, movingAveragePeriods: Set<Int>) -> [Decimal] {
@@ -272,10 +317,10 @@ public struct FChartOverlayModel: Equatable, Sendable {
                 return [bar.low, bar.high]
             }
             let movingAverages = [5, 10, 20, 60, 250].filter { movingAveragePeriods.contains($0) }.flatMap { period in
-                indices.compactMap { index -> Decimal? in
-                    guard index + 1 >= period else { return nil }
-                    let window = bars[(index + 1 - period)...index]
-                    return window.reduce(Decimal.zero) { $0 + $1.close } / Decimal(period)
+                let values = FDailyMovingAverage.values(for: bars, period: period)
+                return indices.compactMap { index -> Decimal? in
+                    guard values.indices.contains(index) else { return nil }
+                    return values[index]
                 }
             }
             return candleValues + movingAverages

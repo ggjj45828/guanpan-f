@@ -132,16 +132,27 @@ public enum FAccountingPolicy {
     public static func costBasisRemoved(unitsSold: Int64, totalUnits: Int64,
                                         totalBookCost: Decimal) throws -> Decimal {
         guard unitsSold > 0, totalUnits > 0, unitsSold <= totalUnits,
-              !totalBookCost.isNaN, totalBookCost >= 0 else {
+              totalBookCost.isFinite, totalBookCost >= 0 else {
             throw FLedgerValidationError.invalidCostAllocation
         }
         if unitsSold == totalUnits { return totalBookCost }
-        let raw = totalBookCost * Decimal(unitsSold) / Decimal(totalUnits)
-        guard !raw.isNaN else { throw FLedgerValidationError.invalidCostAllocation }
+        var soldUnits = Decimal(unitsSold)
+        var allUnits = Decimal(totalUnits)
+        var share = Decimal.zero
+        let divisionStatus = NSDecimalDivide(&share, &soldUnits, &allUnits, .plain)
+        guard (divisionStatus == .noError || divisionStatus == .lossOfPrecision),
+              share.isFinite, share >= 0, share <= 1 else {
+            throw FLedgerValidationError.invalidCostAllocation
+        }
+        var cost = totalBookCost
+        var raw = Decimal.zero
+        let multiplicationStatus = NSDecimalMultiply(&raw, &cost, &share, .plain)
+        guard (multiplicationStatus == .noError || multiplicationStatus == .lossOfPrecision),
+              raw.isFinite else { throw FLedgerValidationError.invalidCostAllocation }
         var input = raw
         var rounded = Decimal()
         NSDecimalRound(&rounded, &input, partialCostBasisScale, .plain)
-        guard !rounded.isNaN, rounded >= 0, rounded <= totalBookCost else {
+        guard rounded.isFinite, rounded >= 0, rounded <= totalBookCost else {
             throw FLedgerValidationError.invalidCostAllocation
         }
         return rounded
@@ -230,18 +241,28 @@ public struct FCashMovement: Codable, Equatable, Sendable, Identifiable {
     public var occurredAt: Date
     /// Positive for deposits/income; negative for withdrawals/outflows.
     public var amount: Decimal
+    /// Optional for legacy movements. Separates account-level costs from broker cash
+    /// reconciliation without attributing either to a security or a fill.
+    public var category: FCashMovementCategory?
     public var reason: String
     public var userConfirmation: FUserLedgerConfirmation
 
-    public init(id: UUID = UUID(), sequence: UInt64, occurredAt: Date, amount: Decimal, reason: String,
+    public init(id: UUID = UUID(), sequence: UInt64, occurredAt: Date, amount: Decimal,
+                category: FCashMovementCategory? = nil, reason: String,
                 userConfirmation: FUserLedgerConfirmation) {
         self.id = id
         self.sequence = sequence
         self.occurredAt = occurredAt
         self.amount = amount
+        self.category = category
         self.reason = reason
         self.userConfirmation = userConfirmation
     }
+}
+
+public enum FCashMovementCategory: String, Codable, Equatable, Sendable {
+    case accountExpense
+    case cashReconciliation
 }
 
 public struct FLedgerAuditEvent: Codable, Equatable, Sendable, Identifiable {
@@ -378,7 +399,7 @@ public extension FAccountBook {
                 guard let removed = fill.costBasisRemoved else {
                     throw FLedgerValidationError.missingSellCostBasis(fill.id)
                 }
-                guard removed >= 0, !removed.isNaN else {
+                guard removed >= 0, removed.isFinite else {
                     throw FLedgerValidationError.invalidFill(fill.id)
                 }
                 guard Self.isFinite(removed), removed >= 0 else {
@@ -435,6 +456,7 @@ public extension FAccountBook {
                 throw FLedgerValidationError.duplicateEventSequence(movement.sequence)
             }
             guard Self.isFinite(movement.amount), movement.amount != 0,
+                  movement.category != .accountExpense || movement.amount < 0,
                   !movement.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw FLedgerValidationError.invalidCashMovement(movement.id)
             }
@@ -449,6 +471,41 @@ public extension FAccountBook {
             guard movement.occurredAt >= openingSnapshot.capturedAt else {
                 throw FLedgerValidationError.implausibleTimestamp("cashMovement.beforeOpening")
             }
+        }
+
+        enum ConfirmationEvent {
+            case fill(FConfirmedFill)
+            case movement(FCashMovement)
+            case feeAdjustment(FFillFeeAdjustment)
+
+            var sequence: UInt64 {
+                switch self {
+                case .fill(let value): value.sequence
+                case .movement(let value): value.sequence
+                case .feeAdjustment(let value): value.sequence
+                }
+            }
+
+            var confirmedAt: Date {
+                switch self {
+                case .fill(let value): value.userConfirmation.confirmedAt
+                case .movement(let value): value.userConfirmation.confirmedAt
+                case .feeAdjustment(let value): value.userConfirmation.confirmedAt
+                }
+            }
+        }
+        let confirmationEvents = fills.map(ConfirmationEvent.fill) +
+            cashMovements.map(ConfirmationEvent.movement) +
+            (feeAdjustments ?? []).map(ConfirmationEvent.feeAdjustment)
+        var previousConfirmationAt: Date?
+        for event in confirmationEvents.sorted(by: { $0.sequence < $1.sequence }) {
+            if let previousConfirmationAt, event.confirmedAt < previousConfirmationAt {
+                throw FLedgerValidationError.implausibleTimestamp("ledgerEventConfirmationOrder")
+            }
+            previousConfirmationAt = event.confirmedAt
+        }
+        if let previousConfirmationAt, updatedAt < previousConfirmationAt {
+            throw FLedgerValidationError.implausibleTimestamp("updatedAt.beforeLedgerEvent")
         }
 
         var auditIDs = Set<UUID>()
@@ -579,7 +636,7 @@ public extension FAccountBook {
         }
     }
 
-    private static func isFinite(_ value: Decimal) -> Bool { !value.isNaN }
+    private static func isFinite(_ value: Decimal) -> Bool { value.isFinite }
 
     private static func isPlausible(_ date: Date, now: Date) -> Bool {
         let timestamp = date.timeIntervalSince1970

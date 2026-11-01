@@ -39,6 +39,8 @@ public struct FAdvisorDecisionMemoryReference: Codable, Equatable, Sendable, Ide
     public let id: UUID
     public let decidedAt: Date
     public let action: FDecisionAction
+    /// Nil for older memory records without a captured request scope.
+    public let scope: FAdvisorEntryScope?
     public let instrumentCode: String?
     public let recommendation: String
     public let rationale: String
@@ -50,6 +52,7 @@ public struct FAdvisorDecisionMemoryReference: Codable, Equatable, Sendable, Ide
         id = memory.id
         decidedAt = memory.decidedAt
         action = memory.action
+        scope = memory.scope
         instrumentCode = memory.instrumentCode
         recommendation = String(memory.recommendation.prefix(800))
         rationale = String(memory.rationale.prefix(1_000))
@@ -74,7 +77,8 @@ public struct FAdvisorDecisionMemoryProjection: Codable, Equatable, Sendable {
             throw FAdvisorEntryError.invalidMemoryProjectionLimit
         }
         let scoped = records.filter { record in
-            guard record.accountID == accountID, record.decidedAt <= asOf else { return false }
+            guard record.accountID == accountID, record.decidedAt <= asOf,
+                  record.scope == nil || record.scope == scope else { return false }
             switch scope {
             case .portfolio:
                 return true
@@ -110,7 +114,8 @@ public struct FAdvisorDecisionMemoryProjection: Codable, Equatable, Sendable {
                       ($0.userFeedback.map(Self.nonBlank) ?? true) }),
                   entry.evidence.allSatisfy({ $0.observedAt.timeIntervalSince1970.isFinite &&
                       $0.observedAt <= asOf && Self.nonBlank($0.source) &&
-                      Self.nonBlank($0.summary) }) else { return false }
+                      Self.nonBlank($0.summary) }),
+                  entry.scope == nil || entry.scope == scope else { return false }
             switch scope {
             case .portfolio: break
             case let .instrument(code):

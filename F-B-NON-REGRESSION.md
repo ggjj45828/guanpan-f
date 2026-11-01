@@ -2,7 +2,7 @@
 
 - 当前本地`main`已提交本轮修改、工作树干净、尚未push；已fetch确认远端main仍为`b099c9d0d9c703f56540b6fa4d3d30cfbb3ddefe`。Run `40710039609`已取消且未执行步骤，不能作为当前树CI证据。
 - F产品体验仍不如B；所有已编码非回归项在当前HEAD CI和人工视觉/交互前不得关闭。品牌名/图标、Home布局、主题切换、NAS可选状态、图表显隐均以最新安装包和设备实测为准。
-- NAS为可选服务；无NAS时当前Advisor基础上下文不得被阻断。完整本地Quant接线仍未完成，资产变化Candidate保持fail-closed。
+- NAS不阻塞实时行情、本机有效策略包运行或Advisor单次请求；其历史分钟数据仍是策略资格研究的主依据。Advisor基础上下文不得因NAS不可达而阻断；无有效qualified策略包时资产变化Candidate保持fail-closed。
 # F-B-NON-REGRESSION
 
 ## 2026-10-29 B donor 来源核验补记
@@ -23,7 +23,7 @@
 
 - 新决策不得退化真实账本隔离：Shadow事件、Candidate状态、Quant输出和建议结果均不能改现金、份额、成本、P&L、Fill或T Contribution；只有用户确认真实成交后唯一Writer可写账。
 - 新增AI页成绩单不会移除原有Advisor/组合和证券入口；当前只是基础汇总接线，尚未完成屏幕实测，也未证明完整的评分体验优于B。
-- NAS降级为可选同步/归档/备份；NAS缺席不能阻断Ledger、实时行情、Quant、Guard或DeepSeek基础Advisor。下方旧NAS必经描述为Superseded。
+- NAS故障不能同步阻断Ledger、实时行情、已安装的有效策略包、Guard或DeepSeek基础Advisor；策略研究仍需历史数据经Backtest/Validation/OOS/Qualification。下方旧NAS Advisor同步等待描述为Superseded。
 - 本轮新增11个FCore测试定义；FCore当前共164项定义（全仓167项含3项UI测试），当前HEAD尚未运行。当前HEAD `7094d744` 对应Run 60 `40717961675` 的两个attempt均被取消且job没有开始；不得作为编译或非回归通过证据。
 
 ## 历史工作树补记（2026-10-28；以开头更新为准）
@@ -63,7 +63,7 @@
 | NRG-12 | 主场景导航保留各自 navigation state | F保留首页/行情/顾问/真实资产/设置独立栈和当前实体状态 | `GuanpanFApp.swift` `FHomeRoot`；源码存在、未实机验证 | 未验证 | 否 |
 | NRG-13 | 全局搜索跨证券/持仓/决策/流水 | F提供只读跨域搜索并路由到真实 F 数据对象 | 当前五 Tab 未见等价全局入口；待实现 | 未验证 | 否 |
 | NRG-14 | 独立通知中心/价格与状态提醒 | F提醒真实行情/NAS/风险/Candidate 状态，不通知虚拟成交 | 当前主导航未见入口；待实现/待验证产品边界 | 未实现 | 否 |
-| NRG-15 | 设置支持字号/字体/配色/浅深护眼 | F至少提供正确 Dynamic Type 与三种清晰外观兼容；主题差异不限色板 | `HomeExperience.swift` Settings 当前只有主题选择；gallery说明深色/护眼/动态字体待验证 | 未验证/部分缺失 | 否 |
+| NRG-15 | 设置支持字号/字体/配色/浅深护眼 | F至少提供正确 Dynamic Type 与三种清晰外观兼容；主题差异不限色板 | 10套主题语义Token现随系统浅/深色变化并有深色UI截图用例；护眼选项、用户字号/字体设置、截图和对比度仍待验 | 部分实现/未验证 | 否 |
 | NRG-16 | NAS/API、DeepSeek Key、安全状态和测试入口 | F显示可操作连接状态、来源/最后成功与具体错误；Key安全保存；不宣称 readyz=数据链完成 | `HomeExperience.swift` `SettingsOverview`、`FNASConnection.swift`；有readyz/Key字段，用户反馈NAS连不上 | 端到端未通过 | 否 |
 | NRG-17 | 备份与恢复、审计版本及冲突确认 | F做 Ledger schema 对应的校验备份/恢复，冲突停止覆盖 | 当前 Settings 未见成熟备份恢复入口；待实现 | 未实现 | 否 |
 | NRG-18 | 独立收息/派息历史及证券上下文 | F只接可核实场内 ETF 分派，明确预测值/来源，不把估计当现金 | 当前 F UI未见等价独立入口；需 F-145 产品/真实源复核 | 未完成 | 否 |
@@ -126,7 +126,7 @@
 
 ## 正式决策架构非退化要求（2026-10-29）
 
-- NAS只作为可选同步、归档、备份和扩展研究；不可成为核心Advisor前置。无NAS时核心Ledger、行情、本机Quant/Guard/Trigger与基础Advisor必须可用。旧NAS必经要求已被替代。
+- NAS不得成为Advisor请求同步前置；无NAS时核心Ledger、行情、本机有效策略包、Guard/Trigger与基础Advisor必须可用。历史分钟研究仍是策略资格签发依据；旧的“Advisor等待NAS”要求已被替代。
 - Quant Signal、AI Advice、Market Result、User Execution不可混为一个结果。Candidate、触发、Shadow和提醒永远不得写真实Ledger；仅用户明确确认真实成交后，唯一Writer才写真实fills。
 - Shadow保存全部Candidate/WAIT的原始不可变快照和后续客观行情评价；失败、未触发、过期、失效、数据不足、未执行/部分执行不得删除或事后修改来抬高表现。Shadow不产生真实收益，也不构成模拟账户。
 - 没有可靠输入就显示Unavailable/暂停；不伪造VWAP、前收、IOPV、胜率、成交和T贡献。没有确认成交关联不得声称用户执行/未执行。

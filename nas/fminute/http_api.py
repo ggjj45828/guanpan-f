@@ -81,7 +81,15 @@ def make_handler(service: MinuteArchiveService):
                 return
             try:
                 if parsed.path == "/readyz":
-                    archive_status = service.archive.integrity_check()
+                    readiness_check = getattr(service.archive, "readiness_check", None)
+                    try:
+                        archive_status = (readiness_check() if callable(readiness_check)
+                                          else service.archive.integrity_check())
+                    except Exception as exc:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                   {"status": "not_ready", "archive": "unavailable",
+                                    "error": type(exc).__name__})
+                        return
                     configured_markets = sorted(set(service.calendars) & set(service.providers))
                     calendar_status = {}
                     calendar_errors = {}
@@ -100,18 +108,13 @@ def make_handler(service: MinuteArchiveService):
                              all(value["currentYear"] in value["supportedYears"]
                                  for value in calendar_status.values()))
                     worker = getattr(service, "runtime_worker", None)
-                    backfill_status = {}
-                    if worker is not None:
-                        for market in configured_markets:
-                            try:
-                                zone = ZoneInfo(getattr(service.calendars[market], "timezone_name", "UTC"))
-                                backfill_status[market] = service.backfill_status(
-                                    worker.securities, market,
-                                    through=datetime.now(zone).date())
-                            except Exception as exc:
-                                backfill_status[market] = {"status": "unavailable",
-                                                           "error": type(exc).__name__ + ": " + str(exc)}
                     status = HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE
+                    index_history = getattr(service, "index_daily_history", None)
+                    try:
+                        index_history_status = (index_history.status() if index_history is not None else
+                                                {"status": "not_configured"})
+                    except Exception as exc:
+                        index_history_status = {"status": "unavailable", "error": type(exc).__name__}
                     self._json(status, {"status": "ready" if ready else "not_ready",
                                         "archive": archive_status,
                                         "configuredMarkets": configured_markets,
@@ -119,15 +122,65 @@ def make_handler(service: MinuteArchiveService):
                                         "calendarErrors": calendar_errors,
                                         "providerNames": {market: [provider.name for provider in service.providers[market]]
                                                           for market in configured_markets},
-                                        "backfillStatus": backfill_status,
-                                        "realtimeWorker": getattr(getattr(service, "runtime_worker", None),
-                                                                  "last_cycle", {"status": "not_configured"}),
-                                        "backfillWorker": getattr(getattr(service, "runtime_worker", None),
-                                                                  "last_backfill_cycle", {"status": "not_configured"}),
-                                        "calendarSync": getattr(getattr(service, "runtime_worker", None),
-                                                                "last_calendar_cycle", {"status": "not_configured"})})
+                                        "realtimeWorker": (worker.worker_snapshot("realtime") if worker is not None else
+                                                           {"status": "not_configured"}),
+                                        "backfillWorker": (worker.worker_snapshot("backfill") if worker is not None else
+                                                           {"status": "not_configured"}),
+                                        "calendarSync": (worker.worker_snapshot("calendar") if worker is not None else
+                                                         {"status": "not_configured"}),
+                                        "indexDailyHistory": index_history_status})
                     return
                 query = self._query()
+                if parsed.path == "/api/v1/backfill-status":
+                    _only_parameters(query, set())
+                    worker = getattr(service, "runtime_worker", None)
+                    status_by_market = {}
+                    if worker is not None:
+                        for market in sorted(set(service.calendars) & set(service.providers)):
+                            try:
+                                zone = ZoneInfo(getattr(service.calendars[market], "timezone_name", "UTC"))
+                                status_by_market[market] = service.backfill_status(
+                                    worker.securities, market,
+                                    through=datetime.now(zone).date())
+                            except Exception as exc:
+                                status_by_market[market] = {"status": "unavailable",
+                                                            "error": type(exc).__name__ + ": " + str(exc)}
+                    self._json(HTTPStatus.OK, {"status": "observed", "backfillStatus": status_by_market})
+                    return
+                if parsed.path == "/api/v1/daily-history-status":
+                    _only_parameters(query, set())
+                    archive = getattr(service, "index_daily_history", None)
+                    if archive is None:
+                        self._json(HTTPStatus.OK, {"status": "not_configured", "securities": {}})
+                        return
+                    try:
+                        self._json(HTTPStatus.OK, archive.security_status())
+                    except Exception as exc:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                   {"status": "unavailable", "error": type(exc).__name__})
+                    return
+                if parsed.path == "/api/v1/index-daily-history":
+                    _only_parameters(query, {"indexCode"})
+                    if "indexCode" not in query:
+                        raise ServiceError("indexCode is required")
+                    archive = getattr(service, "index_daily_history", None)
+                    if archive is None:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                   {"status": "unavailable", "error": "index history archive is not configured"})
+                        return
+                    self._json(HTTPStatus.OK, archive.get_history(query["indexCode"]))
+                    return
+                if parsed.path == "/api/v1/security-daily-history":
+                    _only_parameters(query, {"securityCode"})
+                    if "securityCode" not in query:
+                        raise ServiceError("securityCode is required")
+                    archive = getattr(service, "index_daily_history", None)
+                    if archive is None:
+                        self._json(HTTPStatus.SERVICE_UNAVAILABLE,
+                                   {"status": "unavailable", "error": "daily history archive is not configured"})
+                        return
+                    self._json(HTTPStatus.OK, archive.get_security_history(query["securityCode"]))
+                    return
                 if parsed.path == "/api/v1/minute-history":
                     required = {"securityCode", "market", "tradingDate"}
                     _only_parameters(query, required | {"availableAsOf", "minimumQuality"})

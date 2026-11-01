@@ -4,18 +4,28 @@ import XCTest
 final class MarketRegimeTriggerTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func assessment(crash: Bool) -> FMarketRegimeAssessment {
+    private func assessment(crash: Bool, securityCode: String? = "159352",
+                            insufficientHistory: Bool = false) -> FMarketRegimeAssessment {
         let closes: [Double]
-        let breadth: Double?
-        let benchmarks: [Double]
+        let breadth: FMarketRegimeBreadthObservation?
+        let benchmarks: [FMarketRegimeBenchmarkObservation]
         let volumes: [Double]
         if crash {
             closes = Array(repeating: 100, count: 75) + [92, 88, 84, 80, 75]
-            breadth = 0.20
-            benchmarks = [-0.08, -0.06]
+            breadth = FMarketRegimeBreadthObservation(market: "CN",
+                advancingCount: 20, decliningCount: 80,
+                observedAt: now.addingTimeInterval(-60), capturedAt: now, source: "fixture")
+            benchmarks = [
+                FMarketRegimeBenchmarkObservation(marketContext: "CN", marketCode: "sh000001",
+                    observedAt: now.addingTimeInterval(-60), capturedAt: now,
+                    source: "fixture", sessionReturn: -0.08),
+                FMarketRegimeBenchmarkObservation(marketContext: "CN", marketCode: "sz399001",
+                    observedAt: now.addingTimeInterval(-60), capturedAt: now,
+                    source: "fixture", sessionReturn: -0.06)
+            ]
             volumes = Array(repeating: 100, count: 75) + Array(repeating: 400, count: 5)
         } else {
-            closes = Array(repeating: 100, count: 20)
+            closes = Array(repeating: 100, count: insufficientHistory ? 20 : 75)
             breadth = nil
             benchmarks = []
             volumes = []
@@ -24,10 +34,11 @@ final class MarketRegimeTriggerTests: XCTestCase {
             FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - closes.count + 1) * 86_400),
                              close: close, volume: volumes.isEmpty ? nil : volumes[index])
         }
+        let market = securityCode.map { "security:\($0)" } ?? "CN"
         return FMarketRegimeEngine.evaluate(
-            FMarketRegimeInput(market: "CN", securityCode: "159352", asOf: now,
-                sourceUpdatedAt: now, source: "fixture", bars: bars,
-                breadthRatio: breadth, synchronizedBenchmarkReturns: benchmarks),
+            FMarketRegimeInput(market: market, securityCode: securityCode, asOf: now,
+                sourceUpdatedAt: now, source: FMarketBarTrustPolicy.tencentDailySource, bars: bars,
+                breadthObservation: breadth, benchmarkObservations: benchmarks),
             now: now)
     }
 
@@ -42,7 +53,7 @@ final class MarketRegimeTriggerTests: XCTestCase {
         try FQuantQuoteSnapshot(securityCode: "159352", price: Decimal(string: "1.104")!,
             temporalMetadata: FQuoteTemporalMetadata(
                 quoteTimestamp: now.addingTimeInterval(-1), fetchedAt: now,
-                source: "fixture", timestampTrust: .verifiedExchangeTimestamp,
+                source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
                 marketSessionStatus: .continuous))
     }
 
@@ -59,11 +70,35 @@ final class MarketRegimeTriggerTests: XCTestCase {
     }
 
     func testUnreliableMarketContextFailsClosed() throws {
-        let context = assessment(crash: false)
+        let context = assessment(crash: false, insufficientHistory: true)
         let result = FRealtimeQuantTrigger.evaluate(plan: try plan(), quote: try quote(),
                                                      marketContext: context, now: now)
         XCTAssertEqual(context.regime, .dataUnreliable)
         XCTAssertEqual(result.state, .paused)
         XCTAssertEqual(result.reasonCodes, ["DATA_UNRELIABLE"])
+    }
+
+    func testUnmappedMarketContextCannotTriggerSecurityCandidate() throws {
+        let context = assessment(crash: false, securityCode: nil)
+        let result = FRealtimeQuantTrigger.evaluate(plan: try plan(), quote: try quote(),
+                                                     marketContext: context, now: now)
+        XCTAssertNil(context.securityCode)
+        XCTAssertEqual(result.state, .paused)
+        XCTAssertEqual(result.signal, .wait)
+        XCTAssertEqual(result.reasonCodes, ["market_context_security_mismatch"])
+    }
+
+    func testBroadMarketRegimeCannotMasqueradeAsSecuritySpecificContext() throws {
+        let bars = (0..<80).map { index in
+            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - 79) * 86_400), close: 100)
+        }
+        let broadMarket = FMarketRegimeEngine.evaluate(
+            FMarketRegimeInput(market: "CN", securityCode: "159352", asOf: now,
+                sourceUpdatedAt: now, source: FMarketBarTrustPolicy.tencentDailySource, bars: bars), now: now)
+        let result = FRealtimeQuantTrigger.evaluate(plan: try plan(), quote: try quote(),
+            marketContext: broadMarket, now: now)
+        XCTAssertEqual(result.state, .paused)
+        XCTAssertEqual(result.signal, .wait)
+        XCTAssertEqual(result.reasonCodes, ["market_context_security_mismatch"])
     }
 }

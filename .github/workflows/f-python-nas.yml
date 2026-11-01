@@ -1,0 +1,58 @@
+name: Guanpan F Python and NAS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'nas/**'
+      - 'Tools/**'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'GuanpanFApp/**'
+      - 'Package.swift'
+      - '.github/workflows/f-python-nas.yml'
+  pull_request:
+    paths:
+      - 'nas/**'
+      - 'Tools/**'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'GuanpanFApp/**'
+      - 'Package.swift'
+      - '.github/workflows/f-python-nas.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guanpan-f-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  python-and-nas-tests:
+    name: Run Python, NAS and source-contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Run all repository Python tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s Tools -p 'test_*.py'
+
+      - name: Compile Python sources
+        run: python -m compileall -q nas Tools
+
+      - name: Verify architecture boundaries
+        run: python Tools/verify_architecture_boundaries.py

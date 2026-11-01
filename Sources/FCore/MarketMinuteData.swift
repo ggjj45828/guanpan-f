@@ -34,6 +34,24 @@ public struct FDailyBar: Equatable, Sendable, Identifiable {
     }
 }
 
+/// Shared overflow-safe moving-average calculation for daily bars. Dividing each
+/// observation before summing avoids an overflowing intermediate total.
+public enum FDailyMovingAverage {
+    public static func values(for bars: [FDailyBar], period: Int) -> [Decimal?] {
+        guard period > 0 else { return Array(repeating: nil, count: bars.count) }
+        let divisor = Decimal(period)
+        return bars.indices.map { index -> Decimal? in
+            guard index + 1 >= period else { return nil }
+            var average = Decimal.zero
+            for bar in bars[(index + 1 - period)...index] {
+                average += bar.close / divisor
+                guard average.isFinite else { return nil }
+            }
+            return average
+        }
+    }
+}
+
 public struct FDailyKlineSnapshot: Equatable, Sendable {
     public let securityCode: String
     public let bars: [FDailyBar]
@@ -43,14 +61,17 @@ public struct FDailyKlineSnapshot: Equatable, Sendable {
 
     public init(securityCode: String, bars: [FDailyBar], fetchedAt: Date,
                 source: String, adjustment: String) throws {
+        let fetchedAtIsFinite = fetchedAt.timeIntervalSince1970.isFinite
         guard securityCode.count == 6, securityCode.utf8.count == 6,
               securityCode.utf8.allSatisfy({ (48...57).contains($0) }),
               !bars.isEmpty, bars.count <= 500,
               !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              adjustment == "不复权",
+              adjustment == "不复权", fetchedAtIsFinite,
               zip(bars, bars.dropFirst()).allSatisfy({ $0.0.tradingDate < $0.1.tradingDate }),
               bars.allSatisfy({ bar in
-                  bar.tradingDate <= fetchedAt && bar.low > 0 && bar.volume >= 0 &&
+                  bar.tradingDate.timeIntervalSince1970.isFinite && bar.tradingDate <= fetchedAt &&
+                  [bar.open, bar.close, bar.high, bar.low, bar.volume].allSatisfy(Self.isFinite) &&
+                  bar.low > 0 && bar.volume >= 0 &&
                   bar.high >= max(bar.open, bar.close) && bar.low <= min(bar.open, bar.close) &&
                   bar.high >= bar.low
               }) else { throw FMarketDataError.invalidPayload }
@@ -62,13 +83,11 @@ public struct FDailyKlineSnapshot: Equatable, Sendable {
     }
 
     public func movingAverage(period: Int) -> [Decimal?] {
-        guard period > 0 else { return Array(repeating: nil, count: bars.count) }
-        return bars.indices.map { index in
-            guard index + 1 >= period else { return nil }
-            let window = bars[(index + 1 - period)...index]
-            let total = window.reduce(Decimal.zero) { $0 + $1.close }
-            return total / Decimal(period)
-        }
+        FDailyMovingAverage.values(for: bars, period: period)
+    }
+
+    private static func isFinite(_ value: Decimal) -> Bool {
+        value.isFinite
     }
 }
 
@@ -81,13 +100,31 @@ public struct FCurrentIntradaySnapshot: Equatable, Sendable {
 
     public var latestPrice: Decimal? { samples.last?.price }
 
+    public func temporalMetadata(marketSessionStatus: FMarketSessionStatus = .unknown) -> FQuoteTemporalMetadata {
+        FQuoteTemporalMetadata(quoteTimestamp: quoteTimestamp, fetchedAt: fetchedAt, source: source,
+                               timestampTrust: .verifiedExchangeTimestamp,
+                               marketSessionStatus: marketSessionStatus)
+    }
+
+    public func freshness(at now: Date) -> FQuoteFreshness {
+        temporalMetadata().freshness(at: now)
+    }
+
     public init(securityCode: String, samples: [FMinuteSample], quoteTimestamp: Date,
                 fetchedAt: Date, source: String) throws {
-        guard securityCode.count == 6, securityCode.allSatisfy(\.isNumber),
+        let timesAreFinite = quoteTimestamp.timeIntervalSince1970.isFinite &&
+            fetchedAt.timeIntervalSince1970.isFinite
+        guard securityCode.count == 6, securityCode.utf8.count == 6,
+              securityCode.utf8.allSatisfy({ (48...57).contains($0) }),
               !samples.isEmpty, !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               quoteTimestamp == samples.last?.timestamp, quoteTimestamp <= fetchedAt,
+              timesAreFinite,
               zip(samples, samples.dropFirst()).allSatisfy({ $0.timestamp < $1.timestamp }),
-              samples.allSatisfy({ $0.timestamp <= fetchedAt && $0.price > 0 }) else {
+              samples.allSatisfy({ sample in
+                  sample.timestamp.timeIntervalSince1970.isFinite && sample.timestamp <= fetchedAt &&
+                  Self.isFinite(sample.price) && sample.price > 0 &&
+                  (sample.volume.map { Self.isFinite($0) && $0 >= 0 } ?? true)
+              }) else {
             throw FMarketDataError.invalidPayload
         }
         self.securityCode = securityCode
@@ -95,6 +132,10 @@ public struct FCurrentIntradaySnapshot: Equatable, Sendable {
         self.quoteTimestamp = quoteTimestamp
         self.fetchedAt = fetchedAt
         self.source = source
+    }
+
+    private static func isFinite(_ value: Decimal) -> Bool {
+        value.isFinite
     }
 }
 
@@ -116,10 +157,30 @@ public enum FMarketDataError: Error, Equatable, Sendable, LocalizedError {
     }
 }
 
+/// Parses Tencent's text quote wrapper and verifies that the provider echoed
+/// the exact requested symbol before any returned fields are consumed.
+public enum FTencentTextQuoteParser {
+    public static func fields(_ data: Data, expectedSymbol: String) throws -> [String] {
+        guard !expectedSymbol.isEmpty,
+              let text = String(data: data, encoding: .utf8) else {
+            throw FMarketDataError.invalidPayload
+        }
+        let pattern = #"v_([A-Za-z0-9]+)="([^"]*)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let symbolRange = Range(match.range(at: 1), in: text),
+              String(text[symbolRange]) == expectedSymbol,
+              let bodyRange = Range(match.range(at: 2), in: text) else {
+            throw FMarketDataError.invalidPayload
+        }
+        return text[bodyRange].split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+    }
+}
+
 /// Strict parser for the same current-session Tencent minute response used by
 /// the NAS adapter. It does not turn a fetchedAt value into an exchange time.
 public enum FTencentMinuteParser {
-    public static let source = "Tencent Finance minute/query"
+    public static let source = FMarketQuoteTrustPolicy.tencentMinuteSource
 
     public static func symbol(for securityCode: String) throws -> String {
         guard securityCode.count == 6, securityCode.utf8.count == 6,
@@ -182,6 +243,12 @@ public enum FTencentMinuteParser {
                   stamp <= fetchedAt else { return nil }
             let price = Decimal(string: String(fields[1]), locale: Locale(identifier: "en_US_POSIX"))
             let minuteLabel = String(fields[0])
+            // Provider payloads can contain auction, lunch, or after-hours
+            // observations. Only admit regular-session rows into live charts
+            // and quant factors; 09:30 is separately excluded as the auction.
+            guard FMainlandTradingCalendar.isContinuousSessionTime(at: stamp, timeZone: timeZone) else {
+                return nil
+            }
             let cumulativeVolume = fields.count > 2
                 ? Decimal(string: String(fields[2]), locale: Locale(identifier: "en_US_POSIX")) : nil
             return ParsedRow(timestamp: stamp, sourceIndex: index,
@@ -201,10 +268,21 @@ public enum FTencentMinuteParser {
             guard !row.isOpeningAuction else { continue }
             let minuteVolume: Decimal?
             if let cumulativeVolume = row.cumulativeVolume {
-                minuteVolume = previousCumulativeVolume.map { max(Decimal.zero, cumulativeVolume - $0) }
+                if let previousCumulativeVolume {
+                    let delta = cumulativeVolume - previousCumulativeVolume
+                    // A cumulative counter reset is not a zero-volume minute.
+                    // Keep the price point, but make volume-dependent factors
+                    // fail closed for this observation.
+                    minuteVolume = delta.isFinite && delta >= 0 ? delta : nil
+                } else {
+                    minuteVolume = nil
+                }
                 previousCumulativeVolume = cumulativeVolume
             } else {
                 minuteVolume = nil
+                // A missing/invalid cumulative counter breaks continuity. Do
+                // not attribute the next multi-minute delta to one minute.
+                previousCumulativeVolume = nil
             }
             guard let price = row.price else { continue }
             points[row.timestamp] = (price, minuteVolume)

@@ -37,6 +37,62 @@ public enum FCandidateShadowDataQuality: String, Codable, Equatable, Sendable {
     case freshVerified, staleObserved, insufficient
 }
 
+private enum FCandidateShadowDecimalMath {
+    static func adding(_ lhs: Decimal, _ rhs: Decimal) -> Decimal? {
+        var left = lhs
+        var right = rhs
+        var result = Decimal.zero
+        guard NSDecimalAdd(&result, &left, &right, .plain) == .noError,
+              NSDecimalNumber(decimal: result).doubleValue.isFinite else { return nil }
+        return result
+    }
+
+    static func subtracting(_ lhs: Decimal, _ rhs: Decimal) -> Decimal? {
+        var left = lhs
+        var right = rhs
+        var result = Decimal.zero
+        guard NSDecimalSubtract(&result, &left, &right, .plain) == .noError,
+              NSDecimalNumber(decimal: result).doubleValue.isFinite else { return nil }
+        return result
+    }
+
+    static func relativeChange(from base: Decimal, to value: Decimal) -> Decimal? {
+        guard base > 0 else { return nil }
+        var minuend = value
+        var subtrahend = base
+        var difference = Decimal.zero
+        guard NSDecimalSubtract(&difference, &minuend, &subtrahend, .plain) == .noError else {
+            return nil
+        }
+        var numerator = difference
+        var denominator = base
+        var result = Decimal.zero
+        let status = NSDecimalDivide(&result, &numerator, &denominator, .plain)
+        guard (status == .noError || status == .lossOfPrecision),
+              NSDecimalNumber(decimal: result).doubleValue.isFinite else { return nil }
+        return result
+    }
+}
+
+private enum FCandidateShadowSnapshotRules {
+    static func invalidationIsValid(_ invalidationPrice: Decimal?, action: FDecisionAction,
+                                   targetPrice: Decimal?, targetPriceZone: FShadowPriceZone?) -> Bool {
+        guard let invalidationPrice else { return true }
+        guard invalidationPrice > 0,
+              NSDecimalNumber(decimal: invalidationPrice).doubleValue.isFinite else { return false }
+        switch action {
+        case .buy, .dayTrade:
+            guard let lowerBound = targetPriceZone?.lower ?? targetPrice else { return false }
+            return invalidationPrice < lowerBound
+        case .sell:
+            guard let upperBound = targetPriceZone?.upper ?? targetPrice else { return false }
+            return invalidationPrice > upperBound
+        case .wait, .hold, .grid, .recoveryPlan:
+            return false
+        }
+    }
+}
+
 public struct FShadowPriceZone: Codable, Equatable, Sendable {
     public let lower: Decimal
     public let upper: Decimal
@@ -77,6 +133,8 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
     public let maxQuoteAgeSeconds: Int
     public let advisorConclusion: String
     public let reasonCodes: [String]
+    /// Nil only for legacy archives created before account identity was frozen.
+    public let ledgerAccountID: UUID?
     /// Preserve the provider's value and meaning; nil means not supplied.
     public let confidence: Decimal?
     public let accountDigest: String
@@ -88,13 +146,16 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
                 invalidationPrice: Decimal? = nil, validUntil: Date? = nil,
                 decisionLayers: [FCandidateShadowLayerAction]? = nil,
                 marketRegime: String? = nil, maxChaseDistance: Decimal? = nil,
-                finalAction: FDecisionAction? = nil, guardAllowed: Bool = true,
-                maxQuoteAgeSeconds: Int = 120) throws {
+                finalAction: FDecisionAction? = nil, guardAllowed: Bool = false,
+                maxQuoteAgeSeconds: Int(FQuoteTemporalMetadata.defaultMaximumAge)) throws {
         guard candidate.accountDigest == context.accountDigest,
               context.createdAt.timeIntervalSince1970.isFinite,
               candidate.units.map({ $0 > 0 }) ?? true,
               candidate.limitPrice.map({ $0 > 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite }) ?? true,
-              confidence.map({ !$0.isNaN && $0 >= 0 && $0 <= 1 }) ?? true,
+              targetPriceZone.map({ $0.lower > 0 && $0.upper >= $0.lower &&
+                  NSDecimalNumber(decimal: $0.lower).doubleValue.isFinite &&
+                  NSDecimalNumber(decimal: $0.upper).doubleValue.isFinite }) ?? true,
+              confidence.map({ $0.isFinite && $0 >= 0 && $0 <= 1 }) ?? true,
               validUntil.map({ $0.timeIntervalSince1970.isFinite && $0 >= context.createdAt }) ?? true,
               maxChaseDistance.map({ $0 >= 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite }) ?? true,
               (1...3_600).contains(maxQuoteAgeSeconds) else {
@@ -125,13 +186,12 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
         referencePrice = quote?.decimalValue
         referenceQuoteTimestamp = quote?.quoteTemporalMetadata?.quoteTimestamp ?? quote?.observedAt
         targetPrice = candidate.limitPrice
-        self.targetPriceZone = targetPriceZone
-        if let invalidationPrice {
-            guard invalidationPrice > 0,
-                  NSDecimalNumber(decimal: invalidationPrice).doubleValue.isFinite else {
-                throw FCandidateShadowError.invalidSnapshot
-            }
+        guard FCandidateShadowSnapshotRules.invalidationIsValid(
+            invalidationPrice, action: candidate.action,
+            targetPrice: candidate.limitPrice, targetPriceZone: targetPriceZone) else {
+            throw FCandidateShadowError.invalidSnapshot
         }
+        self.targetPriceZone = targetPriceZone
         self.invalidationPrice = invalidationPrice
         suggestedQuantity = candidate.units
         self.validUntil = validUntil
@@ -148,6 +208,7 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
         self.reasonCodes = Array(reasonCodes.prefix(32)).map { String($0.prefix(128)) }
         self.confidence = confidence
         accountDigest = candidate.accountDigest
+        ledgerAccountID = context.accountID
     }
 
     fileprivate func isTriggerPrice(_ price: Decimal) -> Bool {
@@ -160,6 +221,12 @@ public struct FCandidateShadowSnapshot: Codable, Equatable, Sendable, Identifiab
         case .sell: return price >= targetPrice
         case .wait, .hold, .dayTrade, .grid, .recoveryPlan: return false
         }
+    }
+
+    fileprivate var hasTriggerCondition: Bool {
+        if targetPriceZone != nil { return true }
+        guard targetPrice != nil else { return false }
+        return planType == .buy || planType == .sell
     }
 }
 
@@ -174,6 +241,17 @@ public struct FCandidateShadowMarketObservation: Codable, Equatable, Sendable, I
     public let sessionStatus: FMarketSessionStatus
     public let isFresh: Bool
 
+    fileprivate func isVerifiedFresh(maximumAge: TimeInterval) -> Bool {
+        guard maximumAge.isFinite, maximumAge >= 0,
+              timestampTrust == .verifiedExchangeTimestamp,
+              FMarketQuoteTrustPolicy.isTrusted(source),
+              price > 0, NSDecimalNumber(decimal: price).doubleValue.isFinite,
+              quoteTimestamp.timeIntervalSince1970.isFinite,
+              capturedAt.timeIntervalSince1970.isFinite,
+              quoteTimestamp <= capturedAt else { return false }
+        return capturedAt.timeIntervalSince(quoteTimestamp) <= maximumAge
+    }
+
     public init(id: UUID = UUID(), securityCode: String, price: Decimal,
                 quoteTimestamp: Date, capturedAt: Date, source: String,
                 timestampTrust: FQuoteTimeTrust, sessionStatus: FMarketSessionStatus) throws {
@@ -183,7 +261,7 @@ public struct FCandidateShadowMarketObservation: Codable, Equatable, Sendable, I
               quoteTimestamp.timeIntervalSince1970.isFinite,
               capturedAt.timeIntervalSince1970.isFinite,
               quoteTimestamp <= capturedAt,
-              !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              FMarketQuoteTrustPolicy.isTrusted(source),
               timestampTrust == .verifiedExchangeTimestamp else {
             throw FCandidateShadowError.invalidMarketObservation
         }
@@ -195,7 +273,10 @@ public struct FCandidateShadowMarketObservation: Codable, Equatable, Sendable, I
         self.source = source
         self.timestampTrust = timestampTrust
         self.sessionStatus = sessionStatus
-        isFresh = capturedAt.timeIntervalSince(quoteTimestamp) <= 120
+        isFresh = FQuoteTemporalMetadata(
+            quoteTimestamp: quoteTimestamp, fetchedAt: capturedAt, source: source,
+            timestampTrust: timestampTrust, marketSessionStatus: sessionStatus
+        ).freshness(at: capturedAt) == .fresh
     }
 }
 
@@ -262,9 +343,25 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
         events.append(.market(observation))
     }
 
-    public mutating func appendConfirmedExecution(_ link: FCandidateShadowFillLink) throws {
+    public mutating func appendConfirmedExecution(_ link: FCandidateShadowFillLink,
+                                                   ledgerSnapshot: FReadOnlyLedgerSnapshot) throws {
+        let confirmedFill = ledgerSnapshot.confirmedFills.first { $0.id == link.confirmedFillID }
         guard snapshot.planType == .buy || snapshot.planType == .sell || snapshot.planType == .dayTrade,
+              let ledgerAccountID = snapshot.ledgerAccountID,
+              ledgerAccountID == ledgerSnapshot.accountID,
               link.linkedAt >= snapshot.createdAt,
+              let confirmedFill,
+              confirmedFill.tradedAt <= ledgerSnapshot.capturedAt,
+              confirmedFill.tradedAt == link.linkedAt,
+              confirmedFill.instrumentCode == snapshot.securityCode,
+              link.units == confirmedFill.units,
+              (snapshot.planType == .dayTrade ||
+               (snapshot.planType == .buy && confirmedFill.side == .buy) ||
+               (snapshot.planType == .sell && confirmedFill.side == .sell)),
+              !events.contains(where: {
+                  if case .executionReview = $0 { return true }
+                  return false
+              }),
               !events.contains(where: {
                   if case let .confirmedExecution(existing) = $0 {
                       return existing.confirmedFillID == link.confirmedFillID
@@ -287,13 +384,13 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
     fileprivate var marketObservationEnd: Date {
         let trigger = events.compactMap { event -> FCandidateShadowMarketObservation? in
             guard case let .market(value) = event,
-                  value.capturedAt.timeIntervalSince(value.quoteTimestamp) <= Double(snapshot.maxQuoteAgeSeconds),
+                  value.isVerifiedFresh(maximumAge: Double(snapshot.maxQuoteAgeSeconds)),
                   value.quoteTimestamp <= (snapshot.validUntil ?? .distantFuture),
                   snapshot.isTriggerPrice(value.price) else { return nil }
             return value
         }.min { $0.quoteTimestamp < $1.quoteTimestamp }
-        return max(snapshot.validUntil ?? snapshot.createdAt.addingTimeInterval(3_600),
-                   (trigger?.quoteTimestamp ?? snapshot.createdAt).addingTimeInterval(3_600))
+        if let trigger { return trigger.quoteTimestamp.addingTimeInterval(3_600) }
+        return snapshot.validUntil ?? snapshot.createdAt.addingTimeInterval(3_600)
     }
 
     public func evaluation(asOf: Date) -> FCandidateShadowEvaluation {
@@ -303,16 +400,21 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
         }.filter { $0.quoteTimestamp <= asOf && $0.capturedAt <= asOf }
             .sorted { $0.quoteTimestamp < $1.quoteTimestamp }
         let marketBeforeExpiry = observedMarket.filter {
-            $0.capturedAt.timeIntervalSince($0.quoteTimestamp) <= Double(snapshot.maxQuoteAgeSeconds) &&
+            $0.isVerifiedFresh(maximumAge: Double(snapshot.maxQuoteAgeSeconds)) &&
             $0.quoteTimestamp <= (snapshot.validUntil ?? .distantFuture)
         }
         let trigger = marketBeforeExpiry.first(where: { snapshot.isTriggerPrice($0.price) })
-        let collectionEnd = max(snapshot.validUntil ?? snapshot.createdAt.addingTimeInterval(3_600),
-                                (trigger?.quoteTimestamp ?? snapshot.createdAt).addingTimeInterval(3_600))
+        let collectionEnd = trigger?.quoteTimestamp.addingTimeInterval(3_600) ??
+            (snapshot.validUntil ?? snapshot.createdAt.addingTimeInterval(3_600))
         let allMarket = observedMarket.filter { $0.quoteTimestamp <= collectionEnd }
         let market = allMarket.filter {
-            $0.capturedAt.timeIntervalSince($0.quoteTimestamp) <= Double(snapshot.maxQuoteAgeSeconds)
+            $0.isVerifiedFresh(maximumAge: Double(snapshot.maxQuoteAgeSeconds))
         }
+        let outcomeStart = trigger?.quoteTimestamp ?? snapshot.createdAt
+        let outcomeCoverageComplete = Self.hasContinuousCoverage(
+            market.filter { $0.quoteTimestamp >= outcomeStart },
+            from: outcomeStart, through: collectionEnd,
+            maximumGap: Double(snapshot.maxQuoteAgeSeconds))
         let executionLinks = events.compactMap { event -> FCandidateShadowFillLink? in
             guard case let .confirmedExecution(value) = event else { return nil }
             return value
@@ -336,7 +438,10 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
         }
 
         let invalidated = snapshot.invalidationPrice.flatMap { invalidation in
-            marketBeforeExpiry.first(where: { item in
+            // A trigger starts a one-hour outcome window even if the original
+            // plan expires sooner. Keep monitoring its frozen invalidation
+            // level throughout that window.
+            market.first(where: { item in
                 switch snapshot.planType {
                 case .buy, .dayTrade: return item.price <= invalidation
                 case .sell: return item.price >= invalidation
@@ -356,12 +461,11 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
         } else if let validUntil = snapshot.validUntil, asOf >= validUntil {
             status = .expired
         } else if asOf >= collectionEnd {
-            status = .observationWindowComplete
+            status = outcomeCoverageComplete ? .observationWindowComplete : .insufficientData
         } else if let maxChase = snapshot.maxChaseDistance,
                   let trigger, let last = market.last,
                   last.quoteTimestamp >= trigger.quoteTimestamp,
-                  ((snapshot.planType == .buy && last.price > (snapshot.targetPriceZone?.upper ?? snapshot.targetPrice ?? last.price) + maxChase) ||
-                   (snapshot.planType == .sell && last.price < (snapshot.targetPriceZone?.lower ?? snapshot.targetPrice ?? last.price) - maxChase)) {
+                  hasLeftZone(lastPrice: last.price, maxChase: maxChase) {
             status = .leftZone
         } else if trigger != nil {
             status = snapshot.planType == .wait ? .opportunityObserved : .triggered
@@ -382,29 +486,67 @@ public struct FCandidateShadowRecord: Codable, Equatable, Sendable, Identifiable
             guard let item = market.filter({ $0.quoteTimestamp >= target })
                 .min(by: { $0.quoteTimestamp < $1.quoteTimestamp }),
                   abs(item.quoteTimestamp.timeIntervalSince(target)) <= 120 else { return nil }
-            let raw = (item.price - outcomeReference) / outcomeReference
+            guard let raw = FCandidateShadowDecimalMath.relativeChange(
+                from: outcomeReference, to: item.price) else { return nil }
             return directional ? raw : -raw
         }
         let directionalMoves = trigger.flatMap { _ in outcomeReference }.flatMap { base in
             directional.map { favorableDirection in
-                market.filter { $0.quoteTimestamp >= outcomeAnchor }.map {
-                    ($0.price - base) / base * (favorableDirection ? Decimal(1) : Decimal(-1))
+                market.filter { $0.quoteTimestamp >= outcomeAnchor }.compactMap {
+                    guard let change = FCandidateShadowDecimalMath.relativeChange(
+                        from: base, to: $0.price) else { return nil }
+                    return change * (favorableDirection ? Decimal(1) : Decimal(-1))
                 }
             }
         } ?? []
         return FCandidateShadowEvaluation(status: status, executionStatus: execution,
             evaluatedLayer: .deepSeekAdvisor,
             dataQuality: market.isEmpty ? (allMarket.isEmpty ? .insufficient : .staleObserved) : .freshVerified,
-            observationWindowComplete: asOf >= collectionEnd && !market.isEmpty,
-            notTriggered: trigger == nil && marketBeforeExpiry.isEmpty == false &&
+            observationWindowComplete: asOf >= collectionEnd && outcomeCoverageComplete,
+            notTriggered: snapshot.hasTriggerCondition && trigger == nil && outcomeCoverageComplete &&
                 asOf >= (snapshot.validUntil ?? snapshot.createdAt.addingTimeInterval(3_600)),
             freshObservationCount: market.count, staleObservationCount: allMarket.count - market.count,
             triggeredAt: trigger?.quoteTimestamp, triggerPrice: trigger?.price,
             returnAfter5Minutes: returnAt(300), returnAfter15Minutes: returnAt(900),
             returnAfter30Minutes: returnAt(1_800), returnAfter60Minutes: returnAt(3_600),
-            maximumFavorableExcursion: directionalMoves.max(),
-            maximumAdverseExcursion: directionalMoves.min(),
+            maximumFavorableExcursion: outcomeCoverageComplete ? directionalMoves.max() : nil,
+            maximumAdverseExcursion: outcomeCoverageComplete ? directionalMoves.min() : nil,
             confirmedFillIDs: executionLinks.map(\.confirmedFillID))
+    }
+
+    private static func hasContinuousCoverage(_ observations: [FCandidateShadowMarketObservation],
+                                              from start: Date, through end: Date,
+                                              maximumGap: TimeInterval) -> Bool {
+        guard end > start, maximumGap.isFinite, maximumGap > 0,
+              let first = observations.first, let last = observations.last,
+              first.quoteTimestamp.timeIntervalSince(start) <= maximumGap,
+              end.timeIntervalSince(last.quoteTimestamp) <= maximumGap else { return false }
+        var previous = first.quoteTimestamp
+        for observation in observations.dropFirst() {
+            let gap = observation.quoteTimestamp.timeIntervalSince(previous)
+            guard gap >= 0, gap <= maximumGap else { return false }
+            previous = observation.quoteTimestamp
+        }
+        return true
+    }
+
+    private func hasLeftZone(lastPrice: Decimal, maxChase: Decimal) -> Bool {
+        switch snapshot.planType {
+        case .buy:
+            let upperBound = snapshot.targetPriceZone?.upper ?? snapshot.targetPrice ?? lastPrice
+            guard let chaseCeiling = FCandidateShadowDecimalMath.adding(upperBound, maxChase) else {
+                return false
+            }
+            return lastPrice > chaseCeiling
+        case .sell:
+            let lowerBound = snapshot.targetPriceZone?.lower ?? snapshot.targetPrice ?? lastPrice
+            guard let chaseFloor = FCandidateShadowDecimalMath.subtracting(lowerBound, maxChase) else {
+                return false
+            }
+            return lastPrice < chaseFloor
+        case .dayTrade, .wait, .hold, .grid, .recoveryPlan:
+            return false
+        }
     }
 }
 
@@ -462,7 +604,8 @@ public struct FCandidateShadowArchive: Codable, Equatable, Sendable {
     }
 
     public mutating func appendConfirmedExecution(candidateID: UUID,
-                                                   link: FCandidateShadowFillLink) throws {
+                                                   link: FCandidateShadowFillLink,
+                                                   ledgerSnapshot: FReadOnlyLedgerSnapshot) throws {
         guard let index = records.firstIndex(where: { $0.snapshot.candidateID == candidateID }) else {
             throw FCandidateShadowError.candidateNotFound
         }
@@ -474,7 +617,7 @@ public struct FCandidateShadowArchive: Codable, Equatable, Sendable {
                 return false
             })
         }) else { throw FCandidateShadowError.invalidExecutionLink }
-        try records[index].appendConfirmedExecution(link)
+        try records[index].appendConfirmedExecution(link, ledgerSnapshot: ledgerSnapshot)
     }
 
     public mutating func appendExecutionReview(candidateID: UUID,
@@ -494,9 +637,24 @@ public struct FCandidateShadowArchive: Codable, Equatable, Sendable {
             let snapshot = record.snapshot
             guard snapshot.createdAt.timeIntervalSince1970.isFinite,
                   !snapshot.accountDigest.isEmpty,
-                  snapshot.confidence.map({ !$0.isNaN && $0 >= 0 && $0 <= 1 }) ?? true,
+                  snapshot.referencePrice.map({ $0 > 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite }) ?? true,
+                  snapshot.referenceQuoteTimestamp.map({
+                      $0.timeIntervalSince1970.isFinite && $0 <= snapshot.createdAt
+                  }) ?? true,
+                  (snapshot.referencePrice == nil) == (snapshot.referenceQuoteTimestamp == nil),
+                  snapshot.confidence.map({ $0.isFinite && $0 >= 0 && $0 <= 1 }) ?? true,
                   snapshot.validUntil.map({ $0.timeIntervalSince1970.isFinite && $0 >= snapshot.createdAt }) ?? true,
                   snapshot.targetPrice.map({ $0 > 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite }) ?? true,
+                  snapshot.targetPriceZone.map({
+                      $0.lower > 0 && $0.upper >= $0.lower &&
+                      NSDecimalNumber(decimal: $0.lower).doubleValue.isFinite &&
+                      NSDecimalNumber(decimal: $0.upper).doubleValue.isFinite
+                  }) ?? true,
+                  FCandidateShadowSnapshotRules.invalidationIsValid(
+                      snapshot.invalidationPrice, action: snapshot.planType,
+                      targetPrice: snapshot.targetPrice, targetPriceZone: snapshot.targetPriceZone),
+                  snapshot.suggestedQuantity.map({ $0 > 0 }) ?? true,
+                  snapshot.maxChaseDistance.map({ $0 >= 0 && NSDecimalNumber(decimal: $0).doubleValue.isFinite }) ?? true,
                   (1...3_600).contains(snapshot.maxQuoteAgeSeconds),
                   snapshot.securityCode.map({
                       $0.count == 6 && $0.utf8.count == 6 && $0.utf8.allSatisfy({ (48...57).contains($0) })
@@ -508,23 +666,34 @@ public struct FCandidateShadowArchive: Codable, Equatable, Sendable {
                 switch event {
                 case let .market(observation):
                     guard observation.securityCode == snapshot.securityCode,
+                          observation.quoteTimestamp.timeIntervalSince1970.isFinite,
+                          observation.capturedAt.timeIntervalSince1970.isFinite,
                           observation.quoteTimestamp >= snapshot.createdAt,
                           observation.quoteTimestamp <= observation.capturedAt,
                           observation.timestampTrust == .verifiedExchangeTimestamp,
                           observation.price > 0,
                           NSDecimalNumber(decimal: observation.price).doubleValue.isFinite,
-                          !observation.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          FMarketQuoteTrustPolicy.isTrusted(observation.source),
+                          observation.isFresh == (FQuoteTemporalMetadata(
+                              quoteTimestamp: observation.quoteTimestamp,
+                              fetchedAt: observation.capturedAt,
+                              source: observation.source,
+                              timestampTrust: observation.timestampTrust,
+                              marketSessionStatus: observation.sessionStatus
+                          ).freshness(at: observation.capturedAt) == .fresh),
                           marketTimes.insert(observation.quoteTimestamp).inserted else {
                         throw FCandidateShadowError.invalidArchive
                     }
                 case let .confirmedExecution(link):
                     guard snapshot.planType == .buy || snapshot.planType == .sell || snapshot.planType == .dayTrade,
-                          link.units > 0, link.linkedAt >= snapshot.createdAt,
+                          link.units > 0, link.linkedAt.timeIntervalSince1970.isFinite,
+                          link.linkedAt >= snapshot.createdAt,
                           fillIDs.insert(link.confirmedFillID).inserted,
                           !hasExecutionReview else { throw FCandidateShadowError.invalidArchive }
                     hasExecution = true
                 case let .executionReview(review):
-                    guard review.reviewedAt >= snapshot.createdAt, !hasExecution,
+                    guard review.reviewedAt.timeIntervalSince1970.isFinite,
+                          review.reviewedAt >= snapshot.createdAt, !hasExecution,
                           !hasExecutionReview,
                           !review.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         throw FCandidateShadowError.invalidArchive
@@ -646,10 +815,12 @@ public actor FCandidateShadowJournalStore {
     }
 
     public func appendConfirmedExecution(candidateID: UUID,
-                                         link: FCandidateShadowFillLink) throws {
+                                         link: FCandidateShadowFillLink,
+                                         ledgerSnapshot: FReadOnlyLedgerSnapshot) throws {
         try ensureLoaded()
         var next = archive
-        try next.appendConfirmedExecution(candidateID: candidateID, link: link)
+        try next.appendConfirmedExecution(candidateID: candidateID, link: link,
+                                           ledgerSnapshot: ledgerSnapshot)
         try save(next)
     }
 

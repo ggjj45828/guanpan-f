@@ -2,6 +2,16 @@
 
 状态：产品决策已定稿；实现按阶段推进。本文取代与之冲突的旧要求。文档定稿、源码编码、编译、自动测试、Simulator/真机和真实服务联调是不同状态。
 
+## 当前工作树校准（2026-11-01；覆盖下方较早的“当前状态”快照）
+
+- `FMarketRegimeEngine`已编码多因子Regime；`FLocalQuantEngine`已计算八类描述性因子和三类策略准备状态，并将来源、行情时点与日线支撑日期带入Advisor只读上下文。因子方向分不是收益概率，也不会单独生成交易信号、价位或份额。
+- NAS Research支持历史分钟研究证据，但没有可在生产端验证并签发`FQuantStrategyQualificationGrant`的策略包验签链；所以Local Quant策略仍未qualified，资产变化Candidate继续fail-closed。
+- `FRealtimeQuantTrigger`只有纯状态评估器，没有App生产调用方；当前缺候选计划的合格来源，也没有持续报价订阅、状态持久化、通知与Trigger UI闭环。不能绕过缺失的策略资格去接线触发器。
+- Market Regime可消费已支持的证券/指数日线与159352→CSI A500、159941→Nasdaq-100两项明确映射；其他ETF映射、KOSPI历史日线、完整多市场交易日历/UTC与DST统一、市场广度生产源仍未完成或须保持Unavailable。
+- 当前FCore XCTest定义319项、App UI定义11项；全量Python发现284项，282项通过，2项因本机缺PyYAML而未导入。Apple构建与XCTest未在当前dirty工作树执行；不继承较早SHA的CI结果。
+
+以下日期较早的验收记录保留作历史，不覆盖本节对当前工作树的描述。
+
 ## 产品目标与不可混淆的事实
 
 观盘max是一位围绕用户真实账户工作、快速、可验证、愿意等待并能承认错误的私人投资顾问。目标不是声称预测准确或保证收益。
@@ -30,7 +40,9 @@ Candidate、触发、影子评分和Advisor都没有Ledger写权限。真实账�
 用户手工成交 → 明确确认 → FConfirmedLedgerWriter → Ledger → Quant重算 → Advisor按需复判
 ```
 
-DeepSeek不是逐tick或高频引擎。系统定位于分钟级/日内波段辅助，不自动下单、不追价。NAS是可选同步、历史归档、备份、恢复和扩展服务，不是Ledger、Advisor或Quant的可用前提；没有NAS时核心使用仍需正常。
+DeepSeek不是逐tick或高频引擎。系统定位于分钟级/日内波段辅助，不自动下单、不追价。NAS不是实时行情、本机已安装合格策略包执行、Risk Guard或DeepSeek单次请求的同步依赖；NAS故障时Ledger、行情、本地基础Advisor和有效策略包仍可工作。NAS历史分钟数据则是Quant研究、回测、Validation、样本外评估和策略资格签发的主依据。没有NAS验证资格的规则不得下放为可交易策略。DeepSeek只消费本机已有且未过期的Research Summary缓存；缓存缺失或过期时继续分析并标注不可用，绝不等待NAS。
+
+慢速研究链：NAS历史分钟数据 → Quant Research → Backtest → Validation → Out-of-Sample → Strategy Qualification → 不可变Strategy Version/参数包 → iPhone Local Quant。该链路异步于盘中决策和DeepSeek Advisor。
 
 ## 本地Quant与风险门
 
@@ -38,7 +50,7 @@ DeepSeek不是逐tick或高频引擎。系统定位于分钟级/日内波段辅�
 
 输出至少覆盖 HOLD、WAIT、NO_TRADE、APPROACHING_BUY/SELL、BUY/SELL_CANDIDATE、T_BUY/SELL_CANDIDATE、LEFT_ZONE、INVALIDATED、DATA_UNRELIABLE，并携带reason codes、目标区、份额依据、validUntil、失效条件、quote timestamp和data freshness。confidence只有具备明确统计定义与足够样本时才能提供；否则为空/证据不足。最小优势必须扣除实际费用、价差、人工延迟和踏空风险。NO_TRADE是正式结果。
 
-Market Regime由确定性数据导出，最少包含上涨趋势、下跌趋势、震荡、高/低波动、异常和数据不可靠。每证券Quant Profile与策略版本须由真实数据验证；不能凭DeepSeek或开发者直觉固化参数。Risk Guard可以否决信号，不能自行创造新交易。行情过期、异常、现金不足、持仓不足、计划失效或风险不合格时必须暂停/阻止。
+Market Regime由确定性数据导出，最少包含上涨趋势、下跌趋势、震荡、高/低波动、异常和数据不可靠。每证券Quant Profile与策略版本须由真实历史数据验证，并经Backtest、Validation、Out-of-Sample与Strategy Qualification；不能凭DeepSeek或开发者直觉固化参数。策略资格按证券×Regime×策略版本绑定，并记录数据范围、样本数、样本外指标、来源、生成时间与有效期。缺少或过期参数包时Local Quant只能WAIT/NO_TRADE。Risk Guard可以否决信号，不能自行创造新交易。行情过期、异常、现金不足、持仓不足、计划失效或风险不合格时必须暂停/阻止。
 
 同一组合的多标的机会必须共同竞争真实现金、仓位与集中度；Advisor需排序、分配优先级或等待，不能把全部现金重复分配给每只证券。Analysis Plan必须与可执行Candidate明确区分。
 
@@ -92,7 +104,7 @@ P0 Ledger与Apple CI；P1 B→F原生体验；P2最小可靠本地Quant；P3 Mar
 - 本轮HEAD涉及统一图表显示密度/横轴/图例控件、盈亏折叠、主题表面和自选行情刷新；没有新增Quant、Candidate、Shadow或Ledger实现。
 - GitHub连接器对当前SHA返回空workflow run和空combined status，无法确认当前Apple CI是否已启动或完成。**当前SHA CI未核实**，不得继承旧run结论。Windows当前环境无Xcode/Swift，未能本地Apple编译。
 - 有部分价格区Trigger evaluator与Candidate Shadow追加记录；完整本机多因子Quant、Market Regime、实时报价订阅/后台触发、Risk Guard接线、首页/详情Quant状态、完整Shadow评分与基准对照、DeepSeek真实E2E及成交后Advisor复判仍未完成。
-- NAS已降级为可选同步/归档/备份/扩展研究；NAS分钟研究不再是核心Advisor前置或当前核心P级任务。手机HTTPS连通性没有新现场证据，作为可选链路待验证。
+- NAS不再是Advisor同步前置；NAS历史分钟研究仍是策略Qualification的依据，但完整Research→Strategy Package管线未完成，不能宣称已落地。手机HTTPS连通性没有新现场证据，仍待验证。
 - 测试定义不等于当前HEAD执行。FCore/UI XCTest、Simulator启动/人工视觉、真机和真实服务E2E必须分别以当前SHA的实际证据记录。
 
 ## Run 69 live status correction (2026-10-29)
@@ -113,3 +125,12 @@ Run 69通过的Swift源码SHA为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。之�
 ## 文档推送与Swift验证关系校正（2026-10-29）
 
 本轮五份文档已通过GitHub Desktop成功推送，当前本地与远端main同步。Workflow只监控Swift/工程及workflow路径，因此文档更新没有新触发Apple CI。当前Swift代码的最近验证SHA仍为0dff6c3d84af3870d4a10adcb02fcbea0d492b2a；Run69全绿的FCore、UI XCTest、工程生成、Device/Simulator Build、截图导出、IPA校验与artifact上传均只对应该Swift SHA。
+
+## 当前工作树校准（2026-11-01）
+
+以下状态覆盖上方2026-10-28/29实现快照，不改写历史CI记录：
+
+- FCore现在已有确定性多因子Market Regime分类器、Risk Guard资格硬门和独立Candidate价格区间Trigger；Market Regime使用MA20/60结构，并在满250日时使用MA60/250长趋势因子。长短趋势冲突分类为Transition；不足250日时长周期因子Unavailable。
+- 首页可显示上证、深证、沪深300、创业板、纳斯达克100、日经225、KOSPI和恒生行情。NAS历史日K仅为已验证的六个代码开放归档读取；日经与KOSPI历史仍Unavailable。证券级Regime依据该证券自身NAS日K，指数状态尚未通过可靠映射并入ETF自身状态。
+- 完整Local Quant v1仍未实现：描述性因子观测和归一方向评分已编码，但因子尚未组合成正式策略信号或完成策略选择；持仓/现金约束下的参数包生成、策略资格签发、盘中持续评估与Trigger接线、状态持久化/通知也未闭环。Risk Guard因缺少可验证策略资格包而继续拒绝资产变化候选。
+- 2026-11-01本地dirty工作树的Swift/Python测试及Apple Build尚未运行；此前Run 69只验证其记录的旧SHA，不作为当前工作树证据。NAS实网、Simulator视觉、真机和真实市场表现仍需分别验收。

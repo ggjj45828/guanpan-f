@@ -6,8 +6,9 @@ import FAdvisor
 final class LedgerSchemaTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    private func opening(cash: Decimal = 0, positions: [FPosition] = []) -> FAccountOpeningSnapshot {
-        .init(capturedAt: now.addingTimeInterval(-600), cashBalance: cash, positions: positions)
+    private func opening(cash: Decimal = 0, positions: [FPosition] = [],
+                         capturedAt: Date? = nil) -> FAccountOpeningSnapshot {
+        .init(capturedAt: capturedAt ?? now.addingTimeInterval(-600), cashBalance: cash, positions: positions)
     }
 
     func testValidConfirmedLedgerPassesValidation() throws {
@@ -27,10 +28,88 @@ final class LedgerSchemaTests: XCTestCase {
         }
     }
 
+    func testLedgerRejectsConfirmationsThatRewindBehindEventSequence() {
+        let first = FCashMovement(sequence: 1, occurredAt: now.addingTimeInterval(-60), amount: 10,
+                                  reason: "账户入金",
+                                  userConfirmation: .init(confirmedAt: now.addingTimeInterval(-20),
+                                                          confirmationNote: "已核对"))
+        let second = FCashMovement(sequence: 2, occurredAt: now.addingTimeInterval(-60), amount: -5,
+                                   reason: "账户支出",
+                                   userConfirmation: .init(confirmedAt: now.addingTimeInterval(-30),
+                                                           confirmationNote: "已核对"))
+        let book = FAccountBook(openingSnapshot: opening(cash: 0), cashBalance: 5,
+                                cashMovements: [first, second], updatedAt: now)
+
+        XCTAssertThrowsError(try book.validate(now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError,
+                           .implausibleTimestamp("ledgerEventConfirmationOrder"))
+        }
+
+        let orderedFirst = FCashMovement(sequence: 1, occurredAt: now.addingTimeInterval(-60), amount: 10,
+                                         reason: "账户入金",
+                                         userConfirmation: .init(confirmedAt: now.addingTimeInterval(-30),
+                                                                 confirmationNote: "已核对"))
+        let orderedSecond = FCashMovement(sequence: 2, occurredAt: now.addingTimeInterval(-60), amount: -5,
+                                          reason: "账户支出",
+                                          userConfirmation: .init(confirmedAt: now.addingTimeInterval(-20),
+                                                                  confirmationNote: "已核对"))
+        let staleUpdatedAt = FAccountBook(openingSnapshot: opening(cash: 0), cashBalance: 5,
+                                          cashMovements: [orderedFirst, orderedSecond],
+                                          updatedAt: now.addingTimeInterval(-40))
+        XCTAssertThrowsError(try staleUpdatedAt.validate(now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError,
+                           .implausibleTimestamp("updatedAt.beforeLedgerEvent"))
+        }
+    }
+
     func testRejectsNegativeCash() {
         XCTAssertThrowsError(try FAccountBook(openingSnapshot: opening(), cashBalance: -1, updatedAt: now).validate(now: now)) {
             XCTAssertEqual($0 as? FLedgerValidationError, .invalidCash)
         }
+    }
+
+    func testRejectsInfiniteCashAndFillPrice() {
+        let infinity = Decimal(Double.infinity)
+        XCTAssertTrue(infinity.isInfinite)
+        XCTAssertThrowsError(try FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: infinity,
+            updatedAt: now).validate(now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError, .invalidCash)
+        }
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now, instrumentCode: "510300", side: .buy,
+            units: 1, price: infinity, fee: 0, userConfirmation: confirmation())
+        let book = FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: 10, fills: [fill], updatedAt: now)
+        XCTAssertThrowsError(try book.validate(now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError, .invalidFill(fill.id))
+        }
+    }
+
+    func testLedgerMutationsRejectInfiniteValuesWithoutChangingSourceBook() throws {
+        let infinity = Decimal(Double.infinity)
+        let source = FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: 10,
+                                  updatedAt: now.addingTimeInterval(-60))
+        let movement = FCashMovement(sequence: 1, occurredAt: now, amount: infinity,
+                                     category: .cashReconciliation, reason: "测试边界",
+                                     userConfirmation: confirmation())
+        XCTAssertThrowsError(try source.applyingUserConfirmedCashMovement(movement, now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError, .invalidCashMovement(movement.id))
+        }
+        XCTAssertEqual(source.cashBalance, 10)
+        XCTAssertTrue(source.cashMovements.isEmpty)
+
+        var filled = FAccountBook(openingSnapshot: opening(cash: Decimal(string: "100.10")!),
+                                  cashBalance: Decimal(string: "100.10")!,
+                                  updatedAt: now.addingTimeInterval(-120))
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-30),
+                                  instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                                  fee: Decimal(string: "0.10")!, userConfirmation: confirmation(),
+                                  instrumentName: "A500")
+        filled = try filled.applyingUserConfirmedFill(fill, instrumentName: "A500", now: now)
+        XCTAssertThrowsError(try filled.correctingFillFee(fillID: fill.id, correctedFee: infinity,
+            reason: "测试边界", confirmation: confirmation(), now: now)) {
+            XCTAssertEqual($0 as? FLedgerMutationError, .invalidFeeAdjustment(fill.id))
+        }
+        XCTAssertEqual(filled.cashBalance, 0)
+        XCTAssertNil(filled.feeAdjustments)
     }
 
     func testRejectsDuplicateInstrumentPositions() {
@@ -144,12 +223,30 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNoThrow(try book.validate(now: now))
     }
 
+    func testCashMovementCategoryDecodesLegacyRowsAndRoundTripsNewCategory() throws {
+        let legacy = FCashMovement(sequence: 1, occurredAt: now, amount: -2,
+                                   reason: "旧版其他费用", userConfirmation: confirmation())
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        let legacyJSON = try encoder.encode(legacy)
+        let legacyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: legacyJSON) as? [String: Any])
+        XCTAssertNil(legacyObject["category"])
+        let decodedLegacy = try decoder.decode(FCashMovement.self, from: legacyJSON)
+        XCTAssertNil(decodedLegacy.category)
+
+        let expense = FCashMovement(sequence: 2, occurredAt: now, amount: -2,
+                                    category: .accountExpense, reason: "托管费",
+                                    userConfirmation: confirmation())
+        XCTAssertEqual(try decoder.decode(FCashMovement.self, from: encoder.encode(expense)), expense)
+    }
+
     func testCashOnlyReconciliationLeavesSecurityPositionsAndCostsUnchanged() throws {
         let position = FPosition(instrumentCode: "510300", name: "沪深300ETF", units: 100,
                                  bookCost: Decimal(string: "385.25")!)
         let source = FAccountBook(openingSnapshot: opening(cash: 1000, positions: [position]),
                                   cashBalance: 1000, positions: [position], updatedAt: now.addingTimeInterval(-60))
         let movement = FCashMovement(sequence: 1, occurredAt: now, amount: -2.35,
+                                     category: .accountExpense,
                                      reason: "其他费用/现金对账：无法归属到单笔成交的账户费用",
                                      userConfirmation: confirmation())
 
@@ -160,6 +257,20 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertEqual(updated.fills, source.fills)
         XCTAssertEqual(updated.feeAdjustments, source.feeAdjustments)
         XCTAssertEqual(updated.cashMovements, [movement])
+        let snapshot = try updated.readOnlySnapshot(capturedAt: now)
+        XCTAssertEqual(snapshot.cashFlow.last?.kind, .accountExpense)
+        XCTAssertEqual(snapshot.cashFlow.last?.instrumentCode, nil)
+    }
+
+    func testAccountExpenseCategoryRejectsCashInflow() {
+        let movement = FCashMovement(sequence: 1, occurredAt: now, amount: 2,
+                                     category: .accountExpense, reason: "账户费用",
+                                     userConfirmation: confirmation())
+        let book = FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: 12,
+                                cashMovements: [movement], updatedAt: now)
+        XCTAssertThrowsError(try book.validate(now: now)) {
+            XCTAssertEqual($0 as? FLedgerValidationError, .invalidCashMovement(movement.id))
+        }
     }
 
     func testEventSequenceControlsSameTimestampCashAndFillOrder() throws {
@@ -548,6 +659,125 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertTrue(daily.isValid(asOf: now))
     }
 
+    func testDailyTradeSummaryRejectsOverflowingCombinedFees() {
+        let largeFee = Decimal.greatestFiniteMagnitude * Decimal(string: "0.75")!
+        let fills = [
+            FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-20),
+                instrumentCode: "159352", side: .buy, units: 1, price: 1, fee: largeFee,
+                userConfirmation: confirmation()),
+            FConfirmedFill(sequence: 2, tradedAt: now.addingTimeInterval(-10),
+                instrumentCode: "159352", side: .sell, units: 1, price: 1, fee: largeFee,
+                costBasisRemoved: 0, userConfirmation: confirmation())
+        ]
+
+        XCTAssertThrowsError(try FDailyTradeSummary.derive(from: fills, asOf: now)) {
+            XCTAssertEqual($0 as? FDailyTradeSummaryError, .invalidAmount("159352"))
+        }
+    }
+
+    func testDecodedDailyTradeSummaryRejectsAmountWithoutMatchingSideQuantity() throws {
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
+            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            userConfirmation: confirmation())
+        let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [fill], asOf: now).first)
+        XCTAssertTrue(summary.isValid(asOf: now))
+
+        let encoded = try JSONEncoder().encode(summary)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["buyQuantity"] = 0
+        let tamperedData = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(FDailyTradeSummary.self, from: tamperedData)
+
+        XCTAssertFalse(decoded.isValid(asOf: now))
+        XCTAssertThrowsError(try FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: "159352", tradingDate: decoded.tradingDate,
+            previousClose: 10, trades: decoded, endOfDayUnits: 10, currentPrice: 10))
+        XCTAssertThrowsError(try FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: "159352", tradingDate: decoded.tradingDate,
+            startOfDayUnits: 0, previousClose: 10, trades: decoded,
+            endOfDayUnits: 10, currentPrice: 10))
+    }
+
+    func testDecodedDailyTradeSummaryRequiresSixASCIIDigitSecurityIdentity() throws {
+        let fill = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
+            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            userConfirmation: confirmation())
+        let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [fill], asOf: now).first)
+        let encoded = try JSONEncoder().encode(summary)
+        let original = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+        for invalidCode in ["15935", "１５９３５２", "ABCDEF"] {
+            var tampered = original
+            tampered["securityCode"] = invalidCode
+            let data = try JSONSerialization.data(withJSONObject: tampered)
+            let decoded = try JSONDecoder().decode(FDailyTradeSummary.self, from: data)
+            XCTAssertFalse(decoded.isValid(asOf: now), "Invalid summary identity must fail: \(invalidCode)")
+        }
+    }
+
+    func testDecisionContextRejectsTamperedDailyTradeSummaryAfterDecoding() throws {
+        var book = FAccountBook(openingSnapshot: opening(cash: 1_000), cashBalance: 1_000,
+            updatedAt: now.addingTimeInterval(-300))
+        let buy = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-10),
+            instrumentCode: "159352", side: .buy, units: 10, price: 1,
+            userConfirmation: confirmation())
+        book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
+        let context = FDecisionContext(snapshot: try book.readOnlySnapshot(capturedAt: now), observations: [])
+        let encoded = try JSONEncoder().encode(context)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var summaries = try XCTUnwrap(object["dailyTradeSummaries"] as? [[String: Any]])
+        summaries[0]["buyQuantity"] = 0
+        object["dailyTradeSummaries"] = summaries
+        let tamperedData = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(FDecisionContext.self, from: tamperedData)
+
+        XCTAssertThrowsError(try decoded.validate(now: now))
+    }
+
+    func testDailyPortfolioPnLAggregateIsUnavailableOnDecimalOverflow() throws {
+        let maximum = Decimal.greatestFiniteMagnitude
+        let fills = ["159352", "159866"].enumerated().map { index, code in
+            FConfirmedFill(sequence: UInt64(index + 1), tradedAt: now.addingTimeInterval(-10),
+                instrumentCode: code, side: .sell, units: 1, price: maximum, fee: 0,
+                costBasisRemoved: 0, userConfirmation: confirmation())
+        }
+        let summaries = try FDailyTradeSummary.derive(from: fills, asOf: now)
+
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertTrue(summaries.allSatisfy { $0.realizedPnL.isFinite })
+        XCTAssertNil(FDailyTradeSummary.aggregateRealizedPnL(summaries))
+    }
+
+    func testReadOnlySnapshotRejectsUnrepresentableLifetimeProfit() throws {
+        let unitCost = Decimal.greatestFiniteMagnitude / 8
+        var book = FAccountBook(openingSnapshot: opening(cash: unitCost * 2),
+            cashBalance: unitCost * 2, updatedAt: now.addingTimeInterval(-300))
+        var sequence: UInt64 = 1
+
+        for cycle in 0..<9 {
+            let buy = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(-200),
+                instrumentCode: "159352", side: .buy, units: 1, price: unitCost, fee: 0,
+                userConfirmation: confirmation(), instrumentName: "A500")
+            book = try book.applyingUserConfirmedFill(buy, instrumentName: "A500", now: now)
+            sequence += 1
+            let sell = FConfirmedFill(sequence: sequence, tradedAt: now.addingTimeInterval(-190),
+                instrumentCode: "159352", side: .sell, units: 1, price: unitCost * 2, fee: 0,
+                costBasisRemoved: unitCost, userConfirmation: confirmation(), instrumentName: "A500")
+            book = try book.applyingUserConfirmedFill(sell, instrumentName: "A500", now: now)
+            sequence += 1
+            let withdrawalAmount = -(cycle == 0 ? unitCost * 2 : unitCost)
+            let withdrawal = FCashMovement(sequence: sequence, occurredAt: now,
+                amount: withdrawalAmount, reason: "资金调出",
+                userConfirmation: confirmation())
+            book = try book.applyingUserConfirmedCashMovement(withdrawal, now: now)
+            sequence += 1
+        }
+
+        XCTAssertThrowsError(try book.readOnlySnapshot(capturedAt: now)) {
+            XCTAssertEqual($0 as? FLedgerSnapshotError, .unrepresentablePositionHistory)
+        }
+    }
+
     func testDailyTradeSummarySeparatesPriorTradingDateFromCurrentDayFill() throws {
         let code = "159941"
         let yesterday = now.addingTimeInterval(-24 * 60 * 60 - 60)
@@ -585,7 +815,8 @@ final class LedgerSchemaTests: XCTestCase {
         let code = "159352"
         let prior = FPosition(instrumentCode: code, name: "A500", units: 1_000,
                               bookCost: 10_000)
-        var book = FAccountBook(openingSnapshot: opening(cash: 50_000, positions: [prior]),
+        var book = FAccountBook(openingSnapshot: opening(cash: 50_000, positions: [prior],
+                                                        capturedAt: now.addingTimeInterval(-24 * 60 * 60)),
                                 cashBalance: 50_000, positions: [prior],
                                 updatedAt: now.addingTimeInterval(-120))
         let sell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
@@ -633,18 +864,31 @@ final class LedgerSchemaTests: XCTestCase {
                        "导入前交易缺失时，不能声称证券生命周期累计完整")
 
         let quoteTime = now.addingTimeInterval(-1)
-        let quote = FContextObservation(dataClass: .quote, subject: code, source: "test real quote",
+        let quote = FContextObservation(dataClass: .quote, subject: code, source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                         observedAt: quoteTime, capturedAt: now,
                                         decimalValue: Decimal(string: "10.48")!,
                                         quoteTemporalMetadata: FQuoteTemporalMetadata(
                                             quoteTimestamp: quoteTime, fetchedAt: now,
-                                            source: "test real quote",
+                                            source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                             timestampTrust: .verifiedExchangeTimestamp,
                                             marketSessionStatus: .closed))
-        let context = FDecisionContext(snapshot: snapshot, observations: [quote])
+        let previousClose = FContextObservation(
+            dataClass: .previousClose, subject: code, source: FMarketQuoteTrustPolicy.tencentReferenceSource,
+            reference: "previousClose=10", observedAt: quoteTime.addingTimeInterval(-1),
+            capturedAt: now, decimalValue: 10)
+        let context = FDecisionContext(snapshot: snapshot, observations: [quote, previousClose])
         let facts = try XCTUnwrap(context.instrumentPnLFacts.first)
-        XCTAssertNil(facts.securityDailyPnL,
-                     "缺少经过验证的前收与今日开盘持仓标记时，不允许把已实现值冒充全天总盈亏")
+        XCTAssertEqual(facts.securityDailyPnL, Decimal(string: "989.80"),
+                       "新鲜前收、真实当日成交与可信当前价齐备时计算全天证券贡献")
+        var tamperedObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(context)) as? [String: Any])
+        var tamperedFacts = try XCTUnwrap(tamperedObject["instrumentPnLFacts"] as? [[String: Any]])
+        tamperedFacts[0]["securityDailyPnL"] = 0
+        tamperedObject["instrumentPnLFacts"] = tamperedFacts
+        let tamperedContext = try JSONDecoder().decode(FDecisionContext.self,
+            from: JSONSerialization.data(withJSONObject: tamperedObject))
+        XCTAssertThrowsError(try tamperedContext.validate(now: now),
+                             "Decoded daily P&L must be recomputed from captured market/Ledger facts")
         XCTAssertEqual(facts.dailyRealizedTradingPnL, Decimal(string: "999.90"))
         XCTAssertNil(facts.dailyTContribution)
         XCTAssertEqual(facts.currentEpisodeHistoryIsComplete, true)
@@ -680,6 +924,111 @@ final class LedgerSchemaTests: XCTestCase {
         XCTAssertNil(legacyContext.instrumentPnLFacts.first?.securityLifetimeHistoryIsComplete,
                      "旧版DecisionContext缺少完整性字段时按未知处理，不能默认为完整")
         XCTAssertNil(legacyContext.recentPositionEpisodes.last?.historyIsComplete)
+
+        var legacyWithoutOpeningBaseline = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(context)) as? [String: Any])
+        legacyWithoutOpeningBaseline.removeValue(forKey: "openingSnapshotCapturedAt")
+        legacyWithoutOpeningBaseline.removeValue(forKey: "openingPositionCodes")
+        let decodedWithoutOpeningBaseline = try JSONDecoder().decode(FDecisionContext.self,
+            from: JSONSerialization.data(withJSONObject: legacyWithoutOpeningBaseline))
+        XCTAssertThrowsError(try decodedWithoutOpeningBaseline.validate(now: now),
+            "旧快照仍可解码，但缺少初始持仓时点时不得保留历史日盈亏结论")
+    }
+
+    func testSecurityDailyPnLUsesNoTradeDayAsZeroFillsAndRejectsStalePreviousClose() throws {
+        let code = "159352"
+        let position = FPosition(instrumentCode: code, name: "A500", units: 100,
+                                 bookCost: 1_000)
+        let book = FAccountBook(openingSnapshot: opening(cash: 5_000, positions: [position],
+                                                        capturedAt: now.addingTimeInterval(-24 * 60 * 60)),
+                                cashBalance: 5_000, positions: [position],
+                                updatedAt: now.addingTimeInterval(-120))
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let quoteTime = now.addingTimeInterval(-1)
+        let quote = FContextObservation(dataClass: .quote, subject: code, source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+            observedAt: quoteTime, capturedAt: now, decimalValue: 10.20,
+            quoteTemporalMetadata: FQuoteTemporalMetadata(quoteTimestamp: quoteTime, fetchedAt: now,
+                source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+                marketSessionStatus: .closed))
+        let previousClose = FContextObservation(dataClass: .previousClose, subject: code,
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource, observedAt: now.addingTimeInterval(-30),
+            capturedAt: now, decimalValue: 10)
+
+        let freshContext = FDecisionContext(snapshot: snapshot, observations: [quote, previousClose])
+        XCTAssertEqual(freshContext.instrumentPnLFacts.first?.securityDailyPnL, 20)
+
+        let stalePreviousClose = FContextObservation(dataClass: .previousClose, subject: code,
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource, observedAt: now.addingTimeInterval(-901),
+            capturedAt: now, decimalValue: 10)
+        let staleContext = FDecisionContext(snapshot: snapshot,
+                                            observations: [quote, stalePreviousClose])
+        XCTAssertNil(staleContext.instrumentPnLFacts.first?.securityDailyPnL)
+
+        let forgedPreviousClose = FContextObservation(dataClass: .previousClose, subject: code,
+            source: "unverified-provider", observedAt: now.addingTimeInterval(-30),
+            capturedAt: now, decimalValue: 10)
+        let forgedContext = FDecisionContext(snapshot: snapshot, observations: [quote, forgedPreviousClose])
+        XCTAssertNil(forgedContext.instrumentPnLFacts.first?.securityDailyPnL,
+                     "非可信来源的前收不得参与证券日盈亏")
+        XCTAssertThrowsError(try forgedContext.validate(now: now),
+                             "伪造前收来源不得进入Advisor上下文")
+    }
+
+    func testSameDayImportedPositionAfterOpenHasNoDailyTotalPnL() throws {
+        let code = "159352"
+        let openingAt = now.addingTimeInterval(-600)
+        let tradingDate = try FDailyTradeSummary.tradingDate(for: now)
+        XCTAssertFalse(FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+            openingSnapshotCapturedAt: openingAt, securityCode: code,
+            openingPositionCodes: [code], tradingDate: tradingDate))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let dayStart = calendar.startOfDay(for: now)
+        let preOpen = try XCTUnwrap(calendar.date(byAdding: .hour, value: 9, to: dayStart))
+        XCTAssertTrue(FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+            openingSnapshotCapturedAt: preOpen, securityCode: code,
+            openingPositionCodes: [code], tradingDate: tradingDate))
+        for malformedDate in ["2026--10-20", "2026-2-20", "2026-02-30", "２０２６-10-20"] {
+            XCTAssertFalse(FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+                openingSnapshotCapturedAt: preOpen, securityCode: code,
+                openingPositionCodes: [code], tradingDate: malformedDate), malformedDate)
+        }
+        XCTAssertTrue(FSecurityPnLCalculator.openingSnapshotSupportsDailyPnL(
+            openingSnapshotCapturedAt: openingAt, securityCode: code,
+            openingPositionCodes: [], tradingDate: tradingDate),
+            "当天持仓完全由账本成交重建时，晚建立账本仍有可靠日初数量")
+        let position = FPosition(instrumentCode: code, name: "A500", units: 100, bookCost: 1_000)
+        let book = FAccountBook(openingSnapshot: opening(cash: 5_000, positions: [position],
+                                                         capturedAt: openingAt),
+                                cashBalance: 5_000, positions: [position], updatedAt: openingAt)
+        let snapshot = try book.readOnlySnapshot(capturedAt: now)
+        let quoteTime = now.addingTimeInterval(-1)
+        let quote = FContextObservation(dataClass: .quote, subject: code,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: quoteTime,
+            capturedAt: now, decimalValue: 10.20,
+            quoteTemporalMetadata: FQuoteTemporalMetadata(quoteTimestamp: quoteTime, fetchedAt: now,
+                source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+                timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .closed))
+        let reference = FContextObservation(dataClass: .previousClose, subject: code,
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource, observedAt: now.addingTimeInterval(-2),
+            capturedAt: now, decimalValue: 10)
+        let context = FDecisionContext(snapshot: snapshot, observations: [quote, reference])
+
+        XCTAssertNil(context.instrumentPnLFacts.first?.securityDailyPnL,
+                     "盘中才录入的初始份额不能冒充全天日初份额")
+        XCTAssertEqual(context.instrumentPnLFacts.first?.dailyRealizedTradingPnL, .zero)
+    }
+
+    func testSecurityDailyPnLRejectsClosingUnitsBelowNetPurchases() throws {
+        let summary = try XCTUnwrap(FDailyTradeSummary.derive(from: [
+            FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
+                instrumentCode: "159352", side: .buy, units: 10, price: 10,
+                fee: 0.1, userConfirmation: confirmation())
+        ], asOf: now).first)
+        XCTAssertThrowsError(try FSecurityPnLCalculator.dailySecurityPnL(
+            securityCode: "159352", tradingDate: summary.tradingDate,
+            previousClose: 10, trades: summary, endOfDayUnits: 0,
+            currentPrice: 10.1))
     }
 
     func testSecurityDayLossCanCoexistWithProfitOnSameDayRebuyEpisode() throws {
@@ -735,10 +1084,10 @@ final class LedgerSchemaTests: XCTestCase {
             let snapshot = try book.readOnlySnapshot(capturedAt: now)
             let quoteTime = now.addingTimeInterval(-1)
             let quote = FContextObservation(
-                dataClass: .quote, subject: code, source: "test quote", observedAt: quoteTime,
+                dataClass: .quote, subject: code, source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: quoteTime,
                 capturedAt: now, decimalValue: current,
                 quoteTemporalMetadata: FQuoteTemporalMetadata(
-                    quoteTimestamp: quoteTime, fetchedAt: now, source: "test quote",
+                    quoteTimestamp: quoteTime, fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                     timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .closed))
             return FDecisionContext(snapshot: snapshot, observations: [quote])
         }
@@ -760,7 +1109,7 @@ final class LedgerSchemaTests: XCTestCase {
                        "T贡献为负时，证券历史总体仍可盈利")
     }
 
-    func testTContributionMatchesOnlyTheBuybackQuantityAndRejectsBuybackBeforeSell() throws {
+    func testTContributionRejectsUnmatchedSellAndBuybackBeforeSell() throws {
         let tSell = FConfirmedFill(sequence: 1, tradedAt: now.addingTimeInterval(-60),
                                    instrumentCode: "159866", side: .sell, units: 1_000, price: 12,
                                    fee: Decimal(string: "0.10")!,
@@ -771,9 +1120,22 @@ final class LedgerSchemaTests: XCTestCase {
                                             fee: Decimal(string: "0.10")!,
                                             userConfirmation: confirmation(), tradeIntent: .tBuyback,
                                             tCycleID: "cycle-1")
-        XCTAssertEqual(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
-                       Decimal(string: "999.85"),
-                       "卖出1000份仅买回500份时，只计算500份并按成交比例分摊卖出费用")
+        XCTAssertNil(FTradeContributionCalculator.contribution(from: [tSell, partialBuyback]),
+                     "卖出1000份仅买回500份时仍有未配对卖出，整体T贡献必须不可用")
+        let partialSummary = try XCTUnwrap(FDailyTradeSummary.derive(
+            from: [tSell, partialBuyback], asOf: now).first)
+        XCTAssertNil(partialSummary.tContribution,
+                     "当日摘要不能把已配对部分显示成完整T贡献")
+
+        let fullBuyback = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-20),
+                                         instrumentCode: "159866", side: .buy, units: 1_000, price: 10,
+                                         fee: Decimal(string: "0.10")!,
+                                         userConfirmation: confirmation(), tradeIntent: .tBuyback,
+                                         tCycleID: "cycle-full")
+        var fullTSell = tSell
+        fullTSell.tCycleID = "cycle-full"
+        XCTAssertEqual(FTradeContributionCalculator.contribution(from: [fullTSell, fullBuyback]),
+                       Decimal(string: "1999.80"), "完整配对时才返回净做T贡献")
 
         let excessBuyback = FConfirmedFill(sequence: 3, tradedAt: now.addingTimeInterval(-20),
                                            instrumentCode: "159866", side: .buy, units: 501, price: 10,
@@ -1089,6 +1451,16 @@ final class LedgerSchemaTests: XCTestCase {
         let final = try FAccountingPolicy.costBasisRemoved(
             unitsSold: 2, totalUnits: 2, totalBookCost: Decimal(string: "6.66666667")!)
         XCTAssertEqual(final, Decimal(string: "6.66666667")!)
+    }
+
+    func testLargeCostAllocationAvoidsOverflowingIntermediateProduct() throws {
+        let removed = try FAccountingPolicy.costBasisRemoved(
+            unitsSold: Int64.max / 2, totalUnits: Int64.max,
+            totalBookCost: Decimal.greatestFiniteMagnitude)
+
+        XCTAssertTrue(removed.isFinite)
+        XCTAssertGreaterThan(removed, Decimal.zero)
+        XCTAssertLessThanOrEqual(removed, Decimal.greatestFiniteMagnitude)
     }
 
     func testCostBasisAllocationRejectsInvalidShareCounts() {

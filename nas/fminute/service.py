@@ -486,8 +486,11 @@ class MinuteArchiveService:
             session_rows = value.pop("sessions", None)
             if session_rows is not None:
                 value["sessionCount"] = len(session_rows)
+        eligible_dates = [row["tradingDate"] for row in eligible]
         payload = {"securityCode": security_code, "market": market,
                 "range": {"start": start.isoformat(), "end": end.isoformat()},
+                "dataRange": ({"start": min(eligible_dates), "end": max(eligible_dates)}
+                              if eligible_dates else None),
                 "asOf": as_of.astimezone(timezone.utc).isoformat(),
                 "timezone": self._timezone_for_market(market, sessions),
                 "sessionCoverage": status_counts, "qualifiedIndependentDays": len(eligible),

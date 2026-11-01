@@ -15,7 +15,7 @@ import Foundation
                 throw FLedgerValidationError.feeAdjustmentTargetMissing(adjustment.fillID)
             }
             let next = prior + adjustment.feeDelta
-            guard !next.isNaN, next >= 0 else {
+            guard next.isFinite, next >= 0 else {
                 throw FLedgerValidationError.invalidFeeAdjustment(adjustment.id)
             }
             fees[adjustment.fillID] = next
@@ -35,7 +35,7 @@ import Foundation
         for original in fills.sorted(by: { $0.sequence < $1.sequence }) {
             var fill = original
             let fee = fees[fill.id] ?? fill.fee
-            guard !fee.isNaN, fee >= 0 else {
+            guard fee.isFinite, fee >= 0 else {
                 throw FLedgerValidationError.invalidFill(fill.id)
             }
             fill.fee = fee

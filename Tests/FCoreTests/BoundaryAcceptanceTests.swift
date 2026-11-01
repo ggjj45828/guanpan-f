@@ -25,6 +25,36 @@ final class BoundaryAcceptanceTests: XCTestCase {
         FUserLedgerConfirmation(confirmedAt: now, confirmationNote: "用户已确认")
     }
 
+    private func securityRegimeObservation(
+        securityCode: String = "159352", regime: FMarketRegime = .range,
+        risk: FMarketRiskLevel = .r0Normal, dataAsOf: Date? = nil,
+        observedAt: Date? = nil, capturedAt: Date? = nil
+    ) -> FContextObservation {
+        let asOf = dataAsOf ?? now.addingTimeInterval(-600)
+        let observed = observedAt ?? now.addingTimeInterval(-1)
+        let captured = capturedAt ?? now
+        let formatter = ISO8601DateFormatter()
+        return FContextObservation(dataClass: .quantState, subject: securityCode,
+            source: "FCore Market Regime Engine",
+            reference: "regime=\(regime.rawValue); risk=\(risk.rawValue); confidence=80; dataAsOf=\(formatter.string(from: asOf)); source=fixture; factors=trend=available",
+            observedAt: observed, capturedAt: captured, decimalValue: 80)
+    }
+
+    private func mappedBenchmarkObservation(
+        securityCode: String = "159352", regime: FMarketRegime = .range,
+        risk: FMarketRiskLevel = .r0Normal, dataAsOf: Date? = nil,
+        observedAt: Date? = nil
+    ) throws -> FContextObservation {
+        let mapping = try XCTUnwrap(FMarketIndexSecurityMappingRegistry.mapping(for: securityCode))
+        let asOf = dataAsOf ?? now.addingTimeInterval(-86_400)
+        let formatter = ISO8601DateFormatter()
+        return FContextObservation(dataClass: .quantState,
+            subject: "mapped-index:\(securityCode)",
+            source: "F Verified Issuer Index Mapping + NAS Daily Regime",
+            reference: "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.rawValue);risk=\(risk.rawValue);confidence=80;dataAsOf=\(formatter.string(from: asOf));not_strategy_qualification=true",
+            observedAt: observedAt ?? now.addingTimeInterval(-10), capturedAt: now, decimalValue: 80)
+    }
+
     private func directory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("GuanpanF-Boundary-\(UUID().uuidString)", isDirectory: true)
@@ -34,17 +64,26 @@ final class BoundaryAcceptanceTests: XCTestCase {
 
     private func researchReference(id: String, generatedAt: Date) throws -> FDecisionResearchEvidence {
         let formatter = ISO8601DateFormatter()
-        let metrics: [String: Any] = ["evidenceState": "available_for_review", "trainingDays": 24,
-                                      "outOfSampleDays": 8, "maxMonthlySampleShare": 0.25,
-                                      "maximumMonthlySampleShare": 0.5]
+        let metrics: [String: Any] = ["evidenceState": "available_for_review", "independentDays": 32,
+                                      "minimumTrainingDays": 20, "minimumOutOfSampleDays": 5,
+                                      "trainingDays": 24, "outOfSampleDays": 8,
+                                      "maxMonthlySampleShare": 0.25, "maximumMonthlySampleShare": 0.5,
+                                      "training": ["days": 24, "startDate": "2026-08-03",
+                                                   "endDate": "2026-09-30", "median": 0.1,
+                                                   "mean": 0.1, "positiveRate": 0.6],
+                                      "outOfSample": ["days": 8, "startDate": "2026-10-01",
+                                                      "endDate": "2026-10-20", "median": 0.1,
+                                                      "mean": 0.1, "positiveRate": 0.6]]
         var payload: [String: Any] = [
-            "schemaVersion": 1, "methodologyVersion": "minute-research-1", "evidenceId": String(repeating: "0", count: 64),
+            "schemaVersion": 2, "methodologyVersion": "minute-research-2", "evidenceId": String(repeating: "0", count: 64),
             "securityCode": "159352", "market": "CN",
-            "range": ["start": "2026-10-01", "end": "2026-10-23"],
+            "range": ["start": "2026-08-01", "end": "2026-10-23"],
+            "dataRange": ["start": "2026-08-03", "end": "2026-10-23"],
+            "strategyVersion": NSNull(),
             "asOf": formatter.string(from: now.addingTimeInterval(-120)),
             "generatedAt": formatter.string(from: generatedAt), "timezone": "Asia/Shanghai",
-            "sessionCoverage": ["complete": 28, "partial": 0, "missing": 0],
-            "qualifiedIndependentDays": 28, "minimumQuality": 90, "sources": ["fixture-source"],
+            "sessionCoverage": ["complete": 32, "partial": 0, "missing": 0],
+            "qualifiedIndependentDays": 32, "minimumQuality": 90, "sources": [FResearchSourceTrustPolicy.tencentMinuteSource],
             "evidence": ["vwapBreak": ["windows": ["5": metrics]]],
             "limitations": ["fixture only \(id)"], "rawMinuteBarsIncluded": false, "tradePlan": NSNull()
         ]
@@ -87,6 +126,35 @@ final class BoundaryAcceptanceTests: XCTestCase {
             expected: "159352", actual: "563020")))
     }
 
+    func testDecisionMemoryProjectionKeepsOnlyMatchingExplicitScope() throws {
+        let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+                                       observations: [])
+        let portfolioRequest = try FAdvisorQuestionRequest(question: "组合回顾", scope: .portfolio,
+            decisionContext: context, now: now)
+        let instrumentRequest = try FAdvisorQuestionRequest(question: "159352回顾",
+            scope: .instrument("159352"), decisionContext: context, now: now)
+        let portfolioCandidate = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .wait, rationale: "组合观察")
+        let instrumentCandidate = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .wait, rationale: "证券观察")
+        let portfolioMemory = try FDecisionMemory(context: context, candidate: portfolioCandidate,
+            recommendation: "组合等待", rationale: "组合证据不足", advisorRequest: portfolioRequest)
+        let instrumentMemory = try FDecisionMemory(context: context, candidate: instrumentCandidate,
+            recommendation: "证券等待", rationale: "证券证据不足", advisorRequest: instrumentRequest)
+
+        let portfolioProjection = try FAdvisorDecisionMemoryProjection(records: [portfolioMemory, instrumentMemory],
+            accountID: context.accountID, scope: .portfolio, asOf: now, validatedAt: now)
+        let instrumentProjection = try FAdvisorDecisionMemoryProjection(records: [portfolioMemory, instrumentMemory],
+            accountID: context.accountID, scope: .instrument("159352"), asOf: now, validatedAt: now)
+
+        XCTAssertEqual(portfolioMemory.scope, .portfolio)
+        XCTAssertEqual(instrumentMemory.scope, .instrument("159352"))
+        XCTAssertEqual(portfolioProjection.entries.map(\.id), [portfolioMemory.id])
+        XCTAssertEqual(instrumentProjection.entries.map(\.id), [instrumentMemory.id])
+        XCTAssertTrue(instrumentProjection.isValid(accountID: context.accountID,
+            scope: .instrument("159352"), asOf: now))
+    }
+
     func testDecisionPipelineRejectsResearchEvidenceInjectedAfterContextCapture() async throws {
         let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
                                        observations: [])
@@ -114,6 +182,64 @@ final class BoundaryAcceptanceTests: XCTestCase {
         }
     }
 
+    func testResearchEvidenceRejectsQualifiedDaysAboveCompleteCoverage() throws {
+        let reference = try researchReference(id: String(repeating: "0", count: 64),
+                                              generatedAt: now.addingTimeInterval(-60))
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(reference.envelope)) as? [String: Any])
+        payload["qualifiedIndependentDays"] = 33
+        let unsignedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let unsigned = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: unsignedBytes)
+        payload["evidenceId"] = try unsigned.calculatedContentDigest()
+        let forgedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let forged = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: forgedBytes)
+
+        XCTAssertThrowsError(try forged.validate(capturedAt: now, contextCreatedAt: now))
+    }
+
+    func testQualifiedResearchEvidenceRequiresAValidTimeZone() throws {
+        let reference = try researchReference(id: String(repeating: "0", count: 64),
+                                              generatedAt: now.addingTimeInterval(-60))
+        for invalidZone in [NSNull(), "Mars/Olympus_Mons"] as [Any] {
+            var payload = try XCTUnwrap(JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(reference.envelope)) as? [String: Any])
+            payload["timezone"] = invalidZone
+            let unsignedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            let unsigned = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: unsignedBytes)
+            payload["evidenceId"] = try unsigned.calculatedContentDigest()
+            let forgedBytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            let forged = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: forgedBytes)
+
+            XCTAssertThrowsError(try forged.validate(capturedAt: now, contextCreatedAt: now))
+        }
+    }
+
+    func testResearchDigestMatchesNASAtHalfMillisecondTimestamps() throws {
+        let payload: [String: Any] = [
+            "schemaVersion": 2, "methodologyVersion": "minute-research-2",
+            "evidenceId": String(repeating: "0", count: 64),
+            "securityCode": "159352", "market": "CN",
+            "range": ["start": "2026-10-01", "end": "2026-10-31"],
+            "dataRange": NSNull(), "strategyVersion": NSNull(),
+            "asOf": "2026-10-25T02:00:00.000500Z",
+            "generatedAt": "2026-10-25T02:00:00.001500Z", "timezone": NSNull(),
+            "sessionCoverage": ["complete": 1], "qualifiedIndependentDays": 0,
+            "minimumQuality": 90, "sources": [],
+            "evidence": ["vwapBreak": ["metric": 0.5]],
+            "limitations": [
+                "Historical observational evidence; not a forecast or trade instruction.",
+                "Only complete sessions meeting the configured quality and as-of gates are eligible.",
+                "Market calendar and provider coverage require deployment verification."
+            ],
+            "rawMinuteBarsIncluded": false, "tradePlan": NSNull()
+        ]
+        let bytes = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let envelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: bytes)
+
+        XCTAssertEqual(try envelope.calculatedContentDigest(),
+                       "462be406477951375097389d057533a3cae5733e498d4d1e18cdfd799dd6aff2")
+    }
+
     func testProfileProjectionRejectsFutureRevisionAfterDecode() throws {
         let revision = FInvestorProfileRevision(value: .text("中长期"), confidence: 0.8,
             source: .explicit, updatedAt: now.addingTimeInterval(-60), explanation: "用户明确设置")
@@ -137,28 +263,494 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertFalse(decoded.isValid(asOf: now))
     }
 
+    func testProfileProjectionRevalidatesTemporaryPreferenceExpiryAfterDecode() throws {
+        let revision = FInvestorProfileRevision(value: .text("本周降低交易频率"), confidence: 0.7,
+            source: .temporary, updatedAt: now.addingTimeInterval(-60),
+            explanation: "用户要求本周暂停频繁交易", expiresAt: now.addingTimeInterval(300))
+        let profile = FInvestorProfile(attributes: [
+            FInvestorProfileAttribute(key: .tradingFrequency, revisions: [revision])
+        ])
+        let projection = try FAdvisorInvestorProfileProjection(profile: profile, asOf: now, validatedAt: now)
+        XCTAssertTrue(projection.isValid(asOf: now))
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(projection))
+                                    as? [String: Any])
+        var preferences = try XCTUnwrap(payload["preferences"] as? [[String: Any]])
+        preferences[0]["expiresAt"] = (now.addingTimeInterval(-1).timeIntervalSince1970) * 1_000
+        payload["preferences"] = preferences
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .millisecondsSince1970
+        let decoded = try decoder.decode(FAdvisorInvestorProfileProjection.self,
+            from: JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]))
+        XCTAssertFalse(decoded.isValid(asOf: now))
+    }
+
     func testAssetChangingCandidateMustCiteTheVerifiedFreshQuote() throws {
         let metadata = FQuoteTemporalMetadata(
             quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
-            source: "acceptance-fixture", timestampTrust: .verifiedExchangeTimestamp,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
         let quote = FContextObservation(dataClass: .quote, subject: "159352",
-            source: "acceptance-fixture", observedAt: metadata.quoteTimestamp,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
             capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3", evaluatedAt: now))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", observationID: qualification.id, evaluatedAt: now)
+        let regime = securityRegimeObservation()
+        let mappedBenchmark = try mappedBenchmarkObservation()
         let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
-                                       observations: [quote])
+            observations: [quote, qualification, regime, mappedBenchmark], strategyQualificationGrants: [grant])
         let uncited = FCandidateRecommendation(accountDigest: context.accountDigest,
             action: .buy, instrumentCode: "159352", units: 100,
-            limitPrice: 1, rationale: "基于价格评估")
+            limitPrice: 1, rationale: "基于价格评估",
+            citedObservationIDs: [qualification.id, regime.id, mappedBenchmark.id])
         let uncitedResult = FRiskGuard.evaluate(uncited, in: context, now: now)
         XCTAssertTrue(uncitedResult.findings.contains(.missingCitedEvidence(quote.id)))
 
         let cited = FCandidateRecommendation(accountDigest: context.accountDigest,
             action: .buy, instrumentCode: "159352", units: 100,
             limitPrice: 1, rationale: "基于所引新鲜报价评估",
-            citedObservationIDs: [quote.id])
+            citedObservationIDs: [quote.id, qualification.id, regime.id, mappedBenchmark.id])
         XCTAssertFalse(FRiskGuard.evaluate(cited, in: context, now: now)
             .findings.contains(.missingCitedEvidence(quote.id)))
+    }
+
+    func testAssetChangingCandidateRequiresFreshCitedQuantQualification() throws {
+        let metadata = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352",
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
+            capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+        let regime = securityRegimeObservation()
+        let withoutQualification = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now), observations: [quote, regime])
+        let candidate = FCandidateRecommendation(accountDigest: withoutQualification.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "本地策略审查", citedObservationIDs: [quote.id, regime.id])
+        let missing = FRiskGuard.evaluate(candidate, in: withoutQualification, now: now)
+        XCTAssertTrue(missing.findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("本地 Quant 策略资格")
+            }
+            return false
+        })
+
+        let forgedQualification = FContextObservation(
+            dataClass: .quantState, subject: "strategy-qualification:159352",
+            source: "F Local Quant Strategy Qualification",
+            reference: "strategyID=MeanReversion;strategyVersion=v3;qualification=qualified",
+            observedAt: now, capturedAt: now, decimalValue: 1)
+        let forgedContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, forgedQualification, regime])
+        let forgedCandidate = FCandidateRecommendation(accountDigest: forgedContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "伪造资格标记", citedObservationIDs: [quote.id, forgedQualification.id, regime.id])
+        XCTAssertTrue(FRiskGuard.evaluate(forgedCandidate, in: forgedContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("本地 Quant 策略资格")
+            }
+            return false
+        })
+
+        let staleQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now.addingTimeInterval(-48 * 3600)))
+        let staleGrant = FQuantStrategyQualificationGrant(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: staleQualification.id, evaluatedAt: now.addingTimeInterval(-48 * 3600))
+        let staleContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, staleQualification, regime], strategyQualificationGrants: [staleGrant])
+        XCTAssertTrue(FRiskGuard.evaluate(candidate, in: staleContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("本地 Quant 策略资格")
+            }
+            return false
+        })
+
+        let freshQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let freshGrant = FQuantStrategyQualificationGrant(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: freshQualification.id, evaluatedAt: now)
+        let mappedBenchmark = try mappedBenchmarkObservation()
+        let qualifiedContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, freshQualification, regime, mappedBenchmark],
+            strategyQualificationGrants: [freshGrant])
+        let uncitedQualification = FCandidateRecommendation(accountDigest: qualifiedContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "未引用资格证据", citedObservationIDs: [quote.id, regime.id])
+        XCTAssertTrue(FRiskGuard.evaluate(uncitedQualification, in: qualifiedContext, now: now)
+            .findings.contains(.missingCitedEvidence(freshQualification.id)))
+        let citedQualification = FCandidateRecommendation(accountDigest: qualifiedContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "引用合格策略和对应市场Regime",
+            citedObservationIDs: [quote.id, freshQualification.id, regime.id, mappedBenchmark.id])
+        XCTAssertTrue(FRiskGuard.evaluate(citedQualification, in: qualifiedContext, now: now).allowedForReview)
+
+        let encodedContext = try JSONEncoder().encode(qualifiedContext)
+        XCTAssertFalse(String(decoding: encodedContext, as: UTF8.self).contains("strategyQualificationGrants"))
+        let restoredContext = try JSONDecoder().decode(FDecisionContext.self, from: encodedContext)
+        XCTAssertFalse(FRiskGuard.evaluate(citedQualification, in: restoredContext, now: now).allowedForReview,
+                       "Runtime qualification grants must not survive archive/JSON decoding")
+
+        let bullRegime = securityRegimeObservation(regime: .bullTrend)
+        let mismatchedRegimeContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, freshQualification, bullRegime],
+            strategyQualificationGrants: [freshGrant])
+        let mismatchedRegimeCandidate = FCandidateRecommendation(
+            accountDigest: mismatchedRegimeContext.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "震荡策略资格不得用于牛市",
+            citedObservationIDs: [quote.id, freshQualification.id, bullRegime.id])
+        XCTAssertTrue(FRiskGuard.evaluate(mismatchedRegimeCandidate,
+            in: mismatchedRegimeContext, now: now).findings.contains {
+                if case .incompleteTradingEvidence(let reason) = $0 {
+                    return reason.contains("本地 Quant 策略资格")
+                }
+                return false
+            })
+    }
+
+    func testFreshIOPVMustBeCitedByAssetChangingCandidate() throws {
+        let metadata = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352",
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
+            capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+        let iopv = FContextObservation(dataClass: .iopv, subject: "159352",
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource,
+            reference: "method=(ETF价格/IOPV-1)*100;unit=percent",
+            observedAt: now.addingTimeInterval(-20), capturedAt: now,
+            decimalValue: Decimal(string: "0.35"))
+        let regime = securityRegimeObservation()
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: qualification.id, evaluatedAt: now)
+        let mappedBenchmark = try mappedBenchmarkObservation()
+        let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, iopv, regime, qualification, mappedBenchmark], strategyQualificationGrants: [grant])
+        let uncited = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "基于当前行情评估",
+            citedObservationIDs: [quote.id, regime.id, qualification.id, mappedBenchmark.id])
+
+        XCTAssertTrue(FRiskGuard.evaluate(uncited, in: context, now: now)
+            .findings.contains(.missingCitedEvidence(iopv.id)))
+        let cited = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "已核对当前行情与IOPV折溢价",
+            citedObservationIDs: [quote.id, iopv.id, regime.id, qualification.id, mappedBenchmark.id])
+        XCTAssertFalse(FRiskGuard.evaluate(cited, in: context, now: now)
+            .findings.contains(.missingCitedEvidence(iopv.id)))
+    }
+
+    func testDecisionContextRejectsForgedIOPVProviderOrMethod() throws {
+        for observation in [
+            FContextObservation(dataClass: .iopv, subject: "159352", source: "unknown-provider",
+                reference: "method=(ETF价格/IOPV-1)*100;unit=percent", observedAt: now,
+                capturedAt: now, decimalValue: 0.2),
+            FContextObservation(dataClass: .iopv, subject: "159352",
+                source: FMarketQuoteTrustPolicy.tencentReferenceSource,
+                reference: "unverified-method", observedAt: now, capturedAt: now, decimalValue: 0.2)
+        ] {
+            let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+                                           observations: [observation])
+            XCTAssertThrowsError(try context.validate(now: now))
+        }
+    }
+
+    func testMappedETFBuyRequiresFreshOrderedBenchmarkAndBlocksSevereMappedRisk() throws {
+        let metadata = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352",
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
+            capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+        let regime = securityRegimeObservation()
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: qualification.id, evaluatedAt: now)
+        let mapped = try mappedBenchmarkObservation()
+
+        for observations in [[quote, regime, qualification], [quote, regime, qualification, mapped]] {
+            let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+                observations: observations, strategyQualificationGrants: [grant])
+            let cited = FCandidateRecommendation(accountDigest: context.accountDigest,
+                action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+                rationale: "核对ETF和A500市场状态",
+                citedObservationIDs: observations.map(\.id))
+            let result = FRiskGuard.evaluate(cited, in: context, now: now)
+            if observations.contains(where: { $0.id == mapped.id }) {
+                XCTAssertTrue(result.allowedForReview)
+            } else {
+                XCTAssertTrue(result.findings.contains {
+                    if case .incompleteTradingEvidence(let reason) = $0 {
+                        return reason.contains("对应市场Regime缺失")
+                    }
+                    return false
+                })
+            }
+        }
+
+        let stale = try mappedBenchmarkObservation(dataAsOf: now.addingTimeInterval(-6 * 86_400))
+        let staleContext = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, regime, qualification, stale], strategyQualificationGrants: [grant])
+        let staleCandidate = FCandidateRecommendation(accountDigest: staleContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "不能把过期A500状态当作当前依据",
+            citedObservationIDs: [quote.id, regime.id, qualification.id, stale.id])
+        XCTAssertTrue(FRiskGuard.evaluate(staleCandidate, in: staleContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("对应市场Regime缺失")
+            }
+            return false
+        })
+
+        let futureRelativeToObservation = try mappedBenchmarkObservation(
+            dataAsOf: now.addingTimeInterval(-5), observedAt: now.addingTimeInterval(-10))
+        let futureContext = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, regime, qualification, futureRelativeToObservation],
+            strategyQualificationGrants: [grant])
+        let futureCandidate = FCandidateRecommendation(accountDigest: futureContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "指数数据时点不得晚于观察记录",
+            citedObservationIDs: [quote.id, regime.id, qualification.id, futureRelativeToObservation.id])
+        XCTAssertTrue(FRiskGuard.evaluate(futureCandidate, in: futureContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("对应市场Regime缺失")
+            }
+            return false
+        })
+
+        let severe = try mappedBenchmarkObservation(regime: .extremeRisk, risk: .r4Extreme)
+        let severeContext = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, regime, qualification, severe], strategyQualificationGrants: [grant])
+        let severeCandidate = FCandidateRecommendation(accountDigest: severeContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "不得逆着A500极端风险低吸",
+            citedObservationIDs: [quote.id, regime.id, qualification.id, severe.id])
+        XCTAssertTrue(FRiskGuard.evaluate(severeCandidate, in: severeContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 {
+                return reason.contains("暂停普通买入候选")
+            }
+            return false
+        })
+    }
+
+    func testMappedETFBuyRequiresStrategyAllowedByBothRegimes() throws {
+        let metadata = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+            timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352",
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
+            capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+
+        let bullSecurityRegime = securityRegimeObservation(regime: .bullTrend)
+        let meanReversionForBull = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .bullTrend, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let bullGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .bullTrend,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: meanReversionForBull.id, evaluatedAt: now)
+        let rangeBenchmark = try mappedBenchmarkObservation(regime: .range)
+        let securityMismatchContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, bullSecurityRegime, meanReversionForBull, rangeBenchmark],
+            strategyQualificationGrants: [bullGrant])
+        let securityMismatch = FCandidateRecommendation(accountDigest: securityMismatchContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "Bull不允许均值回归买入",
+            citedObservationIDs: [quote.id, bullSecurityRegime.id, meanReversionForBull.id, rangeBenchmark.id])
+        XCTAssertTrue(FRiskGuard.evaluate(securityMismatch, in: securityMismatchContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("不允许该资格凭证对应的策略") }
+            return false
+        })
+
+        let rangeSecurityRegime = securityRegimeObservation(regime: .range)
+        let rangeQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let rangeGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: rangeQualification.id, evaluatedAt: now)
+        let bearBenchmark = try mappedBenchmarkObservation(regime: .bearTrend, risk: .r2High)
+        let mappedMismatchContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, rangeSecurityRegime, rangeQualification, bearBenchmark],
+            strategyQualificationGrants: [rangeGrant])
+        let mappedMismatch = FCandidateRecommendation(accountDigest: mappedMismatchContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "A500下行状态不允许均值回归买入",
+            citedObservationIDs: [quote.id, rangeSecurityRegime.id, rangeQualification.id, bearBenchmark.id])
+        XCTAssertTrue(FRiskGuard.evaluate(mappedMismatch, in: mappedMismatchContext, now: now).findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("不允许该资格凭证对应的策略") }
+            return false
+        })
+    }
+
+    func testRiskGuardRequiresFreshMatchingRegimeAndBlocksSevereBuyRisk() throws {
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+            observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
+            quoteTemporalMetadata: metadata)
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3", evaluatedAt: now))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", observationID: qualification.id, evaluatedAt: now)
+        let observations = [quote]
+
+        let wrongSecurityRegime = securityRegimeObservation(securityCode: "000001")
+        let wrongSecurityContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: observations + [qualification, wrongSecurityRegime], strategyQualificationGrants: [grant])
+        let wrongSecurityCandidate = FCandidateRecommendation(
+            accountDigest: wrongSecurityContext.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "不能把上证Regime挪给ETF自身",
+            citedObservationIDs: [quote.id, qualification.id, wrongSecurityRegime.id])
+        let wrongSecurityResult = FRiskGuard.evaluate(wrongSecurityCandidate,
+            in: wrongSecurityContext, now: now)
+        XCTAssertTrue(wrongSecurityResult.findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("Market Regime") }
+            return false
+        })
+
+        let regimeTimeInFutureOfItsObservation = securityRegimeObservation(
+            dataAsOf: now.addingTimeInterval(-10), observedAt: now.addingTimeInterval(-20),
+            capturedAt: now.addingTimeInterval(-15))
+        let inconsistentTimeContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: observations + [qualification, regimeTimeInFutureOfItsObservation],
+            strategyQualificationGrants: [grant])
+        let inconsistentTimeCandidate = FCandidateRecommendation(
+            accountDigest: inconsistentTimeContext.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "Regime数据不能晚于其自身评估/采集时点",
+            citedObservationIDs: [quote.id, qualification.id, regimeTimeInFutureOfItsObservation.id])
+        XCTAssertTrue(FRiskGuard.evaluate(inconsistentTimeCandidate,
+            in: inconsistentTimeContext, now: now).findings.contains {
+                if case .incompleteTradingEvidence(let reason) = $0 {
+                    return reason.contains("Market Regime")
+                }
+                return false
+            })
+
+        let citedRegime = securityRegimeObservation()
+        let citedRegimeContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: observations + [qualification, citedRegime], strategyQualificationGrants: [grant])
+        let uncitedRegimeCandidate = FCandidateRecommendation(
+            accountDigest: citedRegimeContext.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "Regime必须被引用",
+            citedObservationIDs: [quote.id, qualification.id])
+        XCTAssertTrue(FRiskGuard.evaluate(uncitedRegimeCandidate, in: citedRegimeContext, now: now)
+            .findings.contains(.missingCitedEvidence(citedRegime.id)))
+
+        let conflictingRegime = securityRegimeObservation(regime: .bearTrend, risk: .r2High)
+        let conflictingContext = FDecisionContext(
+            snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: observations + [qualification, citedRegime, conflictingRegime],
+            strategyQualificationGrants: [grant])
+        let conflictingCandidate = FCandidateRecommendation(
+            accountDigest: conflictingContext.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "相互冲突的同证券Regime不得按数组顺序挑选",
+            citedObservationIDs: [quote.id, qualification.id, citedRegime.id, conflictingRegime.id])
+        XCTAssertTrue(FRiskGuard.evaluate(conflictingCandidate, in: conflictingContext, now: now)
+            .findings.contains {
+                if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("Market Regime") }
+                return false
+            })
+
+        for (regime, risk) in [(FMarketRegime.extremeRisk, FMarketRiskLevel.r4Extreme),
+                               (.riskOff, .r3Severe), (.bullTrend, .r3Severe),
+                               (.dataUnreliable, .r0Normal)] {
+            let regimeObservation = securityRegimeObservation(regime: regime, risk: risk)
+            let regimeQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+                securityCode: "159352", regime: regime, strategyID: "MeanReversion",
+                strategyVersion: "v3", evaluatedAt: now))
+            let regimeGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: regime,
+                strategyID: "MeanReversion", strategyVersion: "v3",
+                observationID: regimeQualification.id, evaluatedAt: now)
+            let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+                observations: observations + [regimeQualification, regimeObservation],
+                strategyQualificationGrants: [regimeGrant])
+            let candidate = FCandidateRecommendation(accountDigest: context.accountDigest,
+                action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+                rationale: "需要遵从市场风险状态",
+                citedObservationIDs: [quote.id, regimeQualification.id, regimeObservation.id])
+            XCTAssertFalse(FRiskGuard.evaluate(candidate, in: context, now: now).allowedForReview,
+                           "\(regime.rawValue)/R\(risk.rawValue)必须阻止普通买入")
+        }
+
+        let staleRegime = securityRegimeObservation(dataAsOf: now.addingTimeInterval(-6 * 86_400))
+        let rangeQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: now))
+        let rangeGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: rangeQualification.id, evaluatedAt: now)
+        let staleContext = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: observations + [rangeQualification, staleRegime], strategyQualificationGrants: [rangeGrant])
+        let staleCandidate = FCandidateRecommendation(accountDigest: staleContext.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: 1,
+            rationale: "过期Regime不得放行",
+            citedObservationIDs: [quote.id, rangeQualification.id, staleRegime.id])
+        let staleResult = FRiskGuard.evaluate(staleCandidate, in: staleContext, now: now)
+        XCTAssertFalse(staleResult.allowedForReview)
+        XCTAssertTrue(staleResult.findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("Market Regime") }
+            return false
+        })
+    }
+
+    func testRiskGuardRejectsBuyLimitAboveLatestPriceAsChasing() throws {
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .continuous)
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+            observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
+            quoteTemporalMetadata: metadata)
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3", evaluatedAt: now))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", observationID: qualification.id, evaluatedAt: now)
+        let regime = securityRegimeObservation()
+        let mappedBenchmark = try mappedBenchmarkObservation()
+        let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+            observations: [quote, qualification, regime, mappedBenchmark], strategyQualificationGrants: [grant])
+        let candidate = FCandidateRecommendation(accountDigest: context.accountDigest, action: .buy,
+            instrumentCode: "159352", units: 100, limitPrice: Decimal(string: "1.001")!,
+            rationale: "当前价1.000，不得上调限价追买",
+            citedObservationIDs: [quote.id, qualification.id, regime.id, mappedBenchmark.id])
+
+        let result = FRiskGuard.evaluate(candidate, in: context, now: now)
+        XCTAssertFalse(result.allowedForReview)
+        XCTAssertTrue(result.findings.contains {
+            if case .incompleteTradingEvidence(let reason) = $0 { return reason.contains("避免追价") }
+            return false
+        })
     }
 
     func testCandidateCreationCannotWriteTheLedger() async throws {
@@ -222,8 +814,11 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let ledgerDigestBeforeAdvisorWrites = try await ledger.currentDigest(now: now)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest, action: .wait,
                                                  rationale: "继续观察")
+        let memoryRequest = try FAdvisorQuestionRequest(question: "组合决策记忆测试",
+            scope: .portfolio, decisionContext: context, now: now)
         let memory = try FDecisionMemory(context: context, candidate: candidate,
-                                         recommendation: "持有", rationale: "当前无新证据")
+                                         recommendation: "持有", rationale: "当前无新证据",
+                                         advisorRequest: memoryRequest)
         let contextStore = FDecisionContextStore(directory: folder)
         let memoryStore = FDecisionMemoryStore(directory: folder)
         let profileStore = FInvestorProfileStore(directory: folder)
@@ -357,6 +952,15 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let citedGuard = FDecisionGuards.evaluate(citedCandidate, in: context,
                                                    using: assembledRequest, now: now)
         XCTAssertTrue(citedGuard.allowedForReview)
+        let unknownProfileCandidate = FCandidateRecommendation(
+            accountDigest: context.accountDigest, action: .wait, rationale: "引用不存在的画像",
+            citedInvestorProfileRevisionIDs: [UUID()])
+        let unknownProfileGuard = FAIGuard.evaluate(unknownProfileCandidate, in: context,
+            using: assembledRequest, now: now)
+        XCTAssertTrue(unknownProfileGuard.findings.contains {
+            if case .missingInvestorProfileRevision = $0 { return true }
+            return false
+        })
         let unknownMemoryCandidate = FCandidateRecommendation(
             accountDigest: context.accountDigest, action: .wait, rationale: "引用不存在的历史",
             citedDecisionMemoryIDs: [UUID()])
@@ -398,19 +1002,26 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertTrue(unboundGuard.findings.contains(.advisorRequestContextMismatch))
         let riskQuoteMetadata = FQuoteTemporalMetadata(
             quoteTimestamp: now.addingTimeInterval(-10), fetchedAt: now,
-            source: "acceptance-fixture", timestampTrust: .verifiedExchangeTimestamp,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
         let quote = FContextObservation(dataClass: .quote, subject: "159352",
-                                        source: "acceptance-fixture",
+                                        source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                         observedAt: riskQuoteMetadata.quoteTimestamp,
                                         capturedAt: now, decimalValue: 1,
                                         quoteTemporalMetadata: riskQuoteMetadata)
+        let riskQualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3", evaluatedAt: now))
+        let riskGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", observationID: riskQualification.id, evaluatedAt: now)
+        let riskRegime = securityRegimeObservation()
         let quoteSnapshot = try makeBook().readOnlySnapshot(capturedAt: now)
-        let riskContext = FDecisionContext(snapshot: quoteSnapshot, observations: [quote])
+        let riskContext = FDecisionContext(snapshot: quoteSnapshot,
+            observations: [quote, riskQualification, riskRegime], strategyQualificationGrants: [riskGrant])
         let oversizedPrice = try XCTUnwrap(Decimal(string: "1e120"))
         let overflowingCandidate = FCandidateRecommendation(
             accountDigest: riskContext.accountDigest, action: .buy, instrumentCode: "159352",
-            units: Int64.max, limitPrice: oversizedPrice, rationale: "超界算术必须拒绝")
+            units: Int64.max, limitPrice: oversizedPrice, rationale: "超界算术必须拒绝",
+            citedObservationIDs: [quote.id, riskQualification.id, riskRegime.id])
         let overflowGuard = FRiskGuard.evaluate(overflowingCandidate, in: riskContext, now: now)
         XCTAssertFalse(overflowGuard.allowedForReview)
         XCTAssertTrue(overflowGuard.findings.contains(.invalidCandidate) ||
@@ -641,6 +1252,39 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertEqual(finalBook.cashMovements.count, 1)
     }
 
+    func testCandidateFillRejectsLedgerVersionChangedAfterAnalysis() async throws {
+        let folder = try directory()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FAccountBookStore(fileURL: folder.appendingPathComponent("account.json"))
+        let writer = FConfirmedLedgerWriter(store: store)
+        _ = try await writer.confirmInitialLedger(makeBook(), confirmation: confirmed(), now: now)
+        let readSnapshot = try await store.readLedgerSnapshot(now: now)
+        let oldSnapshot = try XCTUnwrap(readSnapshot)
+
+        let movement = FCashMovement(sequence: 1, occurredAt: now, amount: 10,
+                                     reason: "并发入金", userConfirmation: confirmed())
+        _ = try await writer.confirmCashMovement(movement, now: now)
+        let staleCandidateFill = FConfirmedFill(
+            sequence: 2, tradedAt: now, instrumentCode: "159941", side: .buy,
+            units: 100, price: 1, fee: 0, userConfirmation: confirmed())
+
+        do {
+            _ = try await writer.confirmFill(staleCandidateFill, instrumentName: "纳指 ETF",
+                expectedLedgerDigest: oldSnapshot.ledgerDigest, now: now)
+            XCTFail("a candidate based on a superseded ledger version was accepted")
+        } catch let error as FLedgerPersistenceError {
+            guard case .concurrentModification = error else {
+                return XCTFail("unexpected stale candidate rejection: \(error)")
+            }
+        }
+
+        let loadedBook = try await store.load(now: now)
+        let finalBook = try XCTUnwrap(loadedBook)
+        XCTAssertEqual(finalBook.cashBalance, 1_010)
+        XCTAssertEqual(finalBook.cashMovements.map(\.id), [movement.id])
+        XCTAssertTrue(finalBook.fills.isEmpty)
+    }
+
     func testInitialSnapshotCannotSmuggleUnconfirmedFillHistory() async throws {
         let folder = try directory()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -788,6 +1432,53 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertTrue(profile.attributes.isEmpty)
     }
 
+    func testClearingOneInvestorPreferenceRequiresConfirmationAndPreservesOthers() throws {
+        var profile = FInvestorProfile()
+        _ = try profile.record(FInvestorProfileRevision(value: .text("15年以上"), confidence: 1,
+                                                         source: .explicit, updatedAt: now,
+                                                         explanation: "用户明确说明"),
+                               for: .investmentHorizon, now: now)
+        _ = try profile.record(FInvestorProfileRevision(value: .text("低风险"), confidence: 1,
+                                                         source: .explicit, updatedAt: now,
+                                                         explanation: "用户明确说明"),
+                               for: .riskTolerance, now: now)
+
+        XCTAssertThrowsError(try profile.clear(.investmentHorizon, userConfirmed: false))
+        XCTAssertNotNil(profile.attribute(.investmentHorizon))
+        try profile.clear(.investmentHorizon, userConfirmed: true)
+
+        XCTAssertNil(profile.attribute(.investmentHorizon))
+        XCTAssertEqual(profile.attribute(.riskTolerance)?.current(at: now)?.value, .text("低风险"))
+        try profile.validate(now: now)
+    }
+
+    func testQuantStateEvidenceCarriesItsOwnFreshnessAndAllowsExplicitUnavailableState() throws {
+        let regime = FContextObservation(dataClass: .quantState, subject: "159352",
+            source: "FCore Market Regime Engine",
+            reference: "regime=range; risk=r0; confidence=68; dataAsOf=2026-10-30",
+            observedAt: now, capturedAt: now, decimalValue: 68)
+        try regime.validate(now: now)
+        XCTAssertTrue(regime.isFresh(at: now))
+        XCTAssertFalse(regime.isFresh(at: now.addingTimeInterval(36 * 3600 + 1)))
+
+        let unavailable = FContextObservation(dataClass: .quantState, subject: "risk-gate:159352",
+            source: "F App Local Quant / Risk Gate", observedAt: nil, capturedAt: now,
+            decimalValue: nil,
+            unavailableReason: "Local Quant 尚未接入；资产变化候选会被硬门槛阻止。")
+        XCTAssertNoThrow(try unavailable.validate(now: now))
+        XCTAssertFalse(unavailable.isFresh(at: now))
+
+        let context = FDecisionContext(snapshot: try makeBook().readOnlySnapshot(capturedAt: now),
+                                       observations: [regime, unavailable])
+        try context.validate(now: now)
+        let candidate = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .wait, rationale: "Local Quant 当前不可用，继续观察")
+        let memory = try FDecisionMemory(context: context, candidate: candidate,
+            recommendation: "等待确定性 Quant 接入", rationale: "保存当前 Regime 和硬门槛状态")
+        XCTAssertEqual(memory.evidence.filter { $0.kind == .riskState }.count, 2)
+        XCTAssertTrue(memory.evidence.contains { $0.id == regime.id && $0.reference == regime.reference })
+    }
+
     func testInvestorProfileRevisionReplayIsIdempotent() throws {
         var profile = FInvestorProfile()
         let revision = FInvestorProfileRevision(id: UUID(uuidString: "2B9D93CD-DB22-4DB7-97C1-8B7EA02607FA")!,
@@ -921,5 +1612,13 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let restoredDigest = try await store.currentDigest(now: now)
         XCTAssertEqual(restored, original)
         XCTAssertNotEqual(restoredDigest, clearedDigest)
+    }
+
+    func testAdvisorPnLAggregatesBecomeUnavailableWhenDecimalOverflows() {
+        let maximum = Decimal.greatestFiniteMagnitude
+        XCTAssertNil(FDecisionFinancialMath.add(maximum, maximum))
+        XCTAssertNil(FDecisionFinancialMath.sum([maximum, maximum]))
+        XCTAssertEqual(FDecisionFinancialMath.add(maximum, -maximum), .zero)
+        XCTAssertNil(FDecisionFinancialMath.sum([maximum, Decimal(Double.infinity)]))
     }
 }

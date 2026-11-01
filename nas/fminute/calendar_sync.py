@@ -13,6 +13,7 @@ from typing import Callable
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from .http_limits import read_bounded_body
 from .service import ServiceError
 
 SSE_URL = "https://www.sse.com.cn/disclosure/dealinstruc/closed/"
@@ -170,11 +171,7 @@ class CalendarStore:
             if staged_payload != payload:
                 raise ServiceError("staged calendar failed read-back verification")
             os.replace(temp_name, self.path)
-            directory_fd = os.open(self.path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+            _fsync_directory(self.path.parent)
         except Exception:
             try:
                 os.unlink(temp_name)
@@ -185,6 +182,18 @@ class CalendarStore:
 
 def _canonical(value: dict) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _fsync_directory(path: Path) -> None:
+    # Windows cannot open a directory as an fsyncable descriptor. The staged
+    # file itself has already been flushed and atomically replaced at this point.
+    if os.name == "nt":
+        return
+    directory_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 class OfficialCalendarSync:
@@ -202,10 +211,10 @@ class OfficialCalendarSync:
         with urlopen(request, timeout=15) as response:
             if response.status != 200:
                 raise OSError("official calendar source unavailable")
-            body = response.read(2_000_001)
-        if len(body) > 2_000_000:
-            raise ServiceError("official calendar page exceeds size limit")
-        return body
+            try:
+                return read_bounded_body(response, 2_000_000, source="official calendar")
+            except ValueError as exc:
+                raise ServiceError(str(exc)) from exc
 
     def _szse_article(self, year: int) -> tuple[str, bytes]:
         index_body = self.fetch(SZSE_INDEX_URL)

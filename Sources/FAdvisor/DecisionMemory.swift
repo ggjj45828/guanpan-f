@@ -6,7 +6,7 @@ public enum FDecisionAction: String, Codable, Equatable, Sendable {
 }
 
 public enum FDecisionEvidenceKind: String, Codable, Equatable, Sendable {
-    case holding, cash, quote, intradayBar, dailyBar, iopv, news, nasResearch
+    case holding, cash, quote, previousClose, intradayBar, dailyBar, iopv, news, nasResearch
     case crossMarket, riskState, investorProfile, decisionMemory, userStatement
 }
 
@@ -83,6 +83,8 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
     public let accountID: UUID
     public let decidedAt: Date
     public let action: FDecisionAction
+    /// Optional for legacy memories; new app-created records freeze the request scope.
+    public let scope: FAdvisorEntryScope?
     public let instrumentCode: String?
     public let recommendation: String
     public let rationale: String
@@ -121,6 +123,7 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
         accountID = context.accountID
         decidedAt = context.createdAt
         action = candidate.action
+        scope = advisorRequest?.scope
         instrumentCode = candidate.instrumentCode
         self.recommendation = recommendation
         self.rationale = rationale
@@ -132,11 +135,14 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
             let kind: FDecisionEvidenceKind
             switch observation.dataClass {
             case .quote: kind = .quote
+            case .previousClose: kind = .previousClose
             case .intraday: kind = .intradayBar
+            case .iopv: kind = .iopv
             case .dailyHistory: kind = .dailyBar
             case .news: kind = .news
             case .nasResearch: kind = .nasResearch
             case .crossMarket: kind = .crossMarket
+            case .quantState: kind = .riskState
             }
             let summary = observation.decimalValue.map {
                 NSDecimalNumber(decimal: $0).stringValue
@@ -224,12 +230,20 @@ public struct FDecisionMemory: Codable, Equatable, Sendable, Identifiable {
     public func validate(now: Date = Date()) throws {
         guard FDecisionValidation.plausible(decidedAt, now: now),
               FDecisionValidation.nonBlank(recommendation), FDecisionValidation.nonBlank(rationale),
-              FDecisionValidation.digest(accountDigest), !cashSnapshot.isNaN, cashSnapshot >= 0,
+              FDecisionValidation.digest(accountDigest), cashSnapshot.isFinite, cashSnapshot >= 0,
+              scope.map({ value in
+                  switch value {
+                  case .portfolio: return true
+                  case .instrument(let code):
+                      return FDecisionValidation.nonBlank(code) &&
+                          (instrumentCode == nil || instrumentCode == code)
+                  }
+              }) ?? true,
               Set(holdingsSnapshot.map(\.instrumentCode)).count == holdingsSnapshot.count,
               holdingsSnapshot.allSatisfy({
                   FDecisionValidation.nonBlank($0.instrumentCode) && FDecisionValidation.nonBlank($0.name) &&
-                  $0.units > 0 && !$0.bookCost.isNaN && $0.bookCost >= 0 &&
-                  ($0.brokerDisplayCostPerUnit.map { !$0.isNaN && $0 >= 0 } ?? true)
+                  $0.units > 0 && $0.bookCost.isFinite && $0.bookCost >= 0 &&
+                  ($0.brokerDisplayCostPerUnit.map { $0.isFinite && $0 >= 0 } ?? true)
               }),
               Set(evidence.map(\.id)).count == evidence.count,
               evidence.allSatisfy({

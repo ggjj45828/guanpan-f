@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import tempfile
@@ -75,9 +76,15 @@ SQLite、补采状态和官方日历保存在 `/data` 挂载目录。当前项�
 """
         (stage / "DEPLOYMENT.md").write_text(deploy_doc, encoding="utf-8")
 
+        git_env = os.environ.copy()
+        git_env.update({
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "safe.directory",
+            "GIT_CONFIG_VALUE_0": str(ROOT),
+        })
         git_head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=git_env,
         ).stdout.strip()
         (stage / "HEAD.txt").write_text(
             f"Source Git HEAD: {git_head}\n"

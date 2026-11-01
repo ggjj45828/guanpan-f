@@ -47,6 +47,18 @@ public struct FDailyTradeSummary: Codable, Equatable, Sendable, Identifiable {
 
     public var dailyRealizedTradingPnL: Decimal { realizedPnL }
 
+    /// Returns an exact representable portfolio total, or nil when there are no
+    /// summaries or the Decimal sum overflows. Callers must not use infinity as P&L.
+    public static func aggregateRealizedPnL(_ summaries: [FDailyTradeSummary]) -> Decimal? {
+        guard !summaries.isEmpty else { return nil }
+        var total = Decimal.zero
+        for summary in summaries {
+            total += summary.realizedPnL
+            guard total.isFinite else { return nil }
+        }
+        return total
+    }
+
     /// Summarizes only fills that occurred on the as-of local trading date. The
     /// timezone is explicit so a UTC day boundary cannot move a CN fill to another day.
     static func derive(from fills: [FConfirmedFill], asOf: Date,
@@ -81,7 +93,7 @@ public struct FDailyTradeSummary: Codable, Equatable, Sendable, Identifiable {
                     .addingReportingOverflow(fill.units)
                 guard !overflow else { throw FDailyTradeSummaryError.quantityOverflow(code) }
                 let gross = fill.price * Decimal(fill.units)
-                guard !gross.isNaN else { throw FDailyTradeSummaryError.invalidAmount(code) }
+                guard gross.isFinite else { throw FDailyTradeSummaryError.invalidAmount(code) }
                 switch fill.side {
                 case .buy:
                     buyQuantity = quantity
@@ -97,8 +109,11 @@ public struct FDailyTradeSummary: Codable, Equatable, Sendable, Identifiable {
                     realizedPnL += gross - fill.fee - costBasisRemoved
                 }
             }
-            guard !buyAmount.isNaN, !sellAmount.isNaN, !buyFees.isNaN,
-                  !sellFees.isNaN, !realizedPnL.isNaN else {
+            guard buyAmount.isFinite, sellAmount.isFinite, buyFees.isFinite,
+                  sellFees.isFinite, realizedPnL.isFinite else {
+                throw FDailyTradeSummaryError.invalidAmount(code)
+            }
+            guard (buyFees + sellFees).isFinite else {
                 throw FDailyTradeSummaryError.invalidAmount(code)
             }
             guard let first = ordered.map(\.tradedAt).min(),
@@ -127,15 +142,26 @@ public struct FDailyTradeSummary: Codable, Equatable, Sendable, Identifiable {
     }
 
     public func isValid(asOf: Date, timeZoneIdentifier: String = "Asia/Shanghai") -> Bool {
+        let expectedTotalFees = buyFees + sellFees
+        let (totalQuantity, quantityOverflow) = buyQuantity.addingReportingOverflow(sellQuantity)
+        let minimumFillCount = (buyQuantity > 0 ? 1 : 0) + (sellQuantity > 0 ? 1 : 0)
+        guard let fillCountAsQuantity = Int64(exactly: fillCount) else { return false }
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier),
+              securityCode.utf8.count == 6,
+              securityCode.utf8.allSatisfy({ (48...57).contains($0) }),
+              securityCode == securityCode.trimmingCharacters(in: .whitespacesAndNewlines),
               !securityCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               tradingDate == Self.dateLabel(asOf, timeZone: timeZone),
               buyQuantity >= 0, sellQuantity >= 0, fillCount > 0,
-              !buyAmount.isNaN, !sellAmount.isNaN, !buyFees.isNaN, !sellFees.isNaN,
+              !quantityOverflow, fillCount >= minimumFillCount,
+              fillCountAsQuantity <= totalQuantity,
+              buyAmount.isFinite, sellAmount.isFinite, buyFees.isFinite, sellFees.isFinite,
               buyAmount >= 0, sellAmount >= 0, buyFees >= 0, sellFees >= 0,
-              totalFees == buyFees + sellFees,
-              !realizedPnL.isNaN,
-              (tContribution.map { !$0.isNaN } ?? true),
+              (buyQuantity == 0 ? buyAmount == 0 && buyFees == 0 : buyAmount > 0),
+              (sellQuantity == 0 ? sellAmount == 0 && sellFees == 0 : sellAmount > 0),
+              expectedTotalFees.isFinite, totalFees.isFinite, totalFees == expectedTotalFees,
+              realizedPnL.isFinite, (sellQuantity > 0 || realizedPnL == 0),
+              (tContribution.map { $0.isFinite } ?? true),
               firstFillTime <= lastFillTime, lastFillTime <= asOf,
               Self.dateLabel(firstFillTime, timeZone: timeZone) == tradingDate,
               Self.dateLabel(lastFillTime, timeZone: timeZone) == tradingDate else { return false }
@@ -229,10 +255,14 @@ public enum FTradeContributionCalculator {
                 default: return nil
                 }
             }
-            guard !cycleContribution.isNaN else { return nil }
+            // A partially matched T sell is not a complete, reportable T result.
+            // Without exposing matched and unmatched quantities separately, returning
+            // only the paired slice can be mistaken for the day's full T contribution.
+            guard sellLots.allSatisfy({ $0.remainingUnits == 0 }) else { return nil }
+            guard cycleContribution.isFinite else { return nil }
             total += cycleContribution
         }
-        return total.isNaN ? nil : total
+        return total.isFinite ? total : nil
     }
 }
 

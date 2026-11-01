@@ -99,4 +99,4 @@ renderer不得自行取行情、重算账本、推断成本、生成Research Evi
 - 五种新增主题：五种首页结构与主题Manifest已编码；专业子页面的主题化、编译与截图人工验收未完成。
 - Theme/Layout Manifest注册表及Theme Gallery选择行：已编码，尚未Apple编译或Simulator运行。
 - 主题业务隔离、10主题Simulator截图对比、动态类型/无障碍/深色护眼验收：未完成。
-- 深色/护眼主题Token、10主题截图对比、动态类型/无障碍与主题切换后的真实导航状态保持仍未完成。主题实现不得挤占Ledger、Apple CI、NAS历史分钟→iOS及AI真实闭环验证。
+- 浅/深色主题Token已接系统外观并新增十主题深色截图用例；护眼Token、实际截图对比、Dynamic Type/无障碍与主题切换后的真实导航状态保持仍未验。主题实现不得挤占Ledger、Apple CI、NAS历史分钟→iOS及AI真实闭环验证。

@@ -11,6 +11,7 @@ public struct FAdvisorProfilePreference: Codable, Equatable, Sendable, Identifia
     public let source: FInvestorProfileSource
     public let updatedAt: Date
     public let explanation: String
+    public let expiresAt: Date?
 
     fileprivate init(attribute: FInvestorProfileAttributeKey, revision: FInvestorProfileRevision) {
         self.attribute = attribute
@@ -20,6 +21,7 @@ public struct FAdvisorProfilePreference: Codable, Equatable, Sendable, Identifia
         source = revision.source
         updatedAt = revision.updatedAt
         explanation = revision.explanation
+        expiresAt = revision.expiresAt
     }
 }
 
@@ -55,14 +57,18 @@ public struct FAdvisorInvestorProfileProjection: Codable, Equatable, Sendable {
             switch preference.value {
             case let .text(value):
                 valueIsValid = !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case let .decimal(value): valueIsValid = !value.isNaN
+            case let .decimal(value): valueIsValid = value.isFinite
             case .integer, .boolean: valueIsValid = true
             }
-            return valueIsValid && !preference.confidence.isNaN &&
+            return valueIsValid && preference.confidence.isFinite &&
                 preference.confidence >= 0 && preference.confidence <= 1 &&
                 preference.updatedAt.timeIntervalSince1970.isFinite &&
                 preference.updatedAt <= asOf &&
-                !preference.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                !preference.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                (preference.source == .temporary) == (preference.expiresAt != nil) &&
+                (preference.expiresAt.map {
+                    $0.timeIntervalSince1970.isFinite && $0 > asOf
+                } ?? true)
         }
     }
 }

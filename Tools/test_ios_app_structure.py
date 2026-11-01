@@ -37,10 +37,13 @@ class IOSAppStructureTests(unittest.TestCase):
 
     def test_advisor_input_and_context_states_are_visible(self) -> None:
         self.assertIn("TextField(", self.views)
-        self.assertIn('Label("发送"', self.views)
+        self.assertIn('Label(model.isAskingAdvisor ? "分析中" : "发送"', self.views)
         self.assertIn("model.portfolioContextLabel", self.views)
-        self.assertIn("尚未配置；发送不会离开本机", self.views)
-        self.assertIn("尚未连接 NAS", self.views)
+        self.assertIn('accessibilityIdentifier("advisor.ai-key-status")', self.views)
+        self.assertIn('accessibilityIdentifier("advisor.context.nas-research")', self.views)
+        self.assertIn("历史Quant研究摘要暂不可用", self.app_source)
+        self.assertIn('Section("NAS 历史研究与数据服务")', self.views)
+        self.assertIn("尚未填写 NAS 地址，连接测试还没有开始。", self.views)
 
     def test_app_only_reads_the_real_ledger_snapshot(self) -> None:
         app_sources = "\n".join(path.read_text(encoding="utf-8") for path in

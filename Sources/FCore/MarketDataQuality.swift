@@ -12,9 +12,130 @@ public enum FQuoteFreshness: String, Codable, Equatable, Sendable {
     case fresh, stale, unverified
 }
 
+/// Only source labels configured for the app's live security/index quote
+/// providers may support a decision-grade quote. Arbitrary non-empty labels
+/// remain displayable, but do not pass the shared freshness gate.
+public enum FMarketQuoteTrustPolicy {
+    public static let tencentMinuteSource = "Tencent Finance minute/query"
+    public static let eastmoneyMinuteSource = "Eastmoney push2 实时分钟（Tencent 主源不可用时备用）"
+    public static let tencentReferenceSource = "Tencent qt.gtimg.cn"
+    public static let sinaIndexSource = "Sina Finance hq.sinajs.cn"
+    public static let naverIndexSource = "Naver Finance"
+    public static let trustedSources: Set<String> = [
+        tencentMinuteSource, eastmoneyMinuteSource, tencentReferenceSource,
+        sinaIndexSource, naverIndexSource
+    ]
+
+    public static func isTrusted(_ source: String?) -> Bool {
+        guard let source else { return false }
+        return trustedSources.contains(source.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    public static func isTrustedReferenceSource(_ source: String?) -> Bool {
+        source?.trimmingCharacters(in: .whitespacesAndNewlines) == tencentReferenceSource
+    }
+}
+
+/// NAS transports archived bars, but the client still verifies which upstream
+/// provider is allowed to have produced them for the requested market.
+public enum FMarketBarTrustPolicy {
+    public static let tencentDailySource = "Tencent Finance daily K-line (archived by F NAS)"
+    public static let nikkeiDailyCloseSource = "Nikkei Indexes official daily close CSV (personal use)"
+    public static let naverKospiDailySource = "Naver Finance KOSPI daily chart (public web endpoint)"
+    public static let tencentMinuteArchiveSource = "Tencent Finance minute/query (public web endpoint)"
+    public static let eastmoneyMinuteArchiveSource = "Eastmoney push2his 1-minute kline (public web endpoint)"
+
+    public static func isTrustedSecurityDailySource(_ source: String?) -> Bool {
+        source?.trimmingCharacters(in: .whitespacesAndNewlines) == tencentDailySource
+    }
+
+    public static func isTrustedIndexDailySource(_ source: String?, indexCode: String) -> Bool {
+        let expected: String
+        switch indexCode {
+        case "sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX", "hkHSI":
+            expected = tencentDailySource
+        case "int_nikkei":
+            expected = nikkeiDailyCloseSource
+        case "KOSPI":
+            expected = naverKospiDailySource
+        default:
+            return false
+        }
+        return source?.trimmingCharacters(in: .whitespacesAndNewlines) == expected
+    }
+
+    public static func isTrustedRegimeHistorySource(_ source: String?, marketContext: String) -> Bool {
+        if marketContext.hasPrefix("security:") {
+            return isTrustedSecurityDailySource(source)
+        }
+        if marketContext.hasPrefix("index:") {
+            return isTrustedIndexDailySource(source, indexCode: String(marketContext.dropFirst("index:".count)))
+        }
+        switch marketContext {
+        case "CN", "US", "HK":
+            return source?.trimmingCharacters(in: .whitespacesAndNewlines) == tencentDailySource
+        case "JP":
+            return source?.trimmingCharacters(in: .whitespacesAndNewlines) == nikkeiDailyCloseSource
+        case "KR":
+            return source?.trimmingCharacters(in: .whitespacesAndNewlines) == naverKospiDailySource
+        default:
+            return false
+        }
+    }
+
+    public static func isTrustedMinuteArchiveSource(_ source: String?) -> Bool {
+        guard let source else { return false }
+        return [tencentMinuteArchiveSource, eastmoneyMinuteArchiveSource]
+            .contains(source.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+/// Provider labels permitted to contribute to Market Regime evidence. Breadth
+/// remains disabled until a production source is explicitly configured.
+public enum FMarketRegimeEvidenceTrustPolicy {
+    private static let verifiedBreadthSourcesByMarket: [String: Set<String>] = [:]
+
+    public static func isTrustedBenchmarkSource(_ source: String, indexCode: String) -> Bool {
+        let expected: String
+        switch indexCode {
+        case "sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX", "hkHSI":
+            expected = FMarketBarTrustPolicy.tencentDailySource
+        case "int_nikkei":
+            expected = FMarketBarTrustPolicy.nikkeiDailyCloseSource
+        case "KOSPI":
+            expected = FMarketBarTrustPolicy.naverKospiDailySource
+        default:
+            return false
+        }
+        return source.trimmingCharacters(in: .whitespacesAndNewlines) == expected
+    }
+
+    public static func isTrustedBreadthSource(_ source: String, market: String) -> Bool {
+        // No exchange breadth provider has passed source, timestamp, and coverage
+        // verification yet. A nonempty caller supplied label is not evidence.
+        guard let verifiedSources = verifiedBreadthSourcesByMarket[market] else { return false }
+        return verifiedSources.contains(source.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+/// Sources permitted to support NAS minute-research evidence. This is kept
+/// separate from live-quote trust because archived provider labels differ.
+public enum FResearchSourceTrustPolicy {
+    public static let tencentMinuteSource = "Tencent Finance minute/query (public web endpoint)"
+    public static let eastmoneyMinuteSource = "Eastmoney push2his 1-minute kline (public web endpoint)"
+    public static let trustedSources: Set<String> = [tencentMinuteSource, eastmoneyMinuteSource]
+
+    public static func isTrusted(_ source: String) -> Bool {
+        trustedSources.contains(source.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
 /// Keeps exchange time and local retrieval time distinct. A display label never
 /// presents fetchedAt as if it were an exchange timestamp.
 public struct FQuoteTemporalMetadata: Codable, Equatable, Sendable {
+    /// Shared maximum age for treating a verified live quote as current.
+    public static let defaultMaximumAge: TimeInterval = 120
+
     public let quoteTimestamp: Date?
     public let fetchedAt: Date?
     public let source: String?
@@ -30,11 +151,11 @@ public struct FQuoteTemporalMetadata: Codable, Equatable, Sendable {
         self.marketSessionStatus = marketSessionStatus
     }
 
-    public func freshness(at now: Date, maximumAge: TimeInterval = 120) -> FQuoteFreshness {
+    public func freshness(at now: Date, maximumAge: TimeInterval = defaultMaximumAge) -> FQuoteFreshness {
         guard maximumAge.isFinite, maximumAge >= 0,
               timestampTrust == .verifiedExchangeTimestamp,
               let quoteTimestamp, let fetchedAt,
-              source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              FMarketQuoteTrustPolicy.isTrusted(source),
               quoteTimestamp <= fetchedAt, fetchedAt <= now, quoteTimestamp <= now,
               quoteTimestamp.timeIntervalSince1970.isFinite,
               fetchedAt.timeIntervalSince1970.isFinite else { return .unverified }
@@ -70,7 +191,8 @@ public struct FQuoteTemporalMetadata: Codable, Equatable, Sendable {
             formatter.timeZone = timeZone
             formatter.dateFormat = "M月d日 HH:mm:ss"
             let time = formatter.string(from: quoteTimestamp)
-            return marketSessionStatus == .closed ? "已收盘 · \(time)" : "行情时间 · \(time)"
+            let label = marketSessionStatus == .closed ? "已收盘 · \(time)" : "行情时间 · \(time)"
+            return FMarketQuoteTrustPolicy.isTrusted(source) ? label : "\(label) · 来源未验证"
         }
         if timestampTrust == .fetchedAtOnly, hasSource, let fetchedAt,
            fetchedAt.timeIntervalSince1970.isFinite {
@@ -150,8 +272,8 @@ public struct FDividendYieldPreference: Codable, Equatable, Sendable {
     }
 
     public func validate() throws {
-        guard !referenceYield.isNaN, referenceYield >= 0, referenceYield <= 1,
-              customMinimumYield.map({ !$0.isNaN && $0 >= 0 && $0 <= 1 }) ?? true,
+        guard referenceYield.isFinite, referenceYield >= 0, referenceYield <= 1,
+              customMinimumYield.map({ $0.isFinite && $0 >= 0 && $0 <= 1 }) ?? true,
               mode != .customMinimum || customMinimumYield != nil else {
             throw FDividendYieldPreferenceError.invalidPreference
         }
@@ -159,7 +281,7 @@ public struct FDividendYieldPreference: Codable, Equatable, Sendable {
 
     public func passesCustomMinimum(currentYield: Decimal?) -> Bool {
         guard mode == .customMinimum, let customMinimumYield else { return true }
-        guard let currentYield, !currentYield.isNaN else { return false }
+        guard let currentYield, currentYield.isFinite else { return false }
         return currentYield >= customMinimumYield
     }
 }

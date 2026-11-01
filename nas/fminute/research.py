@@ -19,6 +19,25 @@ def _valid_quality_threshold(value: int) -> bool:
     return type(value) is int and 0 <= value <= 100
 
 
+def _valid_sample_thresholds(training_days: int, out_of_sample_days: int,
+                             maximum_monthly_concentration: float) -> bool:
+    return (type(training_days) is int and training_days >= 1 and
+            type(out_of_sample_days) is int and out_of_sample_days >= 1 and
+            type(maximum_monthly_concentration) in (int, float) and
+            isfinite(maximum_monthly_concentration) and
+            0 < maximum_monthly_concentration <= 1)
+
+
+def _finite_result_float(value: Decimal) -> float | None:
+    try:
+        converted = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
+    if not isfinite(converted) or (converted == 0 and value != 0):
+        return None
+    return converted
+
+
 def _quality_gate(row: Mapping, minimum_quality: int) -> bool:
     """Prefer the archive's transparent session score; retain strict legacy gates."""
     score = row.get("research_quality")
@@ -45,6 +64,16 @@ def _walk_forward_summary(samples: Sequence[Mapping], *, value_key: str,
             continue
         if day in by_day:
             duplicates.add(day)
+        try:
+            metric = float(sample[value_key])
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return {"evidenceState": "invalid_numeric_observation",
+                    "trainingDays": 0, "outOfSampleDays": 0,
+                    "maxMonthlySampleShare": None, "training": None, "outOfSample": None}
+        if not isfinite(metric):
+            return {"evidenceState": "invalid_numeric_observation",
+                    "trainingDays": 0, "outOfSampleDays": 0,
+                    "maxMonthlySampleShare": None, "training": None, "outOfSample": None}
         by_day[day] = sample
     if duplicates:
         return {"evidenceState": "duplicate_trading_dates", "duplicateDates": sorted(duplicates),
@@ -92,6 +121,17 @@ def _walk_forward_summary(samples: Sequence[Mapping], *, value_key: str,
             "training": training_stats, "outOfSample": holdout_stats}
 
 
+def _period_rows(samples: Sequence[Mapping], period: Mapping | None) -> list[Mapping]:
+    if not period or not period.get("startDate") or not period.get("endDate"):
+        return []
+    return [sample for sample in samples
+            if period["startDate"] <= sample.get("tradingDate", "") <= period["endDate"]]
+
+
+def _reviewable(walk_forward: Mapping) -> bool:
+    return walk_forward.get("evidenceState") == "available_for_review"
+
+
 def build_vwap_break_evidence(sessions: Sequence[Mapping], *, research_as_of: datetime,
                               horizons_minutes: Sequence[int] = (5, 15, 30, 60),
                               minimum_independent_days: int = 20,
@@ -109,9 +149,9 @@ def build_vwap_break_evidence(sessions: Sequence[Mapping], *, research_as_of: da
     if not _is_aware(research_as_of):
         raise ArchiveError("research as-of must be timezone-aware")
     if (not horizons_minutes or any(type(value) is not int or value <= 0 for value in horizons_minutes) or
-            minimum_independent_days < 1 or minimum_out_of_sample_days < 1 or
-            not _valid_quality_threshold(minimum_quality) or
-            not 0 < maximum_monthly_concentration <= 1):
+            not _valid_sample_thresholds(minimum_independent_days, minimum_out_of_sample_days,
+                                         maximum_monthly_concentration) or
+            not _valid_quality_threshold(minimum_quality)):
         raise ArchiveError("horizons must be positive integer minutes")
     cutoff = research_as_of.astimezone(timezone.utc)
     output: dict[str, dict] = {}
@@ -119,6 +159,7 @@ def build_vwap_break_evidence(sessions: Sequence[Mapping], *, research_as_of: da
     all_days: set[str] = set()
     for horizon in sorted(set(horizons_minutes)):
         samples = []
+        rejected_numeric_observations = 0
         for session in sessions:
             if session.get("complete") is not True:
                 continue
@@ -182,23 +223,41 @@ def build_vwap_break_evidence(sessions: Sequence[Mapping], *, research_as_of: da
             signal_price = valid[first_cross][1]
             outcome_price = valid[first_cross + horizon][1]
             change = (outcome_price / signal_price - Decimal(1)) * Decimal(100)
+            return_percent = _finite_result_float(change)
+            if return_percent is None:
+                rejected_numeric_observations += 1
+                continue
             samples.append({"tradingDate": day, "signalTimestamp": valid[first_cross][0].isoformat(),
                             "outcomeTimestamp": valid[first_cross + horizon][0].isoformat(),
-                            "returnPercent": float(change)})
+                            "returnPercent": return_percent})
             all_days.add(day)
             all_sources.update(point[3] for point in valid)
         walk_forward = _walk_forward_summary(
             samples, value_key="returnPercent", minimum_training_days=minimum_independent_days,
             minimum_out_of_sample_days=minimum_out_of_sample_days,
             maximum_monthly_concentration=maximum_monthly_concentration)
+        training_samples = _period_rows(samples, walk_forward.get("training"))
+        out_of_sample_samples = _period_rows(samples, walk_forward.get("outOfSample"))
+        reviewable = _reviewable(walk_forward)
         output[str(horizon)] = {
             "horizonMinutes": horizon,
             "independentDays": len(samples),
+            "rejectedNumericObservations": rejected_numeric_observations,
             "minimumIndependentDays": minimum_independent_days,
-            "medianReturnPercent": (median(sample["returnPercent"] for sample in samples)
-                                    if walk_forward["evidenceState"] == "available_for_review" else None),
-            "meanReturnPercent": (mean(sample["returnPercent"] for sample in samples)
-                                  if walk_forward["evidenceState"] == "available_for_review" else None),
+            "headlinePopulation": "out_of_sample" if reviewable else None,
+            "trainingMedianReturnPercent": (median(sample["returnPercent"] for sample in training_samples)
+                                             if reviewable else None),
+            "trainingMeanReturnPercent": (mean(sample["returnPercent"] for sample in training_samples)
+                                           if reviewable else None),
+            "outOfSampleMedianReturnPercent": (median(sample["returnPercent"] for sample in out_of_sample_samples)
+                                                if reviewable else None),
+            "outOfSampleMeanReturnPercent": (mean(sample["returnPercent"] for sample in out_of_sample_samples)
+                                              if reviewable else None),
+            # Legacy headline fields now use only the chronological holdout.
+            "medianReturnPercent": (median(sample["returnPercent"] for sample in out_of_sample_samples)
+                                    if reviewable else None),
+            "meanReturnPercent": (mean(sample["returnPercent"] for sample in out_of_sample_samples)
+                                  if reviewable else None),
             **walk_forward,
             "samples": samples,
         }
@@ -255,11 +314,13 @@ def build_morning_selloff_recovery_evidence(
     at or before 14:30. It is historical evidence, never a candidate order.
     """
     if (not _is_aware(research_as_of) or not drop_threshold_percent.is_finite() or
-            not _valid_quality_threshold(minimum_quality) or drop_threshold_percent <= 0 or minimum_independent_days < 1 or
-            minimum_out_of_sample_days < 1 or not 0 < maximum_monthly_concentration <= 1):
+            not _valid_quality_threshold(minimum_quality) or drop_threshold_percent <= 0 or
+            not _valid_sample_thresholds(minimum_independent_days, minimum_out_of_sample_days,
+                                         maximum_monthly_concentration)):
         raise ArchiveError("invalid recovery research parameters")
     cutoff = research_as_of.astimezone(timezone.utc)
     samples, sources = [], set()
+    rejected_numeric_observations = 0
     for session in sessions:
         day, tz_name = session.get("tradingDate"), session.get("timezone")
         try:
@@ -285,8 +346,13 @@ def build_morning_selloff_recovery_evidence(
             continue
         outcome = outcomes[-1]
         recovery = (outcome["price"] / trough["price"] - Decimal(1)) * Decimal(100)
-        samples.append({"tradingDate": day, "morningDropPercent": float(drop),
-                        "recoveryFromMorningLowPercent": float(recovery),
+        drop_percent = _finite_result_float(drop)
+        recovery_percent = _finite_result_float(recovery)
+        if drop_percent is None or recovery_percent is None:
+            rejected_numeric_observations += 1
+            continue
+        samples.append({"tradingDate": day, "morningDropPercent": drop_percent,
+                        "recoveryFromMorningLowPercent": recovery_percent,
                         "signalTimestamp": trough["timestamp"].isoformat(),
                         "outcomeTimestamp": outcome["timestamp"].isoformat()})
         sources.update(row["source"] for row in bars)
@@ -295,13 +361,30 @@ def build_morning_selloff_recovery_evidence(
         samples, value_key="recoveryFromMorningLowPercent", minimum_training_days=minimum_independent_days,
         minimum_out_of_sample_days=minimum_out_of_sample_days,
         maximum_monthly_concentration=maximum_monthly_concentration)
+    training_samples = _period_rows(samples, walk_forward.get("training"))
+    out_of_sample_samples = _period_rows(samples, walk_forward.get("outOfSample"))
+    reviewable = _reviewable(walk_forward)
+    training_recovery_rate = (sum(s["recoveryFromMorningLowPercent"] > 0 for s in training_samples) /
+                              len(training_samples) if training_samples else None)
+    out_of_sample_recovery_rate = (sum(s["recoveryFromMorningLowPercent"] > 0
+                                        for s in out_of_sample_samples) /
+                                   len(out_of_sample_samples) if out_of_sample_samples else None)
     return {"researchType": "morning-selloff-afternoon-recovery", "asOf": cutoff.isoformat(),
             "dropThresholdPercent": float(drop_threshold_percent), "independentDays": count,
+            "rejectedNumericObservations": rejected_numeric_observations,
             "minimumIndependentDays": minimum_independent_days,
-            "recoveryRate": (sum(s["recoveryFromMorningLowPercent"] > 0 for s in samples) / count
-                             if walk_forward["evidenceState"] == "available_for_review" else None),
-            "medianRecoveryPercent": (median(s["recoveryFromMorningLowPercent"] for s in samples)
-                                      if walk_forward["evidenceState"] == "available_for_review" else None),
+            "headlinePopulation": "out_of_sample" if reviewable else None,
+            "trainingRecoveryRate": training_recovery_rate if reviewable else None,
+            "trainingMedianRecoveryPercent": (median(s["recoveryFromMorningLowPercent"]
+                                                     for s in training_samples) if reviewable else None),
+            "outOfSampleRecoveryRate": out_of_sample_recovery_rate if reviewable else None,
+            "outOfSampleMedianRecoveryPercent": (median(s["recoveryFromMorningLowPercent"]
+                                                        for s in out_of_sample_samples)
+                                                 if reviewable else None),
+            # Legacy headline fields now use only the chronological holdout.
+            "recoveryRate": out_of_sample_recovery_rate if reviewable else None,
+            "medianRecoveryPercent": (median(s["recoveryFromMorningLowPercent"]
+                                             for s in out_of_sample_samples) if reviewable else None),
             **walk_forward,
             "sources": sorted(sources), "samples": samples, "tradePlan": None}
 
@@ -321,8 +404,9 @@ def replay_grid_spacing_evidence(
     if (not _is_aware(research_as_of) or type(units) is not int or units <= 0 or
             not fee_per_side.is_finite() or fee_per_side < 0 or
             not _valid_quality_threshold(minimum_quality) or
-            minimum_independent_days < 1 or minimum_out_of_sample_days < 1 or
-            not 0 < maximum_monthly_concentration <= 1 or not spacing_percentages):
+            not _valid_sample_thresholds(minimum_independent_days, minimum_out_of_sample_days,
+                                         maximum_monthly_concentration) or
+            not spacing_percentages):
         raise ArchiveError("invalid grid replay parameters")
     spacings = sorted(set(Decimal(str(value)) for value in spacing_percentages))
     if any(not value.is_finite() or value <= 0 or value >= 100 for value in spacings):
@@ -362,19 +446,70 @@ def replay_grid_spacing_evidence(
                                          "lastObservedAt": bars[-1]["timestamp"].isoformat()})
     results = {}
     for spacing, days in trials.items():
-        count = len(days)
-        dated = [dict(row, netAfterFees=float(row["netAfterFees"])) for row in days]
+        dated = []
+        valid_days = []
+        rejected_numeric_observations = 0
+        for row in days:
+            net_after_fees = _finite_result_float(Decimal(row["netAfterFees"]))
+            if net_after_fees is None:
+                rejected_numeric_observations += 1
+                continue
+            dated.append(dict(row, netAfterFees=net_after_fees))
+            valid_days.append(row)
         walk_forward = _walk_forward_summary(
             dated, value_key="netAfterFees", minimum_training_days=minimum_independent_days,
             minimum_out_of_sample_days=minimum_out_of_sample_days,
             maximum_monthly_concentration=maximum_monthly_concentration)
-        results[spacing] = {"independentDays": count, "minimumIndependentDays": minimum_independent_days,
-                            "completedRoundTrips": sum(row["completedRoundTrips"] for row in days),
-                            "netAfterFees": str(sum((Decimal(row["netAfterFees"]) for row in days), Decimal(0)))
-                            if walk_forward["evidenceState"] == "available_for_review" else None,
+        training_days = _period_rows(valid_days, walk_forward.get("training"))
+        out_of_sample_days = _period_rows(valid_days, walk_forward.get("outOfSample"))
+        reviewable = _reviewable(walk_forward)
+        training_net = sum((Decimal(row["netAfterFees"]) for row in training_days), Decimal(0))
+        out_of_sample_net = sum((Decimal(row["netAfterFees"]) for row in out_of_sample_days), Decimal(0))
+        training_round_trips = sum(row["completedRoundTrips"] for row in training_days)
+        out_of_sample_round_trips = sum(row["completedRoundTrips"] for row in out_of_sample_days)
+        results[spacing] = {"independentDays": len(valid_days),
+                            "rejectedNumericObservations": rejected_numeric_observations,
+                            "minimumIndependentDays": minimum_independent_days,
+                            "headlinePopulation": "out_of_sample" if reviewable else None,
+                            "trainingMeanNetAfterFees": (walk_forward["training"]["mean"]
+                                                         if reviewable else None),
+                            "totalObservedCompletedRoundTrips": sum(
+                                row["completedRoundTrips"] for row in valid_days),
+                            "trainingCompletedRoundTrips": training_round_trips if reviewable else None,
+                            "outOfSampleCompletedRoundTrips": out_of_sample_round_trips if reviewable else None,
+                            "completedRoundTrips": out_of_sample_round_trips if reviewable else None,
+                            "trainingNetAfterFees": str(training_net) if reviewable else None,
+                            "outOfSampleNetAfterFees": str(out_of_sample_net) if reviewable else None,
+                            # Legacy headline field now reports only the chronological holdout.
+                            "netAfterFees": str(out_of_sample_net) if reviewable else None,
                             **walk_forward,
-                            "sessions": days}
+                            "sessions": valid_days}
+    # The spacing sweep is model selection. Choose one candidate using training
+    # data only, then publish a single holdout result to avoid repeatedly
+    # querying the same out-of-sample dates and selecting the apparent winner.
+    selectable = [(spacing, result["trainingMeanNetAfterFees"])
+                  for spacing, result in results.items()
+                  if result["evidenceState"] == "available_for_review" and
+                  result["trainingMeanNetAfterFees"] is not None and
+                  result["trainingMeanNetAfterFees"] > 0]
+    selected_spacing = (min(selectable,
+                            key=lambda item: (-item[1], Decimal(item[0])))[0]
+                        if selectable else None)
+    for spacing, result in results.items():
+        result["selectedByTraining"] = spacing == selected_spacing
+        if spacing == selected_spacing:
+            continue
+        if result["evidenceState"] == "available_for_review":
+            result["evidenceState"] = "not_selected_by_training"
+        result["headlinePopulation"] = None
+        result["completedRoundTrips"] = None
+        result["outOfSampleCompletedRoundTrips"] = None
+        result["outOfSampleNetAfterFees"] = None
+        result["netAfterFees"] = None
+        result["outOfSample"] = None
     return {"researchType": "historical-grid-spacing-replay", "asOf": cutoff.isoformat(),
             "unitsPerRoundTrip": units, "feePerSide": str(fee_per_side),
             "fillModel": "close-only; one side per minute; no intraminute high-low inference",
+            "selectionPolicy": "highest positive training mean net-after-fees; ties choose smaller spacing; only one holdout reported",
+            "selectedSpacing": selected_spacing,
             "spacings": results, "tradePlan": None}

@@ -38,14 +38,19 @@ public actor FConfirmedLedgerWriter {
 
     @discardableResult
     public func confirmFill(_ fill: FConfirmedFill, instrumentName: String,
+                            expectedLedgerDigest: String? = nil,
                             now: Date = Date()) async throws -> String {
         try validate(fill.userConfirmation, now: now)
-        guard let prior = try await store.load(now: now),
-              let digest = try await store.currentDigest(now: now) else {
+        guard let base = try await store.loadMutationBase(now: now) else {
             throw FLedgerPersistenceError.primaryFileMissing
         }
-        let updated = try prior.applyingUserConfirmedFill(fill, instrumentName: instrumentName, now: now)
-        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+        if let expectedLedgerDigest, expectedLedgerDigest != base.ledgerDigest {
+            throw FLedgerPersistenceError.concurrentModification(
+                expected: expectedLedgerDigest, actual: base.ledgerDigest)
+        }
+        let updated = try base.accountBook.applyingUserConfirmedFill(
+            fill, instrumentName: instrumentName, now: now)
+        return try await store.save(updated, expectedPriorDigest: base.archiveContentDigest, now: now)
     }
 
     /// Appends an after-the-fact fee correction only after explicit user confirmation.
@@ -54,26 +59,24 @@ public actor FConfirmedLedgerWriter {
                                          confirmation: FUserLedgerConfirmation,
                                          now: Date = Date()) async throws -> String {
         try validate(confirmation, now: now)
-        guard let prior = try await store.load(now: now),
-              let digest = try await store.currentDigest(now: now) else {
+        guard let base = try await store.loadMutationBase(now: now) else {
             throw FLedgerPersistenceError.primaryFileMissing
         }
-        let updated = try prior.correctingFillFee(
+        let updated = try base.accountBook.correctingFillFee(
             fillID: fillID, correctedFee: correctedFee, reason: reason,
             confirmation: confirmation, now: now)
-        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+        return try await store.save(updated, expectedPriorDigest: base.archiveContentDigest, now: now)
     }
 
     @discardableResult
     public func confirmCashMovement(_ movement: FCashMovement,
                                     now: Date = Date()) async throws -> String {
         try validate(movement.userConfirmation, now: now)
-        guard let prior = try await store.load(now: now),
-              let digest = try await store.currentDigest(now: now) else {
+        guard let base = try await store.loadMutationBase(now: now) else {
             throw FLedgerPersistenceError.primaryFileMissing
         }
-        let updated = try prior.applyingUserConfirmedCashMovement(movement, now: now)
-        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+        let updated = try base.accountBook.applyingUserConfirmedCashMovement(movement, now: now)
+        return try await store.save(updated, expectedPriorDigest: base.archiveContentDigest, now: now)
     }
 
     @discardableResult
@@ -81,14 +84,13 @@ public actor FConfirmedLedgerWriter {
                                          confirmation: FUserLedgerConfirmation,
                                          now: Date = Date()) async throws -> String {
         try validate(confirmation, now: now)
-        guard let prior = try await store.load(now: now),
-              let digest = try await store.currentDigest(now: now) else {
+        guard let base = try await store.loadMutationBase(now: now) else {
             throw FLedgerPersistenceError.primaryFileMissing
         }
-        let updated = try prior.correctingBrokerDisplayCost(
+        let updated = try base.accountBook.correctingBrokerDisplayCost(
             instrumentCode: instrumentCode, costPerUnit: costPerUnit,
             confirmation: confirmation, now: now)
-        return try await store.save(updated, expectedPriorDigest: digest, now: now)
+        return try await store.save(updated, expectedPriorDigest: base.archiveContentDigest, now: now)
     }
 
     @discardableResult

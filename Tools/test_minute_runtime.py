@@ -1,8 +1,9 @@
 import unittest
+import threading
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
-from nas.fminute.runtime import select_realtime_rows_for_session, summarize_backfill_cycle
+from nas.fminute.runtime import MinuteRuntimeWorker, select_realtime_rows_for_session, summarize_backfill_cycle
 from nas.fminute.service import ServiceError
 
 
@@ -74,6 +75,46 @@ class RealtimeSessionFilterTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ServiceError, "mismatched security"):
             select_realtime_rows_for_session([wrong_code], session, "159352")
+
+
+class WorkerLifecycleTests(unittest.TestCase):
+    def test_snapshot_reports_stopped_worker_even_when_last_cycle_was_ok(self):
+        worker = MinuteRuntimeWorker(None, ())
+        worker.last_cycle = {"status": "ok"}
+        worker._started = True
+        worker._stopping = True
+
+        snapshot = worker.worker_snapshot("realtime")
+
+        self.assertEqual(snapshot["status"], "ok")
+        self.assertEqual(snapshot["workerState"], "stopped")
+
+    def test_start_does_not_silently_accept_an_existing_live_thread(self):
+        worker = MinuteRuntimeWorker(None, ())
+        release = threading.Event()
+        thread = threading.Thread(target=release.wait, daemon=True)
+        thread.start()
+        worker._threads = [thread]
+        try:
+            with self.assertRaisesRegex(RuntimeError, "already running or still stopping"):
+                worker.start()
+        finally:
+            release.set()
+            thread.join(timeout=1)
+
+    def test_calendar_sync_failure_is_reported_and_worker_can_exit_cleanly(self):
+        worker = MinuteRuntimeWorker(None, ())
+
+        class BrokenCalendarSync:
+            def sync_year(self, year):
+                worker._stop.set()
+                raise OSError("calendar source disconnected")
+
+        worker.calendar_sync = BrokenCalendarSync()
+        worker._run_calendar_sync()
+
+        self.assertEqual(worker.last_calendar_cycle["status"], "degraded")
+        self.assertIn("calendar source disconnected", worker.last_calendar_cycle["error"])
 
 
 if __name__ == "__main__":

@@ -24,6 +24,10 @@ targets:
       path: GuanpanF-Info.plist
       properties:
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSLocalNetworkUsageDescription: "观盘max 可选连接您配置的 NAS 历史归档与研究服务；未连接 NAS 仍可使用本机账本、行情和顾问基础功能。"
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

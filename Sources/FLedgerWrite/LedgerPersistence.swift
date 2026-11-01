@@ -267,6 +267,12 @@ public struct FAccountBookArchive: Codable, Equatable, Sendable {
     }
 }
 
+struct FAccountBookMutationBase: Sendable {
+    let accountBook: FAccountBook
+    let ledgerDigest: String
+    let archiveContentDigest: String
+}
+
 /// Actor-isolated, single-writer file store for an F account book.
 /// Saves validate before writing, use optimistic full-content digests, preserve the prior
 /// verified archive, atomically replace one file, and read it back before returning.
@@ -291,6 +297,16 @@ public actor FAccountBookStore {
     public func currentDigest(now: Date = Date()) throws -> String? {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         return try decodeArchive(Data(contentsOf: fileURL), now: now).archiveContentDigest
+    }
+
+    /// Reads the account and both optimistic-concurrency digests from the same
+    /// validated archive snapshot, so a write cannot pair an old book with a new digest.
+    func loadMutationBase(now: Date = Date()) throws -> FAccountBookMutationBase? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        let archive = try decodeArchive(Data(contentsOf: fileURL), now: now)
+        return FAccountBookMutationBase(accountBook: archive.accountBook,
+                                        ledgerDigest: archive.ledgerDigest,
+                                        archiveContentDigest: archive.archiveContentDigest)
     }
 
     /// Atomically saves a complete account snapshot while preserving import receipts.

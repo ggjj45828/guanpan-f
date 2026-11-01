@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: guanpan-f-${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Test F core and build iOS targets

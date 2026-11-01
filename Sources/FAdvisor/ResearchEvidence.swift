@@ -1,6 +1,17 @@
 import Foundation
 import CryptoKit
 
+/// Dividend factor providers are not yet connected to a verified source in this
+/// app. Keep the set explicit so evidence remains unavailable until a real
+/// provider is integrated and its provenance contract is reviewed.
+public enum FResearchDividendSourceTrustPolicy {
+    public static let trustedSources: Set<String> = []
+
+    public static func isTrusted(_ source: String) -> Bool {
+        trustedSources.contains(source.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
 /// Recursive JSON values keep the NAS evidence tree structured without creating
 /// a permissive `Any` escape hatch in DecisionContext.
 public indirect enum FResearchJSONValue: Codable, Equatable, Sendable {
@@ -73,6 +84,11 @@ public indirect enum FResearchJSONValue: Codable, Equatable, Sendable {
         return nil
     }
 
+    fileprivate var boolValue: Bool? {
+        if case let .bool(value) = self { return value }
+        return nil
+    }
+
     fileprivate var isNull: Bool { if case .null = self { return true }; return false }
 }
 
@@ -89,7 +105,7 @@ public struct FResearchDateRange: Codable, Equatable, Sendable {
     public let end: String
 }
 
-/// Direct Codable representation of NAS `ResearchEvidenceEnvelope` schema v1.
+/// Direct Codable representation of NAS `ResearchEvidenceEnvelope` schema v2.
 /// Evidence is compact statistics only; raw minute bars and executable plans are rejected.
 public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
     public let schemaVersion: Int
@@ -98,6 +114,11 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
     public let securityCode: String
     public let market: String
     public let range: FResearchDateRange
+    /// Calendar-date span of sessions that actually passed archive quality gates.
+    /// This is distinct from the requested query range.
+    public let dataRange: FResearchDateRange?
+    /// Nil means no NAS-qualified strategy version has been released for this evidence.
+    public let strategyVersion: String?
     public let asOf: String
     public let generatedAt: String
     public let timezone: String?
@@ -117,21 +138,36 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
     /// gate; another qualified section cannot authorize a different strategy.
     public func hasQualifiedEvidence(_ family: String) -> Bool {
         guard let value = evidence[family] else { return false }
-        return Self.hasQualifiedNode(value)
+        return Self.hasQualifiedNode(value, maximumIndependentDays: qualifiedIndependentDays, dataRange: dataRange)
     }
 
     public func validate(capturedAt: Date, contextCreatedAt: Date) throws {
-        guard schemaVersion == 1, methodologyVersion == "minute-research-1",
+        guard schemaVersion == 2, methodologyVersion == "minute-research-2",
               Self.digest(evidenceId), Self.nonBlank(securityCode), Self.nonBlank(market),
               let start = Self.parseDay(range.start), let end = Self.parseDay(range.end), start <= end,
+              (dataRange.map {
+                  guard let dataStart = Self.parseDay($0.start),
+                        let dataEnd = Self.parseDay($0.end) else { return false }
+                  return start <= dataStart && dataStart <= dataEnd && dataEnd <= end
+              } ?? true),
+              (strategyVersion.map(Self.nonBlank) ?? true),
               let asOfDate = Self.parseTimestamp(asOf), let generatedDate = Self.parseTimestamp(generatedAt),
               generatedDate >= asOfDate, asOfDate <= contextCreatedAt,
               generatedDate <= capturedAt, capturedAt <= contextCreatedAt,
               sources.allSatisfy(Self.nonBlank),
+              (qualifiedIndependentDays == 0 || sources.allSatisfy(FResearchSourceTrustPolicy.isTrusted)),
+              sessionCoverage.keys.allSatisfy(Self.nonBlank),
+              (timezone.map(Self.nonBlank) ?? true),
+              (timezone.map { TimeZone(identifier: $0) != nil } ?? true),
               (qualifiedIndependentDays == 0 || !sources.isEmpty),
               qualifiedIndependentDays >= 0, minimumQuality >= 0, minimumQuality <= 100,
+              qualifiedIndependentDays == 0 || dataRange != nil,
+              qualifiedIndependentDays == 0 || timezone != nil,
+              qualifiedIndependentDays == 0 ||
+                qualifiedIndependentDays <= (sessionCoverage["complete"] ?? 0),
               rawMinuteBarsIncluded == false, tradePlan.isNull,
               Set(evidence.keys).isSubset(of: Set(["vwapBreak", "morningRecovery", "gridSpacingReplay", "dividendQuality"])),
+              Self.validGridSpacingSelection(evidence["gridSpacingReplay"]),
               !evidence.isEmpty, !Self.containsForbiddenPayload(.object(evidence)),
               try calculatedContentDigest() == evidenceId else {
             throw FDecisionContextError.invalidResearchEvidence(evidenceId)
@@ -160,29 +196,61 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
             return Self.validDividendNode(dividend, envelopeAsOf: asOfDate)
         }
         guard qualifiedIndependentDays >= 25 else { return false }
-        return Self.hasQualifiedNode(.object(evidence))
+        guard dataRange != nil else { return false }
+        return Self.hasQualifiedNode(.object(evidence), maximumIndependentDays: qualifiedIndependentDays, dataRange: dataRange)
     }
 
     public var compactSummary: String {
-        let qualified = Self.qualifiedNodeCount(.object(evidence))
+        let qualified = Self.qualifiedNodeCount(.object(evidence), maximumIndependentDays: qualifiedIndependentDays, dataRange: dataRange)
         return "\(market)/\(securityCode) · 合格研究类型 \(qualified) · 独立交易日 \(qualifiedIndependentDays) · 来源 \(sources.joined(separator: ","))"
     }
 
     private var asOfDate: Date { observedAt }
 
-    private static func hasQualifiedNode(_ value: FResearchJSONValue) -> Bool {
+    private static func hasQualifiedNode(_ value: FResearchJSONValue, maximumIndependentDays: Int,
+                                         dataRange: FResearchDateRange?) -> Bool {
         if let object = value.objectValue {
-            if object["evidenceState"]?.stringValue == "available_for_review",
-               let training = object["trainingDays"]?.integerValue, training >= 20,
-               let outOfSample = object["outOfSampleDays"]?.integerValue, outOfSample >= 5,
-               let share = object["maxMonthlySampleShare"]?.numberValue,
-               let maximum = object["maximumMonthlySampleShare"]?.numberValue,
-               share >= 0, maximum >= 0, share <= maximum, maximum <= 0.5 {
+            if isQualifiedNode(object, maximumIndependentDays: maximumIndependentDays, dataRange: dataRange) {
                 return true
             }
-            return object.values.contains(where: hasQualifiedNode)
+            return object.values.contains {
+                hasQualifiedNode($0, maximumIndependentDays: maximumIndependentDays, dataRange: dataRange)
+            }
         }
         return false
+    }
+
+    private static func isQualifiedNode(_ object: [String: FResearchJSONValue], maximumIndependentDays: Int,
+                                        dataRange: FResearchDateRange?) -> Bool {
+        guard object["evidenceState"]?.stringValue == "available_for_review",
+              let independent = object["independentDays"]?.integerValue, independent > 0,
+              independent <= maximumIndependentDays,
+              let training = object["trainingDays"]?.integerValue, training >= 20,
+              let outOfSample = object["outOfSampleDays"]?.integerValue, outOfSample >= 5,
+              independent == training + outOfSample,
+              let minimumTraining = object["minimumTrainingDays"]?.integerValue,
+              training >= minimumTraining,
+              let minimumOutOfSample = object["minimumOutOfSampleDays"]?.integerValue,
+              outOfSample >= minimumOutOfSample,
+              let trainingStats = object["training"]?.objectValue,
+              trainingStats["days"]?.integerValue == training,
+              let outStats = object["outOfSample"]?.objectValue,
+              outStats["days"]?.integerValue == outOfSample,
+              let trainingStartText = trainingStats["startDate"]?.stringValue,
+              let trainingEndText = trainingStats["endDate"]?.stringValue,
+              let outStartText = outStats["startDate"]?.stringValue,
+              let outEndText = outStats["endDate"]?.stringValue,
+              let trainingStart = parseDay(trainingStartText), let trainingEnd = parseDay(trainingEndText),
+              let outStart = parseDay(outStartText), let outEnd = parseDay(outEndText),
+              trainingStart <= trainingEnd, trainingEnd < outStart, outStart <= outEnd,
+              let dataRange,
+              let dataStart = parseDay(dataRange.start), let dataEnd = parseDay(dataRange.end),
+              dataStart <= trainingStart, trainingEnd <= dataEnd,
+              dataStart <= outStart, outEnd <= dataEnd,
+              let share = object["maxMonthlySampleShare"]?.numberValue,
+              let maximum = object["maximumMonthlySampleShare"]?.numberValue,
+              share >= 0, maximum >= 0, share <= maximum, maximum <= 0.5 else { return false }
+        return true
     }
 
     /// Dividend evidence has factor provenance gates, not minute-research day counts.
@@ -203,6 +271,7 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
             guard let item = factor.objectValue,
                   let source = item["source"]?.stringValue, !source.trimmingCharacters(
                     in: .whitespacesAndNewlines).isEmpty,
+                  FResearchDividendSourceTrustPolicy.isTrusted(source),
                   let quality = item["quality"]?.integerValue, quality >= 90,
                   let observedText = item["observedAt"]?.stringValue,
                   let fetchedText = item["fetchedAt"]?.stringValue,
@@ -213,17 +282,40 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
         return true
     }
 
-    private static func qualifiedNodeCount(_ value: FResearchJSONValue) -> Int {
+    private static func qualifiedNodeCount(_ value: FResearchJSONValue, maximumIndependentDays: Int,
+                                           dataRange: FResearchDateRange?) -> Int {
         guard let object = value.objectValue else { return 0 }
-        let isQualified = object["evidenceState"]?.stringValue == "available_for_review" &&
-            (object["trainingDays"]?.integerValue ?? 0) >= 20 &&
-            (object["outOfSampleDays"]?.integerValue ?? 0) >= 5 &&
-            (object["maxMonthlySampleShare"]?.numberValue ?? -1) >= 0 &&
-            (object["maximumMonthlySampleShare"]?.numberValue ?? -1) >= 0 &&
-            (object["maxMonthlySampleShare"]?.numberValue ?? 1) <=
-            (object["maximumMonthlySampleShare"]?.numberValue ?? 0) &&
-            (object["maximumMonthlySampleShare"]?.numberValue ?? 1) <= 0.5
-        return (isQualified ? 1 : 0) + object.values.reduce(0) { $0 + qualifiedNodeCount($1) }
+        let isQualified = isQualifiedNode(object, maximumIndependentDays: maximumIndependentDays, dataRange: dataRange)
+        return (isQualified ? 1 : 0) + object.values.reduce(0) {
+            $0 + qualifiedNodeCount($1, maximumIndependentDays: maximumIndependentDays, dataRange: dataRange)
+        }
+    }
+
+    private static func validGridSpacingSelection(_ value: FResearchJSONValue?) -> Bool {
+        guard let value else { return true }
+        guard let root = value.objectValue,
+              let spacings = root["spacings"]?.objectValue,
+              let selectedValue = root["selectedSpacing"] else { return false }
+        let reviewable = spacings.filter {
+            $0.value.objectValue?["evidenceState"]?.stringValue == "available_for_review"
+        }
+        guard let selected = selectedValue.stringValue else {
+            return selectedValue.isNull && reviewable.isEmpty && spacings.values.allSatisfy { node in
+                node.objectValue?["selectedByTraining"]?.boolValue == false &&
+                node.objectValue?["outOfSample"]?.isNull == true
+            }
+        }
+        guard reviewable.count == 1, reviewable.first?.key == selected,
+              let selectedNode = spacings[selected]?.objectValue,
+              selectedNode["selectedByTraining"]?.boolValue == true,
+              selectedNode["headlinePopulation"]?.stringValue == "out_of_sample",
+              selectedNode["outOfSample"]?.objectValue != nil else { return false }
+        return spacings.allSatisfy { key, value in
+            guard key != selected, let node = value.objectValue else { return key == selected }
+            return node["evidenceState"]?.stringValue != "available_for_review" &&
+                node["selectedByTraining"]?.boolValue == false &&
+                node["outOfSample"]?.isNull == true
+        }
     }
 
     private static func containsForbiddenPayload(_ value: FResearchJSONValue) -> Bool {
@@ -260,6 +352,10 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
             "market": .string(market),
             "startDate": .string(range.start),
             "endDate": .string(range.end),
+            "dataRange": dataRange.map {
+                .object(["start": .string($0.start), "end": .string($0.end)])
+            } ?? .null,
+            "strategyVersion": strategyVersion.map(FResearchJSONValue.string) ?? .null,
             "asOfEpochMillis": .number((asOfDate.timeIntervalSince1970 * 1_000).rounded()),
             "generatedAtEpochMillis": .number((generatedDate.timeIntervalSince1970 * 1_000).rounded()),
             "timezone": timezone.map(FResearchJSONValue.string) ?? .null,

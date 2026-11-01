@@ -41,7 +41,7 @@ public struct FLegacyLedgerMigrationPreview: Sendable {
 
         let legacy = decoded.current
         guard legacy.schemaVersion == 1,
-              legacy.cash >= 0, !legacy.cash.isNaN,
+              legacy.cash.isFinite, legacy.cash >= 0,
               UUID(uuidString: legacy.id) != nil,
               legacy.positions.count <= 10_000 else {
             throw FLedgerPersistenceError.invalidMigrationSource
@@ -53,7 +53,7 @@ public struct FLegacyLedgerMigrationPreview: Sendable {
             let code = item.code.trimmingCharacters(in: .whitespacesAndNewlines)
             guard code == item.code, Self.validCode(code), codes.insert(code).inserted,
                   !item.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  item.units >= 0, !item.bookCost.isNaN, item.bookCost >= 0 else {
+                  item.units >= 0, item.bookCost.isFinite, item.bookCost >= 0 else {
                 throw FLedgerPersistenceError.invalidMigrationSource
             }
             if item.units == 0 { continue }

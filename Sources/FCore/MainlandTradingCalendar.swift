@@ -23,9 +23,23 @@ public enum FMainlandTradingCalendar {
         let dateKey = String(format: "%04d-%02d-%02d", reviewedYear, month, day)
         guard weekday != 1, weekday != 7, !closures2026.contains(dateKey) else { return .closed }
         let minuteOfDay = hour * 60 + minute
-        if (570...690).contains(minuteOfDay) || (780...900).contains(minuteOfDay) { return .continuous }
+        if isContinuousSessionTime(at: instant, timeZone: timeZone) { return .continuous }
         if (690..<780).contains(minuteOfDay) { return .lunchBreak }
         if minuteOfDay < 570 { return .preOpen }
         return .closed
+    }
+
+    /// Clock-time check used to discard non-session provider rows even when
+    /// the exchange date is outside the reviewed holiday-calendar range.
+    /// Calendar trust remains separate and can still fail closed for trading.
+    public static func isContinuousSessionTime(at instant: Date,
+                                               timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current)
+        -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let components = calendar.dateComponents([.hour, .minute], from: instant)
+        guard let hour = components.hour, let minute = components.minute else { return false }
+        let minuteOfDay = hour * 60 + minute
+        return (570...690).contains(minuteOfDay) || (780...900).contains(minuteOfDay)
     }
 }

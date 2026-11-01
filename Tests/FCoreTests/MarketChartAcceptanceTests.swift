@@ -20,11 +20,33 @@ final class MarketChartAcceptanceTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Shanghai")!
     private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
 
+    private func securityRegimeObservation(_ code: String = "159352") -> FContextObservation {
+        let asOf = now.addingTimeInterval(-600)
+        return FContextObservation(dataClass: .quantState, subject: code,
+            source: "FCore Market Regime Engine",
+            reference: "regime=range; risk=0; confidence=80; dataAsOf=\(ISO8601DateFormatter().string(from: asOf)); source=fixture; factors=trend=available",
+            observedAt: now.addingTimeInterval(-1), capturedAt: now, decimalValue: 80)
+    }
+
+    private func mappedBenchmarkObservation(
+        _ code: String = "159352", regime: FMarketRegime = .range,
+        risk: FMarketRiskLevel = .r0Normal
+    ) throws -> FContextObservation {
+        let mapping = try XCTUnwrap(FMarketIndexSecurityMappingRegistry.mapping(for: code))
+        let asOf = now.addingTimeInterval(-86_400)
+        let timestamp = ISO8601DateFormatter().string(from: asOf)
+        return FContextObservation(dataClass: .quantState,
+            subject: "mapped-index:\(code)",
+            source: "F Verified Issuer Index Mapping + NAS Daily Regime",
+            reference: "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.rawValue);risk=\(risk.rawValue);confidence=80;dataAsOf=\(timestamp);not_strategy_qualification=true",
+            observedAt: now.addingTimeInterval(-10), capturedAt: now, decimalValue: 80)
+    }
+
     func testClosedIndexQuoteShowsVerifiedMarketTime() {
         let metadata = FQuoteTemporalMetadata(
             quoteTimestamp: ISO8601DateFormatter().date(from: "2026-10-23T07:00:00Z"),
             fetchedAt: ISO8601DateFormatter().date(from: "2026-10-23T07:02:00Z"),
-            source: "verified-provider", timestampTrust: .verifiedExchangeTimestamp,
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .closed)
         XCTAssertEqual(metadata.displayLabel(timeZone: zone), "已收盘 · 10月23日 15:00:00")
         XCTAssertEqual(metadata.freshness(at: now), .stale)
@@ -55,7 +77,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
     func testFreshnessUsesQuoteTimestampAndNotRetrievalTimestamp() {
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-30),
-                                              fetchedAt: now, source: "provider",
+                                              fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                               timestampTrust: .verifiedExchangeTimestamp,
                                               marketSessionStatus: .continuous)
         XCTAssertEqual(metadata.freshness(at: now), .fresh)
@@ -65,21 +87,79 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertEqual(metadata.freshness(at: now, maximumAge: .nan), .unverified)
         XCTAssertNotEqual(metadata.quoteTimestamp, metadata.fetchedAt)
         let observation = FContextObservation(dataClass: .quote, subject: "159352",
-                                              source: "provider", observedAt: metadata.quoteTimestamp,
+                                              source: FMarketQuoteTrustPolicy.tencentMinuteSource, observedAt: metadata.quoteTimestamp,
                                               capturedAt: now, decimalValue: 1,
                                               quoteTemporalMetadata: metadata)
         XCTAssertNoThrow(try observation.validate(now: now))
         XCTAssertTrue(observation.isFresh(at: now))
         let futureMetadata = FQuoteTemporalMetadata(
             quoteTimestamp: now.addingTimeInterval(1), fetchedAt: now.addingTimeInterval(2),
-            source: "provider", timestampTrust: .verifiedExchangeTimestamp,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
         let futureObservation = FContextObservation(dataClass: .quote, subject: "159352",
-                                                   source: "provider",
+                                                   source: FMarketQuoteTrustPolicy.tencentMinuteSource,
                                                    observedAt: futureMetadata.quoteTimestamp,
                                                    capturedAt: now, decimalValue: 1,
                                                    quoteTemporalMetadata: futureMetadata)
         XCTAssertThrowsError(try futureObservation.validate(now: now.addingTimeInterval(10)))
+    }
+
+    func testUnknownProviderCannotBecomeDecisionGradeByUsingFreshTimestamp() {
+        let metadata = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-1), fetchedAt: now,
+            source: "unconfigured-provider", timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let observation = FContextObservation(dataClass: .quote, subject: "159352",
+            source: "unconfigured-provider", observedAt: metadata.quoteTimestamp,
+            capturedAt: now, decimalValue: 1, quoteTemporalMetadata: metadata)
+
+        XCTAssertFalse(FMarketQuoteTrustPolicy.isTrusted("unconfigured-provider"))
+        XCTAssertEqual(metadata.freshness(at: now), .unverified)
+        XCTAssertFalse(observation.isFresh(at: now))
+        XCTAssertTrue(metadata.displayLabel(timeZone: zone).contains("来源未验证"))
+        XCTAssertTrue(FMarketQuoteTrustPolicy.isTrusted(FMarketQuoteTrustPolicy.tencentMinuteSource))
+        XCTAssertTrue(FMarketQuoteTrustPolicy.isTrusted(FMarketQuoteTrustPolicy.eastmoneyMinuteSource))
+        XCTAssertTrue(FMarketQuoteTrustPolicy.isTrusted(FMarketQuoteTrustPolicy.tencentReferenceSource))
+        XCTAssertTrue(FMarketQuoteTrustPolicy.isTrusted(FMarketQuoteTrustPolicy.sinaIndexSource))
+        XCTAssertTrue(FMarketQuoteTrustPolicy.isTrusted(FMarketQuoteTrustPolicy.naverIndexSource))
+    }
+
+    func testAvailableNewsObservationRequiresTrustedProviderAndPayload() throws {
+        let untrusted = FContextObservation(dataClass: .news, subject: "CN/global market headlines",
+            source: "unverified-news-source", reference: "{}", observedAt: now,
+            capturedAt: now, decimalValue: 1)
+        XCTAssertThrowsError(try untrusted.validate(now: now))
+
+        let missingPayload = FContextObservation(dataClass: .news, subject: "CN/global market headlines",
+            source: FNewsTrustPolicy.providerName, observedAt: now,
+            capturedAt: now, decimalValue: 1)
+        XCTAssertThrowsError(try missingPayload.validate(now: now))
+
+        let verified = FContextObservation(dataClass: .news, subject: "CN/global market headlines",
+            source: FNewsTrustPolicy.providerName, reference: "{}", observedAt: now,
+            capturedAt: now, decimalValue: 1)
+        XCTAssertNoThrow(try verified.validate(now: now))
+    }
+
+    func testDefaultLiveQuoteFreshnessBoundaryIs120Seconds() {
+        let exactlyAtBoundary = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-FQuoteTemporalMetadata.defaultMaximumAge),
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+        let justOlder = FQuoteTemporalMetadata(
+            quoteTimestamp: now.addingTimeInterval(-FQuoteTemporalMetadata.defaultMaximumAge - 0.001),
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+            marketSessionStatus: .continuous)
+
+        XCTAssertEqual(FQuoteTemporalMetadata.defaultMaximumAge, 120)
+        XCTAssertEqual(FRealtimeQuantTrigger.defaultMaximumQuoteAge,
+                       FQuoteTemporalMetadata.defaultMaximumAge)
+        XCTAssertEqual(FContextDataClass.quote.maximumAge,
+                       FQuoteTemporalMetadata.defaultMaximumAge)
+        XCTAssertEqual(FContextDataClass.previousClose.maximumAge, 900)
+        XCTAssertEqual(FContextDataClass.iopv.maximumAge, 90)
+        XCTAssertEqual(exactlyAtBoundary.freshness(at: now), .fresh)
+        XCTAssertEqual(justOlder.freshness(at: now), .stale)
     }
 
     func testKLineHitTestingSelectsFirstAndLastRenderedBars() {
@@ -113,10 +193,10 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
         let first = fetchedAt.addingTimeInterval(-120)
         let second = fetchedAt.addingTimeInterval(-60)
-        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
-            source: "verified-chart-source", timestampTrust: .fetchedAtOnly,
-            marketSessionStatus: .closed)
-        let chart = try FChartDataModel(securityCode: "159352", window: .historicalIntraday(tradingDate: first),
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: second, fetchedAt: fetchedAt,
+            source: FMarketQuoteTrustPolicy.tencentMinuteSource,
+            timestampTrust: .verifiedExchangeTimestamp, marketSessionStatus: .continuous)
+        let chart = try FChartDataModel(securityCode: "159352", window: .liveIntraday,
             series: .minute([FMinuteSample(timestamp: first, price: 10),
                              FMinuteSample(timestamp: second, price: 11)]),
             quality: .complete, temporalMetadata: metadata)
@@ -132,6 +212,66 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let range = try XCTUnwrap(model.priceRange())
         XCTAssertLessThan(range.lowerBound, 10)
         XCTAssertGreaterThan(range.upperBound, 13)
+    }
+
+    func testHistoricalIntradayChartExcludesCurrentIOPVFromPriceRange() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = fetchedAt.addingTimeInterval(-120)
+        let second = fetchedAt.addingTimeInterval(-60)
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "verified-chart-source", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: 10),
+                             FMinuteSample(timestamp: second, price: 11)]),
+            quality: .complete, temporalMetadata: metadata)
+        let currentIOPV = try FIOPVObservation(securityCode: "159352", value: 13,
+            observedAt: second, fetchedAt: fetchedAt, source: "verified IOPV source",
+            quality: .complete)
+        let model = try FChartOverlayModel(chart: chart, iopv: currentIOPV)
+
+        let range = try XCTUnwrap(model.priceRange())
+        XCTAssertNil(model.liveIOPV)
+        XCTAssertLessThan(range.upperBound, 12)
+    }
+
+    func testChartDataRejectsNonFiniteOrNegativeMinuteAndDailyValues() {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = fetchedAt.addingTimeInterval(-60)
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "verified-chart-source", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+
+        XCTAssertThrowsError(try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: -1)]),
+            quality: .complete, temporalMetadata: metadata))
+        XCTAssertThrowsError(try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: 1, volume: -1)]),
+            quality: .complete, temporalMetadata: metadata))
+        XCTAssertThrowsError(try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: .nan)]),
+            quality: .complete, temporalMetadata: metadata))
+        let infinity = Decimal(Double.infinity)
+        XCTAssertThrowsError(try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: first),
+            series: .minute([FMinuteSample(timestamp: first, price: infinity)]),
+            quality: .complete, temporalMetadata: metadata))
+        XCTAssertThrowsError(try FIOPVObservation(securityCode: "159352", value: 1,
+            observedAt: first, fetchedAt: Date(timeIntervalSince1970: .infinity),
+            source: "fixture", quality: .complete))
+        XCTAssertThrowsError(try FChartPriceOverlay(securityCode: "159352", kind: .cost,
+            points: [FChartOverlayPoint(timestamp: Date(timeIntervalSince1970: .infinity), value: 1)],
+            quality: .complete, source: "fixture", fetchedAt: fetchedAt))
+
+        let invalidDaily = FDailyBar(tradingDate: first, open: 1, close: 1,
+            high: 1, low: 1, volume: .nan)
+        XCTAssertThrowsError(try FChartDataModel(securityCode: "159352", window: .daily,
+            series: .daily([invalidDaily]), quality: .complete,
+            temporalMetadata: metadata))
     }
 
     func testDailyVisibleRangeKeepsOffscreenHistoryMA250InPriceRange() throws {
@@ -152,6 +292,41 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
         let range = try XCTUnwrap(FChartOverlayModel(chart: chart).priceRange(interaction: viewport))
         XCTAssertLessThan(range.lowerBound, 5) // visible MA250 is ~4.996; only the visible candle is near 1,000.
+    }
+
+    func testPriceRangeReturnsUnavailableWhenPaddingOverflowsDecimal() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let timestamp = fetchedAt.addingTimeInterval(-60)
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "fixture", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352",
+            window: .historicalIntraday(tradingDate: timestamp),
+            series: .minute([FMinuteSample(timestamp: timestamp,
+                price: Decimal.greatestFiniteMagnitude)]),
+            quality: .complete, temporalMetadata: metadata)
+
+        XCTAssertNil(FChartOverlayModel(chart: chart).priceRange())
+    }
+
+    func testDailyMovingAverageAvoidsIntermediateDecimalOverflow() throws {
+        let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let close = Decimal.greatestFiniteMagnitude / 3
+        let start = fetchedAt.addingTimeInterval(-5 * 86_400)
+        let bars = (0..<5).map { index in
+            FDailyBar(tradingDate: start.addingTimeInterval(Double(index) * 86_400),
+                open: close, close: close, high: close, low: close, volume: 0)
+        }
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: nil, fetchedAt: fetchedAt,
+            source: "fixture", timestampTrust: .fetchedAtOnly,
+            marketSessionStatus: .closed)
+        let chart = try FChartDataModel(securityCode: "159352", window: .daily,
+            series: .daily(bars), quality: .complete, temporalMetadata: metadata)
+
+        let range = try XCTUnwrap(FChartOverlayModel(chart: chart).priceRange())
+
+        XCTAssertTrue(range.lowerBound.isFinite)
+        XCTAssertTrue(range.upperBound.isFinite)
     }
 
     func testHiddenMovingAveragesDoNotCompressVisiblePriceRange() throws {
@@ -266,28 +441,55 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
     func testRiskGuardCanValidateBuyWithoutOptionalNASResearch() throws {
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
-            fetchedAt: now, source: "live-provider", timestampTrust: .verifiedExchangeTimestamp,
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
-        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "live-provider",
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
             observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: metadata)
-        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote])
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            evaluatedAt: now))
+        let qualificationGrant = FQuantStrategyQualificationGrant(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: qualification.id, evaluatedAt: now)
+        let regime = securityRegimeObservation()
+        let mappedBenchmark = try mappedBenchmarkObservation()
+        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote, qualification, regime, mappedBenchmark],
+                                       strategyQualificationGrants: [qualificationGrant])
         XCTAssertTrue(context.researchEvidence.isEmpty)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest,
-            action: .buy, instrumentCode: "159352", units: 10, limitPrice: 1,
+            action: .buy, instrumentCode: "159352", units: 100, limitPrice: Decimal(string: "0.900")!,
             rationale: "只依据新鲜行情和真实账本形成的待审阅候选",
-            citedObservationIDs: [quote.id])
+            citedObservationIDs: [quote.id, qualification.id, regime.id, mappedBenchmark.id])
 
         let result = FRiskGuard.evaluate(candidate, in: context, now: now)
-        XCTAssertTrue(result.allowedForReview, "NAS不属于行情/现金/持仓风险校验的必要输入：\(result.findings)")
+        XCTAssertTrue(result.allowedForReview,
+            "可选Research Summary不是Risk Guard的必要输入，但该ETF仍需本机已有的新鲜指数Regime：\(result.findings)")
+
+        let fractionalLot = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 150, limitPrice: 1,
+            rationale: "非法份额候选",
+            citedObservationIDs: [quote.id, qualification.id, regime.id, mappedBenchmark.id])
+        let fractionalPrice = FCandidateRecommendation(accountDigest: context.accountDigest,
+            action: .buy, instrumentCode: "159352", units: 100,
+            limitPrice: Decimal(string: "1.0001")!, rationale: "非法价格步长候选",
+            citedObservationIDs: [quote.id, qualification.id, regime.id, mappedBenchmark.id])
+        for invalidOrder in [fractionalLot, fractionalPrice] {
+            let rejected = FRiskGuard.evaluate(invalidOrder, in: context, now: now)
+            XCTAssertFalse(rejected.allowedForReview)
+            XCTAssertTrue(rejected.findings.contains {
+                if case .incompleteTradingEvidence(_) = $0 { return true }
+                return false
+            })
+        }
     }
 
     func testGridNeedsItsOwnQualifiedStudyAndConservativeDayTradeDoesNotRequireOrderBook() throws {
         let researchContext = try contextWithResearchEvidence(evidenceJSON(qualified: true))
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
-            fetchedAt: now, source: "fixture", timestampTrust: .verifiedExchangeTimestamp,
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
-        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "fixture",
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
             observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: metadata)
         let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote],
@@ -307,17 +509,27 @@ final class MarketChartAcceptanceTests: XCTestCase {
                                 updatedAt: now.addingTimeInterval(-60))
         let positionSnapshot = try book.readOnlySnapshot(capturedAt: now)
         let dayTradeMetadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
-            fetchedAt: now, source: "fixture", timestampTrust: .verifiedExchangeTimestamp,
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
-        let freshQuote = FContextObservation(dataClass: .quote, subject: "159352", source: "fixture",
+        let freshQuote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
             observedAt: dayTradeMetadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: dayTradeMetadata)
-        let dayTradeContext = FDecisionContext(snapshot: positionSnapshot, observations: [freshQuote],
-                                               researchEvidence: researchContext.researchEvidence)
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            evaluatedAt: now))
+        let qualificationGrant = FQuantStrategyQualificationGrant(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: qualification.id, evaluatedAt: now)
+        let regime = securityRegimeObservation()
+        let mappedBenchmark = try mappedBenchmarkObservation()
+        let dayTradeContext = FDecisionContext(snapshot: positionSnapshot,
+                                               observations: [freshQuote, qualification, regime, mappedBenchmark],
+                                               researchEvidence: researchContext.researchEvidence,
+                                               strategyQualificationGrants: [qualificationGrant])
         let dayTrade = FCandidateRecommendation(accountDigest: dayTradeContext.accountDigest,
-            action: .dayTrade, instrumentCode: "159352", units: 1,
-            limitPrice: 1, estimatedFee: Decimal(string: "0.20")!, rationale: "保守做T候选",
-            citedObservationIDs: [freshQuote.id],
+            action: .dayTrade, instrumentCode: "159352", units: 100,
+            limitPrice: Decimal(string: "0.998")!, estimatedFee: Decimal(string: "0.20")!, rationale: "保守做T候选",
+            citedObservationIDs: [freshQuote.id, qualification.id, regime.id, mappedBenchmark.id],
             citedResearchEvidenceIDs: [dayTradeContext.researchEvidence[0].id])
         let dayTradeResult = FDecisionGuards.evaluate(dayTrade, in: dayTradeContext, now: now)
         XCTAssertTrue(dayTradeResult.allowedForReview)
@@ -328,16 +540,16 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
     func testAdvisorRechecksQuoteFreshnessAfterModelReturns() async throws {
         let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
-            fetchedAt: now, source: "fixture", timestampTrust: .verifiedExchangeTimestamp,
+            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
-        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: "fixture",
+        let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
             observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
             quoteTemporalMetadata: metadata)
         let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote])
         let request = try FAdvisorQuestionRequest(question: "可以买入吗？", scope: .instrument("159352"),
                                                   decisionContext: context, now: now)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest, action: .buy,
-            instrumentCode: "159352", units: 10, limitPrice: 1, rationale: "依据最新报价",
+            instrumentCode: "159352", units: 100, limitPrice: 1, rationale: "依据最新报价",
             citedObservationIDs: [quote.id])
         let result = try await FAdvisorDecisionPipeline(model: FixedCandidateModel(result: candidate))
             .assess(request: request, context: context, now: now)
@@ -458,8 +670,26 @@ final class MarketChartAcceptanceTests: XCTestCase {
             .usableResearchEvidence(at: now).isEmpty)
 
         let missingSource = evidenceJSON(qualified: true).replacingOccurrences(
-            of: "\"sources\":[\"fixture-provider\"]", with: "\"sources\":[]")
+            of: "\"sources\":[\"Tencent Finance minute/query (public web endpoint)\"]", with: "\"sources\":[]")
         XCTAssertThrowsError(try contextWithResearchEvidence(missingSource))
+    }
+
+    func testResearchQualificationRequiresConsistentChronologicalWindows() throws {
+        let wrongIndependentCount = evidenceJSON(qualified: true).replacingOccurrences(
+            of: "\"independentDays\":32", with: "\"independentDays\":31")
+        let countContext = try contextWithResearchEvidence(wrongIndependentCount)
+        XCTAssertTrue(countContext.usableResearchEvidence(at: now).isEmpty)
+
+        let overlappingWindows = evidenceJSON(qualified: true).replacingOccurrences(
+            of: "\"endDate\":\"2026-09-30\"", with: "\"endDate\":\"2026-10-02\"")
+        let overlapContext = try contextWithResearchEvidence(overlappingWindows)
+        XCTAssertTrue(overlapContext.usableResearchEvidence(at: now).isEmpty)
+    }
+
+    func testQualifiedResearchRejectsUnknownProviderEvenWithRecomputedDigest() throws {
+        let untrusted = evidenceJSON(qualified: true).replacingOccurrences(
+            of: FResearchSourceTrustPolicy.tencentMinuteSource, with: "unverified-provider")
+        XCTAssertThrowsError(try contextWithResearchEvidence(recomputedEvidenceJSON(untrusted)))
     }
 
     func testInsufficientResearchRemainsAuditableButIsExcludedFromAISet() throws {
@@ -470,12 +700,13 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
         let noHistory = evidenceJSON(qualified: false)
             .replacingOccurrences(of: "\"qualifiedIndependentDays\":4", with: "\"qualifiedIndependentDays\":0")
-            .replacingOccurrences(of: "\"sources\":[\"fixture-provider\"]", with: "\"sources\":[]")
+            .replacingOccurrences(of: "\"sources\":[\"Tencent Finance minute/query (public web endpoint)\"]", with: "\"sources\":[]")
+            .replacingOccurrences(of: "\"dataRange\":{\"end\":\"2026-10-23\",\"start\":\"2026-10-05\"},", with: "")
         let noHistoryContext = try contextWithResearchEvidence(noHistory)
         XCTAssertTrue(noHistoryContext.usableResearchEvidence(at: now).isEmpty)
     }
 
-    func testDividendEvidenceUsesFactorQualityInsteadOfMinuteDayThreshold() throws {
+    func testDividendEvidenceFromUnconfiguredProviderIsRejected() throws {
         let factor: [String: Any] = ["value": "3.9", "source": "official-provider", "quality": 95,
                                      "observedAt": "2026-10-23T07:50:00Z",
                                      "fetchedAt": "2026-10-23T07:55:00Z", "unit": "percent"]
@@ -489,16 +720,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
         object["qualifiedIndependentDays"] = 0
         object["evidence"] = ["dividendQuality": node]
         let json = String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
-        let context = try contextWithResearchEvidence(json)
-        XCTAssertEqual(context.usableResearchEvidence(at: now).count, 1)
-
-        var futureNode = node
-        var futureFactors = futureNode["factors"] as! [String: [String: Any]]
-        futureFactors["currentYield"]?["fetchedAt"] = "2026-10-23T08:01:00Z"
-        futureNode["factors"] = futureFactors
-        object["evidence"] = ["dividendQuality": futureNode]
-        let futureJSON = String(decoding: try JSONSerialization.data(withJSONObject: object), as: UTF8.self)
-        XCTAssertThrowsError(try contextWithResearchEvidence(futureJSON))
+        XCTAssertThrowsError(try contextWithResearchEvidence(json))
     }
 
     func testExpiredResearchRemainsInContextButIsExcludedFromAISet() throws {
@@ -512,6 +734,43 @@ final class MarketChartAcceptanceTests: XCTestCase {
             of: "\"evidenceState\":",
             with: "\"samples\":[{\"timestamp\":\"2026-10-23T07:00:00Z\"}],\"evidenceState\":")
         XCTAssertThrowsError(try contextWithResearchEvidence(raw))
+    }
+
+    func testLegacyMinuteResearchMethodologyIsNotAcceptedAsCurrentEvidence() throws {
+        let legacy = evidenceJSON(qualified: true).replacingOccurrences(
+            of: "minute-research-2", with: "minute-research-1")
+        XCTAssertThrowsError(try contextWithResearchEvidence(legacy))
+    }
+
+    func testResearchEvidenceRequiresOneTrainingSelectedGridHoldout() throws {
+        let qualifiedMetrics: [String: Any] = [
+            "evidenceState": "available_for_review", "selectedByTraining": true,
+            "headlinePopulation": "out_of_sample", "trainingDays": 20,
+            "outOfSampleDays": 5, "maxMonthlySampleShare": 0.5,
+            "maximumMonthlySampleShare": 0.5,
+            "outOfSample": ["days": 5, "mean": 0.1]
+        ]
+        let withheld: [String: Any] = [
+            "evidenceState": "not_selected_by_training", "selectedByTraining": false,
+            "outOfSample": NSNull()
+        ]
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
+        var evidence = try XCTUnwrap(payload["evidence"] as? [String: Any])
+        evidence["gridSpacingReplay"] = ["selectedSpacing": "1",
+                                         "spacings": ["1": qualifiedMetrics, "2": withheld]]
+        payload["evidence"] = evidence
+        let validJSON = String(decoding: try JSONSerialization.data(
+            withJSONObject: payload, options: [.sortedKeys]), as: UTF8.self)
+        XCTAssertNoThrow(try contextWithResearchEvidence(validJSON))
+
+        var spacings = try XCTUnwrap((evidence["gridSpacingReplay"] as? [String: Any])?["spacings"] as? [String: Any])
+        spacings["2"] = qualifiedMetrics
+        evidence["gridSpacingReplay"] = ["selectedSpacing": "1", "spacings": spacings]
+        payload["evidence"] = evidence
+        let repeatedHoldoutJSON = String(decoding: try JSONSerialization.data(
+            withJSONObject: payload, options: [.sortedKeys]), as: UTF8.self)
+        XCTAssertThrowsError(try contextWithResearchEvidence(repeatedHoldoutJSON))
     }
 
     func testResearchEvidenceRejectsFutureGeneratedOrCapturedTime() throws {
@@ -528,7 +787,42 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let original = try JSONDecoder().decode(FResearchEvidenceEnvelope.self,
             from: Data(evidenceJSON(qualified: true).utf8))
         XCTAssertEqual(try original.calculatedContentDigest(),
-                       "80249e4e1aaceac09fba6183f6c509d8b9e056e317dd8b34bfc93b46b1c5bdff")
+                       "e7df02163cd2587e8e6aeee518aa4d793472414062beb101bfa988c2b5648edb")
+        var dataRangeObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
+        dataRangeObject["dataRange"] = ["start": "2026-10-04", "end": "2026-10-23"]
+        let changedDataRange = try JSONSerialization.data(withJSONObject: dataRangeObject,
+            options: [.sortedKeys])
+        let changedEnvelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self,
+            from: changedDataRange)
+        XCTAssertNotEqual(try original.calculatedContentDigest(),
+                          try changedEnvelope.calculatedContentDigest())
+
+        var strategyVersionObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
+        strategyVersionObject["strategyVersion"] = "mean-reversion-v3"
+        let changedStrategyVersion = try JSONSerialization.data(withJSONObject: strategyVersionObject,
+            options: [.sortedKeys])
+        let strategyEnvelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self,
+            from: changedStrategyVersion)
+        XCTAssertNotEqual(try original.calculatedContentDigest(),
+                          try strategyEnvelope.calculatedContentDigest())
+
+        var missingDataRangeObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
+        missingDataRangeObject.removeValue(forKey: "dataRange")
+        let missingDataRangeJSON = String(decoding: try JSONSerialization.data(
+            withJSONObject: missingDataRangeObject, options: [.sortedKeys]), as: UTF8.self)
+        XCTAssertThrowsError(try contextWithResearchEvidence(
+            recomputedEvidenceJSON(missingDataRangeJSON)))
+
+        var legacySchemaObject = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
+        legacySchemaObject["schemaVersion"] = 1
+        let legacySchemaJSON = String(decoding: try JSONSerialization.data(
+            withJSONObject: legacySchemaObject, options: [.sortedKeys]), as: UTF8.self)
+        XCTAssertThrowsError(try contextWithResearchEvidence(
+            recomputedEvidenceJSON(legacySchemaJSON)))
         var object = try XCTUnwrap(JSONSerialization.jsonObject(
             with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
         object["qualifiedIndependentDays"] = 0
@@ -778,21 +1072,32 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let generatedAtText = generatedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "2026-10-23T07:59:00Z"
         let metrics: [String: Any] = [
             "evidenceState": qualified ? "available_for_review" : "insufficient_independent_days",
+            "independentDays": qualified ? 32 : 4,
+            "minimumTrainingDays": 20, "minimumOutOfSampleDays": 5,
             "trainingDays": qualified ? 24 : 4,
             "outOfSampleDays": qualified ? 8 : 0,
             "maxMonthlySampleShare": qualified ? 0.25 : 1.0,
-            "maximumMonthlySampleShare": 0.5
+            "maximumMonthlySampleShare": 0.5,
+            "training": ["days": qualified ? 24 : 4, "startDate": "2026-08-03",
+                         "endDate": "2026-09-30", "median": 0.1, "mean": 0.1, "positiveRate": 0.6],
+            "outOfSample": ["days": qualified ? 8 : 0, "startDate": "2026-10-01",
+                            "endDate": qualified ? ("2026-10-20" as Any) : NSNull(),
+                            "median": 0.1, "mean": 0.1, "positiveRate": 0.6]
         ]
         var object: [String: Any] = [
-            "schemaVersion": 1, "methodologyVersion": "minute-research-1",
+            "schemaVersion": 2, "methodologyVersion": "minute-research-2",
             "evidenceId": String(repeating: "a", count: 64), "securityCode": "159352", "market": "CN",
-            "range": ["start": "2026-10-01", "end": "2026-10-23"],
+            "range": ["start": "2026-08-01", "end": "2026-10-23"],
+            "dataRange": ["start": "2026-08-03", "end": "2026-10-23"],
+            "strategyVersion": NSNull(),
             "asOf": asOfText, "generatedAt": generatedAtText,
-            "timezone": "Asia/Shanghai", "sessionCoverage": ["complete": 20, "partial": 1, "missing": 2],
-            "qualifiedIndependentDays": qualified ? 28 : 4, "minimumQuality": 90, "sources": ["fixture-provider"],
+            "timezone": "Asia/Shanghai", "sessionCoverage": ["complete": 32, "partial": 1, "missing": 2],
+            "qualifiedIndependentDays": qualified ? 32 : 4, "minimumQuality": 90,
+            "sources": [FResearchSourceTrustPolicy.tencentMinuteSource],
             "evidence": ["vwapBreak": ["windows": ["5": metrics]],
                          "morningRecovery": ["evidenceState": "insufficient_independent_days"],
-                         "gridSpacingReplay": ["spacings": [String: Any]()]],
+                         "gridSpacingReplay": ["selectedSpacing": NSNull(),
+                                              "spacings": [String: Any]()]],
             "limitations": [
                 "Historical observational evidence; not a forecast or trade instruction.",
                 "Only complete sessions meeting the configured quality and as-of gates are eligible.",

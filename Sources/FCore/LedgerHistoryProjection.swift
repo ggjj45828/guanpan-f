@@ -1,7 +1,7 @@
 import Foundation
 
 public enum FReadOnlyCashFlowKind: String, Codable, Equatable, Sendable {
-    case openingBalance, buy, sell, feeAdjustment, deposit, withdrawal
+    case openingBalance, buy, sell, feeAdjustment, deposit, withdrawal, accountExpense, cashReconciliation
 }
 
 /// One cash-changing ledger event with its resulting reconciled cash balance.
@@ -302,8 +302,14 @@ enum FLedgerHistoryProjection {
                          reason: fill.userConfirmation.confirmationNote)
         }
         events += book.cashMovements.map { movement in
+            let kind: FReadOnlyCashFlowKind
+            switch movement.category {
+            case .some(.accountExpense): kind = .accountExpense
+            case .some(.cashReconciliation): kind = .cashReconciliation
+            case .none: kind = movement.amount > 0 ? .deposit : .withdrawal
+            }
             Event(sequence: movement.sequence, date: movement.occurredAt,
-                  kind: movement.amount > 0 ? .deposit : .withdrawal, code: nil, name: nil,
+                  kind: kind, code: nil, name: nil,
                   sourceFillID: nil, units: nil, price: nil, fee: 0, effectiveFee: nil,
                   delta: movement.amount,
                   reason: movement.reason + " · " + movement.userConfirmation.confirmationNote)

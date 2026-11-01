@@ -753,3 +753,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Artifact `12945537710`, name `guanpan-f-ios-build-evidence`, contains `GuanpanFApp/build/观盘max.ipa` and CI evidence. Artifact expires 2026-11-13.
 - This CI proves build/tests/package only. It does not prove Tonghuashun live access, real news relevance, DeepSeek citation E2E, NAS exact-date history connectivity, manual Simulator visual review, or iPhone Air/device UX.
 - News source remains a candidate public Tonghuashun webpage endpoint; this environment's proxy prevented a live request. NAS history screenshot previously showed HTTP 200 with an incompatible payload and legacy fallback 404; deployment/API contract still needs device/service-side validation.
+
+## 2026-11-01 架构澄清：NAS非阻塞与策略研究资格分离
+
+- 用户最新确认的优先级：NAS历史分钟数据 → Quant Research → Backtest → Validation → Out-of-Sample → Strategy Qualification → Strategy Version/参数包 → iPhone Local Quant。NAS Research的主要服务对象是Quant；DeepSeek缓存摘要仅为次要用途。
+- DeepSeek单次分析只读本机已存在且未过期的Research Summary；缺失/过期时继续分析并标注“历史Quant研究摘要暂不可用”，绝不同步调用或等待NAS。
+- NAS不可达不阻断实时行情、Ledger、本机有效策略包执行、Risk Guard或基础Advisor。但未经过历史回测、验证、样本外评估和资格签发的策略，或资格过期的参数包，Local Quant必须WAIT/NO_TRADE。
+- 研究/资格链必须独立异步运行。版本包至少带证券、Regime、策略版本、数据范围、样本数、Validation/OOS指标、来源、生成时间与有效期。
+- 实现现状：Advisor组上下文前检查本机新鲜缓存，并以后台Task刷新NAS摘要；静态代码路径未发现同步等待NAS后才分析。完整NAS→Quant资格研究与参数包下放仍未实现，不能标记完成。当前环境无Swift/Xcode；本轮不声称已编译或执行测试。

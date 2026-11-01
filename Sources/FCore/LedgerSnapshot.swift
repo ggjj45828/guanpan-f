@@ -29,6 +29,8 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
     public let schemaVersion: Int
     public let currencyCode: String
     public let capturedAt: Date
+    public let openingSnapshotCapturedAt: Date
+    public let openingPositionCodes: Set<String>
     public let ledgerDigest: String
     public let cashBalance: Decimal
     public let positions: [FReadOnlyPositionSnapshot]
@@ -40,26 +42,79 @@ public struct FReadOnlyLedgerSnapshot: Equatable, Sendable {
     public let dailyTradeSummaries: [FDailyTradeSummary]
     public let confirmedFillIDs: Set<UUID>
     public let confirmedFillTimestamps: [UUID: Date]
+    public let confirmedFills: [FReadOnlyConfirmedFillSnapshot]
 
     fileprivate init(book: FAccountBook, capturedAt: Date, digest: String) throws {
         accountID = book.accountID
         schemaVersion = book.schemaVersion
         currencyCode = book.currencyCode
         self.capturedAt = capturedAt
+        openingSnapshotCapturedAt = book.openingSnapshot.capturedAt
+        openingPositionCodes = Set(book.openingSnapshot.positions.map(\.instrumentCode))
         ledgerDigest = digest
         cashBalance = book.cashBalance
         positions = book.positions.map(FReadOnlyPositionSnapshot.init)
             .sorted { $0.instrumentCode < $1.instrumentCode }
         let economicFills = try FLedgerFeeProjection.adjustedFills(in: book)
-        instrumentHistories = FLedgerHistoryProjection.instruments(from: book, fills: economicFills)
+        let histories = FLedgerHistoryProjection.instruments(from: book, fills: economicFills)
+        guard histories.allSatisfy({ history in
+            history.lifetimeRealizedProfit.isFinite && history.activeBookCost.isFinite &&
+            history.episodes.allSatisfy { episode in
+                episode.currentBookCost.isFinite && episode.netRealizedProfit.isFinite &&
+                episode.trades.allSatisfy { $0.realizedProfit?.isFinite ?? true }
+            }
+        }) else {
+            throw FLedgerSnapshotError.unrepresentablePositionHistory
+        }
+        instrumentHistories = histories
         let names = Dictionary(uniqueKeysWithValues: instrumentHistories.map {
             ($0.instrumentCode, $0.instrumentName)
         })
-        cashFlow = try FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
+        let projectedCashFlow = try FLedgerHistoryProjection.cashFlow(from: book, namesByCode: names)
+        guard projectedCashFlow.allSatisfy({ entry in
+            entry.fee.isFinite && entry.cashDelta.isFinite && entry.resultingCashBalance.isFinite &&
+            (entry.effectiveFee?.isFinite ?? true) && (entry.price?.isFinite ?? true)
+        }) else {
+            throw FLedgerSnapshotError.unrepresentableCashFlow
+        }
+        cashFlow = projectedCashFlow
         dailyTradeSummaryDate = try FDailyTradeSummary.tradingDate(for: capturedAt)
         dailyTradeSummaries = try FDailyTradeSummary.derive(from: economicFills, asOf: capturedAt)
         confirmedFillIDs = Set(book.fills.map(\.id))
         confirmedFillTimestamps = Dictionary(uniqueKeysWithValues: book.fills.map { ($0.id, $0.tradedAt) })
+        confirmedFills = book.fills.map(FReadOnlyConfirmedFillSnapshot.init)
+    }
+}
+
+/// Minimal immutable fill facts for safely associating an existing Ledger fill with
+/// an Advisor/Shadow record. It intentionally omits price, fee and confirmation note.
+public struct FReadOnlyConfirmedFillSnapshot: Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let tradedAt: Date
+    public let instrumentCode: String
+    public let side: FTradeSide
+    public let units: Int64
+
+    fileprivate init(_ fill: FConfirmedFill) {
+        id = fill.id
+        tradedAt = fill.tradedAt
+        instrumentCode = fill.instrumentCode
+        side = fill.side
+        units = fill.units
+    }
+}
+
+public enum FLedgerSnapshotError: Error, Equatable, Sendable, LocalizedError {
+    case unrepresentablePositionHistory
+    case unrepresentableCashFlow
+
+    public var errorDescription: String? {
+        switch self {
+        case .unrepresentablePositionHistory:
+            return "账本持仓历史的盈亏超出可精确表示范围"
+        case .unrepresentableCashFlow:
+            return "账本现金流水超出可精确表示范围"
+        }
     }
 }
 

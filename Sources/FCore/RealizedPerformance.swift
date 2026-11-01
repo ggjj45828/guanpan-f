@@ -15,7 +15,7 @@ public struct FRealizedInstrumentPerformance: Equatable, Sendable, Identifiable 
     public var returnOnRemovedCost: Decimal? {
         guard costBasisRemoved > 0 else { return nil }
         let value = netRealizedProfit / costBasisRemoved
-        return value.isNaN ? nil : value
+        return value.isFinite ? value : nil
     }
 }
 
@@ -54,7 +54,7 @@ public struct FRealizedPerformanceSnapshot: Equatable, Sendable {
             let (nextUnits, overflow) = totals.unitsSold.addingReportingOverflow(fill.units)
             guard !overflow else { throw FLedgerValidationError.positionQuantityOverflow(fill.instrumentCode) }
             let proceeds = fill.price * Decimal(fill.units)
-            guard !proceeds.isNaN else { throw FLedgerValidationError.invalidFill(fill.id) }
+            guard proceeds.isFinite else { throw FLedgerValidationError.invalidFill(fill.id) }
             totals.sellFillCount += 1
             totals.unitsSold = nextUnits
             totals.grossProceeds += proceeds
@@ -69,8 +69,8 @@ public struct FRealizedPerformanceSnapshot: Equatable, Sendable {
             item.grossProceeds += proceeds
             item.fees += fill.fee
             item.costBasisRemoved += removed
-            guard !totals.grossProceeds.isNaN, !totals.fees.isNaN, !totals.costBasisRemoved.isNaN,
-                  !item.grossProceeds.isNaN, !item.fees.isNaN, !item.costBasisRemoved.isNaN else {
+            guard totals.grossProceeds.isFinite, totals.fees.isFinite, totals.costBasisRemoved.isFinite,
+                  item.grossProceeds.isFinite, item.fees.isFinite, item.costBasisRemoved.isFinite else {
                 throw FLedgerValidationError.invalidFill(fill.id)
             }
             instruments[fill.instrumentCode] = item
@@ -78,7 +78,7 @@ public struct FRealizedPerformanceSnapshot: Equatable, Sendable {
 
         func net(_ value: Accumulator) throws -> Decimal {
             let result = value.grossProceeds - value.fees - value.costBasisRemoved
-            guard !result.isNaN else { throw FLedgerValidationError.invalidCash }
+            guard result.isFinite else { throw FLedgerValidationError.invalidCash }
             return result
         }
         let rows = try instruments.keys.sorted().map { code -> FRealizedInstrumentPerformance in

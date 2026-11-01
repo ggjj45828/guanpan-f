@@ -43,7 +43,7 @@ public extension FAccountBook {
                            now: Date = Date()) throws -> FAccountBook {
         try validate(now: now)
         guard let fill = fills.first(where: { $0.id == fillID }),
-              !correctedFee.isNaN, correctedFee >= 0,
+              correctedFee.isFinite, correctedFee >= 0,
               !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               confirmation.confirmedAt >= updatedAt,
@@ -55,7 +55,7 @@ public extension FAccountBook {
         let delta = correctedFee - priorFee
         guard delta != 0 else { throw FLedgerMutationError.invalidFeeAdjustment(fillID) }
         let newCash = cashBalance - delta
-        guard !newCash.isNaN, newCash >= 0 else { throw FLedgerMutationError.insufficientCash }
+        guard newCash.isFinite, newCash >= 0 else { throw FLedgerMutationError.insufficientCash }
 
         let lastSequence = (fills.map(\.sequence) + cashMovements.map(\.sequence) +
                             (feeAdjustments ?? []).map(\.sequence)).max() ?? 0
@@ -101,7 +101,7 @@ public extension FAccountBook {
                                      confirmation: FUserLedgerConfirmation,
                                      now: Date = Date()) throws -> FAccountBook {
         try validate(now: now)
-        guard !costPerUnit.isNaN, costPerUnit >= 0 else {
+        guard costPerUnit.isFinite, costPerUnit >= 0 else {
             throw FLedgerMutationError.invalidBrokerDisplayCost(instrumentCode)
         }
         guard !confirmation.confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -160,12 +160,12 @@ public extension FAccountBook {
         let beforeDigest = try ledgerStateDigest()
         var result = self
         let consideration = fill.price * Decimal(fill.units)
-        guard !consideration.isNaN else { throw FLedgerValidationError.invalidFill(fill.id) }
+        guard consideration.isFinite else { throw FLedgerValidationError.invalidFill(fill.id) }
 
         switch fill.side {
         case .buy:
             let debit = consideration + fill.fee
-            guard !debit.isNaN, result.cashBalance >= debit else {
+            guard debit.isFinite, result.cashBalance >= debit else {
                 throw FLedgerMutationError.insufficientCash
             }
             result.cashBalance -= debit
@@ -205,8 +205,9 @@ public extension FAccountBook {
                     sequence: fill.sequence, expected: policyCost, actual: removedCost)
             }
             let credit = consideration - fill.fee
-            guard !credit.isNaN else { throw FLedgerValidationError.invalidFill(fill.id) }
+            guard credit.isFinite else { throw FLedgerValidationError.invalidFill(fill.id) }
             result.cashBalance += credit
+            guard result.cashBalance.isFinite else { throw FLedgerValidationError.invalidFill(fill.id) }
             result.positions[index].units -= fill.units
             result.positions[index].bookCost -= removedCost
             result.positions[index].name = retainedName
@@ -251,11 +252,11 @@ public extension FAccountBook {
         guard movement.userConfirmation.confirmedAt >= updatedAt else {
             throw FLedgerValidationError.implausibleTimestamp("confirmation.beforeUpdatedAt")
         }
-        guard movement.amount != 0, !movement.amount.isNaN else {
+        guard movement.amount != 0, movement.amount.isFinite else {
             throw FLedgerValidationError.invalidCashMovement(movement.id)
         }
         let newCash = cashBalance + movement.amount
-        guard !newCash.isNaN, newCash >= 0 else { throw FLedgerMutationError.insufficientCash }
+        guard newCash.isFinite, newCash >= 0 else { throw FLedgerMutationError.insufficientCash }
 
         let beforeDigest = try ledgerStateDigest()
         var result = self

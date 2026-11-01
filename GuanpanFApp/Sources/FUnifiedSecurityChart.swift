@@ -114,7 +114,7 @@ struct FUnifiedSecurityChart: View {
                                 .lineLimit(1).minimumScaleFactor(0.75)
                             Spacer()
                             Text(timestampLabel(timestamps[start], window: model.chart.window))
-                            Text("—").foregroundStyle(.tertiary)
+                            Text("—").foregroundStyle(theme.manifest.tokens.secondaryForeground)
                             Text(timestampLabel(timestamps[end - 1], window: model.chart.window))
                             Button(crosshairEnabled ? "退出十字" : "十字") {
                                 crosshairEnabled.toggle()
@@ -123,16 +123,16 @@ struct FUnifiedSecurityChart: View {
                             .font(.caption2.weight(.semibold)).buttonStyle(.bordered).controlSize(.mini)
                         }
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     }
                 }
             } else {
                 Text("当前图表数据不可用；不会补造价格或曲线。")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: height >= 600 ? height + 80 : height)
+        .frame(height: height)
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
         .padding(.vertical, 2)
@@ -158,10 +158,10 @@ struct FUnifiedSecurityChart: View {
                     layerButton(overlayTitle(overlay.kind), key: layerKey(overlay.kind),
                                 color: overlayColor(overlay.kind), available: !isUnavailable(overlay.quality))
                 }
-                if let iopv = model.iopv {
+                if let iopv = model.liveIOPV {
                     layerButton("IOPV参考", key: "iopv", color: overlayColor(.iopv), available: !isUnavailable(iopv.quality))
-                } else {
-                    Text("IOPV 不可用").font(.caption2).foregroundStyle(.tertiary)
+                } else if case .liveIntraday = model.chart.window {
+                    Text("IOPV 不可用").font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -222,13 +222,7 @@ struct FUnifiedSecurityChart: View {
 
     private func movingAverages(for series: FChartSeries) -> [[Decimal?]] {
         guard case let .daily(bars) = series else { return [] }
-        return averagePeriods.map { period in
-            bars.indices.map { index in
-                guard index + 1 >= period else { return nil }
-                let values = bars[(index + 1 - period)...index]
-                return values.reduce(Decimal.zero) { $0 + $1.close } / Decimal(period)
-            }
-        }
+        return averagePeriods.map { FDailyMovingAverage.values(for: bars, period: $0) }
     }
 
     private func chartHeader(model: FChartOverlayModel, series: FChartSeries,
@@ -256,7 +250,7 @@ struct FUnifiedSecurityChart: View {
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isDaily(series) ? "收盘" : "最新")
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     Text(primaryValue(series: series, index: activeIndex))
                         .font(.system(size: 25, weight: .semibold, design: .rounded).monospacedDigit())
                         .foregroundStyle(theme.ink).lineLimit(1).minimumScaleFactor(0.8)
@@ -266,7 +260,7 @@ struct FUnifiedSecurityChart: View {
                     Text(selectionTimestamp(series: series, index: activeIndex))
                     if let source = model.chart.temporalMetadata?.source { Text(source) }
                 }
-                .font(.system(size: 9)).foregroundStyle(.secondary)
+                .font(.system(size: 9)).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 .lineLimit(1).truncationMode(.middle)
             }
             if isDaily(series) {
@@ -579,7 +573,7 @@ struct FUnifiedSecurityChart: View {
                 context.stroke(path, with: .color(overlayColor(overlay.kind)), style: StrokeStyle(lineWidth: 1.0, dash: [3, 2]))
             }
         }
-        if visibleLayers.contains("iopv"), let observation = model.iopv,
+        if visibleLayers.contains("iopv"), let observation = model.liveIOPV,
            !isUnavailable(observation.quality), let value = observation.value {
             let lineY = y(value)
             var iopvPath = Path()
@@ -707,12 +701,12 @@ struct FUnifiedSecurityChart: View {
 
     private func modelWithVisibleOverlays(_ model: FChartOverlayModel) -> FChartOverlayModel {
         let overlays = model.priceOverlays.filter { visibleLayerKeys.contains(layerKey($0.kind)) }
-        let iopv = visibleLayerKeys.contains("iopv") ? model.iopv : nil
+        let iopv = visibleLayerKeys.contains("iopv") ? model.liveIOPV : nil
         return (try? FChartOverlayModel(chart: model.chart, priceOverlays: overlays, iopv: iopv)) ?? model
     }
 
     private func unavailableOverlaySummary(_ model: FChartOverlayModel) -> String {
-        if case .daily = model.chart.window { return "" }
+        if case .daily = model.chart.window { return "IOPV仅实时快照，无历史序列" }
         var unavailable: [String] = []
         if !model.priceOverlays.contains(where: { $0.kind == .intradayAverage && !isUnavailable($0.quality) }) {
             unavailable.append("均价不可用")
@@ -720,9 +714,18 @@ struct FUnifiedSecurityChart: View {
         if !model.priceOverlays.contains(where: { $0.kind == .previousClose && !isUnavailable($0.quality) }) {
             unavailable.append("前收不可用")
         }
-        if model.iopv.map({ isUnavailable($0.quality) }) != false { unavailable.append("IOPV不可用") }
-        if model.priceOverlays.contains(where: { $0.kind == .intradayAverage && !isUnavailable($0.quality) }) {
-            unavailable.append("量价均价按分钟收盘价加权，非官方VWAP")
+        if case .liveIntraday = model.chart.window {
+            if model.liveIOPV.map({ isUnavailable($0.quality) }) != false { unavailable.append("IOPV不可用") }
+        } else {
+            unavailable.append("IOPV仅实时快照，无历史序列")
+        }
+        if let average = model.priceOverlays.first(where: {
+            $0.kind == .intradayAverage && !isUnavailable($0.quality)
+        }) {
+            switch average.quality {
+            case .partial(let reason), .stale(let reason): unavailable.append(reason)
+            default: unavailable.append("量价均价按分钟收盘价加权，非官方VWAP")
+            }
         }
         return unavailable.joined(separator: " · ")
     }
@@ -760,19 +763,34 @@ enum FChartPresentationBuilder {
                      candidate: FCandidateRecommendation?, ledgerCapturedAt: Date?,
                      reference: FTencentMarketReference? = nil) -> FChartOverlayModel? {
         guard let snapshot else { return nil }
-        let session = FMainlandTradingCalendar.status(at: Date())
-        let metadata = FQuoteTemporalMetadata(quoteTimestamp: snapshot.quoteTimestamp,
-                                              fetchedAt: snapshot.fetchedAt, source: snapshot.source,
-                                              timestampTrust: .verifiedExchangeTimestamp,
-                                              marketSessionStatus: session)
-        let quality: FChartDataQuality = session == .continuous &&
-            Date().timeIntervalSince(snapshot.quoteTimestamp) > 300 ? .stale(reason: "超过5分钟未更新") : .complete
+        let validReference = reference.flatMap { $0.hasTrustedTimestamp(at: Date()) ? $0 : nil }
+        let now = Date()
+        let session = FMainlandTradingCalendar.status(at: now)
+        let metadata = snapshot.temporalMetadata(marketSessionStatus: session)
+        let freshness = metadata.freshness(at: now)
+        let quality: FChartDataQuality
+        switch session {
+        case .continuous:
+            switch freshness {
+            case .fresh: quality = .complete
+            case .stale: quality = .stale(reason: "超过2分钟未更新")
+            case .unverified: quality = .stale(reason: "行情时间未验证或来自未来")
+            }
+        case .lunchBreak:
+            quality = .stale(reason: "午间休市；展示最后有效分钟")
+        case .preOpen:
+            quality = .stale(reason: "开盘前；展示上次有效分钟")
+        case .closed:
+            quality = .stale(reason: "已收盘或休市；展示最后有效分钟")
+        case .unknown:
+            quality = .partial(reason: "当前交易日历未覆盖；行情时段未验证")
+        }
         guard let chart = try? FChartDataModel(securityCode: snapshot.securityCode, window: .liveIntraday,
                                                series: .minute(snapshot.samples), quality: quality,
                                                temporalMetadata: metadata) else { return nil }
         return makeOverlay(chart: chart, holding: holding, candidate: candidate,
-                           capturedAt: ledgerCapturedAt, reference: reference,
-                           previousClose: reference.map { ($0.previousClose, $0.source, $0.fetchedAt) })
+                           capturedAt: ledgerCapturedAt, reference: validReference,
+                           previousClose: validReference.map { ($0.previousClose, $0.source, $0.fetchedAt) })
     }
 
     static func historical(_ archive: FNASArchivedIntraday?, holding: FHomeHolding?,
@@ -826,10 +844,12 @@ enum FChartPresentationBuilder {
                                                               value: cumulativeAmount / cumulativeVolume))
                 }
             }
+            let unknownVolumeCount = samples.filter { $0.volume == nil }.count
             if !weightedPoints.isEmpty,
                let average = try? FChartPriceOverlay(
                 securityCode: chart.securityCode, kind: .intradayAverage,
-                points: weightedPoints, quality: .partial(reason: "按分钟收盘价×分钟成交量加权；非官方VWAP"),
+                points: weightedPoints,
+                quality: .partial(reason: "按分钟收盘价×可用分钟量加权；非官方VWAP；成交量未知 \(unknownVolumeCount) 点"),
                 source: "Tencent minute/query volume deltas · weighted minute closes",
                 fetchedAt: chart.temporalMetadata?.fetchedAt) {
                 overlays.append(average)
@@ -877,7 +897,7 @@ enum FChartPresentationBuilder {
         }
         let iopv: FIOPVObservation?
         if let reference, reference.providerInstrumentType == "ETF", let value = reference.iopv,
-           Date().timeIntervalSince(reference.observedAt) <= 900 {
+           reference.hasFreshIOPV(at: Date()) {
             iopv = try? FIOPVObservation(securityCode: chart.securityCode, value: value,
                                          observedAt: reference.observedAt, fetchedAt: reference.fetchedAt,
                                          source: reference.source,

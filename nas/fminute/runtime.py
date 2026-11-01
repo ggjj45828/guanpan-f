@@ -11,6 +11,9 @@ from .archive import MinuteArchive
 from .calendar import Mainland2026Calendar
 from .calendar_sync import CalendarStore, OfficialCalendarSync
 from .providers import EastmoneyMinuteHistoryProvider, TencentCurrentMinuteProvider
+from .index_history import (IndexDailyHistoryArchive, MultiMarketDailyProvider,
+                            NaverKospiDailyProvider, NikkeiDailyCloseProvider,
+                            TencentIndexDailyProvider)
 from .service import BackfillPriority, MinuteArchiveService, ServiceError
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -100,10 +103,34 @@ class MinuteRuntimeWorker:
         self.last_cycle: dict = {"status": "not_started"}
         self.last_backfill_cycle: dict = {"status": "not_started"}
         self.last_calendar_cycle: dict = {"status": "not_started"}
+        self._started = False
+        self._stopping = False
+
+    def worker_snapshot(self, worker: str) -> dict:
+        """Return the last cycle together with the actual thread lifecycle."""
+        values = {
+            "realtime": (self.last_cycle, "f-minute-realtime"),
+            "backfill": (self.last_backfill_cycle, "f-minute-backfill"),
+            "calendar": (self.last_calendar_cycle, "f-official-calendar-sync"),
+        }
+        cycle, thread_name = values[worker]
+        thread = next((item for item in self._threads if item.name == thread_name), None)
+        if worker == "calendar" and self.calendar_sync is None:
+            return {"status": "not_configured", "workerState": "not_configured"}
+        if thread is not None and thread.is_alive():
+            state = "stopping" if self._stopping else "running"
+        elif not self._started:
+            state = "not_started"
+        elif self._stopping:
+            state = "stopped"
+        else:
+            state = "exited"
+        return {**cycle, "workerState": state}
 
     def start(self) -> None:
         if any(thread.is_alive() for thread in self._threads):
-            return
+            raise RuntimeError("minute runtime worker is already running or still stopping")
+        self._stopping = False
         now = datetime.now(timezone.utc)
         startup_errors = []
         for code in self.securities:
@@ -130,8 +157,10 @@ class MinuteRuntimeWorker:
                                                   name="f-official-calendar-sync", daemon=True))
         for thread in self._threads:
             thread.start()
+        self._started = True
 
     def stop(self) -> None:
+        self._stopping = True
         self._stop.set()
         for thread in self._threads:
             thread.join(timeout=5)
@@ -159,16 +188,22 @@ class MinuteRuntimeWorker:
             due = calendar_sync_due(now, last_month, retry_at)
             if due:
                 last_month = month_key
-                current = self.calendar_sync.sync_year(now.year)
-                next_year = self.calendar_sync.sync_year(now.year + 1)
-                self.last_calendar_cycle = {"status": "updated" if (current["status"] == "updated" or
-                                                                        next_year["status"] == "updated")
-                                            else "waiting_for_official_notice",
-                                            "checkedAt": now.isoformat(),
-                                            "currentYear": current, "nextYear": next_year}
-                retry_current = current["status"] != "updated"
-                retry_next_year = next_year["status"] != "updated" and now.month >= 11
-                if retry_current or retry_next_year:
+                try:
+                    current = self.calendar_sync.sync_year(now.year)
+                    next_year = self.calendar_sync.sync_year(now.year + 1)
+                    self.last_calendar_cycle = {"status": "updated" if (current["status"] == "updated" or
+                                                                            next_year["status"] == "updated")
+                                                else "waiting_for_official_notice",
+                                                "checkedAt": now.isoformat(),
+                                                "currentYear": current, "nextYear": next_year}
+                    retry_current = current["status"] != "updated"
+                    retry_next_year = next_year["status"] != "updated" and now.month >= 11
+                    needs_retry = retry_current or retry_next_year
+                except Exception as exc:
+                    self.last_calendar_cycle = {"status": "degraded", "checkedAt": now.isoformat(),
+                                                "error": _error_summary(exc)}
+                    needs_retry = True
+                if needs_retry:
                     # Retry unsupported/current calendars weekly instead of
                     # waiting for the next month. Holiday notices commonly
                     # arrive late in the year.
@@ -237,6 +272,11 @@ def build_service() -> MinuteArchiveService:
         {"CN": calendar},
         {"CN": (EastmoneyMinuteHistoryProvider(), TencentCurrentMinuteProvider())},
     )
+    service.index_daily_history = IndexDailyHistoryArchive(
+        data_dir / "index-daily-history.sqlite3",
+        MultiMarketDailyProvider(TencentIndexDailyProvider(), NikkeiDailyCloseProvider(),
+                                 NaverKospiDailyProvider()),
+        cache_ttl=timedelta(hours=6))
     service.runtime_worker = MinuteRuntimeWorker(service, _configured_securities(),
                                                  calendar_sync=calendar_sync)
     return service

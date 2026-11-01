@@ -21,7 +21,7 @@ enum FNASConnectionError: Error, LocalizedError {
         switch self {
         case .invalidAddress: return "NAS 地址无效；请填写 http(s)://主机:8788。"
         case let .notReady(status): return "NAS 已响应，但服务未就绪：\(status)"
-        case let .historyUnavailable(reason): return "NAS 历史分钟读取失败：\(reason)"
+        case let .historyUnavailable(reason): return "NAS 历史数据读取失败：\(reason)"
         case .invalidResponse: return "NAS 返回了无法识别的就绪状态。"
         }
     }
@@ -29,9 +29,45 @@ enum FNASConnectionError: Error, LocalizedError {
 
 enum FNASReadinessClient {
     private struct ReadyResponse: Decodable {
+        struct Worker: Decodable {
+            let status: String?
+        }
+        struct HistoryItem: Decodable {
+            let status: String?
+            let sampleCount: Int?
+        }
+        struct HistoryCollection: Decodable {
+            let indexes: [String: HistoryItem]?
+            let securities: [String: HistoryItem]?
+
+            func summary(label: String, items: [String: HistoryItem]?) -> String? {
+                guard let items else { return nil }
+                let available = items.values.filter { $0.status == "available" }.count
+                return "\(label) \(available)/\(items.count) 可用"
+            }
+        }
         let status: String
         let archive: String
         let configuredMarkets: [String]
+        let realtimeWorker: Worker?
+        let backfillWorker: Worker?
+        let indexDailyHistory: HistoryCollection?
+        let securityDailyHistory: HistoryCollection?
+
+        var operationalSummary: [String] {
+            var items: [String] = []
+            if let status = realtimeWorker?.status { items.append("实时采集 \(status)") }
+            if let status = backfillWorker?.status { items.append("历史补采 \(status)") }
+            if let indexes = indexDailyHistory?.indexes,
+               let summary = indexDailyHistory?.summary(label: "指数日K", items: indexes) {
+                items.append(summary)
+            }
+            if let securities = securityDailyHistory?.securities,
+               let summary = securityDailyHistory?.summary(label: "证券日K", items: securities) {
+                items.append(summary)
+            }
+            return items
+        }
     }
 
     static func validateAddress(_ text: String) -> URL? {
@@ -52,7 +88,7 @@ enum FNASReadinessClient {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
         guard (200..<300).contains(http.statusCode),
               let body = try? JSONDecoder().decode(ReadyResponse.self, from: data) else {
@@ -62,7 +98,9 @@ enum FNASReadinessClient {
         guard body.status == "ready", body.archive == "ok" else {
             throw FNASConnectionError.notReady(body.status)
         }
-        return "NAS 已就绪 · \(body.configuredMarkets.joined(separator: ", "))"
+        let details = ["NAS 已就绪", body.configuredMarkets.joined(separator: ", ")] +
+            body.operationalSummary
+        return details.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     static func connectionHint(for error: Error) -> String {
@@ -87,6 +125,233 @@ enum FNASReadinessClient {
     }
 }
 
+struct FNASArchivedIndexDaily: Sendable {
+    let indexCode: String
+    let timeZoneIdentifier: String
+    let source: String
+    let fetchedAt: Date
+    let bars: [FMarketRegimeBar]
+}
+
+enum FNASecurityDailyHistoryClient {
+    private static let maximumCompletedBarAge: TimeInterval = 5 * 86_400
+
+    private struct Response: Decodable {
+        struct Bar: Decodable {
+            let tradingDate: String
+            let open: String
+            let close: String
+            let high: String
+            let low: String
+            let volume: String
+        }
+        let securityCode: String
+        let status: String
+        let source: String
+        let fetchedAt: String?
+        let sampleCount: Int
+        let adjustment: String
+        let bars: [Bar]
+        let unavailableReason: String?
+    }
+
+    static func fetch(baseAddress: String, securityCode: String) async throws -> FDailyKlineSnapshot {
+        guard let readinessURL = FNASReadinessClient.validateAddress(baseAddress),
+              var components = URLComponents(url: readinessURL, resolvingAgainstBaseURL: false) else {
+            throw FNASConnectionError.invalidAddress
+        }
+        components.path = "/api/v1/security-daily-history"
+        components.queryItems = [URLQueryItem(name: "securityCode", value: securityCode)]
+        guard let url = components.url else { throw FNASConnectionError.invalidAddress }
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let body = try? JSONDecoder().decode(Response.self, from: data),
+              body.securityCode == securityCode else {
+            throw FNASConnectionError.historyUnavailable("NAS 证券日 K 接口响应无效")
+        }
+        guard body.status == "available" else {
+            throw FNASConnectionError.historyUnavailable(body.unavailableReason ??
+                "NAS 证券日 K 不可用（\(body.status)，\(body.sampleCount)个样本）")
+        }
+        guard let fetchedAt = parseISO8601(body.fetchedAt), fetchedAt <= Date(),
+              Date().timeIntervalSince(fetchedAt) <= 36 * 60 * 60,
+              FMarketBarTrustPolicy.isTrustedSecurityDailySource(body.source),
+              body.adjustment == "不复权", body.sampleCount == body.bars.count,
+              body.bars.count >= 60 else {
+            throw FNASConnectionError.historyUnavailable("NAS 证券日 K 来源、时点、复权方式或样本数无效")
+        }
+        guard let timeZone = TimeZone(identifier: "Asia/Shanghai") else {
+            throw FNASConnectionError.historyUnavailable("证券市场时区不可用")
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.isLenient = false
+        formatter.dateFormat = "yyyy-MM-dd"
+        let todayText = formatter.string(from: Date())
+        var bars: [FDailyBar] = []
+        for row in body.bars {
+            guard let day = formatter.date(from: row.tradingDate),
+                  formatter.string(from: day) == row.tradingDate,
+                  row.tradingDate < todayText,
+                  let open = Decimal(string: row.open, locale: Locale(identifier: "en_US_POSIX")),
+                  let close = Decimal(string: row.close, locale: Locale(identifier: "en_US_POSIX")),
+                  let high = Decimal(string: row.high, locale: Locale(identifier: "en_US_POSIX")),
+                  let low = Decimal(string: row.low, locale: Locale(identifier: "en_US_POSIX")),
+                  let volume = Decimal(string: row.volume, locale: Locale(identifier: "en_US_POSIX")) else {
+                throw FNASConnectionError.historyUnavailable("NAS 证券日 K 含无效日期或数字")
+            }
+            bars.append(FDailyBar(tradingDate: day, open: open, close: close,
+                                  high: high, low: low, volume: volume))
+        }
+        guard zip(bars, bars.dropFirst()).allSatisfy({ $0.0.tradingDate < $0.1.tradingDate }) else {
+            throw FNASConnectionError.historyUnavailable("NAS 证券日 K 日期重复或乱序")
+        }
+        guard let latestBar = bars.last, latestBar.tradingDate <= Date(),
+              Date().timeIntervalSince(latestBar.tradingDate) <= maximumCompletedBarAge else {
+            throw FNASConnectionError.historyUnavailable("NAS 证券日 K 的最后交易日超过5个自然日")
+        }
+        return try FDailyKlineSnapshot(securityCode: securityCode, bars: bars,
+                                       fetchedAt: fetchedAt, source: body.source, adjustment: body.adjustment)
+    }
+
+    private static func parseISO8601(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+}
+
+enum FNASIndexDailyHistoryClient {
+    private static let supportedTimeZones = [
+        "sh000001": "Asia/Shanghai",
+        "sz399001": "Asia/Shanghai",
+        "sh000300": "Asia/Shanghai",
+        "sh000510": "Asia/Shanghai",
+        "sz399006": "Asia/Shanghai",
+        "usNDX": "America/New_York",
+        "hkHSI": "Asia/Hong_Kong",
+        "int_nikkei": "Asia/Tokyo",
+        "KOSPI": "Asia/Seoul"
+    ]
+
+    private struct Response: Decodable {
+        struct Bar: Decodable {
+            let tradingDate: String
+            let open: String?
+            let close: String
+            let high: String?
+            let low: String?
+            let volume: String?
+        }
+        let indexCode: String
+        let timezone: String
+        let status: String
+        let source: String
+        let fetchedAt: String?
+        let sampleCount: Int
+        let bars: [Bar]
+        let unavailableReason: String?
+    }
+
+    static func fetch(baseAddress: String, indexCode: String) async throws -> FNASArchivedIndexDaily {
+        guard let expectedTimeZone = supportedTimeZones[indexCode] else {
+            throw FNASConnectionError.historyUnavailable("该指数尚无经过验证的历史日K来源，Regime不可用")
+        }
+        guard let readinessURL = FNASReadinessClient.validateAddress(baseAddress),
+              var components = URLComponents(url: readinessURL, resolvingAgainstBaseURL: false) else {
+            throw FNASConnectionError.invalidAddress
+        }
+        components.path = "/api/v1/index-daily-history"
+        components.queryItems = [URLQueryItem(name: "indexCode", value: indexCode)]
+        guard let url = components.url else { throw FNASConnectionError.invalidAddress }
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let body = try? JSONDecoder().decode(Response.self, from: data),
+              body.indexCode == indexCode else {
+            throw FNASConnectionError.historyUnavailable("NAS 指数历史接口响应无效")
+        }
+        guard body.status == "available" else {
+            throw FNASConnectionError.historyUnavailable(body.unavailableReason ??
+                "NAS 指数历史不可用（\(body.status)，\(body.sampleCount)个样本）")
+        }
+        guard let fetchedAt = parseISO8601(body.fetchedAt), fetchedAt <= Date(),
+              Date().timeIntervalSince(fetchedAt) <= 36 * 60 * 60,
+              body.timezone == expectedTimeZone,
+              let timeZone = TimeZone(identifier: expectedTimeZone),
+              FMarketBarTrustPolicy.isTrustedIndexDailySource(body.source, indexCode: indexCode),
+              body.sampleCount == body.bars.count, body.bars.count >= 60 else {
+            throw FNASConnectionError.historyUnavailable("NAS 指数历史缺少来源、时点或60个有效日K")
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let today = calendar.startOfDay(for: fetchedAt)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.calendar = calendar
+        formatter.isLenient = false
+        formatter.dateFormat = "yyyy-MM-dd"
+        var bars: [FMarketRegimeBar] = []
+        for row in body.bars {
+            guard let close = decimal(row.close) else {
+                throw FNASConnectionError.historyUnavailable("NAS 指数收盘价含有无效数字")
+            }
+            let optionalOHLCV = [row.open, row.high, row.low, row.volume]
+            let rawOHLCVPresent = optionalOHLCV.map { $0 != nil }
+            let parsedOHLCV = optionalOHLCV.map { $0.flatMap(decimal) }
+            guard rawOHLCVPresent.allSatisfy({ $0 }) || rawOHLCVPresent.allSatisfy({ !$0 }),
+                  !rawOHLCVPresent.contains(true) || parsedOHLCV.allSatisfy({ $0 != nil }) else {
+                throw FNASConnectionError.historyUnavailable("NAS 指数 OHLCV 字段必须完整提供或全部缺失")
+            }
+            guard let day = formatter.date(from: row.tradingDate),
+                  formatter.string(from: day) == row.tradingDate, day < today, close > 0 else {
+                throw FNASConnectionError.historyUnavailable("NAS 指数日期或收盘价校验失败")
+            }
+            if let open = parsedOHLCV[0], let high = parsedOHLCV[1],
+               let low = parsedOHLCV[2], let volume = parsedOHLCV[3],
+               !(low > 0 && volume >= 0 && high >= max(open, close) &&
+                 low <= min(open, close) && high >= low) {
+                throw FNASConnectionError.historyUnavailable("NAS 指数日K OHLCV 校验失败")
+            }
+            bars.append(FMarketRegimeBar(timestamp: day,
+                close: NSDecimalNumber(decimal: close).doubleValue,
+                open: parsedOHLCV[0].map { NSDecimalNumber(decimal: $0).doubleValue },
+                high: parsedOHLCV[1].map { NSDecimalNumber(decimal: $0).doubleValue },
+                low: parsedOHLCV[2].map { NSDecimalNumber(decimal: $0).doubleValue },
+                volume: parsedOHLCV[3].map { NSDecimalNumber(decimal: $0).doubleValue }))
+        }
+        guard zip(bars, bars.dropFirst()).allSatisfy({ $0.0.timestamp < $0.1.timestamp }) else {
+            throw FNASConnectionError.historyUnavailable("NAS 指数日K存在重复或乱序交易日")
+        }
+        return FNASArchivedIndexDaily(indexCode: indexCode, timeZoneIdentifier: body.timezone,
+            source: body.source, fetchedAt: fetchedAt, bars: bars)
+    }
+
+    private static func parseISO8601(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+
+    private static func decimal(_ raw: String) -> Decimal? {
+        guard let value = Decimal(string: raw, locale: Locale(identifier: "en_US_POSIX")),
+              value.isFinite, NSDecimalNumber(decimal: value).doubleValue.isFinite else { return nil }
+        return value
+    }
+}
+
 enum FNASHistoricalMinuteClient {
     private struct Response: Decodable {
         struct Coverage: Decodable {
@@ -95,8 +360,13 @@ enum FNASHistoricalMinuteClient {
             let observedCount: Int?
             let missingTimestamps: [String]?
             let qualityPassed: Bool?
+            let completenessPassed: Bool?
+            let volumePassed: Bool?
 
-            private enum CodingKeys: String, CodingKey { case status, expectedCount, observedCount, missingTimestamps, qualityPassed }
+            private enum CodingKeys: String, CodingKey {
+                case status, expectedCount, observedCount, missingTimestamps
+                case qualityPassed, completenessPassed, volumePassed
+            }
             init(from decoder: Decoder) throws {
                 let values = try decoder.container(keyedBy: CodingKeys.self)
                 status = try? values.decodeIfPresent(String.self, forKey: .status)
@@ -104,6 +374,8 @@ enum FNASHistoricalMinuteClient {
                 observedCount = try? values.decodeIfPresent(Int.self, forKey: .observedCount)
                 missingTimestamps = try? values.decodeIfPresent([String].self, forKey: .missingTimestamps)
                 qualityPassed = try? values.decodeIfPresent(Bool.self, forKey: .qualityPassed)
+                completenessPassed = try? values.decodeIfPresent(Bool.self, forKey: .completenessPassed)
+                volumePassed = try? values.decodeIfPresent(Bool.self, forKey: .volumePassed)
             }
         }
         struct Bar: Decodable {
@@ -232,7 +504,7 @@ enum FNASHistoricalMinuteClient {
         var request = URLRequest(url: url, timeoutInterval: 20)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
         var modernFailure: String?
         if (200..<300).contains(http.statusCode),
@@ -278,25 +550,44 @@ enum FNASHistoricalMinuteClient {
         guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else {
             throw FNASConnectionError.invalidResponse
         }
+        let validationTime = Date()
         let samples = body.bars.compactMap { bar -> FMinuteSample? in
             guard (bar.securityCode == nil || bar.securityCode == securityCode),
                   (bar.market == nil || bar.market?.uppercased() == "CN"),
-                  (bar.tradingDate == nil || bar.tradingDate == dateText) else { return nil }
+                  (bar.tradingDate == nil || bar.tradingDate == dateText),
+                  FMarketBarTrustPolicy.isTrustedMinuteArchiveSource(bar.source) else { return nil }
             guard let stamp = parseTimestamp(bar.timestamp), stamp >= dayStart, stamp < dayEnd,
-                  bar.price > 0 else { return nil }
-            if let fetchedAtText = bar.fetchedAt,
-               let fetchedAt = parseTimestamp(fetchedAtText), fetchedAt < stamp { return nil }
+                  stamp <= validationTime,
+                  bar.price > 0,
+                  (bar.minuteVolume.map { $0 >= 0 } ?? true) else { return nil }
+            if let fetchedAtText = bar.fetchedAt {
+                guard let fetchedAt = parseTimestamp(fetchedAtText),
+                      fetchedAt >= stamp, fetchedAt <= validationTime else { return nil }
+            }
             return FMinuteSample(timestamp: stamp, price: bar.price, volume: bar.minuteVolume)
         }.sorted { $0.timestamp < $1.timestamp }
         let unique = Dictionary(samples.map { ($0.timestamp, $0) }, uniquingKeysWith: { first, _ in first })
         let ordered = unique.keys.sorted().compactMap { unique[$0] }
         let discardedCount = body.bars.count - ordered.count
         let reportedStatus = (body.status ?? "partial").lowercased()
+        let coverageConsistent = body.coverage.map { coverage in
+            guard coverage.status?.lowercased() == "complete",
+                  coverage.qualityPassed == true,
+                  coverage.completenessPassed == true,
+                  coverage.volumePassed == true,
+                  let expected = coverage.expectedCount, expected > 0,
+                  let observed = coverage.observedCount, observed == expected,
+                  observed == body.bars.count,
+                  let missing = coverage.missingTimestamps, missing.isEmpty else { return false }
+            return true
+        } ?? false
         let missingProvenance = body.bars.contains { bar in
-            bar.source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false ||
+            !FMarketBarTrustPolicy.isTrustedMinuteArchiveSource(bar.source) ||
             bar.fetchedAt.flatMap(parseTimestamp) == nil
         }
-        let effectiveStatus = (discardedCount > 0 || missingProvenance || body.coverage == nil) && reportedStatus == "complete"
+        let qualityFailed = body.coverage?.qualityPassed == false
+        let needsDowngrade = discardedCount > 0 || missingProvenance || !coverageConsistent
+        let effectiveStatus = needsDowngrade && reportedStatus == "complete"
             ? "partial" : (body.status ?? "partial")
         let coverage = body.coverage
         let coverageSummary: String
@@ -306,8 +597,10 @@ enum FNASHistoricalMinuteClient {
             let missing = coverage.missingTimestamps?.count
             let quality = coverage.qualityPassed.map { $0 ? " · 质量合格" : " · 质量未达标" } ?? ""
             let discarded = discardedCount > 0 ? " · 客户端剔除 \(discardedCount) 条无效/重复记录" : ""
-            let provenance = missingProvenance ? " · 来源/采集时间缺失，降为Partial" : ""
-            coverageSummary = "\(effectiveStatus) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)\(discarded)\(provenance)"
+            let provenance = missingProvenance ? " · 来源未验证或采集时间缺失，降为Partial" : ""
+            let coverageDowngrade = !coverageConsistent && reportedStatus == "complete"
+                ? (qualityFailed ? " · 质量门未通过，降为Partial" : " · 完整度元数据缺失或不一致，降为Partial") : ""
+            coverageSummary = "\(effectiveStatus) · \(observed)/\(expected) 点 · 缺失 \(missing.map { "\($0)" } ?? "未知") 点\(quality)\(discarded)\(provenance)\(coverageDowngrade)"
         } else {
             coverageSummary = "\(effectiveStatus) · NAS未提供完整度统计"
         }
@@ -331,7 +624,7 @@ enum FNASHistoricalMinuteClient {
         var request = URLRequest(url: url, timeoutInterval: 20)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
         guard (200..<300).contains(http.statusCode),
               let body = try? JSONDecoder().decode(LegacyBResponse.self, from: data),

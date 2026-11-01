@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from .archive import MinuteBar
+from .http_limits import read_bounded_body
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 USER_AGENT = "GuanpanF-MinuteArchive/1"
@@ -78,7 +79,8 @@ class TencentCurrentMinuteProvider:
         with self.opener(request, timeout=self.timeout) as response:
             if response.status != 200:
                 raise OSError("Tencent minute source unavailable")
-            body = response.read(2_000_000).decode("utf-8", "strict")
+            body = read_bounded_body(response, 2_000_000, source="Tencent current minute").decode(
+                "utf-8", "strict")
         return self.parse(body, security_code, market, trading_date, fetched_at=now)
 
     @staticmethod
@@ -169,7 +171,8 @@ class EastmoneyMinuteHistoryProvider:
         with self.opener(request, timeout=self.timeout) as response:
             if response.status != 200:
                 raise OSError("Eastmoney minute history unavailable")
-            payload = json.loads(response.read(4_000_000).decode("utf-8", "strict"))
+            body = read_bounded_body(response, 4_000_000, source="Eastmoney minute history")
+            payload = json.loads(body.decode("utf-8", "strict"))
         data = payload.get("data") or {}
         klines = data.get("klines") or []
         if not isinstance(klines, list):

@@ -1,5 +1,5 @@
 from contextlib import closing
-from datetime import date, datetime, timedelta, timezone, tzinfo
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +9,7 @@ import sqlite3
 
 from nas.fminute.archive import ArchiveError, MarketSession, MinuteArchive, MinuteBar
 from nas.fminute.research import (
+    _finite_result_float,
     build_morning_selloff_recovery_evidence, build_vwap_break_evidence,
     replay_grid_spacing_evidence,
 )
@@ -33,6 +34,13 @@ def bars(session, *, source="provider-a", fetched=None, quality=95, trust=95, pr
                                 price, i + 1, 1, volume_method, source, fetched,
                                 source_timestamp or stamp, quality, trust, completeness))
     return result
+
+
+def research_row(stamp, price):
+    return {"timestamp": stamp.isoformat(), "source_timestamp": stamp.isoformat(),
+            "fetched_at": (stamp + timedelta(minutes=1)).isoformat(), "price": str(price),
+            "minute_volume": 100, "volume_method": "source_minute", "data_quality": 98,
+            "source_trust": 99, "source": "fixture"}
 
 
 class Provider:
@@ -457,6 +465,65 @@ class MinuteArchiveTests(unittest.TestCase):
         self.assertEqual(evidence["windows"]["5"]["medianReturnPercent"], None)
         self.assertEqual(evidence["windows"]["15"]["evidenceState"], "insufficient_independent_days")
 
+    def test_research_rejects_nonfinite_float_statistics_before_marking_reviewable(self):
+        self.assertIsNone(_finite_result_float(Decimal("1e-400")))
+
+        def session_for(day, prices, minute_offsets):
+            rows = []
+            for price, (hour, minute) in zip(prices, minute_offsets):
+                stamp = datetime.combine(day, datetime.min.time(), tzinfo=UTC).replace(
+                    hour=hour, minute=minute)
+                rows.append({"timestamp": stamp.isoformat(),
+                             "source_timestamp": stamp.isoformat(),
+                             "fetched_at": (stamp + timedelta(minutes=1)).isoformat(),
+                             "price": price, "minute_volume": 1,
+                             "volume_method": "source_minute", "data_quality": 98,
+                             "source_trust": 99, "source": "fixture"})
+            return {"tradingDate": day.isoformat(), "complete": True,
+                    "timezone": "UTC", "bars": rows}
+
+        days = (date(2026, 10, 8), date(2026, 10, 9))
+        extreme_vwap = [session_for(day, ("1", "1", "1e308", "1e-300", "1e308"),
+                                   ((9, 31), (9, 32), (9, 33), (9, 34), (9, 35)))
+                        for day in days]
+        vwap = build_vwap_break_evidence(
+            extreme_vwap, research_as_of=self.now, horizons_minutes=(1,),
+            minimum_independent_days=1, minimum_out_of_sample_days=1,
+            maximum_monthly_concentration=1.0)["windows"]["1"]
+        self.assertEqual(vwap["rejectedNumericObservations"], 2)
+        self.assertEqual(vwap["independentDays"], 0)
+        self.assertEqual(vwap["evidenceState"], "insufficient_independent_days")
+        self.assertIsNone(vwap["outOfSampleMeanReturnPercent"])
+        self.assertEqual(vwap["samples"], [])
+
+        extreme_recovery = [session_for(day, ("1e308", "1e-300", "1e308"),
+                                        ((9, 31), (9, 32), (14, 25)))
+                            for day in days]
+        recovery = build_morning_selloff_recovery_evidence(
+            extreme_recovery, research_as_of=self.now,
+            minimum_independent_days=1, minimum_out_of_sample_days=1,
+            maximum_monthly_concentration=1.0)
+        self.assertEqual(recovery["rejectedNumericObservations"], 2)
+        self.assertEqual(recovery["independentDays"], 0)
+        self.assertEqual(recovery["evidenceState"], "insufficient_independent_days")
+        self.assertIsNone(recovery["outOfSampleMedianRecoveryPercent"])
+        self.assertEqual(recovery["samples"], [])
+
+        extreme_grid = [session_for(day, ("1", "0.98", "1.01"),
+                                    ((9, 31), (9, 32), (9, 33)))
+                        for day in days]
+        grid = replay_grid_spacing_evidence(
+            extreme_grid, research_as_of=self.now, spacing_percentages=(Decimal("1"),),
+            units=10 ** 400, minimum_independent_days=1,
+            minimum_out_of_sample_days=1, maximum_monthly_concentration=1.0
+        )["spacings"]["1"]
+        self.assertEqual(grid["rejectedNumericObservations"], 2)
+        self.assertEqual(grid["independentDays"], 0)
+        self.assertEqual(grid["evidenceState"], "insufficient_independent_days")
+        self.assertEqual(grid["totalObservedCompletedRoundTrips"], 0)
+        self.assertIsNone(grid["outOfSampleNetAfterFees"])
+        self.assertEqual(grid["sessions"], [])
+
     def test_walk_forward_holdout_is_chronological_and_uses_independent_months(self):
         sessions = []
         for month in (8, 9, 10, 11, 12):
@@ -478,6 +545,98 @@ class MinuteArchiveTests(unittest.TestCase):
         self.assertEqual(result["outOfSample"]["startDate"], "2026-12-08")
         self.assertEqual(result["maxMonthlySampleShare"], 0.2)
         self.assertEqual(result["evidenceState"], "available_for_review")
+
+    def test_vwap_headline_metrics_are_chronological_holdout_only(self):
+        sessions = []
+        for month, prices in zip((8, 9, 10, 11, 12),
+                                 (("10", "9", "8", "8.5"),) * 4 + (("10", "9", "8", "10"),)):
+            day = date(2026, month, 10)
+            start = datetime.combine(day, datetime.min.time(), tzinfo=UTC).replace(hour=9, minute=31)
+            sessions.append({"tradingDate": day.isoformat(), "complete": True,
+                             "bars": [research_row(start + timedelta(minutes=index), price)
+                                      for index, price in enumerate(prices)]})
+
+        result = build_vwap_break_evidence(
+            sessions, research_as_of=datetime(2027, 1, 1, tzinfo=UTC), horizons_minutes=(2,),
+            minimum_independent_days=4, minimum_out_of_sample_days=1)["windows"]["2"]
+
+        self.assertEqual(result["evidenceState"], "available_for_review")
+        self.assertEqual(result["headlinePopulation"], "out_of_sample")
+        self.assertLess(result["trainingMedianReturnPercent"], 0)
+        self.assertGreater(result["outOfSampleMedianReturnPercent"], 0)
+        self.assertEqual(result["medianReturnPercent"], result["outOfSampleMedianReturnPercent"])
+
+    def test_morning_recovery_headline_rate_uses_only_oos_holdout(self):
+        local_zone = timezone(timedelta(hours=8))
+        sessions = []
+        for month, close in zip((8, 9, 10, 11, 12), ("9.7", "9.7", "9.7", "9.7", "10.2")):
+            day = date(2026, month, 10)
+            rows = [research_row(datetime.combine(day, time(9, 31), local_zone), "10"),
+                    research_row(datetime.combine(day, time(9, 32), local_zone), "9.8"),
+                    research_row(datetime.combine(day, time(14, 29), local_zone), close)]
+            sessions.append({"tradingDate": day.isoformat(), "timezone": "Asia/Shanghai",
+                             "complete": True, "bars": rows})
+
+        result = build_morning_selloff_recovery_evidence(
+            sessions, research_as_of=datetime(2027, 1, 1, tzinfo=UTC),
+            minimum_independent_days=4, minimum_out_of_sample_days=1)["recoveryRate"]
+        evidence = build_morning_selloff_recovery_evidence(
+            sessions, research_as_of=datetime(2027, 1, 1, tzinfo=UTC),
+            minimum_independent_days=4, minimum_out_of_sample_days=1)
+
+        self.assertEqual(evidence["headlinePopulation"], "out_of_sample")
+        self.assertEqual(evidence["trainingRecoveryRate"], 0)
+        self.assertEqual(result, 1)
+        self.assertEqual(evidence["outOfSampleRecoveryRate"], result)
+
+    def test_grid_headline_net_uses_only_oos_holdout(self):
+        sessions = []
+        training_prices = ("10", "9.8", "10.1", "10")
+        holdout_prices = ("10", "9.8", "10.1", "9.8", "10.1", "9.8", "10.1")
+        for month in (8, 9, 10, 11, 12):
+            day = date(2026, month, 10)
+            start = datetime.combine(day, datetime.min.time(), tzinfo=UTC).replace(hour=9, minute=31)
+            prices = holdout_prices if month == 12 else training_prices
+            sessions.append({"tradingDate": day.isoformat(), "complete": True,
+                             "bars": [research_row(start + timedelta(minutes=index), price)
+                                      for index, price in enumerate(prices)]})
+
+        result = replay_grid_spacing_evidence(
+            sessions, research_as_of=datetime(2027, 1, 1, tzinfo=UTC),
+            spacing_percentages=(Decimal("1"),), units=10, minimum_independent_days=4,
+            minimum_out_of_sample_days=1)["spacings"]["1"]
+
+        self.assertEqual(result["headlinePopulation"], "out_of_sample")
+        self.assertEqual(Decimal(result["netAfterFees"]), Decimal(result["outOfSampleNetAfterFees"]))
+        self.assertNotEqual(result["netAfterFees"], str(sum(
+            (Decimal(row["netAfterFees"]) for row in result["sessions"]), Decimal(0))))
+
+    def test_grid_spacing_sweep_selects_on_training_and_withholds_other_holdouts(self):
+        sessions = []
+        training_prices = ("10", "9.9", "10.1", "10")
+        holdout_prices = ("10", "9.8", "10.1", "10")
+        for month in (8, 9, 10, 11, 12):
+            day = date(2026, month, 10)
+            start = datetime.combine(day, datetime.min.time(), tzinfo=UTC).replace(hour=9, minute=31)
+            prices = holdout_prices if month == 12 else training_prices
+            sessions.append({"tradingDate": day.isoformat(), "complete": True,
+                             "bars": [research_row(start + timedelta(minutes=index), price)
+                                      for index, price in enumerate(prices)]})
+
+        result = replay_grid_spacing_evidence(
+            sessions, research_as_of=datetime(2027, 1, 1, tzinfo=UTC),
+            spacing_percentages=(Decimal("1"), Decimal("2")), units=10,
+            minimum_independent_days=4, minimum_out_of_sample_days=1)
+
+        self.assertEqual(result["selectedSpacing"], "1")
+        self.assertEqual(result["selectionPolicy"],
+                         "highest positive training mean net-after-fees; ties choose smaller spacing; only one holdout reported")
+        self.assertEqual(result["spacings"]["1"]["evidenceState"], "available_for_review")
+        self.assertTrue(result["spacings"]["1"]["selectedByTraining"])
+        self.assertEqual(result["spacings"]["2"]["evidenceState"], "not_selected_by_training")
+        self.assertFalse(result["spacings"]["2"]["selectedByTraining"])
+        self.assertIsNone(result["spacings"]["2"]["outOfSample"])
+        self.assertIsNone(result["spacings"]["2"]["outOfSampleNetAfterFees"])
 
     def test_temporal_concentration_fails_closed_without_publishing_summary(self):
         sessions = []

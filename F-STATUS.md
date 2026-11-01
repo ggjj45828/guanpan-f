@@ -1,15 +1,49 @@
-# F状态文档说明（2026-10-28）
+# F状态文档说明（2026-11-01）
 
-## 当前源树状态覆盖（2026-10-28；优先于下方历史记录）
+## 当前源树状态覆盖（2026-11-01；优先于下方历史记录）
 
-- 当前HEAD：`e500fc84f6dd8acf93cc32305aefcff28e700f4e`；GitHub Desktop Fetch确认 `origin/main=9e575693de5400a154eafb16fcb08c003f9ce49e`，当前分支ahead 1 / behind 8且工作树dirty。尚未合并、提交或推送；禁止强推。
-- 当前FCore测试定义153；当前HEAD executed=0 / passed=0 / failed=0；App UI定义3、当前HEAD未执行。Windows无Swift/Xcode/XcodeGen；Apple编译和测试External Verification Pending。
-- 当前产品架构：NAS为可选同步/备份/归档/扩展研究；本地Quant/Trigger是目标核心，但现在仅有未接线价格区间Trigger；完整Quant、Risk Guard接线、报价订阅、持久化、通知和UI均未完成。Candidate仍fail-closed。
-- 本轮图表语义色已接入Theme Manifest tokens，改动尚未编译。IOPV有值时的renderer/图例路径存在，但无可靠源时仍Unavailable。Simulator/截图人工审阅、iPhone Air、横屏交互、NAS/DeepSeek实网均未验证。
+- 2026-11-01 韩股历史指数接入：NAS增设Naver KOSPI日线provider，独立于iPhone实时报价，支持Naver常见日期格式、过滤当日未完成bar、校验OHLCV，并接入日线归档、iPhone可信来源门与KR Regime；新增路由、解析和API回归。Naver历史端点为未签约公开接口，本机无法实网验证，须由NAS部署后的实际请求确认可用性与覆盖。提交推送授权已给出，每次最多两个Actions run；当前尚未提交。
+- 2026-11-01 用户图表反馈续审：详情分时、日K、NAS历史分钟及行情卡片图表统一从400/360pt收至320pt；新增稳定可访问性标识、UI高度验收及源码合同。Home/追踪合同30/30通过；全量Python发现293项、291项通过，2项因缺PyYAML无法导入；`git diff --check`通过。Swift/XCTest与Simulator不可用，尚无截图视觉确认。B-058已更新；未提交/推送。
+- 2026-11-01 Local Quant 输入信任续审：确认盘中因子只在共享报价时效/来源门通过且处于连续交易时段时计算；证券日K来源与时点、Regime市场身份/数据时点、映射指数身份/获取时间及IOPV来源均有独立门控。未确认可绕过路径。Local Quant、Regime、报价信任与追踪聚焦合同30/30通过；Swift/XCTest未执行；未提交/推送。
+- 2026-11-01 Ledger金额与每日盈亏续审：复核真实成交回放、数量溢出、成本移除、费用更正、每日已实现盈亏及T配对；运算结果在账本余额核对或报表聚合处失败关闭，未确认金额错算路径。账户费用、Ledger并发写、每日盈亏、Shadow成交关联及追踪合同16/16通过；Swift/XCTest未执行；未提交/推送。
+- 2026-11-01 星图主题无障碍标识续审：发现组合中心摘要与可导航真实资产节点复用`home.role.portfolio`，造成UI查询歧义且未断言资产节点可点击。中心摘要改用独立`home.star-map.center`；UI验收现检查组合角色唯一、四节点均可点击并与中心不重叠。Home/追踪合同30/30通过，diff检查通过；Simulator UI XCTest未执行；未提交/推送。
+
+- 2026-11-01 NAS底层链续审：响应体上限、分钟归档/provider/runtime/service、研究证据与分红研究回归131/131通过（测试临时目录置于工作区）。KRX官方资料确认KOSPI日线接口需要申请AUTH_KEY；目前compose和runtime均无密钥注入及KOSPI历史采集实现，故仍应Unavailable，不能以当前KOSPI实时行情替代Regime日线。Local Quant完整NAS资格包闭环仍是未完成需求。未提交/推送。
+
+- 2026-11-01 后续全盘审计：复核多市场指数日K provider/NAS API/Regime接线、首页与持仓录入、CI触发与并发。未发现本轮可确认的新产品缺陷；KOSPI实时行情已接入，历史KOSPI因KRX适配器/授权缺失明确Unavailable。指数/Regime/Advisor聚焦回归90/90通过；首页、账户费用、PnL、行情缓存、追踪及CI合同47/47通过。Windows默认临时目录拒绝SQLite文件后，将测试临时目录指向工作区并通过；Swift/Xcode/XCTest和Simulator仍不可用。无提交/推送。
+
+- 2026-11-01 B-018前收来源审计：日盈亏计算之前按任意新鲜`previousClose`观察接受数值，没有限定来源。现校验Tencent参考行情精确来源，且在PnL取值和DecisionContext验证两处失败关闭；新增伪造来源Swift回归。Security Daily P&L、Advisor安全和追踪合同33/33通过；Swift/XCTest未执行。未提交/推送。
+
+- 2026-11-01 腾讯分钟量续审发现：累计成交量字段缺失/无效后，旧解析器沿用上一个基准，使下一个可读差值覆盖多个分钟。现清空累计量基准，直到建立新基准后再输出单分钟量；新增缺量连续性 XCTest 和来源合同。相关聚焦合同37/37通过，compileall、架构边界及diff检查通过。本机无Swift/Xcode，XCTest未执行。全量Python重跑因Windows回环套接字访问错误中断；最近一次完整发现293项、291通过，2项因缺PyYAML导入失败。未提交/推送。
+
+- 2026-11-01 Market Regime 输入边界复审：核心此前会过滤掉收盘价非有限/非正的bar后继续用其余历史分类，也不校验负成交量、部分OHLCV字段和矛盾OHLC。现在有效as-of区间的任一坏bar令Regime Data Unreliable并提供专用因子/原因码；未来回放区间的坏bar仍忽略。新增2项FCore XCTest定义；Market Regime与追踪Python合同19/19通过。全量Python发现293项，291项通过，2项因缺PyYAML未能导入；compileall、架构边界及diff检查通过。本机无Swift/Xcode，XCTest未执行；未提交/推送。
+
+- 当前工作树：分支`main`，HEAD `0296013f20156b23831cedd6d95f707eb6d89cc3`，工作树dirty；本轮无提交或推送。origin状态本轮未重新核实。
+- 2026-11-01 iOS成交量质量续审：腾讯当前分钟累计成交量回退时，iOS旧逻辑把负差值夹成0；现保留价格点、将该分钟成交量标为未知，并以回退值作为后续差分基准。图表的部分量价均价会明示未知分钟量点数。新增解析器和图表状态合同3/3通过；B-010追踪行已补充。FCore测试定义326项；本机无Swift/Xcode，XCTest尚未执行。全量Python发现292项，290项通过，另2项因缺PyYAML不能导入；无提交/推送。
+- 2026-11-01 iOS跨市场指数数值边界：NAS指数历史解码器现仅接受有限Decimal且其Double转换仍有限，避免异常数值进入Market Regime bars。Daily-history wiring回归14/14通过；Swift/Xcode未安装，新增Swift改动未编译/运行。KRX历史接口仍缺获批授权密钥与NAS适配器；无提交/推送。
+- 2026-11-01首页资产摘要续审：新增“账本内资产估值”，只计算现金+全部真实持仓市值；必须为CNY、账本时点有效，且每个持仓证券有120秒内可信报价，否则整项显示不可用并列出缺失代码，不显示部分持仓的伪总值。新增5个FCore XCTest定义及首页可访问性UI断言；相关Home/追踪Python合同30/30通过；全量Python发现288项，286项通过、2项因缺PyYAML无法导入；架构边界和compileall通过。当前FCore定义324项、UI定义11项；本机无Swift/Xcode/XcodeGen，新增Swift未编译/执行，需Apple CI及实机核对金额/可访问性。未提交/推送。
+- 2026-11-01 Advisor新闻请求边界：组合目标证券为空时跳过证券关联新闻外网请求，状态说明未抓取；新增源码契约。Advisor安全/新闻/Home/追踪相关合同61/61通过；全量Python288项中286通过、2项缺PyYAML未导入。Swift/Xcode不可用，未做Apple构建或网络实测。未提交/推送。
+- 2026-11-01 NAS研究阈值审计：三个底层分钟研究builder改为严格要求正整数样本门和有限、非布尔月份集中度；拒绝`True`导致的隐式门槛降级。新增回归，分钟服务45/45通过，`py_compile`通过；全量Python288项，286通过、2项因缺PyYAML无法导入。未提交/推送。
+- 2026-11-01 NAS研究非有限统计审计：有限正价格也可能形成超出Float范围的百分比收益/回收或网格净值；VWAP、早盘回撤修复和网格研究此前可输出Infinity并仍标available_for_review。三者现在拒绝不可有限表示/下溢成零的统计样本，记录拒绝数并排除在OOS摘要外；walk-forward汇总另加非有限防线。NAS研究/归档/provider/runtime/service/股息和追踪共128/128通过；全量Python288项，286通过、2项缺PyYAML无法导入；py_compile通过。未提交/推送。
+- 当前定义：FCore XCTest方法332项、App UI 12项；dirty工作树在本机执行的Apple测试为0。本机没有Swift/Xcode/XcodeGen，当前Swift及iOS改动没有编译或运行证据。最近一次完整Python发现293项，其中291项通过；两个依赖PyYAML的测试模块因本机缺少该依赖未能导入。Home/追踪聚焦合同30/30通过；Python compileall、架构边界检查与diff检查通过。上述静态/Python结果不能替代Apple运行验收。
+- 本轮再次核对持仓初始录入：六位证券代码触发名称查询并允许手动修改，每份真实经济成本乘持有份额得到账本总经济成本，券商现金通过独立表单录入；已有Home源合同和UI入口定义。未发现可确认的实现缺陷；实际网络名称查询、Apple UI运行与持久化实机验收仍待完成。
+- 首页主题覆盖：九种常规主题共用Portfolio→Market→Cross-market→Advisor角色顺序；dataStarMap按径向位置布局并检查可点击性。相应UI测试已补充，但未在Simulator运行或人工查看截图，视觉验收仍未通过。
+- 跨市场时区审计：纽约秋季回拨时重复的本地时点无法唯一映射UTC；指数时间解析现拒绝这种歧义，也拒绝春季跳时不存在的时点。已增加两项FCore XCTest定义与Python源码合同；Regime/指数合同15/15通过。跨市场UTC存储、交易所日历和全时区DST回放仍未完成。
+- 市场日历复审：iPhone的CN本地会话只接受审阅过的2026日历，未审阅年份返回`unknown`；NAS归档和实时采集在写入前核对会话身份、交易日范围及预期分钟。未发现未知年份被当作闭市或可交易的路径。NAS归档、runtime与service 100/100通过；US/HK/JP/KR官方假日和临时停市日历仍未实现。
+- 行情自选回归：B→F审计原先误称F缺少自选与筛选；现确认代码查询、自选持久化和持仓/自选/合并列表已接入。补充UI用例验证自选列表与Ledger分离并恢复测试前状态，及源码契约验证存储边界。当前首页合同27/27与追踪3/3通过；UI XCTest未在Apple工具链执行。全市场目录与证券名称搜索仍缺。
+- 2026-11-01 B-032续审：画像投影此前丢失临时修订过期时间。投影现在保留 `expiresAt`，解码后重新校验临时来源/过期字段一致且在 `asOf` 后仍有效；新增篡改成过期记录的 XCTest定义与源码合同。Advisor安全/画像合同26/26及追踪合同3/3通过；完整Python发现269项中267通过、两项因缺PyYAML无法导入。八个现有画像字段仍不能由当前镜像证明覆盖原B需求全部子字段，未据此推定完整。Swift/XCTest未执行；无提交/推送。
+- 2026-11-01 Shadow成交关联续审：只读Ledger快照现在必须证明账户ID、成交ID、成交时间（不晚于快照）、证券代码、买卖方向及完整成交份额均匹配，避免随机ID/编造时间/跨账户挂接被标记为确认成交。相关Shadow Python合同4/4通过；Swift XCTest仍未执行。旧归档与真实App流程仍未验收；无提交/推送。
+- 2026-11-01 B-030续审：DecisionMemory现保存原请求scope，Advisor投影拒绝跨scope历史；提示词要求只比较同范围历史建议、说明证据差异，且无匹配记录时不推断。确定性变化引擎、专用UI与真实模型输出仍未验；Advisor安全合同已增加对应断言。
+- 2026-11-01 B-036续审：画像使用约束已真正附加到DeepSeek system prompt；响应支持引用本次画像revision ID，并在Provider与Guard拒绝无效引用。真实DeepSeek输出及Apple构建仍待验。
+- 当前产品架构：NAS历史分钟数据仍主要服务Quant回测、Validation、OOS和Strategy Qualification；NAS Research Summary只作为Advisor可选的本机缓存，不得同步阻塞行情或Advisor。Local Quant已有因子与Regime消费骨架，但合格策略包尚未签发/下放，不能声称已形成可交易的完整Quant。Risk Guard与Realtime Trigger存在确定性门控代码，但候选生成、实时报价订阅、持久化、通知和完整UI闭环尚未端到端验收；Candidate继续fail-closed。
+- Market Regime已编码多因子分类、来源/市场身份/时效校验、已支持指数历史归档输入和同步的同市场基准观察；KOSPI日线适配器缺失、广度无生产来源，必须保持Unavailable。图表语义色已接入Theme Manifest tokens。Simulator/截图人工审阅、iPhone Air、横屏交互、NAS/DeepSeek实网、真实指数覆盖与映射效果均未验证。
 - 已做真实远端Fetch但还未安全reconcile；远端首页/IPA后续提交需要先审阅合并冲突。当前改动不能触发Apple CI，直至正常提交并推送。
 - 用户实机反馈当前F整体体验明显不如B；B→F逐页整改尚未关闭。以下历史条目保留作追溯，不得视作当前源码、当前验证或当前需求，冲突时以 `F-REALTIME-HANDOFF.md` 最新快照和 `F-MASTER-ACCEPTANCE-MATRIX.md` 当前盘点为准。
+- 2026-11-01 NAS定位修正：顾问提示词、首页研究说明、主题描述和设置页明确NAS历史分钟主要服务Quant回测/策略资格验证，摘要仅作Advisor次要缓存，NAS不可达不阻断实时行情或单次基础分析；当前参数包尚未下放Local Quant。新增Advisor/Home源合同，并修正将后台Task内`await`误识别为同步等待的测试断言。Node静态合同检查通过；Python unittest和Swift/XCTest未执行。
+- 2026-11-01 NAS上游响应上限复核：指数与分钟provider此前只读取上限字节数，未拒绝超限响应；现统一验证Content-Length并最多读取上限+1，超限失败关闭。相关NAS回归79/79通过；全量Python 282项中280通过，另两项依赖PyYAML的测试不能导入。Swift及NAS实网未验证。
+- 2026-11-01 HTTP响应内存上限：将NAS私有读取器改为应用共享流式读取器，NAS与Advisor Research最多4MB、DeepSeek最多2MB、公开指数/行情最多128KB；已有新闻流式读取仍最多1MB。超过Content-Length或实际流量上限即中止，应用源码中不再保留`URLSession.data(for:)`整段无上限读取。相关Python合同18/18通过；全量发现263项中261项通过、两项因缺PyYAML导入失败。Swift/XCTest未能在本机执行；未提交/推送。
 
-本文件下方旧记录中“无同标的合格NAS研究时阻断资产变化Candidate”等产品规则已被正式决策取代：NAS现为可选同步/备份/历史归档/扩展研究。核心方向改为本地Quant + Risk Guard + Realtime Trigger + DeepSeek慢速Advisor。迁移实施与Apple验证状态以`F-REALTIME-HANDOFF.md`及`F-LOCAL-QUANT-ARCHITECTURE.md`为准。保留以下旧内容仅作历史记录，不作为当前产品要求或验证证据。
+本文件下方旧记录保留为历史快照，不作为当前要求或验证证据。当前规则是：NAS研究不得同步阻塞Advisor；但策略必须经过NAS历史数据回测、验证、样本外评估与资格签发才能成为合格策略包。无有效包时Local Quant继续fail-closed。迁移实施与Apple验证状态以`F-REALTIME-HANDOFF.md`及`F-LOCAL-QUANT-ARCHITECTURE.md`为准。
 
 # F 云端开发状态
 
@@ -394,3 +428,21 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 
 - 用户指定本机唯一 Active Development 工作区为 `C:\Users\Administrator\.codex\.chatgpt-projects\g-p-6ac90ddb9a888191a751dc24eb6a329d\F`。今后 F 的所有源码修改、提交、测试、状态矩阵和 checkpoint 均在此目录进行；A/B 保持只读。
 - 当前 F 目录从 ZIP 解包且没有 `.git` 或 checkpoint bundle。提交与 checkpoint 流程需待 Git 元数据恢复后执行；不把源码目录误报为 Git 分支或 checkpoint。
+
+- 2026-11-01 跨市场指数时点解析修复：严格拒绝含混入字符、分隔符或非ASCII数字的供应商时点，避免把抽取数字误当有效时间；市场Regime/指数历史/API聚焦合同34/34通过，新增Swift正反回归定义未在Apple工具链执行。B-136统一UTC/DST验证仍是未完成要求。
+
+- Market Regime门控现令证券自身R3/R4风险立即关闭策略许可；Local Quant不再因仍保留Bull/Range确认标签而报告策略准备可用。新增2项Swift回归定义和源码合同，Market Regime/Local Quant/Advisor/追踪合同50/50通过；Apple XCTest未执行。
+
+- Regime历史bar现拒绝非有限时间戳（包括负无穷），否则该输入可能参与长期均线并被误判可靠。新增Swift回归定义，聚焦合同26/26通过；Swift/XCTest未执行。
+
+- 2026-11-01 iOS实时分钟时段审计：腾讯与东方财富回包此前只按日期/竞价/未来时间筛选，午休及盘后分钟可能进入分时与因子输入。现两解析器按时钟过滤非连续交易分钟，独立于年份审阅过的假日历；增加腾讯午休、收盘边界与未审阅年份时钟判定回归定义及源码合同。Swift测试尚未在本机执行；Python解析/追踪合同7/7通过，compileall与diff检查通过；无提交/推送。
+
+- 2026-11-01 Local Quant VWAP可用性复核：Tencent首个有效分钟的成交量按安全策略记为未知，但VWAP旧逻辑要求每点成交量均已知，导致真实Tencent分钟样本下该因子通常整项不可用。现要求至少20个分钟样本，忽略未知量点后以已知成交量加权，并要求量覆盖率≥90%；覆盖不足或总成交量为零仍Unavailable。新增XCTest与源码合同；Apple执行待有Swift工具链，本轮定向Python结果随后记录；无提交/推送。
+
+- 2026-11-01 Local Quant VWAP回归结果：LocalQuant/MarketBarTrust/追踪相关合同17/17通过；全量Python发现292项，290通过、2项因缺PyYAML导入失败；compileall与diff检查通过。FCore XCTest定义327项；本机无Swift/Xcode，新增用例未编译/执行。无提交/推送。
+
+- 2026-11-01 RealtimeTrigger Regime时序门控：此前只验证Regime dataAsOf，未验证滞后/未来的memory.lastEvaluationAt，未来记忆仍可能通过候选触发门。现同时要求记忆时点有限、≥dataAsOf、≤当前时点且不旧于5日，并验证confidence范围。新增Swift回归；Market Regime/Local Quant/追踪合同28/28通过，架构边界及diff检查通过。XCTest未在本机执行；无提交/推送。
+
+- 2026-11-01 RealtimeTrigger Regime时序门控：此前只验证Regime dataAsOf，未验证滞后/未来的memory.lastEvaluationAt，未来记忆仍可能通过候选触发门。现同时要求记忆时点有限、≥dataAsOf、≤当前时点且不旧于5日，并验证confidence范围。新增Swift回归；Market Regime/Local Quant/追踪合同28/28通过，架构边界及diff检查通过。XCTest未在本机执行；无提交/推送。
+
+- 2026-11-01 每日成交摘要身份校验：解码后的FDailyTradeSummary.isValid此前只要求证券代码非空且无首尾空格，未执行F账本的6位ASCII数字规则；伪造summary身份可能进入DecisionContext日已实现盈亏聚合。现要求exact 6 ASCII digits，新增短码/全角数字/字母代码解码回归并更新B-018。security daily P&L与追踪合同6/6通过，XCTest未在本机执行；无提交/推送。
