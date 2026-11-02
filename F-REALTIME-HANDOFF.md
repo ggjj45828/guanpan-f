@@ -943,3 +943,8 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - GitHub run `41469458134` (SHA `13b5f5e`)：FCore 338/338、XcodeGen、Device Build、Simulator Build及截图导出通过；UI XCTest 7/12，未通过且未产出IPA。失败集中于市场查询框键盘焦点/前一测试设备方向，以及资产“已清仓”分段控件查找。
 - 本地已按真实失败修改：各查询测试固定并恢复竖屏、输入前等待键盘；资产分段控件有唯一标识；跨页面主题主视觉按布局族切换（编辑、终端、玻璃、星图、网格、Bento），统一消费该主题的语义颜色/表面；Advisor和Settings滚动可收键盘。
 - 以上修改尚未进入Apple CI；Windows无Simulator，截图尚未人工审阅，主题与实机验收保持未完成。
+
+
+## 2026-11-02 — Theme hero 编译修复
+
+- Apple run `41472998168` 在设备构建失败；FCore、XcodeGen通过。Swift日志显示跨页面 Theme Hero 的布局族视图块少了一个结束大括号，导致后续扩展被解析到结构体内部并产生级联错误。已补齐闭合；本修复待新一轮 Apple CI 验证。

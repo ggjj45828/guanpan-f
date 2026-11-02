@@ -168,6 +168,7 @@ private struct FThemePageHero: View {
     }
 
 
+}
 struct HomeLayout: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
