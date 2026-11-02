@@ -813,3 +813,12 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | Python/NAS Run 27 | [41398262417](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262417)：306项唯一失败为B-058追溯矩阵引用旧UI测试方法 | 已更新B-058锚点；本机相关追溯+布局合同30/30通过；未声称全量CI重跑 |
 | iOS Run 224 | [41398262288](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262288)，SHA `f1f2c2914a4b57e178ab03142e7bb6e57aed7acd` | FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、观盘max IPA校验与打包均成功 |
 | 视觉验收 | Run 224截图Artifact 13120891486 | 已导出，尚未人工逐张审阅；iPhone Air真机验收仍External Pending |
+
+## 2026-11-02 全盘审计清单续记（当前SHA）
+
+- 逐项目标清单：[`F-AUDIT-TARGET-CHECKLIST.md`](F-AUDIT-TARGET-CHECKLIST.md)，A01–A32。各项区分源码确认、指定SHA自动测试和外部验收；不能把一层证据继承成下一层完成。
+- 当前SHA `edd14a397b70a8203467c39fa06133baa5e564ff`：iOS Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642) 完成FCore 335/335、UI XCTest 12/12、XcodeGen、设备/模拟器Build、截图导出及观盘max IPA打包校验；Python/NAS Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391) 完成306 tests、compileall和架构边界检查。
+- 该SHA新增Swift修正：跨市场涨跌摘要颜色统一接入主题语义tokens；不能据自动CI断言跨页面主题视觉已经一致。
+- 第一轮静态核对：初始持仓入口、真实成交录入路径、MACD显隐renderer及watchlist基础加入/移除源码存在；自选综合评分/迷你走势图、NAS真实部署契约、新闻实网/顾问引用、B→F逐页视觉对比仍未达标或待验。
+- 产品架构依照2026-11-02用户决策：实时行情 + 本机Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger为核心；NAS为可选增强，不得列为Advisor必经依赖。旧NAS主链条描述若冲突，以该决策为准。
+- Simulator截图只记录为“已导出”，未人工逐张审阅；iPhone Air、真实NAS/新闻/DeepSeek/确认成交端到端均保持External Pending。

@@ -5,9 +5,11 @@
 ## 本轮基线
 
 - 审计日期：2026-11-02（Asia/Shanghai）
-- 审计开始时 HEAD / `origin/main`：`c6ba442835d712b444c27d158aefdc5f1aecdf04`；开始时工作树干净且与远端一致。后续审计修改见本清单及工作树差异。
-- 最新 iOS 证据：Run 224，SHA `f1f2c291…`，FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build 和 IPA 流程通过。当前 HEAD 是文档/CI触发器提交，不改变该次验证过的 Swift 源码；该证据不能代替当前 SHA 的新 UI 视觉验收。
-- 最新 NAS/Python 证据：Run 28，提交 `c6ba442…`，306 项、compileall、架构边界通过。
+- 审计开始时 HEAD / `origin/main`：`c6ba442835d712b444c27d158aefdc5f1aecdf04`；开始时工作树干净且与远端一致。
+- 当前 HEAD / `origin/main`：`edd14a397b70a8203467c39fa06133baa5e564ff`；该源码修复已普通推送并通过CI。本段CI结果回填和交接更新当前仍在工作树，待普通推送。
+- 当前 SHA iOS 证据：Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642)，FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、观盘max IPA校验/打包/上传全部通过。Artifact 13123048046。CI截图尚未人工逐张审阅。
+- 当前 SHA NAS/Python 证据：Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391)，306项、compileall、架构边界通过。
+- 静态修复：跨市场摘要涨跌颜色已从硬编码系统红/绿改用主题 `positive` / `negative` semantic token；Run 225已编译验证。
 - 本机验证：Home/追踪定向合同 30/30；本机全量Python导入曾受环境依赖影响并被中止，不记为全量通过。
 - Simulator 导出截图未人工逐页审阅；iPhone Air真机、图表手势、NAS指定日期数据、真实新闻可达性、DeepSeek真实E2E仍需实测。
 
@@ -44,7 +46,7 @@
 | A19 | Guard、候选计划有效区间和失效规则 | Guard/量化状态模型已有代码与回归 | 源码确认；生产实时报价驱动触发器待核 | 检查行情Stale时暂停、离开价格区不追价；验证计划生命周期状态和候选版本不可变 |
 | A20 | 自选证券加入/移除、打分、曲线与自动更新 | MarketOverview支持搜索及watchlist入口；本轮尚未核实Quant评分/自选走势图是否完整接线 | 未核 | 沿UI→model→quote refresh追踪每个字段；缺Quant分值/迷你图则按既定本地确定性规则修复，不增加模型黑盒 |
 | A21 | 首页第一屏信息层次与主题对应布局 | HomeLayout含10个family renderer；首页核心role组件存在 | 不达标—视觉验收；用户持续反馈丑/层级乱 | 逐主题截图审阅首页布局、信息层级；只针对可见问题调整，CI截图不能替代手工审阅 |
-| A22 | 一个主题在全App颜色/排版/卡片/导航一致 | 全局`@AppStorage`主题驱动manifest/token，页面使用共享theme | 源码部分确认；跨页面一致性未验证 | 已修复跨市场指数涨跌标签硬编码红/绿，改用正/负语义token；仍需逐主题截图抽查首页、行情、证券详情、AI、资产、设置的背景、字色、间距、导航 |
+| A22 | 一个主题在全App颜色/排版/卡片/导航一致 | 全局`@AppStorage`主题驱动manifest/token，页面使用共享theme | 源码部分确认；当前SHA CI通过，跨页面一致性未验证 | 已修复跨市场指数涨跌标签硬编码红/绿，改用正/负语义token；仍需逐主题截图抽查首页、行情、证券详情、AI、资产、设置的背景、字色、间距、导航 |
 | A23 | 10主题不是换色；保持全App结构和信息职责 | 10个theme/layout family及HomeLayout renderer存在；Settings gallery可折叠 | 源码确认；灰度构图与各页覆盖未验 | 建立各主题×核心页面截图矩阵；三套标杆先完成，未有截图证据不得写达标 |
 | A24 | 设置页信息密度、滚动与主题栏不混乱 | 设置为SwiftUI List分组，主题选择横向条、全部预览折叠 | 不达标—截图反馈显示行高/字段换行与长说明占用过大 | 压缩次要说明、把NAS/数据高级状态分组折叠，保留错误主状态；必须对比新旧截图后验收 |
 | A25 | 键盘输入可收起且不遮挡操作 | 行情搜索有FocusState与“收起键盘”按钮；表单键盘关闭路径需逐页检 | 部分源码确认 | 搜索所有TextField/Form，统一有提交/关闭手段并可滚动至确认按钮；UI Test/Simulator验证 |
@@ -52,8 +54,8 @@
 | A27 | App显示名、图标、IPA | Run224 IPA交付门检查通过，观盘max及AppIcon纳入编译产物 | 自动验证通过（Run224） | 用户安装后仅处理实机安装差异；当前无须继续改包线 |
 | A28 | 隐私、安全与禁止自动交易 | 无券商下单路径的设计边界、Keychain、确认成交入口存在 | 源码确认；全仓安全扫描未完成 | 搜索URLSession请求中账本泄漏、secret/fixture及任何自动下单代码；修复发现的高风险项 |
 | A29 | B→F成熟UI不退化 | B源码地图、gap audit、non-regression清单存在；B真实UI对照已部分记录 | 未达成，F当前整体视觉不如B（用户实际反馈） | 按首页→行情→证券详情/图表→AI→资产逐页对照源码与截图，迁移成熟布局而不复制B业务逻辑 |
-| A30 | XCTest定义/执行/通过数如实登记 | Run224 335/335 FCore、12/12 UI；Run28 306 Python | 指定Run通过；设备人工验收External Pending | 新提交每次记录对应SHA与真实执行数；绝不把定义数写成执行数 |
-| A31 | Simulator截图人工审阅与iPhone Air验收 | 仅有CI截图导出证据，无本轮人工查看/真机触摸证据 | 外部待验 | 取得artifact截图逐页查看；可交互Apple Simulator/iPhone Air时验收滚动、手势、长文本和状态恢复 |
+| A30 | XCTest定义/执行/通过数如实登记 | Run225 335/335 FCore、12/12 UI；Run29 306 Python，均对应当前SHA | 当前SHA指定CI全部通过；设备人工验收External Pending | 新提交每次记录对应SHA与真实执行数；绝不把定义数写成执行数 |
+| A31 | Simulator截图人工审阅与iPhone Air验收 | Run225截图Artifact 13123048046已导出；无本轮人工逐张查看/真机触摸证据 | 外部待验 | 取得artifact截图逐页查看；可交互Apple Simulator/iPhone Air时验收滚动、手势、长文本和状态恢复 |
 | A32 | NAS、实时行情、新闻、DeepSeek、真实成交全链E2E | 现有源码分别有客户端/协议/边界，但无完整同一真实账户端到端证据 | 外部待验 | 明确分段验收证据：服务→iOS数据→DecisionContext→DeepSeek→Candidate→人工真实成交→Ledger复判 |
 
 ## 本轮已发现并立即修复
@@ -64,6 +66,20 @@
 | 初始持仓入口是否缺失 | 当前源码并非完全没有：首页/真实资产均有未建账录入入口，已建空账本时有真实成交开仓入口，且UI测试检查录入表单标识 | 不改Ledger语义；把“已实现/设备发现性待验”列为明确项，避免错误宣称不存在或已完全解决 |
 | 图表MACD是否缺失 | 当前源码已有MACD计算、绘制和副图切换；但此前截图可能未选择MACD，图表体验仍有尺寸/布局问题 | 记录为“能力存在，发现性/比例待验”，继续逐主题视觉验收 |
 | 主题语义涨跌色是否统一 | 跨市场指数摘要原先直接使用系统红/绿，绕过主题语义色 | 已改为 `positive` / `negative` semantic token；待Apple CI编译与深浅外观截图确认 |
+
+## 本轮修复闭环
+
+| 修复 | 源码 | 验证 |
+|---|---|---|
+| 跨市场指数摘要不跟随主题的问题 | `GuanpanFApp/Sources/HomeExperience.swift` | 当前SHA `edd14a3` 的iOS Run 225通过；CI仅证明构建与自动测试，不证明截图视觉检查完成 |
+
+## 仍未达标/待外部验证（不得写成完成）
+
+- A13/A16：均价、前收、IOPV和指定日NAS历史分钟仍缺当前设备真实来源/响应证据；Unavailable安全降级保留。
+- A17：同花顺新闻实现存在，但真实设备可达、文章链接/时间和Advisor引用链未验。
+- A20：自选加入/移除和行情已接线；自选确定性评分及自动迷你趋势图没有被确认完整接线，缺口保持打开，不以未经验证的因子均值造分。
+- A21–A24/A29：主题层与10套首页自动截图存在；当前没有人工灰度构图、跨页面一致性或B/F逐页截图对照，不能宣称视觉达标。
+- A31/A32：Simulator截图虽由Run 225导出，但未人工逐页查看；iPhone Air、NAS实机、DeepSeek及真实成交E2E仍External Pending。
 
 ## 后续逐轮处理顺序
 

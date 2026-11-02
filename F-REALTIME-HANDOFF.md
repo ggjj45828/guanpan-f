@@ -779,6 +779,17 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 本轮审阅的Ledger成交/手续费重放和Local Quant/Trigger边界未发现可由当前源码证据确认的核心记账或候选写账缺陷；此结论限于静态抽查，不替代真实成交E2E。真实NAS HTTPS设备连接和指定日历史分钟、新闻源实网可达与顾问引用、DeepSeek真实E2E、Candidate→用户确认成交→Ledger→Advisor复判、Simulator人工截图审阅、iPhone Air均未由上述CI证明。
 - 当前产品缺口仍包括：B/F逐页视觉差距尚无本轮人工对照证据；多主题整套页面一致性尚未完成；NAS历史分钟响应契约与新闻实时来源需要设备/服务实测；自选评分/自动曲线体验须以实际页面验收。不可把构建绿灯解释为产品验收完成。
 - 下一步：继续以此 SHA 的真实源码审计和修复；涉及Swift的修改先完整审阅，再触发Apple CI。截图artifact应实际打开检查后再记录视觉结论。推送前重新核对运行数，最多保持2个Actions同时运行。
+
+## 2026-11-02 全盘审计清单与当前SHA闭环
+
+- 本轮以远端 `main` 为起点核对并建立 [F-AUDIT-TARGET-CHECKLIST.md](F-AUDIT-TARGET-CHECKLIST.md)，共32项，逐条分为源码证据、CI证据与设备/服务外部验收；所有未达标/未核项保持打开。
+- 当前远端HEAD：`edd14a397b70a8203467c39fa06133baa5e564ff`。本轮唯一Swift修复是跨市场摘要涨跌颜色改用主题positive/negative semantic tokens；清单、handoff及Master Matrix同步记录。推送前无其他Actions并发，推送后iOS与Python/NAS恰为2条运行。
+- 当前SHA iOS Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642) 成功：FCore 335/335，XcodeGen、Device Build、Simulator Build、UI XCTest 12/12、截图导出、显示名/图标校验、IPA打包与Artifact上传通过。Artifact 13123048046，已导出不等于人工视觉审阅。
+- 当前SHA Python/NAS Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391) 成功：306 tests、compileall及架构边界检查通过。
+- 当前核对确认：初始持仓录入和已建账后真实成交开仓入口在源码中存在；MACD副图与MA/VOL显隐也有renderer实现；自选加入/移除已接线。但是自选独立评分/自动迷你图未确认实现，不能把Local Quant各因子方向值随意平均成评分。
+- 仍未完成：NAS历史日期API在用户真实部署端的字段/数据尚未实测；新闻虽实现同花顺来源但iPhone真实可达及Advisor引用未证；均价、前收、IOPV仅在可靠数据可得时开放；10主题跨全App的一致性与截图对照未人工验收；B/F逐页视觉审计仍有差距；iPhone Air手势、DeepSeek真实E2E、Candidate真实成交回写闭环未完成。
+- 当前状态应表述为：审计清单已建立并完成第一轮源码抽查；已修1项且当前SHA CI通过；32项目标尚未全部达标。后续按清单A01起逐项收敛，不以测试/文件数量替代产品验收。
+- 旧段落若把NAS历史研究写成核心Advisor前置，与2026-11-02用户最终决策冲突：核心改为实时行情 + 真实Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger；NAS仅为可选同步、归档、备份和扩展证据，不可阻断基础顾问链。
 # 2026-11-02 最新主线续审（工作树基于当前 main）
 
 - 校准基线：文档起始HEAD `31c30077b53256adaf307ea8534eeeb7843bc63b`，其中Swift源码基线为 `73bfb479fb60e0d611661157045f6d593fa2c795`；此前最新iOS Actions Run 222及NAS/Python Run 25均为该源码SHA成功。Run 222完成FCore、XcodeGen、Device/Simulator Build、UI XCTest、截图导出和未签名IPA打包；CI截图没有人工视觉审阅。Windows无Xcode/Simulator。
