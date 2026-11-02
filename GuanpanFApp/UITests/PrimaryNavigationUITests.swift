@@ -6,10 +6,14 @@ final class PrimaryNavigationUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)
-            .matching(identifier: "portfolio.valuation.total").firstMatch.waitForExistence(timeout: 3),
-            "Home must expose the ledger-only valuation row, including its unavailable state")
         attachScreenshot("01-home", app: app)
+        let homeScroll = app.scrollViews["home.scroll"]
+        XCTAssertTrue(homeScroll.waitForExistence(timeout: 3), app.debugDescription)
+        let valuation = app.descendants(matching: .any)
+            .matching(identifier: "portfolio.valuation.total").firstMatch
+        scrollUntilHittable(valuation, in: homeScroll)
+        XCTAssertTrue(valuation.waitForExistence(timeout: 3),
+            "Home must expose the ledger-only valuation row, including its unavailable state")
 
         app.tabBars.buttons["行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 3))

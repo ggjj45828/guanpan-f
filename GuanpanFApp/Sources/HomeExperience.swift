@@ -29,6 +29,7 @@ struct HomeLayout: View {
             }
             .padding(theme.manifest.tokens.spacing.standard)
         }
+        .accessibilityIdentifier("home.scroll")
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
     }
