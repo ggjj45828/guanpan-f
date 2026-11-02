@@ -941,7 +941,8 @@ private struct PortfolioCard: View {
     }
 }
 
-private extension Result where Failure == FPortfolioMarketValuationUnavailableReason {
+private extension Result where Success == FPortfolioMarketValuation,
+                               Failure == FPortfolioMarketValuationUnavailableReason {
     var displayLabel: String {
         switch self {
         case .success(let valuation):
@@ -1326,20 +1327,14 @@ struct HomeDestination: View {
                     if let reference = model.marketReferenceByCode[code],
                        reference.hasTrustedTimestamp(at: Date()) {
                         let now = Date()
-                        let iopv: String
-                        if let value = reference.iopv, reference.hasFreshIOPV(at: now) {
-                            iopv = " · IOPV参考 ¥\(NSDecimalNumber(decimal: value).stringValue)"
-                        } else {
-                            iopv = " · IOPV过期/不可用"
-                        }
-                        let premium: String
-                        if reference.hasFreshReference(at: now), let value = reference.premiumPercent {
-                            premium = " · 腾讯溢折价 \(value)%"
-                        } else if reference.hasFreshReference(at: now) {
-                            premium = " · 溢折价不可用"
-                        } else {
-                            premium = " · 腾讯溢折价过期/不可用"
-                        }
+                        let iopv = reference.iopv.map { value in
+                            reference.hasFreshIOPV(at: now)
+                                ? " · IOPV参考 ¥\(NSDecimalNumber(decimal: value).stringValue)"
+                                : " · IOPV过期/不可用"
+                        } ?? " · IOPV过期/不可用"
+                        let premium = reference.hasFreshReference(at: now)
+                            ? reference.premiumPercent.map { " · 腾讯溢折价 \($0)%" } ?? " · 溢折价不可用"
+                            : " · 腾讯溢折价过期/不可用"
                         Text("前收 ¥\(NSDecimalNumber(decimal: reference.previousClose).stringValue)" +
                              iopv +
                              premium + " · \(reference.source) · \(reference.observedAt.formatted(date: .omitted, time: .standard))")
@@ -1563,11 +1558,8 @@ private struct CrossMarketOverview: View {
         .accessibilityIdentifier("crossmarket.list")
         .navigationTitle("跨市场脉搏")
         .task {
-            async let liveQuotes: Void = {
-                if model.marketIndicesUpdatedAt == nil { await model.refreshMarketIndices() }
-            }()
-            async let historicalRegimes: Void = model.refreshHistoricalIndexRegimes()
-            _ = await (liveQuotes, historicalRegimes)
+            if model.marketIndicesUpdatedAt == nil { await model.refreshMarketIndices() }
+            await model.refreshHistoricalIndexRegimes()
         }
     }
 

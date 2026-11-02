@@ -6,6 +6,22 @@ import FCore
 import FAdvisor
 import FLedgerWrite
 
+private func fIopvPremiumPercent(price: Decimal, iopv: Decimal) -> Decimal? {
+    guard price.isFinite, price > 0, iopv.isFinite, iopv > 0 else { return nil }
+    var price = price
+    var iopv = iopv
+    var ratio = Decimal.zero
+    guard NSDecimalDivide(&ratio, &price, &iopv, .plain) == .noError else { return nil }
+    var one = Decimal(1)
+    var premium = Decimal.zero
+    guard NSDecimalSubtract(&premium, &ratio, &one, .plain) == .noError else { return nil }
+    var hundred = Decimal(100)
+    var percent = Decimal.zero
+    guard NSDecimalMultiply(&percent, &premium, &hundred, .plain) == .noError,
+          percent.isFinite else { return nil }
+    return percent
+}
+
 @main
 struct GuanpanFApp: App {
     @StateObject private var model = FHomeModel()
@@ -324,8 +340,9 @@ final class FHomeModel: ObservableObject {
     }
 
     func securityDailyPnL(for code: String, at now: Date = Date()) -> Decimal? {
-        guard let snapshot = latestLedgerSnapshot,
-              let tradingDate = snapshot.dailyTradeSummaryDate,
+        guard let snapshot = latestLedgerSnapshot else { return nil }
+        let tradingDate = snapshot.dailyTradeSummaryDate
+        guard
               (try? FDailyTradeSummary.tradingDate(for: now)) == tradingDate,
               (try? FDailyTradeSummary.tradingDate(for: snapshot.capturedAt)) == tradingDate,
               let quote = marketDataByCode[code], quote.freshness(at: now) == .fresh,
@@ -671,8 +688,11 @@ final class FHomeModel: ObservableObject {
                 do {
                     let link = try FCandidateShadowFillLink(confirmedFillID: fill.id,
                                                             linkedAt: now, units: units)
+                    guard let confirmedLedger = try await store.readLedgerSnapshot(now: Date()) else {
+                        throw FAdvisorLiveError.noRealLedger
+                    }
                     try await candidateShadowJournalStore.appendConfirmedExecution(
-                        candidateID: candidate.id, link: link)
+                        candidateID: candidate.id, link: link, ledgerSnapshot: confirmedLedger)
                     await refreshCandidateShadowSummary(now: now)
                 } catch {
                     candidateShadowJournalStatus = "真实成交已入账；成绩单未能关联成交编号 · \(error.localizedDescription)"
@@ -1057,7 +1077,7 @@ final class FHomeModel: ObservableObject {
                        reference.source == FMarketQuoteTrustPolicy.tencentReferenceSource,
                        reference.hasFreshIOPV(at: contextCaptureTime),
                        let iopvValue = reference.iopv,
-                       let premium = Self.iopvPremiumPercent(price: reference.latestPrice, iopv: iopvValue) {
+                       let premium = fIopvPremiumPercent(price: reference.latestPrice, iopv: iopvValue) {
                         observations.append(FContextObservation(
                             dataClass: .iopv, subject: code, source: reference.source,
                             reference: "method=(ETF价格/IOPV-1)*100;unit=percent",
@@ -1075,8 +1095,8 @@ final class FHomeModel: ObservableObject {
                         mappedBenchmarkIndexCode: FMarketIndexSecurityMappingRegistry.mapping(for: code)?.indexCode,
                         now: contextCaptureTime)
                     let factorFacts = assessment.factors.map { factor in
-                        let value = factor.value.map(String.init) ?? "Unavailable"
-                        let score = factor.directionalScore.map(String.init) ?? "Unavailable"
+                        let value = factor.value.map { String($0) } ?? "Unavailable"
+                        let score = factor.directionalScore.map { String($0) } ?? "Unavailable"
                         let observedAt = factor.observedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "Unavailable"
                         let supportingDataAsOf = factor.supportingDataAsOf.map {
                             ISO8601DateFormatter().string(from: $0)
@@ -1304,7 +1324,7 @@ final class FHomeModel: ObservableObject {
                         candidate: assessment.candidate, context: context,
                         advisorConclusion: narrative.conclusion,
                         invalidationConditions: narrative.invalidationConditions,
-                        reasonCodes: uniqueGuardFindings.map { String(describing: $0) },
+                        reasonCodes: assessment.guardResult.findings.map { String(describing: $0) },
                         finalAction: assessment.guardResult.allowedForReview
                             ? assessment.candidate.action : .wait,
                         guardAllowed: assessment.guardResult.allowedForReview)
@@ -1780,7 +1800,8 @@ final class FHomeModel: ObservableObject {
                     }
                 }
             } else {
-                marketRefreshStateByCode[code] += " · 本机离线缓存不可用"
+                marketRefreshStateByCode[code] =
+                    (marketRefreshStateByCode[code] ?? "已更新") + " · 本机离线缓存不可用"
             }
             if let candidateShadowJournalStore,
                let price = snapshot.latestPrice, price > 0 {
