@@ -76,7 +76,7 @@ public enum FLocalQuantEngine {
     private static let maximumDailyHistoryAge: TimeInterval = 36 * 60 * 60
     private static let maximumDailyBarAge: TimeInterval = 5 * 86_400
     private static let maximumRegimeAge: TimeInterval = 5 * 86_400
-    private static let maximumIntradaySampleGap: TimeInterval = 180
+    private static let maximumIntradaySampleGap: TimeInterval = 90
     private static let strategies: [FQuantStrategyKind] = [
         .meanReversion, .trendPullback, .vwapDeviation
     ]

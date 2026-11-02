@@ -505,7 +505,7 @@ public enum FMarketRegimeEngine {
 
     private static func hasValidPriceData(_ bar: FMarketRegimeBar) -> Bool {
         guard bar.close.isFinite, bar.close > 0 else { return false }
-        if let volume = bar.volume, (!volume.isFinite || volume < 0) { return false }
+        if let volume = bar.volume, volume.isFinite, volume < 0 { return false }
         let ohlc = [bar.open, bar.high, bar.low]
         let present = ohlc.compactMap { $0 }
         guard present.isEmpty || present.count == ohlc.count,

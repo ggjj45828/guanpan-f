@@ -37,6 +37,15 @@ public struct FAdvisorDecisionPipeline: Sendable {
     public func assess(request: FAdvisorQuestionRequest,
                        context: FDecisionContext,
                        now: Date = Date()) async throws -> FAdvisorDecisionAssessment {
+        try await assess(request: request, context: context, now: now, completionTime: Date())
+    }
+
+    /// Internal clock seam lets boundary tests reproduce slow model responses
+    /// without sleeping for the quote freshness interval.
+    func assess(request: FAdvisorQuestionRequest,
+                context: FDecisionContext,
+                now: Date,
+                completionTime: Date) async throws -> FAdvisorDecisionAssessment {
         try context.validate(now: now)
         guard request.accountID == context.accountID,
               request.accountDigest == context.accountDigest,
@@ -52,7 +61,7 @@ public struct FAdvisorDecisionPipeline: Sendable {
         // A slow model response must not inherit the quote freshness from the
         // request start. Preserve deterministic future-dated fixtures while
         // advancing ordinary requests to the actual response completion time.
-        let completedAt = max(now, Date())
+        let completedAt = max(now, completionTime)
         let base = FDecisionGuards.evaluate(candidate, in: context, using: request, now: completedAt)
         var findings = base.findings
         if case let .instrument(code) = request.scope,

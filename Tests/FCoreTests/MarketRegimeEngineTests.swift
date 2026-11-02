@@ -588,7 +588,7 @@ final class MarketRegimeEngineTests: XCTestCase {
 
         let result = FMarketRegimeEngine.evaluate(input, now: now)
 
-        XCTAssertEqual(result.factors.first(where: { $0.key == "fresh_benchmarks" })?.value, 1)
+        XCTAssertNil(result.factors.first(where: { $0.key == "fresh_benchmarks" })?.value)
         XCTAssertEqual(result.riskLevel, .r0Normal)
     }
 

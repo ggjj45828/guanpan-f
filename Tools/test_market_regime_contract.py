@@ -52,13 +52,13 @@ class MarketRegimeNumericContractTests(unittest.TestCase):
         for condition in [
             "bar.close.isFinite, bar.close > 0",
             "present.allSatisfy(\\.isFinite)",
-            "volume < 0",
-            "if let volume = bar.volume",
             "high >= max(open, bar.close)",
             "low <= min(open, bar.close)",
         ]:
             self.assertIn(condition, self.engine)
         self.assertIn("!hasInvalidBarValues", self.engine)
+        self.assertIn("volumes.allSatisfy({ $0.isFinite && $0 >= 0 })", self.engine)
+        self.assertIn("volume.isFinite, volume < 0", self.engine)
         self.assertIn("factor(\"daily_bar_values\"", self.engine)
         self.assertIn('reasons.append("invalid_daily_bar_values")', self.engine)
         self.assertIn('!["daily_bar_spacing", "daily_bar_values"].contains($0.key)', self.engine)

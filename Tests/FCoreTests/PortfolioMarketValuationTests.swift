@@ -81,10 +81,8 @@ final class PortfolioMarketValuationTests: XCTestCase {
         XCTAssertEqual(valuation.totalAssets, 1250)
         XCTAssertNil(valuation.quotesAsOf)
 
-        let foreign = try ledger(cash: 1250, positions: [], currency: "USD")
-        let unsupported = FPortfolioMarketValuationCalculator.calculate(
-            ledger: foreign, quotes: [:], at: now)
-        XCTAssertEqual(unsupported.failureReason, .unsupportedCurrency("USD"))
+        XCTAssertThrowsError(try ledger(cash: 1250, positions: [], currency: "USD"),
+            "Ledger必须在快照阶段拒绝不支持的币种")
     }
 
     func testUnrepresentableMarketValueDoesNotOverflowIntoTheDisplayTotal() throws {

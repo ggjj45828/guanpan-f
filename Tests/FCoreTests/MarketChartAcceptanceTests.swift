@@ -20,26 +20,27 @@ final class MarketChartAcceptanceTests: XCTestCase {
     private let zone = TimeZone(identifier: "Asia/Shanghai")!
     private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
 
-    private func securityRegimeObservation(_ code: String = "159352") -> FContextObservation {
-        let asOf = now.addingTimeInterval(-600)
+    private func securityRegimeObservation(_ code: String = "159352",
+                                          at timestamp: Date = now) -> FContextObservation {
+        let asOf = timestamp.addingTimeInterval(-600)
         return FContextObservation(dataClass: .quantState, subject: code,
             source: "FCore Market Regime Engine",
             reference: "regime=range; risk=0; confidence=80; dataAsOf=\(ISO8601DateFormatter().string(from: asOf)); source=fixture; factors=trend=available",
-            observedAt: now.addingTimeInterval(-1), capturedAt: now, decimalValue: 80)
+            observedAt: timestamp.addingTimeInterval(-1), capturedAt: timestamp, decimalValue: 80)
     }
 
     private func mappedBenchmarkObservation(
         _ code: String = "159352", regime: FMarketRegime = .range,
-        risk: FMarketRiskLevel = .r0Normal
+        risk: FMarketRiskLevel = .r0Normal, at timestamp: Date = now
     ) throws -> FContextObservation {
         let mapping = try XCTUnwrap(FMarketIndexSecurityMappingRegistry.mapping(for: code))
-        let asOf = now.addingTimeInterval(-86_400)
+        let asOf = timestamp.addingTimeInterval(-86_400)
         let timestamp = ISO8601DateFormatter().string(from: asOf)
         return FContextObservation(dataClass: .quantState,
             subject: "mapped-index:\(code)",
             source: "F Verified Issuer Index Mapping + NAS Daily Regime",
             reference: "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.rawValue);risk=\(risk.rawValue);confidence=80;dataAsOf=\(timestamp);not_strategy_qualification=true",
-            observedAt: now.addingTimeInterval(-10), capturedAt: now, decimalValue: 80)
+            observedAt: timestamp.addingTimeInterval(-10), capturedAt: timestamp, decimalValue: 80)
     }
 
     func testClosedIndexQuoteShowsVerifiedMarketTime() {
@@ -546,17 +547,27 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
             observedAt: metadata.quoteTimestamp, capturedAt: freshNow, decimalValue: 1,
             quoteTemporalMetadata: metadata)
-        let context = FDecisionContext(snapshot: try emptySnapshot(capturedAt: freshNow), observations: [quote])
+        let qualification = try XCTUnwrap(FQuantStrategyQualificationEvidence.observation(
+            securityCode: "159352", regime: .range, strategyID: "MeanReversion",
+            strategyVersion: "v3", evaluatedAt: freshNow))
+        let grant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range,
+            strategyID: "MeanReversion", strategyVersion: "v3",
+            observationID: qualification.id, evaluatedAt: freshNow)
+        let regime = securityRegimeObservation(at: freshNow)
+        let benchmark = try mappedBenchmarkObservation(at: freshNow)
+        let context = FDecisionContext(snapshot: try emptySnapshot(capturedAt: freshNow),
+            observations: [quote, qualification, regime, benchmark],
+            strategyQualificationGrants: [grant])
         let request = try FAdvisorQuestionRequest(question: "可以买入吗？", scope: .instrument("159352"),
                                                   decisionContext: context, now: freshNow)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest, action: .buy,
             instrumentCode: "159352", units: 100, limitPrice: 1, rationale: "依据最新报价",
-            citedObservationIDs: [quote.id])
+            citedObservationIDs: [quote.id, qualification.id, regime.id, benchmark.id])
         let result = try await FAdvisorDecisionPipeline(model: FixedCandidateModel(result: candidate))
-            .assess(request: request, context: context, now: freshNow)
+            .assess(request: request, context: context, now: freshNow,
+                    completionTime: freshNow.addingTimeInterval(121))
         XCTAssertFalse(result.isEligibleForUserReview)
-        XCTAssertTrue(result.guardResult.findings.contains(.invalidContext) ||
-                      result.guardResult.findings.contains(.missingFreshQuote("159352")))
+        XCTAssertTrue(result.guardResult.findings.contains(.invalidContext))
     }
 
     func testResearchToolCallsAreBoundedToRequestScopeAndCapturedTime() throws {
@@ -598,6 +609,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
                                             endDate: "2026-10-23", asOf: asOf)
         let result = try await call.execute(using: FixedResearchProvider(result: context.researchEvidence[0]),
                                             for: request, now: capturedAt)
+        XCTAssertTrue(context.researchEvidence[0].isUsableForAI(
+            contextCreatedAt: context.createdAt, now: capturedAt))
         XCTAssertEqual(result, context.researchEvidence[0])
     }
 
@@ -619,6 +632,9 @@ final class MarketChartAcceptanceTests: XCTestCase {
             envelope: envelope, capturedAt: capturedAt.addingTimeInterval(60))
         let result = try await call.execute(using: FixedResearchProvider(result: postRequestEvidence),
                                             for: request, now: capturedAt)
+        XCTAssertTrue(postRequestEvidence.isUsableForAI(
+            contextCreatedAt: postRequestEvidence.capturedAt,
+            now: capturedAt.addingTimeInterval(60)))
         XCTAssertEqual(result.capturedAt, capturedAt.addingTimeInterval(60))
         XCTAssertLessThanOrEqual(result.envelope.observedAt, context.createdAt)
     }
