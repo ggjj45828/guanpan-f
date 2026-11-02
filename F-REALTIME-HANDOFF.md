@@ -763,7 +763,7 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 实现现状：Advisor组上下文前检查本机新鲜缓存，并以后台Task刷新NAS摘要；静态代码路径未发现同步等待NAS后才分析。完整NAS→Quant资格研究与参数包下放仍未实现，不能标记完成。当前环境无Swift/Xcode；本轮不声称已编译或执行测试。
 ## 2026-11-02 最新 main 基线（以远端最新提交为准）
 
-- 权威版本：GitHub `main` 与本地干净克隆均为 `73bfb479fb60e0d611661157045f6d593fa2c795`（`Restore UTF-8 encoding for navigation UI tests`）。本地目录 `work/guanpan-f-latest-2026-11-02`，状态 `main...origin/main`，无代码/文档未提交差异。早期交接包和旧工作树不覆盖此基线；没有将旧补丁移植到最新提交。
+- 权威源码基线：`73bfb479fb60e0d611661157045f6d593fa2c795`（`Restore UTF-8 encoding for navigation UI tests`）。本轮只增补交接/审计文档，文档提交为 `ad435bda770f649072e90040249c43df851fb7f2`；当前GitHub `main` 与本地克隆均为该文档提交，源码基线仍为前述SHA。本地目录 `work/guanpan-f-latest-2026-11-02`，状态干净。早期交接包和旧工作树不覆盖此源码基线；没有将旧补丁移植到最新提交。
 - 最新同 SHA Actions 已实际完成且成功：iOS Run 222 [41383590113](https://github.com/ggjj45830/guanpan-f/actions/runs/41383590113)，Python/NAS Run 25 [41383590156](https://github.com/ggjj45830/guanpan-f/actions/runs/41383590156)。截至核对时最近100条运行中没有 queued/in-progress/waiting/requested 运行；当前同时运行数为0，符合推送最多2个运行的约束。
 - Run 222 成功步骤：F Swift package tests、XcodeGen、unsigned iOS Device Build、Simulator Build、导航 UI XCTest、Simulator截图导出、unsigned IPA打包/校验、artifact上传。截图artifact `guanpan-f-ios-build-evidence`（ID `13114433497`）存在；截图已导出但未由本轮人工逐张查看。CI成功是该 SHA 的编译/自动测试证据，不等于人工视觉、iPhone Air或真机验收。日志摘要接口未提供测试计数，本交接不猜测数字。
 - Run 25 成功步骤：安装CI依赖、完整Python/NAS及源码合同测试、Python compileall、架构边界检查。

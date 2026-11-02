@@ -1209,7 +1209,7 @@ Ledger event-order follow-up validation: 247 locally importable Python tests pas
 2026-11-01 NAS lower-chain follow-up: strict response-size handling, minute archive/providers/runtime/service, research evidence and dividend research tests passed 131/131 with temporary files redirected to the workspace. The official KRX KOSPI-series daily-history API documents an `AUTH_KEY` request header and a baseline-date query; current compose/runtime has no credential injection or KOSPI daily adapter. Keep history unavailable until a key path and compliant, bounded collection/attribution flow are implemented; the live KOSPI quote is not a substitute for Regime history. The full NAS-qualified strategy package to Local Quant remains an open requirement. No commit/push.
 ## 2026-11-02 最新提交审计基线
 
-- 审计目标固定为 GitHub `main` 最新 SHA `73bfb479fb60e0d611661157045f6d593fa2c795`，干净克隆位于 `work/guanpan-f-latest-2026-11-02`。本地与`origin/main`一致；不采用交接包/旧克隆中比该提交更早的工作树状态。
+- 源码审计目标为 `73bfb479fb60e0d611661157045f6d593fa2c795`；随后仅文档更新提交 `ad435bda770f649072e90040249c43df851fb7f2`。干净克隆位于 `work/guanpan-f-latest-2026-11-02`，当前与`origin/main`一致；不采用交接包/旧克隆中更早的工作树状态。
 - 该 SHA 的 iOS Actions Run 222 与 Python/NAS Run 25均成功。iOS的包测试、XcodeGen、Device/Simulator构建、导航UI测试、截图导出、unsigned IPA及artifact上传步骤成功；测试数量没有从当前可用job摘要中取得，因此不填写数字。Python/NAS完整CI、compileall、架构边界步骤成功。
 - Windows本机复核：compileall和架构边界脚本成功；Python unittest共发现295项，293项通过，2个模块因缺少PyYAML无法导入。CI环境安装依赖后全绿。Windows不具备Swift/Xcode/Simulator。
 - 静态重点审阅：真实Ledger写入仍集中在确认写入口；手续费更正保留原始fill、以追加事件重放费用并重算成本基础；Candidate/Trigger读取行情与风险条件但未发现直接Ledger写权限。此次为静态抽查，不构成账本全场景或真实交易E2E证明。
