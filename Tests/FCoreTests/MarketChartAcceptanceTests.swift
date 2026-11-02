@@ -21,7 +21,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
     private let now = ISO8601DateFormatter().date(from: "2026-10-23T08:00:00Z")!
 
     private func securityRegimeObservation(_ code: String = "159352",
-                                          at timestamp: Date = now) -> FContextObservation {
+                                          at timestamp: Date? = nil) -> FContextObservation {
+        let timestamp = timestamp ?? now
         let asOf = timestamp.addingTimeInterval(-600)
         return FContextObservation(dataClass: .quantState, subject: code,
             source: "FCore Market Regime Engine",
@@ -31,15 +32,16 @@ final class MarketChartAcceptanceTests: XCTestCase {
 
     private func mappedBenchmarkObservation(
         _ code: String = "159352", regime: FMarketRegime = .range,
-        risk: FMarketRiskLevel = .r0Normal, at timestamp: Date = now
+        risk: FMarketRiskLevel = .r0Normal, at timestamp: Date? = nil
     ) throws -> FContextObservation {
+        let timestamp = timestamp ?? now
         let mapping = try XCTUnwrap(FMarketIndexSecurityMappingRegistry.mapping(for: code))
         let asOf = timestamp.addingTimeInterval(-86_400)
-        let timestamp = ISO8601DateFormatter().string(from: asOf)
+        let asOfText = ISO8601DateFormatter().string(from: asOf)
         return FContextObservation(dataClass: .quantState,
             subject: "mapped-index:\(code)",
             source: "F Verified Issuer Index Mapping + NAS Daily Regime",
-            reference: "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.rawValue);risk=\(risk.rawValue);confidence=80;dataAsOf=\(timestamp);not_strategy_qualification=true",
+            reference: "indexCode=\(mapping.indexCode);indexName=\(mapping.indexName);mappingSource=\(mapping.sourceURL);mapping=issuer_benchmark;contextRole=benchmark_only;regime=\(regime.rawValue);risk=\(risk.rawValue);confidence=80;dataAsOf=\(asOfText);not_strategy_qualification=true",
             observedAt: timestamp.addingTimeInterval(-10), capturedAt: timestamp, decimalValue: 80)
     }
 

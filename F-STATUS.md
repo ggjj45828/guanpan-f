@@ -467,3 +467,4 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 第十轮 Python/NAS workflow 通过；Swift 编译继续暴露 ResearchEvidence 的静态时间格式辅助函数引用实例 evidenceId。现将标识显式作为参数传入；等待下一轮Apple Actions验证。
 - 第十一轮 Python/NAS workflow 通过；Swift生产模块成功编译，测试源编译发现两处研究来源测试误把私有JSON helper当作String扩展调用。现已改为显式传入JSON参数，下一轮验证完整XCTest。
 - 第十二轮 iOS XCTest 已运行，暴露分钟缺口阈值过宽、暂停Trigger仍泄露建议份额、非有限成交量不应污染价格Regime、过期宽基引用测试过期、非法币种应在Ledger快照入口拒绝，以及慢响应测试时钟不可控。已修复/校正对应规则与测试，加入Research Tool可用性断言定位响应拒绝根因；293项本地Python可运行测试通过，下一轮Actions继续验证。
+- 第十三轮 Python/NAS workflow 通过；iOS测试模块编译发现新增时点辅助函数使用了实例属性默认参数并意外遮蔽Date变量。已改为可选时点加函数体内默认值，并区分日期字符串名称。下一轮验证编译/XCTest。
