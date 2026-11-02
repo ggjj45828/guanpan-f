@@ -787,6 +787,7 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 当前SHA iOS Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642) 成功：FCore 335/335，XcodeGen、Device Build、Simulator Build、UI XCTest 12/12、截图导出、显示名/图标校验、IPA打包与Artifact上传通过。Artifact 13123048046，已导出不等于人工视觉审阅。
 - 当前SHA Python/NAS Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391) 成功：306 tests、compileall及架构边界检查通过。
 - 当前核对确认：初始持仓录入和已建账后真实成交开仓入口在源码中存在；MACD副图与MA/VOL显隐也有renderer实现；自选加入/移除已接线。但是自选独立评分/自动迷你图未确认实现，不能把Local Quant各因子方向值随意平均成评分。
+- 安全边界首轮静态扫描：Swift文件未发现券商下单接口/订单路由文本或硬编码密钥模式；6处`FConfirmedLedgerWriter`调用对应用户发起的成本/现金/费用更正、初始账本、Candidate成交确认或手工成交。URLSession外发payload、日志和fixture的完整隐私扫描仍未关闭。
 - 仍未完成：NAS历史日期API在用户真实部署端的字段/数据尚未实测；新闻虽实现同花顺来源但iPhone真实可达及Advisor引用未证；均价、前收、IOPV仅在可靠数据可得时开放；10主题跨全App的一致性与截图对照未人工验收；B/F逐页视觉审计仍有差距；iPhone Air手势、DeepSeek真实E2E、Candidate真实成交回写闭环未完成。
 - 当前状态应表述为：审计清单已建立并完成第一轮源码抽查；已修1项且当前SHA CI通过；32项目标尚未全部达标。后续按清单A01起逐项收敛，不以测试/文件数量替代产品验收。
 - 旧段落若把NAS历史研究写成核心Advisor前置，与2026-11-02用户最终决策冲突：核心改为实时行情 + 真实Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger；NAS仅为可选同步、归档、备份和扩展证据，不可阻断基础顾问链。

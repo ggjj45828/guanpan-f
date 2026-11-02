@@ -820,5 +820,6 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 - 当前SHA `edd14a397b70a8203467c39fa06133baa5e564ff`：iOS Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642) 完成FCore 335/335、UI XCTest 12/12、XcodeGen、设备/模拟器Build、截图导出及观盘max IPA打包校验；Python/NAS Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391) 完成306 tests、compileall和架构边界检查。
 - 该SHA新增Swift修正：跨市场涨跌摘要颜色统一接入主题语义tokens；不能据自动CI断言跨页面主题视觉已经一致。
 - 第一轮静态核对：初始持仓入口、真实成交录入路径、MACD显隐renderer及watchlist基础加入/移除源码存在；自选综合评分/迷你走势图、NAS真实部署契约、新闻实网/顾问引用、B→F逐页视觉对比仍未达标或待验。
+- 安全边界首轮扫描未发现券商自动下单路由或硬编码密钥；6处Ledger writer调用点均对应用户主动确认操作。出站请求字段/日志/fixture隐私检查尚未完成，不关闭A28。
 - 产品架构依照2026-11-02用户决策：实时行情 + 本机Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger为核心；NAS为可选增强，不得列为Advisor必经依赖。旧NAS主链条描述若冲突，以该决策为准。
 - Simulator截图只记录为“已导出”，未人工逐张审阅；iPhone Air、真实NAS/新闻/DeepSeek/确认成交端到端均保持External Pending。
