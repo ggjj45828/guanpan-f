@@ -903,5 +903,5 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 
 | 验收项 | 最新CI结果 | 修正/待验证 |
 |---|---|---|
-| 自选中已持仓证券的身份提示 | Run `41459794655` UI 11/12；实际出现“真实持仓”，旧测试误要求仅“自选关注” | F行内标签已编码为“真实持仓 · 自选”；测试断言更新为包含“自选”，待下一次Apple CI |
-| 当前SHA编译/完整UI/IPA | Run `41459794655` Swift Package、XcodeGen、设备构建、Simulator构建通过；UI一项失败，IPA跳过 | 当前未提交修改尚无CI，必须以新SHA运行；截图artifact导出成功但未人工查看 |
+| 自选中已持仓证券的身份提示 | Run `41462998125` UI XCTest 12/12通过 | “真实持仓 · 自选”状态和自选筛选回归已由当前SHA验证 |
+| 当前SHA编译/完整UI/IPA | Run `41462998125` FCore 338/338、XcodeGen、设备构建、Simulator构建、UI XCTest 12/12、截图导出、IPA校验/打包和Artifact上传全部通过 | Simulator截图已导出；人工逐张视觉审阅及iPhone Air实机验收仍未完成 |

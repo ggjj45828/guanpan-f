@@ -916,6 +916,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 修正市场行状态标签：两者同时成立时显示“真实持仓 · 自选”；自选测试现在要求行标识清楚体现自选身份。自选列表筛选仍只由自选代码集合决定，测试结束会移除本测试新增的自选项。
 - 这次修正尚未编译或通过Apple CI。已检查本地diff无空白错误；推送前需要再次核对远端主线和Actions并普通快进推送。截图artifact中已导出首页、行情、证券详情、AI、资产、设置及6种主题浅/深色截图，但目前还没有人工逐张视觉审阅，不能写成视觉通过。
 
+## 2026-11-02 — 自选/持仓状态修复通过 Apple CI
+
+- 远端 `main` 提交 `07952628465ffc1b07f633a95398ed5b5cb24163`：自选列表中已持仓证券显示“真实持仓 · 自选”，UI 回归断言验证自选身份；旧的真实持仓标签仍保留。
+- Apple iOS run `41462998125` 为本轮唯一 Actions；FCore 338/338、XcodeGen、iOS Device Build、Simulator Build、UI XCTest 12/12、截图导出、`观盘max.ipa`校验/打包、Artifact 上传全部成功。Artifact `13149184260`（`guanpan-f-ios-build-evidence`）。没有启动 Python/NAS workflow。
+- CI 截图已导出并随artifact保存，但尚未人工逐张审阅；这只能证明自动截图生成，不代表视觉验收通过。B/F整体视觉差距、六主题全页面统一、iPhone Air实测仍未完成。
+- 本机Git网络的fetch/push通道无法连接GitHub端口443；已核对API远端HEAD并用期望SHA保护完成非强制快进提交。工作区origin现为`https://github.com/ggjj45828/guanpan-f.git`，镜像标志已关闭，fetch refspec改为远端分支跟踪。后续本机Git网络恢复时先fetch并与API提交对齐再继续普通push。
+
 ## 2026-11-02 — CI 第二轮失败根因
 
 - 推送 `df431b7` 后只启动 iOS run `41458070851`，没有启动 Python/NAS workflow；Swift Package、XcodeGen、Device Build、Simulator Build均成功，六主题首页角色测试也不再失败。
