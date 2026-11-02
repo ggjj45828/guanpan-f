@@ -11,6 +11,8 @@ on:
       - 'Tests/**'
       - 'GuanpanFApp/**'
       - 'Package.swift'
+      - 'F-B-145-TRACEABILITY.md'
+      - 'F-MASTER-ACCEPTANCE-MATRIX.md'
       - '.github/workflows/f-python-nas.yml'
   pull_request:
     paths:
@@ -20,6 +22,8 @@ on:
       - 'Tests/**'
       - 'GuanpanFApp/**'
       - 'Package.swift'
+      - 'F-B-145-TRACEABILITY.md'
+      - 'F-MASTER-ACCEPTANCE-MATRIX.md'
       - '.github/workflows/f-python-nas.yml'
 
 permissions:
