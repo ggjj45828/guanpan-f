@@ -916,3 +916,15 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 与用户概念图的视觉一致性 | 已照着暖色底、彩色强调、中央圆形AI导航推进 | 尚未通过截图人工对照；不能标记视觉完成 |
 | Windows/Simulator及iPhone Air验收 | 本环境无Xcode/iOS Simulator；需Apple CI图像导出与真实iPhone检查 | External Pending |
 
+
+
+## 2026-11-02 — 跨页面主题一致性与 UI 回归
+
+| 项目 | 状态 |
+|---|---|
+| 最近Apple CI | Run `41469458134`：构建通过，UI 7/12失败；当前HEAD没有全绿证据 |
+| 六套首页主题 | 不同首页布局已存在，截图导出可用，人工视觉审阅未完成 |
+| 六主题专业页 | 主视觉开始按布局族分流并复用语义token，待CI与逐页截图核验 |
+| 资产控件、键盘与方向回归 | 已修复查找/测试方向并等待Apple CI |
+| iPhone Air/手势人工验收 | External Pending |
+| 整体主题验收 | 未完成，不以源码存在或CI截图导出替代视觉验收 |

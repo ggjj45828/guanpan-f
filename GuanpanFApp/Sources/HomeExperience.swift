@@ -20,58 +20,153 @@ private struct FThemePageHero: View {
     private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(eyebrow.uppercased())
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.78))
-                    Text(title)
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(subtitle)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.82))
-                        .fixedSize(horizontal: false, vertical: true)
+        Group {
+            switch theme.layoutFamily {
+            case .editorial, .inkEditorial, .magazine:
+                editorialHero
+            case .terminalDashboard, .minimalTerminal:
+                terminalHero
+            case .spatialGlass:
+                glassHero
+            case .radialMap:
+                radialHero
+            case .cardGrid:
+                gridHero
+            case .staticBento, .adaptiveBento:
+                bentoHero
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(eyebrow.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(tokens.secondaryForeground)
+            Text(title)
+                .font(.system(size: 25, weight: .bold, design: .rounded))
+                .foregroundStyle(tokens.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(subtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(tokens.secondaryForeground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder private var valueBlock: some View {
+        if let value {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 27, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let valueLabel {
+                    Text(valueLabel).font(.caption.weight(.medium))
                 }
+            }
+            .foregroundStyle(tokens.foreground)
+        }
+    }
+
+    private var editorialHero: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Rectangle().fill(tokens.accent).frame(width: 42, height: 3)
+            heading
+            HStack(alignment: .lastTextBaseline, spacing: 10) {
+                valueBlock
                 Spacer(minLength: 0)
-                Image(systemName: symbol)
-                    .font(.system(size: 21, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.17), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                Image(systemName: symbol).font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(tokens.accent)
             }
-            if let value {
-                HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(value)
-                        .font(.system(size: 27, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if let valueLabel {
-                        Text(valueLabel).font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.78))
-                    }
-                }
-                .foregroundStyle(.white)
+        }
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.22)).frame(height: 1) }
+    }
+
+    private var terminalHero: some View {
+        HStack(alignment: .center, spacing: 12) {
+            RoundedRectangle(cornerRadius: 2).fill(tokens.accent).frame(width: 3)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(eyebrow.uppercased()).font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .tracking(0.8).foregroundStyle(tokens.accent)
+                Text(title).font(.system(size: 20, weight: .bold, design: .monospaced)).foregroundStyle(tokens.foreground)
+                Text(subtitle).font(.system(size: 11, weight: .medium)).foregroundStyle(tokens.secondaryForeground)
+                    .lineLimit(2)
             }
+            Spacer(minLength: 4)
+            VStack(alignment: .trailing, spacing: 4) {
+                if let value { Text(value).font(.system(size: 19, weight: .bold, design: .monospaced)).foregroundStyle(tokens.foreground).lineLimit(1).minimumScaleFactor(0.65) }
+                if let valueLabel { Text(valueLabel).font(.system(size: 9, weight: .medium)).foregroundStyle(tokens.secondaryForeground) }
+                Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(tokens.accent)
+            }
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.40)).frame(height: 1) }
+    }
+
+    private var glassHero: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol).font(.system(size: 21, weight: .semibold)).foregroundStyle(tokens.accent)
+                .frame(width: 44, height: 44).background(.ultraThinMaterial, in: Circle())
+            VStack(alignment: .leading, spacing: 8) { heading; valueBlock }
         }
         .padding(17)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack(alignment: .topTrailing) {
-                LinearGradient(colors: [tokens.accent, tokens.advisorSurface], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Circle().fill(.white.opacity(0.10)).frame(width: 150, height: 150).offset(x: 48, y: -72)
-                Circle().stroke(.white.opacity(0.13), lineWidth: 1).frame(width: 118, height: 118).offset(x: 20, y: -46)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).stroke(.white.opacity(0.24), lineWidth: 0.8))
-        .shadow(color: tokens.accent.opacity(theme == .dashboard || theme == .minimalTerminal ? 0.10 : 0.18), radius: 16, x: 0, y: 8)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(tokens.accent.opacity(0.25), lineWidth: 1))
+        .shadow(color: tokens.accent.opacity(0.14), radius: 16, x: 0, y: 8)
     }
-}
+
+    private var radialHero: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack {
+                Circle().stroke(tokens.accent.opacity(0.20), lineWidth: 1).frame(width: 58, height: 58)
+                Circle().fill(tokens.highlightSurface).frame(width: 44, height: 44)
+                Image(systemName: symbol).font(.system(size: 19, weight: .semibold)).foregroundStyle(tokens.accent)
+            }
+            VStack(alignment: .leading, spacing: 6) { heading; valueBlock }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.18)).frame(height: 1) }
+    }
+
+    private var gridHero: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 9) { heading; valueBlock }
+            Spacer(minLength: 0)
+            Image(systemName: symbol).font(.system(size: 22, weight: .semibold)).foregroundStyle(tokens.accent)
+                .frame(width: 50, height: 50).background(tokens.highlightSurface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+        }
+        .padding(17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tokens.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(tokens.accent.opacity(0.14), lineWidth: 1))
+    }
+
+    private var bentoHero: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) { heading; valueBlock }
+            Spacer(minLength: 0)
+            VStack(spacing: 8) {
+                Image(systemName: symbol).font(.system(size: 18, weight: .bold))
+                if let valueLabel { Text(valueLabel).font(.system(size: 9, weight: .bold)).lineLimit(1) }
+            }
+            .foregroundStyle(tokens.accentForeground)
+            .frame(width: 70, height: 70)
+            .background(tokens.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .padding(15)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tokens.surfaceGradient.first ?? tokens.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(tokens.accent).frame(width: 4).padding(.vertical, 14) }
+    }
+
 
 struct HomeLayout: View {
     @ObservedObject var model: FHomeModel
@@ -2489,6 +2584,7 @@ struct AdvisorOverview: View {
             }
             .padding(18)
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("AI 私人投资顾问")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.refreshCandidateShadowSummary() }
@@ -2690,6 +2786,12 @@ struct RealAssetsOverview: View {
                 }
                 .padding(.vertical, 12)
                 .listRowBackground(theme.manifest.tokens.surface)
+                Picker("资产视图", selection: $selectedView) {
+                    Text("当前持仓").tag(0)
+                    Text("已清仓").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("assets.view-picker")
             }
             Section("本机真实账本") {
                 assetSummaryRow("账本状态", value: model.ledgerStatus)
@@ -2714,10 +2816,6 @@ struct RealAssetsOverview: View {
                     Text("已建账时，记录券商真实成交；若当前空仓，可录入已成交买入开始建仓。不会向券商下单。")
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
-                Picker("资产视图", selection: $selectedView) {
-                    Text("当前持仓").tag(0)
-                    Text("已清仓").tag(1)
-                }.pickerStyle(.segmented)
             }
             if selectedView == 0 {
                 Section("当前持仓") {
@@ -2834,6 +2932,7 @@ struct RealAssetsOverview: View {
         .padding(.horizontal, 8)
     }
 }
+
 
 private extension FReadOnlyCashFlowKind {
     var label: String {
@@ -3050,6 +3149,7 @@ struct SettingsOverview: View {
             }
         }
         .accessibilityIdentifier("settings.form")
+        .scrollDismissesKeyboard(.interactively)
         .listStyle(.insetGrouped)
         .confirmationDialog("清除画像偏好？", isPresented: $showingProfileClearConfirmation,
                             titleVisibility: .visible) {

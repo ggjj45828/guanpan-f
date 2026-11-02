@@ -936,3 +936,10 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - UI仍有两个失败：开户表单子字段被父级 `ledger.opening.position.<UUID>` 标识覆盖；首页组合卡父级 `home.role.portfolio` 标识覆盖了估值文本的标识。已在对应SwiftUI父容器声明 `accessibilityElement(children: .contain)`，保留父级角色标识并恢复子控件独立标识；本地Home layout合同28/28通过，尚待Apple CI验证。
 - 本轮截图导出步骤成功并上传artifact，但测试失败使IPA步骤跳过。尚未把artifact中的截图人工审阅为通过；新一次CI需先验证标识修复并重新取出截图。
 
+
+
+## 2026-11-02 — 六主题跨页面样式与 CI 回归修复
+
+- GitHub run `41469458134` (SHA `13b5f5e`)：FCore 338/338、XcodeGen、Device Build、Simulator Build及截图导出通过；UI XCTest 7/12，未通过且未产出IPA。失败集中于市场查询框键盘焦点/前一测试设备方向，以及资产“已清仓”分段控件查找。
+- 本地已按真实失败修改：各查询测试固定并恢复竖屏、输入前等待键盘；资产分段控件有唯一标识；跨页面主题主视觉按布局族切换（编辑、终端、玻璃、星图、网格、Bento），统一消费该主题的语义颜色/表面；Advisor和Settings滚动可收键盘。
+- 以上修改尚未进入Apple CI；Windows无Simulator，截图尚未人工审阅，主题与实机验收保持未完成。

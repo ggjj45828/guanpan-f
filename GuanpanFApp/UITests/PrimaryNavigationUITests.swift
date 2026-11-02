@@ -94,12 +94,15 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     func testSecurityDetailChartsUseExpandedPhoneHeight() {
         let app = XCUIApplication()
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
         app.buttons["navigation.tab.行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 5))
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 3))
         lookup.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
@@ -144,6 +147,8 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     func testWatchlistIsSeparateAndAppearsInItsOwnMarketFilter() {
         let app = XCUIApplication()
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
         app.buttons["navigation.tab.行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 5))
@@ -152,6 +157,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 3))
         lookup.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText(code)
 
         let toggle = app.buttons["market.watchlist.toggle"]
@@ -299,7 +305,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let assetList = app.descendants(matching: .any)["assets.list"]
         XCTAssertTrue(assetList.waitForExistence(timeout: 3))
 
-        let closedView = app.buttons["已清仓"]
+        let closedView = app.segmentedControls["assets.view-picker"].buttons["已清仓"]
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
         let closedHeading = app.staticTexts["已清仓 / 历史持仓"]
@@ -396,6 +402,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let app = XCUIApplication()
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
+        XCUIDevice.shared.orientation = .portrait
         app.launch()
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8))
         app.buttons["navigation.tab.行情"].tap()

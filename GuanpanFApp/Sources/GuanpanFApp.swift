@@ -1995,6 +1995,7 @@ private struct FBottomNavigationItem: Identifiable {
 private struct FBottomNavigationBar: View {
     @Binding var selection: FPrimaryTab
     let theme: FHomeTheme
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private let items: [FBottomNavigationItem] = [
         .init(id: .home, title: "首页", symbol: "house.fill"),
@@ -2005,6 +2006,7 @@ private struct FBottomNavigationBar: View {
     ]
 
     var body: some View {
+        let compact = verticalSizeClass == .compact
         HStack(alignment: .center, spacing: 2) {
             ForEach(items) { item in
                 let isSelected = selection == item.id
@@ -2017,10 +2019,10 @@ private struct FBottomNavigationBar: View {
                         if item.id == .advisor {
                             VStack(spacing: 3) {
                                 Image(systemName: item.symbol)
-                                    .font(.system(size: 23, weight: .semibold))
+                                    .font(.system(size: compact ? 19 : 23, weight: .semibold))
                                     .symbolRenderingMode(.hierarchical)
                                     .foregroundStyle(.white)
-                                    .frame(width: 52, height: 52)
+                                    .frame(width: compact ? 40 : 52, height: compact ? 40 : 52)
                                     .background {
                                         Circle().fill(LinearGradient(
                                             colors: [theme.manifest.tokens.advisorSurface, theme.accent],
@@ -2028,28 +2030,29 @@ private struct FBottomNavigationBar: View {
                                     }
                                     .overlay(Circle().stroke(.white.opacity(0.82), lineWidth: 3))
                                     .shadow(color: theme.accent.opacity(0.34), radius: 10, x: 0, y: 5)
-                                    .offset(y: -13)
+                                    .offset(y: compact ? -7 : -13)
                                 Text(item.title)
-                                    .font(.system(size: 10, weight: isSelected ? .bold : .semibold))
+                                    .font(.system(size: compact ? 9 : 10, weight: isSelected ? .bold : .semibold))
                                     .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
-                                    .offset(y: -11)
+                                    .offset(y: compact ? -6 : -11)
                             }
                             .frame(maxWidth: .infinity)
-                            .frame(height: 59)
+                            .frame(height: compact ? 43 : 59)
                         } else {
-                            VStack(spacing: 5) {
+                            VStack(spacing: compact ? 2 : 5) {
                                 Image(systemName: item.symbol)
-                                    .font(.system(size: isSelected ? 23 : 21, weight: isSelected ? .semibold : .regular))
+                                    .font(.system(size: compact ? (isSelected ? 20 : 18) : (isSelected ? 23 : 21),
+                                                  weight: isSelected ? .semibold : .regular))
                                     .symbolRenderingMode(.hierarchical)
-                                    .frame(height: 25)
+                                    .frame(height: compact ? 20 : 25)
                                 Text(item.title)
-                                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                                    .font(.system(size: compact ? 9 : 10, weight: isSelected ? .semibold : .medium))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                             }
                             .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 55)
+                            .frame(height: compact ? 42 : 55)
                             .background {
                                 if isSelected {
                                     RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -2067,8 +2070,8 @@ private struct FBottomNavigationBar: View {
             }
         }
         .padding(.horizontal, 9)
-        .padding(.top, 7)
-        .padding(.bottom, 4)
+        .padding(.top, compact ? 2 : 7)
+        .padding(.bottom, compact ? 1 : 4)
         .background {
             Rectangle()
                 .fill(.ultraThinMaterial)
@@ -2076,9 +2079,11 @@ private struct FBottomNavigationBar: View {
                     Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                 }
                 .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
         }
     }
 }
+
 
 private enum FMarketIndexHTTPClient {
     private struct Definition: Sendable {
