@@ -878,6 +878,7 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 |---|---|---|---|---|
 | BUG-01 | IOPV溢价使用不晚于目标行情报价的IOPV，并与Quant使用同一报价价格 | Advisor DecisionContext要求参考观测不晚于报价时间，溢价改用该报价快照价格 | 已编码；未编译/未测试 | 当前SHA Apple CI + 实际报价/参考数据时序回归 |
 | BUG-02 | Quant/Regime不得使用报价日或交易所当前日尚未完成的日K | FCore Quant始终排除报价日及未来日K；App证券/跨市场Regime按本地日期过滤；跨市场收益使用过滤后的bars | 已编码；未编译/未测试 | 当前SHA Apple CI + 未收盘/历史报价时点回归 |
+| BUG-03 | NAS历史分钟HTTP 200 schema错误必须可定位具体字段，而不被兼容路由404掩盖 | iOS错误现在保留顶层响应诊断，并附DecodingError字段路径及类型/缺失原因；200仍不触发旧路由fallback | 已编码；未编译/未实机 | 当前SHA CI + 用户设备实际HTTP 200响应对照 |
 | EXT-01 | NAS exact-date历史分钟部署契约匹配且返回真实bars/coverage | 本轮未改服务端；此前手机存在HTTP 200 schema不符及404证据 | External Pending | 实际部署响应契约、真实日期数据、iOS渲染端到端通过 |
 | EXT-02 | 新闻真实源可达并被DeepSeek按ID/来源/时间/链接引用 | 本轮未改新闻provider | External Pending | 真设备实际新闻响应 + Advisor真实响应引用验证 |
 | EXT-03 | iPhone Air当前版视觉、图表交互和多主题一致性 | 未进行人工Simulator/真机验证 | External Pending | 当前SHA截图逐页人工审阅与iPhone Air交互 |

@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | BUG-01 | Advisor用于DecisionContext的IOPV溢价，可能使用Tencent参考响应自身价格，和本轮Quant报价不同步；即使两个源各自新鲜也可跨时点混算 | `GuanpanFApp/Sources/GuanpanFApp.swift` 的 `.iopv` observation过去基于 `reference.latestPrice`，而同一循环Quant使用 `quote` | 要求 `reference.observedAt <= quote.quoteTimestamp`；用 `quote.latestPrice` 与该IOPV算溢价；不满足则不注入 | 已编码；未编译、未跑Swift测试、未实机验证 |
 | BUG-02 | Tencent日K没有完成状态字段；同一交易日临时OHLC/close可进入Local Quant及Regime/指数联动，日期午夜时间戳会掩盖未完成事实 | `FTencentDailyKlineParser`将 `day` 行作为普通bar；Quant以前按日期年龄接受；Regime摄取端以前直接使用所有行 | Local Quant始终排除报价当地日期及未来日K，避免仅凭时钟推断供应商已定稿；证券Regime按上海日期过滤；跨市场Regime按各自交易所时区过滤并以截断bars计算指数基准；原始bars仍保留给图表 | 已编码；未编译、未跑Swift测试、未实网回放 |
+| BUG-03 | NAS历史分钟HTTP 200解码失败时，只显示顶层字段清单，不能定位嵌套字段缺失/类型错误 | `FNASHistoricalMinuteClient.fetch`过去以`try? decode`吞掉具体`DecodingError`，实机提示无法对应模型中的具体字段/路径 | 现在保留原响应摘要，并附`DecodingError`的coding path、缺失字段或期望类型；HTTP 200错误仍直接报告首个端点，不用旧兼容404覆盖 | 已编码；未编译；需要下一次实机查询确认诊断与真实payload吻合 |
 | EXT-01 | NAS历史分钟真实部署契约未通过：用户设备曾收到HTTP 200但字段与iOS decoder不符，并有兼容路径404 | 用户截图/错误文案记录于历史交接 | 本轮不猜服务端payload、不修改NAS部署；须用实际部署响应对齐契约 | 外部待验；不能标完成 |
 | EXT-02 | 同花顺新闻公开接口与Advisor引用真实可达性无当前设备E2E | 源码有来源/时间/链接校验和上下文约束，但无实机请求/真实回答证据 | 保留无新闻时明确降级；需联网设备验真 | 外部待验 |
 | EXT-03 | iPhone Air视觉、连续缩放/拖动、手势与导航冲突未人工实测 | Windows环境无Simulator；旧截图不等于当前HEAD | 等待可交互Apple设备，不能以CI截图导出替代 | 外部待验 |

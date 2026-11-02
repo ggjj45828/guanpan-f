@@ -507,9 +507,23 @@ enum FNASHistoricalMinuteClient {
         let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 4_000_000)
         guard let http = response as? HTTPURLResponse else { throw FNASConnectionError.invalidResponse }
         var modernFailure: String?
-        if (200..<300).contains(http.statusCode),
-           let body = try? JSONDecoder().decode(Response.self, from: data),
-           body.securityCode == securityCode, body.market.uppercased() == "CN", body.tradingDate == dateText {
+        if (200..<300).contains(http.statusCode) {
+            let body: Response
+            do {
+                body = try JSONDecoder().decode(Response.self, from: data)
+            } catch {
+                let shape = Self.responseFailure(data: data, response: http,
+                                                 expectedSecurityCode: securityCode,
+                                                 expectedTradingDate: dateText)
+                throw FNASConnectionError.historyUnavailable(
+                    "\(shape)；解码位置：\(Self.decodingFailure(error))")
+            }
+            guard body.securityCode == securityCode,
+                  body.market.uppercased() == "CN", body.tradingDate == dateText else {
+                throw FNASConnectionError.historyUnavailable(Self.responseFailure(
+                    data: data, response: http,
+                    expectedSecurityCode: securityCode, expectedTradingDate: dateText))
+            }
             let archive = try makeArchive(body: body, securityCode: securityCode, dateText: dateText,
                                           timeZone: timeZone)
             if !archive.samples.isEmpty { return archive }
@@ -738,6 +752,26 @@ enum FNASHistoricalMinuteClient {
             return "HTTP \(response.statusCode) 历史分钟响应校验失败：\(reason)（顶层字段：\(object.keys.sorted().joined(separator: ", "))）"
         }
         return "HTTP \(response.statusCode) 响应格式不是可识别的历史分钟 JSON（\(contentType)）"
+    }
+
+    private static func decodingFailure(_ error: Error) -> String {
+        func path(_ context: DecodingError.Context, appending key: String? = nil) -> String {
+            let components = context.codingPath.map(\.stringValue) + (key.map { [$0] } ?? [])
+            return components.isEmpty ? "<根对象>" : components.joined(separator: ".")
+        }
+        guard let decodingError = error as? DecodingError else {
+            return "响应无法解码（\(error.localizedDescription)）"
+        }
+        switch decodingError {
+        case let DecodingError.keyNotFound(key, context):
+            return "缺少字段 \(path(context, appending: key.stringValue))"
+        case let DecodingError.typeMismatch(type, context):
+            return "字段 \(path(context)) 类型不符（期望 \(String(describing: type))）"
+        case let DecodingError.valueNotFound(type, context):
+            return "字段 \(path(context)) 值为空（期望 \(String(describing: type))）"
+        case let DecodingError.dataCorrupted(context):
+            return "字段 \(path(context)) 数据损坏"
+        }
     }
 
     private static func jsonScalar(_ value: Any) -> String {

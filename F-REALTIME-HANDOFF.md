@@ -12,6 +12,12 @@
 - 本轮审计列出的非本机代码可证明/需外部核验项：NAS真实部署HTTP 200历史响应仍曾与iOS字段契约不符、旧路径404；新闻实网可达与DeepSeek逐条引用未实测；Simulator截图人工审阅、iPhone Air手势与布局、真实成交闭环均未验。不得写为已修好。
 - 审计/修复详情同步到 `F-AUDIT-TARGET-CHECKLIST.md`、`F-MASTER-ACCEPTANCE-MATRIX.md`；下一步先审阅diff和本地可用静态检查，再fetch/reconcile、确认Actions并行数不超过2后普通push，等待当前SHA Apple CI；失败按首个根因修复。
 
+## 2026-11-02 后续批量收口：NAS 200 响应诊断
+
+- 对历史手机证据“HTTP 200 JSON与分钟契约不符，旧兼容路由404”补充客户端诊断：解码失败时不再吞掉`DecodingError`，错误会指出coding path、缺少字段/实际类型不符，并保留顶层字段诊断。200错误仍不会调用旧兼容路由，以免404遮住首因。
+- 这是为下一次实机复现提供可行动错误路径，不代表修复了NAS实际payload或确认历史数据可读。没有用户部署HTTP body，本轮不猜协议、不修改NAS服务端。
+- 此增量和BUG-03已同步到审计清单与主验收矩阵；源码未编译、未测试。诊断修复已提交到本地`main`；本地相对GitHub核实的`a1ba645`领先7个提交。普通`git push origin main`重试仍因`getaddrinfo() thread failed to start`失败；未强推、未触发CI。远端Actions此前只读核验queued/in_progress均为0。
+
 - GitHub最新 `main` 经提交列表核实为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`；本轮开始时本地工作树干净。最新Swift改动尚未提交/推送/编译，不能引用Run225旧代码的335/335、12/12作为当前改动结果。
 - A20自选：行内完整320pt图已改成基于上游分钟样本的细线趋势；增加`FLocalQuantAssessment.watchlistDirectionalScore`，要求报价fresh且至少3个有效方向因子，少于门槛显示“样本不足”，明确不是收益概率/交易信号。评分/过期门槛回归测试已定义。现状态：已编码，Swift执行0，Apple编译0，视觉证据0。
 - A24设置：画像字段移入“编辑明确偏好”折叠项，数据诊断/研究细节折叠，NAS地址与保存测试、主题栏保留在主层；画像UI测试现在会先展开该区域。现状态：已编码，未编译/未运行UI测试/无新截图。
