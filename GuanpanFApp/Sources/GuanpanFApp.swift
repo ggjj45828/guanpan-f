@@ -1939,7 +1939,8 @@ struct FHomeRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
-        // Centralize drag-to-dismiss so every tab's scrollable content behaves consistently.
+        // Keep this at the navigation root so every scrollable screen and
+        // sheet list inherits the same drag-to-dismiss keyboard behavior.
         .scrollDismissesKeyboard(.interactively)
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -2065,7 +2066,7 @@ private struct FBottomNavigationBar: View {
                                 if isSelected && usesPillSelection {
                                     RoundedRectangle(cornerRadius: usesGlassNavigation ? 20 : 15,
                                                      style: .continuous)
-                                        .fill(theme.accent.opacity(0.12))
+                                        .fill(theme.accent.opacity(usesTerminalNavigation ? 0.18 : 0.12))
                                         .padding(.horizontal, 3)
                                 }
                             }
@@ -2117,8 +2118,8 @@ private struct FBottomNavigationBar: View {
                         }
                 }
             }
-            .ignoresSafeArea(edges: .bottom)
-            .allowsHitTesting(false)
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
         }
     }
 
@@ -2131,11 +2132,12 @@ private struct FBottomNavigationBar: View {
     }
 
     private var usesPillSelection: Bool {
-        theme.surfaceTreatment != .terminal && theme.surfaceTreatment != .minimal &&
-            theme.surfaceTreatment != .ink && theme.surfaceTreatment != .magazine
+        switch theme.surfaceTreatment {
+        case .terminal, .minimal, .ink, .magazine: false
+        default: true
+        }
     }
 }
-
 
 private enum FMarketIndexHTTPClient {
     private struct Definition: Sendable {

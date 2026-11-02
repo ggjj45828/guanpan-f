@@ -956,3 +956,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 六套当前可选主题仍分别保留既有首页布局，并新增跨页面布局族主视觉Renderer和共享语义token。资产切换控件与方向/键盘测试回归通过。
 - CI截图只记录为已导出；未人工逐张审阅，故不能标记主题视觉验收、iPhone Air或真机交互完成。Windows工作机无Simulator/真机环境。
 - 最近一次修复与全绿结果：`https://github.com/ggjj45828/guanpan-f/actions/runs/41473653986`。
+
+## 2026-11-03 — 彩色主题逐页落色与证券图表 UI 检查修正
+
+- 远端上一轮 iOS run `41545250649`（SHA `121a92005ea03b292803778d3ac37761b02e77db`）的 FCore、XcodeGen、iOS Device Build、Simulator Build均成功；UI XCTest因证券详情图表元素当时只有约14pt可见、测试却立即检查420pt高度而失败。该失败是已观察到的真实验收问题，不能记为全绿或视觉通过。
+- 当前改动把图表 UI 检查改为先滚动到图表完整可见，再校验高度；首页与图表完整视口截图分别留存。该修正待本SHA Apple CI验证。
+- 主题增量把资产/顾问/行情/研究语义色应用到证券详情、Advisor上下文与成绩单、跨市场指数卡、资产列表和行情关注行；资产/设置页背景跟随主题。杂志、东方、玻璃、星图方向补充独立彩色角色色组。
+- 仍是单一Ledger、行情、Quant与Advisor数据流；页面按证券、顾问、市场、跨市场、资产、设置角色排版并由主题渲染。没有向真实账本注入演示数据，也没有更改NAS/Python服务。
+- 当前实现未由Apple CI验证；Windows无Xcode/Simulator。自动截图待本轮CI导出，人工查看和iPhone Air实测仍External Pending。概念图逐像素匹配与全主题视觉Pass均未完成。

@@ -23,6 +23,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 3))
         lookup.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.isEnabled)
@@ -30,21 +31,23 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["159352"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["market.refresh.159352"].exists)
         XCTAssertTrue(app.staticTexts["NAS 历史分时"].exists)
+        let detailScroll = app.scrollViews["market.security-detail.scroll"]
+        XCTAssertTrue(detailScroll.waitForExistence(timeout: 3))
+        attachScreenshot("03-security-detail-top", app: app)
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
         XCTAssertTrue(liveChart.waitForExistence(timeout: 3), app.debugDescription)
+        scrollUntilHittable(liveChart, in: detailScroll, minimumVisibleHeight: 400)
         XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
                                     "Security detail chart should use the expanded 420pt plot height")
         XCTAssertLessThanOrEqual(liveChart.frame.height, 424.5,
                                  "Security detail chart must stay within its 420pt height cap")
-        attachScreenshot("03-security-detail-top", app: app)
-        let detailScroll = app.scrollViews["market.security-detail.scroll"]
-        XCTAssertTrue(detailScroll.waitForExistence(timeout: 3))
+        attachScreenshot("03-security-detail-live-chart", app: app)
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.waitForExistence(timeout: 1) {
-            scrollUntilHittable(dailyChart, in: detailScroll)
+            scrollUntilHittable(dailyChart, in: detailScroll, minimumVisibleHeight: 400)
             XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
                                         "Daily chart should use the expanded 420pt plot height")
             XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
@@ -111,7 +114,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let detailScroll = app.scrollViews["market.security-detail.scroll"]
         XCTAssertTrue(detailScroll.waitForExistence(timeout: 5))
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
-        scrollUntilHittable(liveChart, in: detailScroll)
+        scrollUntilHittable(liveChart, in: detailScroll, minimumVisibleHeight: 400)
         XCTAssertTrue(liveChart.exists, app.debugDescription)
         XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
                                     "Live chart should use the expanded 420pt phone chart height")
@@ -122,7 +125,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.exists {
-            scrollUntilHittable(dailyChart, in: detailScroll)
+            scrollUntilHittable(dailyChart, in: detailScroll, minimumVisibleHeight: 400)
             XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
                                         "Daily chart should use the expanded 420pt phone chart height")
             XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
@@ -400,16 +403,18 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     func testLandscapeRotationKeepsSecurityDetailAndChartAccessible() {
         let app = XCUIApplication()
-        XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
         XCUIDevice.shared.orientation = .portrait
         app.launch()
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8))
         app.buttons["navigation.tab.行情"].tap()
+        XCUIDevice.shared.orientation = .landscapeLeft
 
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 5))
+        XCTAssertTrue(lookup.isHittable, app.debugDescription)
         lookup.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
         let dismissKeyboard = app.buttons["market.security-code.dismiss"]
         XCTAssertTrue(dismissKeyboard.waitForExistence(timeout: 3))
@@ -430,9 +435,10 @@ final class PrimaryNavigationUITests: XCTestCase {
         add(attachment)
     }
 
-    private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement) {
+    private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
+                                    minimumVisibleHeight: CGFloat = 1) {
         for _ in 0..<20 {
-            if element.isHittable { return }
+            if element.isHittable && element.frame.height >= minimumVisibleHeight { return }
             guard element.exists else {
                 scrollContainer.swipeUp(velocity: .slow)
                 continue

@@ -8,8 +8,19 @@ extension FHomeTheme {
     var accent: Color { manifest.tokens.accent }
 }
 
-private struct FThemePageHero: View {
+private enum FThemePageRole {
+    case security, advisor, market, crossMarket, assets, settings
+}
+
+private enum FThemeSurfaceRole {
+    case portfolio, advisor, market, research, settings, neutral
+}
+
+/// Page headers share business facts but use role-specific composition. The
+/// selected theme changes their type, surface and spacing through its manifest.
+private struct FThemePageHeader: View {
     let theme: FHomeTheme
+    let role: FThemePageRole
     let eyebrow: String
     let title: String
     let subtitle: String
@@ -21,154 +32,186 @@ private struct FThemePageHero: View {
 
     var body: some View {
         Group {
-            switch theme.layoutFamily {
-            case .editorial, .inkEditorial, .magazine:
-                editorialHero
-            case .terminalDashboard, .minimalTerminal:
-                terminalHero
-            case .spatialGlass:
-                glassHero
-            case .radialMap:
-                radialHero
-            case .cardGrid:
-                gridHero
-            case .staticBento, .adaptiveBento:
-                bentoHero
+            switch role {
+            case .security: securityHeader
+            case .advisor: advisorHeader
+            case .market: marketHeader
+            case .crossMarket: crossMarketHeader
+            case .assets: assetsHeader
+            case .settings: settingsHeader
             }
         }
         .accessibilityElement(children: .combine)
     }
 
-    private var heading: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(eyebrow.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(tokens.secondaryForeground)
-            Text(title)
-                .font(.system(size: 25, weight: .bold, design: .rounded))
-                .foregroundStyle(tokens.foreground)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(subtitle)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(tokens.secondaryForeground)
-                .fixedSize(horizontal: false, vertical: true)
+    private var editorialFamily: Bool {
+        theme.layoutFamily == .editorial || theme.layoutFamily == .inkEditorial || theme.layoutFamily == .magazine
+    }
+
+    private var terminalFamily: Bool {
+        theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal
+    }
+
+    private var cardRadius: CGFloat {
+        switch theme.surfaceTreatment {
+        case .terminal, .minimal: 8
+        case .glass, .orbit: 28
+        case .bento, .adaptive: 24
+        default: 18
         }
     }
 
-    @ViewBuilder private var valueBlock: some View {
-        if let value {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 27, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if let valueLabel {
-                    Text(valueLabel).font(.caption.weight(.medium))
-                }
-            }
-            .foregroundStyle(tokens.foreground)
-        }
+    private var headerFont: Font {
+        if terminalFamily { return .system(size: 21, weight: .bold, design: .monospaced) }
+        if editorialFamily { return .system(size: 29, weight: .bold, design: .serif) }
+        return .system(size: 25, weight: .bold, design: .rounded)
     }
 
-    private var editorialHero: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Rectangle().fill(tokens.accent).frame(width: 42, height: 3)
-            heading
-            HStack(alignment: .lastTextBaseline, spacing: 10) {
-                valueBlock
-                Spacer(minLength: 0)
-                Image(systemName: symbol).font(.system(size: 20, weight: .medium))
+    private var securityHeader: some View {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1.1)
                     .foregroundStyle(tokens.accent)
-            }
-        }
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.22)).frame(height: 1) }
-    }
-
-    private var terminalHero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            RoundedRectangle(cornerRadius: 2).fill(tokens.accent).frame(width: 3)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(eyebrow.uppercased()).font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .tracking(0.8).foregroundStyle(tokens.accent)
-                Text(title).font(.system(size: 20, weight: .bold, design: .monospaced)).foregroundStyle(tokens.foreground)
-                Text(subtitle).font(.system(size: 11, weight: .medium)).foregroundStyle(tokens.secondaryForeground)
-                    .lineLimit(2)
+                Text(title).font(headerFont).foregroundStyle(tokens.foreground).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).lineLimit(2)
+                if let valueLabel { Text(valueLabel.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(tokens.secondaryForeground) }
             }
             Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 4) {
-                if let value { Text(value).font(.system(size: 19, weight: .bold, design: .monospaced)).foregroundStyle(tokens.foreground).lineLimit(1).minimumScaleFactor(0.65) }
-                if let valueLabel { Text(valueLabel).font(.system(size: 9, weight: .medium)).foregroundStyle(tokens.secondaryForeground) }
-                Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(tokens.accent)
+            if let value {
+                Text(value).font(.system(size: terminalFamily ? 20 : 27, weight: .bold,
+                                         design: terminalFamily ? .monospaced : .rounded))
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.68)
+                    .foregroundStyle(tokens.foreground)
+            } else {
+                Image(systemName: symbol).font(.title2.weight(.semibold)).foregroundStyle(tokens.accent)
             }
         }
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.40)).frame(height: 1) }
-    }
-
-    private var glassHero: some View {
-        HStack(spacing: 14) {
-            Image(systemName: symbol).font(.system(size: 21, weight: .semibold)).foregroundStyle(tokens.accent)
-                .frame(width: 44, height: 44).background(.ultraThinMaterial, in: Circle())
-            VStack(alignment: .leading, spacing: 8) { heading; valueBlock }
-        }
-        .padding(17)
+        .padding(theme.manifest.tokens.spacing.standard)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(tokens.accent.opacity(0.25), lineWidth: 1))
-        .shadow(color: tokens.accent.opacity(0.14), radius: 16, x: 0, y: 8)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .market))
     }
 
-    private var radialHero: some View {
+    private var advisorHeader: some View {
+        HStack(alignment: .top, spacing: 13) {
+            Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(tokens.accentForeground)
+                .frame(width: 48, height: 48)
+                .background(tokens.accent, in: RoundedRectangle(cornerRadius: theme.surfaceTreatment == .terminal ? 8 : 16, style: .continuous))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1)
+                    .foregroundStyle(tokens.secondaryForeground)
+                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
+                Text(subtitle).font(.subheadline.weight(.medium)).foregroundStyle(tokens.secondaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if let value {
+                Text(value).font(.caption.weight(.bold)).lineLimit(2).multilineTextAlignment(.trailing)
+                    .foregroundStyle(tokens.accentForeground)
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(tokens.accent, in: Capsule())
+            }
+        }
+        .padding(theme.manifest.tokens.spacing.standard)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .advisor))
+        .overlay(alignment: .leading) {
+            if editorialFamily { Rectangle().fill(tokens.accent).frame(width: 3).padding(.vertical, 12) }
+        }
+    }
+
+    private var marketHeader: some View {
+        VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1)
+                        .foregroundStyle(tokens.accent)
+                    Text(title).font(headerFont).foregroundStyle(tokens.foreground)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(tokens.accent)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if let value { Text(value).font(.system(size: 18, weight: .bold, design: terminalFamily ? .monospaced : .rounded)).foregroundStyle(tokens.foreground) }
+                if let valueLabel { Text(valueLabel).font(.caption.weight(.semibold)).foregroundStyle(tokens.secondaryForeground) }
+                Spacer(minLength: 0)
+            }
+            Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(theme.manifest.tokens.spacing.standard)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .market))
+    }
+
+    private var crossMarketHeader: some View {
         HStack(alignment: .center, spacing: 14) {
             ZStack {
-                Circle().stroke(tokens.accent.opacity(0.20), lineWidth: 1).frame(width: 58, height: 58)
-                Circle().fill(tokens.highlightSurface).frame(width: 44, height: 44)
+                Circle().stroke(tokens.accent.opacity(0.25), lineWidth: 1).frame(width: 54, height: 54)
+                Circle().fill(tokens.highlightSurface).frame(width: 42, height: 42)
                 Image(systemName: symbol).font(.system(size: 19, weight: .semibold)).foregroundStyle(tokens.accent)
             }
-            VStack(alignment: .leading, spacing: 6) { heading; valueBlock }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(tokens.accent.opacity(0.18)).frame(height: 1) }
-    }
-
-    private var gridHero: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 9) { heading; valueBlock }
-            Spacer(minLength: 0)
-            Image(systemName: symbol).font(.system(size: 22, weight: .semibold)).foregroundStyle(tokens.accent)
-                .frame(width: 50, height: 50).background(tokens.highlightSurface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-        }
-        .padding(17)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tokens.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(tokens.accent.opacity(0.14), lineWidth: 1))
-    }
-
-    private var bentoHero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) { heading; valueBlock }
-            Spacer(minLength: 0)
-            VStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 18, weight: .bold))
-                if let valueLabel { Text(valueLabel).font(.system(size: 9, weight: .bold)).lineLimit(1) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(0.9).foregroundStyle(tokens.accent)
+                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
+                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
             }
-            .foregroundStyle(tokens.accentForeground)
-            .frame(width: 70, height: 70)
-            .background(tokens.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            Spacer(minLength: 0)
+            if let value {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(value).font(.system(size: 19, weight: .bold, design: terminalFamily ? .monospaced : .rounded))
+                        .monospacedDigit().foregroundStyle(tokens.foreground)
+                    Text(valueLabel ?? "指数").font(.caption2).foregroundStyle(tokens.secondaryForeground)
+                }
+            }
         }
-        .padding(15)
+        .padding(theme.manifest.tokens.spacing.standard)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tokens.surfaceGradient.first ?? tokens.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(tokens.accent).frame(width: 4).padding(.vertical, 14) }
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .research))
     }
 
+    private var assetsHeader: some View {
+        VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
+            HStack {
+                Label(eyebrow, systemImage: symbol).font(.caption.weight(.semibold)).foregroundStyle(tokens.accent)
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.caption.weight(.bold)).foregroundStyle(tokens.secondaryForeground)
+            }
+            Text(title).font(headerFont).foregroundStyle(tokens.foreground)
+            if let value {
+                Text(value).font(.system(size: terminalFamily ? 24 : 32, weight: .bold,
+                                         design: terminalFamily ? .monospaced : .rounded))
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(tokens.foreground)
+            }
+            if let valueLabel { Text(valueLabel).font(.caption.weight(.medium)).foregroundStyle(tokens.secondaryForeground) }
+            Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(theme.manifest.tokens.spacing.spacious)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .portfolio))
+    }
+
+    private var settingsHeader: some View {
+        HStack(alignment: .center, spacing: 13) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1).foregroundStyle(tokens.accent)
+                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
+                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            VStack(spacing: 5) {
+                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(tokens.accentForeground)
+                if let value { Text(value).font(.caption2.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(tokens.accentForeground) }
+            }
+            .padding(10)
+            .background(tokens.accent, in: RoundedRectangle(cornerRadius: theme.surfaceTreatment == .terminal ? 4 : 14, style: .continuous))
+        }
+        .padding(theme.manifest.tokens.spacing.standard)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .settings))
+    }
 
 }
+
 struct HomeLayout: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
@@ -2082,33 +2125,80 @@ private struct RouteCard: View {
 private struct FThemeSurfaceModifier: ViewModifier {
     let theme: FHomeTheme
     let radius: CGFloat
+    let role: FThemeSurfaceRole
+
+    init(theme: FHomeTheme, radius: CGFloat, role: FThemeSurfaceRole = .neutral) {
+        self.theme = theme
+        self.radius = radius
+        self.role = role
+    }
+
+    private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
+
+    private var roleTint: Color {
+        switch role {
+        case .portfolio: tokens.portfolioSurface
+        case .advisor: tokens.advisorSurface
+        case .market: tokens.marketSurface
+        case .research: tokens.highlightSurface
+        case .settings, .neutral: tokens.accent
+        }
+    }
+
+    private var cornerStyle: RoundedRectangle {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+    }
+
+    private var coloredSurface: LinearGradient {
+        LinearGradient(colors: [tokens.surface, roleTint.opacity(theme.surfaceTreatment == .bento ? 0.34 : 0.20)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         switch theme.surfaceTreatment {
         case .terminal, .minimal:
             content.background(theme.manifest.tokens.surface.opacity(0.98))
-                .overlay(alignment: .bottom) { Rectangle().fill(theme.accent.opacity(0.24)).frame(height: 0.5) }
+                .overlay(alignment: .leading) { Rectangle().fill(roleTint).frame(width: 2) }
+                .overlay(alignment: .bottom) { Rectangle().fill(roleTint.opacity(0.45)).frame(height: 0.7) }
         case .glass, .orbit:
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius + 8))
-                .overlay(RoundedRectangle(cornerRadius: radius + 8).stroke(.white.opacity(0.28), lineWidth: 1))
-                .shadow(color: theme.accent.opacity(0.12), radius: 16, y: 8)
+            content.background {
+                RoundedRectangle(cornerRadius: radius + 8, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: radius + 8, style: .continuous)
+                        .fill(roleTint.opacity(0.12)))
+            }
+                .overlay(RoundedRectangle(cornerRadius: radius + 8).stroke(roleTint.opacity(0.36), lineWidth: 1))
+                .shadow(color: roleTint.opacity(0.18), radius: 16, y: 8)
         case .ink:
-            content.background(theme.manifest.tokens.background.opacity(0.78))
-                .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 2) }
+            content.background {
+                cornerStyle.fill(tokens.background)
+                    .overlay(cornerStyle.fill(roleTint.opacity(0.095)))
+            }
+                .overlay(alignment: .leading) { Rectangle().fill(roleTint).frame(width: 3) }
         case .magazine:
-            content.background(theme.manifest.tokens.background.opacity(0.9))
-                .overlay(alignment: .top) { Rectangle().fill(theme.accent.opacity(0.7)).frame(height: 1) }
-        case .bento, .adaptive:
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius + 4))
-                .overlay(RoundedRectangle(cornerRadius: radius + 4).stroke(theme.accent.opacity(0.18), lineWidth: 1))
+            content.background {
+                cornerStyle.fill(tokens.background)
+                    .overlay(cornerStyle.fill(roleTint.opacity(0.12)))
+            }
+                .overlay(alignment: .top) { Rectangle().fill(roleTint).frame(height: 2) }
+        case .bento:
+            content.background(coloredSurface, in: RoundedRectangle(cornerRadius: radius + 4, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: radius + 4, style: .continuous)
+                    .stroke(roleTint.opacity(0.54), lineWidth: 1.2))
+                .shadow(color: roleTint.opacity(0.15), radius: 9, y: 4)
+        case .adaptive:
+            content.background(coloredSurface, in: RoundedRectangle(cornerRadius: radius + 4, style: .continuous))
+                .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 3).fill(roleTint).frame(width: 4).padding(.vertical, 12) }
+                .overlay(RoundedRectangle(cornerRadius: radius + 4, style: .continuous)
+                    .stroke(roleTint.opacity(0.40), lineWidth: 1))
         case .editorial:
-            content.background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(theme.ink.opacity(0.09), lineWidth: 0.8))
+            content.background(coloredSurface, in: cornerStyle)
+                .overlay(cornerStyle.stroke(roleTint.opacity(0.20), lineWidth: 0.8))
                 .shadow(color: theme.ink.opacity(0.035), radius: 8, y: 3)
         case .card:
-            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
+            content.background(coloredSurface, in: cornerStyle)
+                .overlay(cornerStyle.stroke(roleTint.opacity(0.24), lineWidth: 0.9))
         }
     }
 }
@@ -2259,7 +2349,7 @@ struct HomeDestination: View {
         } else { nil }
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                FThemePageHero(theme: theme,
+                FThemePageHeader(theme: theme, role: .security,
                                eyebrow: holding == nil ? "自选观察 · 证券详情" : "真实持仓 · 证券详情",
                                title: instrumentName,
                                subtitle: "\(code) · \(quoteSnapshot.map { Self.quoteFreshnessText($0, now: quoteNow) } ?? "等待可靠行情")",
@@ -2276,7 +2366,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .portfolio))
                     Button(holding.brokerDisplayCostPerUnit == nil ? "录入券商展示成本" : "修正券商展示成本") {
                         brokerCostText = holding.brokerDisplayCostPerUnit.map {
                             NSDecimalNumber(decimal: $0).stringValue
@@ -2298,7 +2388,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .portfolio))
                 } else {
                     Text("当前未持有；行情与证券级顾问仍可查看。真实持仓仅来自本机账本。")
                         .font(.subheadline).foregroundStyle(theme.manifest.tokens.secondaryForeground)
@@ -2335,7 +2425,7 @@ struct HomeDestination: View {
                     }
                 }
                 .padding(14)
-                .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .portfolio))
                 if let history {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("持仓周期历史").font(.headline)
@@ -2353,7 +2443,7 @@ struct HomeDestination: View {
                         }
                     }
                     .padding(14)
-                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .research))
                 }
                 let snapshot = quoteSnapshot
                     VStack(alignment: .leading, spacing: 8) {
@@ -2522,7 +2612,7 @@ struct AdvisorOverview: View {
         ScrollView {
             VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
                 let portfolioResult = model.advisorResult.flatMap { $0.scope == .portfolio ? $0 : nil }
-                FThemePageHero(theme: theme, eyebrow: "观盘max · 决策中枢", title: "今日投资判断",
+                FThemePageHeader(theme: theme, role: .advisor, eyebrow: "观盘max · 决策中枢", title: "今日投资判断",
                                subtitle: portfolioResult?.narrative.conclusion ?? "结合真实持仓、可靠行情与风险状态，再决定操作或等待。",
                                symbol: "sparkles",
                                value: portfolioResult?.candidate.action.displayName ?? model.aiKeyStatus,
@@ -2554,7 +2644,7 @@ struct AdvisorOverview: View {
                 }
                 .font(.subheadline)
                 .padding(16)
-                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18, role: .advisor))
                 VStack(alignment: .leading, spacing: 10) {
                     Text("决策成绩单 · 最近30天").font(.headline)
                     if let summary = model.candidateShadowSummary {
@@ -2579,7 +2669,7 @@ struct AdvisorOverview: View {
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
                 .padding(16)
-                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18))
+                .modifier(FThemeSurfaceModifier(theme: theme, radius: 18, role: .research))
                 Text("发送时重新读取本机真实账本和标的行情，再构建 DecisionContext 并运行 Risk Guard / AI Guard；NAS 研究仅在配置且可用时附加。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
             }
@@ -2599,7 +2689,7 @@ private struct CrossMarketOverview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                FThemePageHero(theme: theme, eyebrow: "全球市场 · 指数观察", title: "跨市场脉搏",
+                FThemePageHeader(theme: theme, role: .crossMarket, eyebrow: "全球市场 · 指数观察", title: "跨市场脉搏",
                                subtitle: "实时指数由手机读取；历史数据与研究服务为可选增强。",
                                symbol: "globe.asia.australia",
                                value: "\(model.marketIndexQuotes.filter { $0.latestPrice != nil }.count) / \(model.marketIndexQuotes.count)",
@@ -2702,7 +2792,7 @@ private struct CrossMarketOverview: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: 16))
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .market))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("crossmarket.index.\(quote.code)")
     }
@@ -2770,7 +2860,7 @@ struct RealAssetsOverview: View {
     var body: some View {
         List {
             Section {
-                FThemePageHero(theme: theme, eyebrow: "本机账本 · 真实成交", title: "账户总览",
+                FThemePageHeader(theme: theme, role: .assets, eyebrow: "本机账本 · 真实成交", title: "账户总览",
                                subtitle: "持仓、现金与成交记录均来自确认后的真实账本。",
                                symbol: "briefcase.fill",
                                value: model.portfolioMarketValuation(at: Date()).displayLabel,
@@ -2818,6 +2908,7 @@ struct RealAssetsOverview: View {
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
             }
+            .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.085))
             if selectedView == 0 {
                 Section("当前持仓") {
                 if model.holdings.isEmpty {
@@ -2834,6 +2925,7 @@ struct RealAssetsOverview: View {
                     }
                 }
                 }
+                .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.11))
             } else {
                 Section("已清仓 / 历史持仓") {
                     let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
@@ -2852,6 +2944,7 @@ struct RealAssetsOverview: View {
                         }
                     }
                 }
+                .listRowBackground(theme.manifest.tokens.highlightSurface.opacity(0.10))
             }
             Section("现金与成交流水") {
                 Button("录入其他费用 / 现金对账差额") {
@@ -2887,15 +2980,19 @@ struct RealAssetsOverview: View {
                     }
                 }
             }
+            .listRowBackground(theme.manifest.tokens.marketSurface.opacity(0.085))
             Section("资产安全") {
                 Label("AI 建议和候选计划不写入真实账本", systemImage: "lock.shield")
                 Text("只有用户确认实际成交后才写入账本；所有成交和现金变动保留在历史流水中。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
             }
+            .listRowBackground(theme.manifest.tokens.advisorSurface.opacity(0.085))
         }
         .accessibilityIdentifier("assets.list")
         .navigationTitle("真实资产")
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(theme.manifest.tokens.background.ignoresSafeArea())
         .sheet(isPresented: $model.showingFeeCorrection) {
             FLedgerFeeCorrectionSheet(model: model)
         }
@@ -2934,7 +3031,6 @@ struct RealAssetsOverview: View {
     }
 }
 
-
 private extension FReadOnlyCashFlowKind {
     var label: String {
         switch self {
@@ -2966,7 +3062,7 @@ struct SettingsOverview: View {
     var body: some View {
         Form {
             Section {
-                FThemePageHero(theme: theme, eyebrow: "观盘max · 个性空间", title: "账户与体验",
+                FThemePageHeader(theme: theme, role: .settings, eyebrow: "观盘max · 个性空间", title: "账户与体验",
                                subtitle: "统一调整顾问连接、可选数据服务与整套界面风格。",
                                symbol: "slider.horizontal.3", value: theme.manifest.name,
                                valueLabel: "当前主题")
@@ -3152,6 +3248,8 @@ struct SettingsOverview: View {
         .accessibilityIdentifier("settings.form")
         .scrollDismissesKeyboard(.interactively)
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(theme.manifest.tokens.background.ignoresSafeArea())
         .confirmationDialog("清除画像偏好？", isPresented: $showingProfileClearConfirmation,
                             titleVisibility: .visible) {
             Button("清除该项画像", role: .destructive) {
@@ -3377,7 +3475,7 @@ struct MarketOverview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
-                FThemePageHero(theme: theme, eyebrow: "实时雷达 · 更新 10 秒", title: "行情新鲜度",
+                FThemePageHeader(theme: theme, role: .market, eyebrow: "实时雷达 · 更新 10 秒", title: "行情新鲜度",
                                subtitle: "手机直连行情源 · 曲线按上游分钟时点绘制",
                                symbol: "waveform.path.ecg", value: model.marketCalendarStatusText,
                                valueLabel: "市场时段")
@@ -3570,13 +3668,14 @@ struct MarketOverview: View {
                     .padding(13)
                     .background {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(LinearGradient(colors: theme.manifest.tokens.surfaceGradient.isEmpty
-                                                ? [theme.manifest.tokens.surface]
-                                                : theme.manifest.tokens.surfaceGradient,
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .fill(LinearGradient(
+                                colors: [theme.manifest.tokens.surface,
+                                         theme.manifest.tokens.marketSurface.opacity(
+                                            theme.surfaceTreatment == .bento || theme.surfaceTreatment == .adaptive ? 0.30 : 0.16)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(theme.manifest.tokens.accent.opacity(0.16), lineWidth: 0.8))
+                        .stroke(theme.manifest.tokens.marketSurface.opacity(0.48), lineWidth: 0.9))
                 }
             }
             .padding(.horizontal, 8)

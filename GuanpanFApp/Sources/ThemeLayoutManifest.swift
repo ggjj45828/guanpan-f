@@ -224,12 +224,34 @@ enum FThemeLayoutRegistry {
             marketSurface = adaptive(light: (0.98, 0.98, 1.0), dark: (0.11, 0.13, 0.19))
             highlightSurface = adaptive(light: (0.22, 0.74, 0.62), dark: (0.04, 0.37, 0.31))
             surfaceGradient = [adaptive(light: (0.05, 0.39, 0.98), dark: (0.04, 0.26, 0.62)), adaptive(light: (0.01, 0.20, 0.75), dark: (0.02, 0.12, 0.42))]
-        case .magazine, .inkModern, .fluidGlass, .dataStarMap:
-            portfolioSurface = surface
-            advisorSurface = accentFallback(theme)
-            marketSurface = surface
-            highlightSurface = surface
-            surfaceGradient = [background, surface]
+        case .magazine:
+            portfolioSurface = adaptive(light: (0.91, 0.34, 0.19), dark: (0.64, 0.20, 0.14))
+            advisorSurface = adaptive(light: (0.70, 0.20, 0.31), dark: (0.52, 0.13, 0.25))
+            marketSurface = adaptive(light: (0.98, 0.78, 0.33), dark: (0.52, 0.36, 0.12))
+            highlightSurface = adaptive(light: (0.55, 0.38, 0.72), dark: (0.35, 0.24, 0.52))
+            surfaceGradient = [adaptive(light: (1.0, 0.89, 0.71), dark: (0.20, 0.11, 0.10)),
+                               adaptive(light: (0.94, 0.68, 0.48), dark: (0.32, 0.16, 0.13))]
+        case .inkModern:
+            portfolioSurface = adaptive(light: (0.12, 0.28, 0.55), dark: (0.10, 0.23, 0.43))
+            advisorSurface = adaptive(light: (0.76, 0.25, 0.17), dark: (0.60, 0.18, 0.13))
+            marketSurface = adaptive(light: (0.28, 0.53, 0.48), dark: (0.15, 0.35, 0.31))
+            highlightSurface = adaptive(light: (0.89, 0.69, 0.40), dark: (0.43, 0.30, 0.13))
+            surfaceGradient = [adaptive(light: (0.98, 0.93, 0.82), dark: (0.14, 0.12, 0.10)),
+                               adaptive(light: (0.88, 0.79, 0.63), dark: (0.23, 0.19, 0.13))]
+        case .fluidGlass:
+            portfolioSurface = adaptive(light: (0.12, 0.48, 0.80), dark: (0.08, 0.34, 0.60))
+            advisorSurface = adaptive(light: (0.46, 0.32, 0.82), dark: (0.31, 0.22, 0.64))
+            marketSurface = adaptive(light: (0.18, 0.70, 0.76), dark: (0.07, 0.42, 0.49))
+            highlightSurface = adaptive(light: (0.95, 0.43, 0.58), dark: (0.62, 0.23, 0.39))
+            surfaceGradient = [adaptive(light: (0.79, 0.88, 1.0), dark: (0.10, 0.15, 0.25)),
+                               adaptive(light: (0.83, 0.80, 0.98), dark: (0.20, 0.14, 0.32))]
+        case .dataStarMap:
+            portfolioSurface = adaptive(light: (0.20, 0.40, 0.94), dark: (0.13, 0.29, 0.72))
+            advisorSurface = adaptive(light: (0.82, 0.28, 0.66), dark: (0.60, 0.17, 0.48))
+            marketSurface = adaptive(light: (0.10, 0.67, 0.78), dark: (0.04, 0.39, 0.52))
+            highlightSurface = adaptive(light: (0.98, 0.66, 0.18), dark: (0.59, 0.35, 0.07))
+            surfaceGradient = [adaptive(light: (0.80, 0.85, 1.0), dark: (0.12, 0.12, 0.27)),
+                               adaptive(light: (0.94, 0.82, 0.98), dark: (0.25, 0.13, 0.30))]
         }
         let accent: Color
         switch theme {
@@ -406,3 +428,4 @@ extension FHomeTheme {
     var manifest: FThemeManifest { FThemeLayoutRegistry.manifest(for: self) }
     var title: String { manifest.name }
 }
+
