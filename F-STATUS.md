@@ -468,3 +468,4 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 第十一轮 Python/NAS workflow 通过；Swift生产模块成功编译，测试源编译发现两处研究来源测试误把私有JSON helper当作String扩展调用。现已改为显式传入JSON参数，下一轮验证完整XCTest。
 - 第十二轮 iOS XCTest 已运行，暴露分钟缺口阈值过宽、暂停Trigger仍泄露建议份额、非有限成交量不应污染价格Regime、过期宽基引用测试过期、非法币种应在Ledger快照入口拒绝，以及慢响应测试时钟不可控。已修复/校正对应规则与测试，加入Research Tool可用性断言定位响应拒绝根因；293项本地Python可运行测试通过，下一轮Actions继续验证。
 - 第十三轮 Python/NAS workflow 通过；iOS测试模块编译发现新增时点辅助函数使用了实例属性默认参数并意外遮蔽Date变量。已改为可选时点加函数体内默认值，并区分日期字符串名称。下一轮验证编译/XCTest。
+- 第十四轮 iOS XCTest 中Advisor新鲜度行为已按断档闭锁；NAS Research Summary本身通过qualified/usability断言，实际拒绝是测试请求范围与返回证据范围不一致（请求起始日为10/1，证据起始日为8/1）。已将有效请求夹具绑定到证据的8/1起始日，下一轮复验；Python/NAS workflow通过。

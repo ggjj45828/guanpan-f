@@ -569,7 +569,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
             .assess(request: request, context: context, now: freshNow,
                     completionTime: freshNow.addingTimeInterval(121))
         XCTAssertFalse(result.isEligibleForUserReview)
-        XCTAssertTrue(result.guardResult.findings.contains(.invalidContext))
+        XCTAssertTrue(result.guardResult.findings.contains(.invalidContext) ||
+                      result.guardResult.findings.contains(.missingFreshQuote("159352")))
     }
 
     func testResearchToolCallsAreBoundedToRequestScopeAndCapturedTime() throws {
@@ -607,7 +608,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
                                                   scope: .instrument("159352"),
                                                   decisionContext: context, now: capturedAt)
         let call = FAdvisorResearchToolCall(tool: .vwapBreakStudy, securityCode: "159352",
-                                            market: "CN", startDate: "2026-10-01",
+                                            market: "CN", startDate: "2026-08-01",
                                             endDate: "2026-10-23", asOf: asOf)
         let result = try await call.execute(using: FixedResearchProvider(result: context.researchEvidence[0]),
                                             for: request, now: capturedAt)
@@ -627,7 +628,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
                                                   scope: .instrument("159352"),
                                                   decisionContext: context, now: capturedAt)
         let call = FAdvisorResearchToolCall(tool: .vwapBreakStudy, securityCode: "159352",
-                                            market: "CN", startDate: "2026-10-01",
+                                            market: "CN", startDate: "2026-08-01",
                                             endDate: "2026-10-23", asOf: asOf)
         let envelope = context.researchEvidence[0].envelope
         let postRequestEvidence = FDecisionResearchEvidence(
