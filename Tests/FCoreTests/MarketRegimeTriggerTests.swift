@@ -6,6 +6,7 @@ final class MarketRegimeTriggerTests: XCTestCase {
 
     private func assessment(crash: Bool, securityCode: String? = "159352",
                             insufficientHistory: Bool = false) -> FMarketRegimeAssessment {
+        let evidenceAsOf = now.addingTimeInterval(-2)
         let closes: [Double]
         let breadth: FMarketRegimeBreadthObservation?
         let benchmarks: [FMarketRegimeBenchmarkObservation]
@@ -14,13 +15,13 @@ final class MarketRegimeTriggerTests: XCTestCase {
             closes = Array(repeating: 100, count: 75) + [92, 88, 84, 80, 75]
             breadth = FMarketRegimeBreadthObservation(market: "CN",
                 advancingCount: 20, decliningCount: 80,
-                observedAt: now.addingTimeInterval(-60), capturedAt: now, source: "fixture")
+                observedAt: evidenceAsOf.addingTimeInterval(-60), capturedAt: evidenceAsOf, source: "fixture")
             benchmarks = [
                 FMarketRegimeBenchmarkObservation(marketContext: "CN", marketCode: "sh000001",
-                    observedAt: now.addingTimeInterval(-60), capturedAt: now,
+                    observedAt: evidenceAsOf.addingTimeInterval(-60), capturedAt: evidenceAsOf,
                     source: "fixture", sessionReturn: -0.08),
                 FMarketRegimeBenchmarkObservation(marketContext: "CN", marketCode: "sz399001",
-                    observedAt: now.addingTimeInterval(-60), capturedAt: now,
+                    observedAt: evidenceAsOf.addingTimeInterval(-60), capturedAt: evidenceAsOf,
                     source: "fixture", sessionReturn: -0.06)
             ]
             volumes = Array(repeating: 100, count: 75) + Array(repeating: 400, count: 5)
@@ -31,15 +32,15 @@ final class MarketRegimeTriggerTests: XCTestCase {
             volumes = []
         }
         let bars = closes.enumerated().map { index, close in
-            FMarketRegimeBar(timestamp: now.addingTimeInterval(Double(index - closes.count + 1) * 86_400),
+            FMarketRegimeBar(timestamp: evidenceAsOf.addingTimeInterval(Double(index - closes.count + 1) * 86_400),
                              close: close, volume: volumes.isEmpty ? nil : volumes[index])
         }
         let market = securityCode.map { "security:\($0)" } ?? "CN"
         return FMarketRegimeEngine.evaluate(
-            FMarketRegimeInput(market: market, securityCode: securityCode, asOf: now,
-                sourceUpdatedAt: now, source: FMarketBarTrustPolicy.tencentDailySource, bars: bars,
+            FMarketRegimeInput(market: market, securityCode: securityCode, asOf: evidenceAsOf,
+                sourceUpdatedAt: evidenceAsOf, source: FMarketBarTrustPolicy.tencentDailySource, bars: bars,
                 breadthObservation: breadth, benchmarkObservations: benchmarks),
-            now: now)
+            now: evidenceAsOf)
     }
 
     private func plan() throws -> FQuantTriggerPlan {

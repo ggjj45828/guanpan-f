@@ -68,8 +68,8 @@ final class LocalQuantEngineTests: XCTestCase {
         let now = Date()
         let quote = try quote(now: now)
         let iopv = try FIOPVObservation(securityCode: "159352", value: Decimal(string: "1.01"),
-                                        observedAt: now.addingTimeInterval(-5),
-                                        fetchedAt: now.addingTimeInterval(-2),
+                                        observedAt: quote.quoteTimestamp.addingTimeInterval(-5),
+                                        fetchedAt: quote.quoteTimestamp.addingTimeInterval(-2),
                                         source: FMarketQuoteTrustPolicy.tencentReferenceSource,
                                         quality: .complete)
         let assessment = FLocalQuantEngine.evaluate(quote: quote, dailyHistory: nil, regime: nil,
