@@ -1067,6 +1067,7 @@ final class FHomeModel: ObservableObject {
                 if let quote = quotes[code] ?? marketDataByCode[code] {
                     let iopv = marketReferenceByCode[code].flatMap { reference -> FIOPVObservation? in
                         guard reference.securityCode == code, reference.hasFreshIOPV(at: contextCaptureTime),
+                              reference.observedAt <= quote.quoteTimestamp,
                               let value = reference.iopv else { return nil }
                         return try? FIOPVObservation(securityCode: code, value: value,
                             observedAt: reference.observedAt, fetchedAt: reference.fetchedAt,
@@ -1076,11 +1077,13 @@ final class FHomeModel: ObservableObject {
                        reference.securityCode == code,
                        reference.source == FMarketQuoteTrustPolicy.tencentReferenceSource,
                        reference.hasFreshIOPV(at: contextCaptureTime),
+                       reference.observedAt <= quote.quoteTimestamp,
                        let iopvValue = reference.iopv,
-                       let premium = fIopvPremiumPercent(price: reference.latestPrice, iopv: iopvValue) {
+                       let quotePrice = quote.latestPrice,
+                       let premium = fIopvPremiumPercent(price: quotePrice, iopv: iopvValue) {
                         observations.append(FContextObservation(
                             dataClass: .iopv, subject: code, source: reference.source,
-                            reference: "method=(ETF价格/IOPV-1)*100;unit=percent",
+                            reference: "method=(同一报价时点ETF价格/不晚于报价时点的IOPV-1)*100;unit=percent",
                             observedAt: reference.observedAt, capturedAt: contextCaptureTime,
                             decimalValue: premium))
                     }
@@ -1412,7 +1415,15 @@ final class FHomeModel: ObservableObject {
             }
             dailyKlineByCode[code] = snapshot
             let evaluatedAt = Date()
-            let regimeBars = snapshot.bars.map { bar in
+            let shanghai = TimeZone(identifier: "Asia/Shanghai") ?? .current
+            var tradingCalendar = Calendar(identifier: .gregorian)
+            tradingCalendar.timeZone = shanghai
+            let currentTradingDayStart = tradingCalendar.startOfDay(for: evaluatedAt)
+            // The daily provider does not label an in-progress session bar as
+            // partial. Exclude today's row from regime inference until the next
+            // local trading day; the chart still keeps the original snapshot.
+            let completedBars = snapshot.bars.filter { $0.tradingDate < currentTradingDayStart }
+            let regimeBars = completedBars.map { bar in
                 FMarketRegimeBar(
                     timestamp: bar.tradingDate,
                     close: NSDecimalNumber(decimal: bar.close).doubleValue,
@@ -2054,15 +2065,24 @@ private enum FMarketIndexHTTPClient {
         // retrieval time, and provider identity. The core filters market, source,
         // freshness, duplicate and session synchronization mismatches.
         let evaluationTime = Date()
+        let completedBarsByCode = Dictionary(uniqueKeysWithValues: results.compactMap { result in
+            guard let history = result.history,
+                  let definition = definitions.first(where: { $0.code == result.code }),
+                  let timeZone = TimeZone(identifier: definition.timeZone) else { return nil }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = timeZone
+            let currentSessionDayStart = calendar.startOfDay(for: evaluationTime)
+            return (result.code, history.bars.filter { $0.timestamp < currentSessionDayStart })
+        })
         for result in results.sorted(by: { $0.code < $1.code }) {
             statuses[result.code] = result.status
             guard let history = result.history else { continue }
             fetchedAtByCode[result.code] = history.fetchedAt
             let benchmarks = results.compactMap { peer -> FMarketRegimeBenchmarkObservation? in
                 guard peer.code != result.code, let peerHistory = peer.history,
-                      peerHistory.bars.count >= 2,
-                      let previousBar = peerHistory.bars.dropLast().last,
-                      let latestBar = peerHistory.bars.last,
+                      let peerBars = completedBarsByCode[peer.code], peerBars.count >= 2,
+                      let previousBar = peerBars.dropLast().last,
+                      let latestBar = peerBars.last,
                       previousBar.close.isFinite, previousBar.close > 0,
                       latestBar.close.isFinite, latestBar.close > 0 else { return nil }
                 let sessionReturn = latestBar.close / previousBar.close - 1
@@ -2073,15 +2093,16 @@ private enum FMarketIndexHTTPClient {
                     capturedAt: peerHistory.fetchedAt,
                     source: peerHistory.source, sessionReturn: sessionReturn)
             }
+            let completedBars = completedBarsByCode[result.code] ?? []
             let assessment = FMarketRegimeEngine.evaluate(
                 FMarketRegimeInput(market: "index:\(result.code)", asOf: evaluationTime,
                     sourceUpdatedAt: history.fetchedAt, source: history.source,
-                    bars: history.bars, benchmarkObservations: benchmarks),
+                    bars: completedBars, benchmarkObservations: benchmarks),
                 previous: result.previous, now: evaluationTime)
             assessments[result.code] = assessment
             let newestDate = assessment.dataAsOf?.formatted(date: .numeric, time: .omitted) ?? "不可用"
             statuses[result.code] = assessment.regime == .dataUnreliable
-                ? "历史 Regime 不可用 · \(history.bars.count) 根已完成日K · 最近数据 \(newestDate) · 数据不足或过旧"
+                ? "历史 Regime 不可用 · \(completedBars.count) 根已完成日K · 最近数据 \(newestDate) · 数据不足或过旧"
                 : "历史 Regime \(assessment.regime.displayName) · \(assessment.riskLevel.displayName) · \(assessment.confidence)/100 · \(newestDate) 截止"
         }
         return (assessments, statuses, fetchedAtByCode)

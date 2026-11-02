@@ -2,6 +2,16 @@
 
 ## 2026-11-02 后续审计进度（覆盖本节以下旧基线）
 
+## 2026-11-02 全盘细微Bug审计与集中修复（当前工作树增量）
+
+- 审计基线：本地 `main` HEAD `3f930f0`，相对本地 `origin/main` ahead 4；审计开始时工作树干净。此前四个本地提交未推送；本轮未尝试强推。Windows无Xcode/Simulator，Swift编译、XCTest、iPhone Air视觉验收未执行。
+- 本轮确认并集中修正两类因果时点缺陷：
+  1. Advisor DecisionContext过去以Tencent参考响应中的 `latestPrice` 计算 IOPV 溢价，而Local Quant使用分钟快照价格；且Advisor上下文没有要求IOPV观测时点不晚于本次报价。现改为仅在参考/IOPV时点不晚于该报价时纳入，并以同一报价的 `latestPrice` 计算溢价，避免AI与Quant看到不同的溢价。
+  2. 日K来源不提供“当日K线已完成”标记。Local Quant过去可把报价交易日的日K收盘值纳入趋势/均线因子；证券Regime和跨市场Regime也可能把当日进行中的日K当作完成bar。现仅对图表保留原始完整快照；Local Quant始终排除报价日及未来日K，不靠时钟推断供应商是否定稿；Regime按各市场当地日期排除当日进行中的bar；指数基准收益也用同样截断后的bars。
+- 这是源码修复，不是验证通过。本轮未添加/运行自动测试；需要后续Apple CI验证编译与行为。
+- 本轮审计列出的非本机代码可证明/需外部核验项：NAS真实部署HTTP 200历史响应仍曾与iOS字段契约不符、旧路径404；新闻实网可达与DeepSeek逐条引用未实测；Simulator截图人工审阅、iPhone Air手势与布局、真实成交闭环均未验。不得写为已修好。
+- 审计/修复详情同步到 `F-AUDIT-TARGET-CHECKLIST.md`、`F-MASTER-ACCEPTANCE-MATRIX.md`；下一步先审阅diff和本地可用静态检查，再fetch/reconcile、确认Actions并行数不超过2后普通push，等待当前SHA Apple CI；失败按首个根因修复。
+
 - GitHub最新 `main` 经提交列表核实为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`；本轮开始时本地工作树干净。最新Swift改动尚未提交/推送/编译，不能引用Run225旧代码的335/335、12/12作为当前改动结果。
 - A20自选：行内完整320pt图已改成基于上游分钟样本的细线趋势；增加`FLocalQuantAssessment.watchlistDirectionalScore`，要求报价fresh且至少3个有效方向因子，少于门槛显示“样本不足”，明确不是收益概率/交易信号。评分/过期门槛回归测试已定义。现状态：已编码，Swift执行0，Apple编译0，视觉证据0。
 - A24设置：画像字段移入“编辑明确偏好”折叠项，数据诊断/研究细节折叠，NAS地址与保存测试、主题栏保留在主层；画像UI测试现在会先展开该区域。现状态：已编码，未编译/未运行UI测试/无新截图。

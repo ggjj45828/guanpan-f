@@ -872,3 +872,15 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 持仓入口/MACD | 初始真实持仓快照、空仓真实成交建仓、日K MACD源码均存在 | 入口可发现性和交互仍External Pending |
 | B/F、全主题、NAS实网、新闻DeepSeek引用、iPhone Air及真实成交闭环 | 保持实际验收要求 | 未通过；不能由源码或旧CI关闭 |
 | 本轮证据 | Home布局合同28/28；NAS/Local Quant/Advisor/Traceability 41/41；宽套件运行异常不计通过。远端main=`a1ba64582c29340596d5f5f1639ebc5478a5186c`，最近Actions活跃0；fetch失败，未推送/未触发CI | 当前Swift编译和人工截图验收均未执行 |
+## 2026-11-02 全盘Bug审计修复增量（以本节记录的本地dirty源码为准）
+
+| ID | 验收要求 | 当前源码改动 | 状态 | 关闭条件 |
+|---|---|---|---|---|
+| BUG-01 | IOPV溢价使用不晚于目标行情报价的IOPV，并与Quant使用同一报价价格 | Advisor DecisionContext要求参考观测不晚于报价时间，溢价改用该报价快照价格 | 已编码；未编译/未测试 | 当前SHA Apple CI + 实际报价/参考数据时序回归 |
+| BUG-02 | Quant/Regime不得使用报价日或交易所当前日尚未完成的日K | FCore Quant始终排除报价日及未来日K；App证券/跨市场Regime按本地日期过滤；跨市场收益使用过滤后的bars | 已编码；未编译/未测试 | 当前SHA Apple CI + 未收盘/历史报价时点回归 |
+| EXT-01 | NAS exact-date历史分钟部署契约匹配且返回真实bars/coverage | 本轮未改服务端；此前手机存在HTTP 200 schema不符及404证据 | External Pending | 实际部署响应契约、真实日期数据、iOS渲染端到端通过 |
+| EXT-02 | 新闻真实源可达并被DeepSeek按ID/来源/时间/链接引用 | 本轮未改新闻provider | External Pending | 真设备实际新闻响应 + Advisor真实响应引用验证 |
+| EXT-03 | iPhone Air当前版视觉、图表交互和多主题一致性 | 未进行人工Simulator/真机验证 | External Pending | 当前SHA截图逐页人工审阅与iPhone Air交互 |
+| EXT-04 | Candidate真实成交确认后Ledger更新并由Advisor重新读取 | 本轮未进行真实交易E2E | External Pending | 用户确认的真实fills全链路可核对且无候选自动写账 |
+
+上述源码改动尚无本SHA编译或测试证据；不得继承旧SHA的CI结果。

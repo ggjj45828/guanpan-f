@@ -1,5 +1,22 @@
 # F 全盘审计目标清单
 
+## 2026-11-02 当前全盘细微Bug审计（HEAD 3f930f0基线；本节优先于后续历史状态）
+
+| ID | 发现 | 证据 | 集中修复 | 验证/状态 |
+|---|---|---|---|---|
+| BUG-01 | Advisor用于DecisionContext的IOPV溢价，可能使用Tencent参考响应自身价格，和本轮Quant报价不同步；即使两个源各自新鲜也可跨时点混算 | `GuanpanFApp/Sources/GuanpanFApp.swift` 的 `.iopv` observation过去基于 `reference.latestPrice`，而同一循环Quant使用 `quote` | 要求 `reference.observedAt <= quote.quoteTimestamp`；用 `quote.latestPrice` 与该IOPV算溢价；不满足则不注入 | 已编码；未编译、未跑Swift测试、未实机验证 |
+| BUG-02 | Tencent日K没有完成状态字段；同一交易日临时OHLC/close可进入Local Quant及Regime/指数联动，日期午夜时间戳会掩盖未完成事实 | `FTencentDailyKlineParser`将 `day` 行作为普通bar；Quant以前按日期年龄接受；Regime摄取端以前直接使用所有行 | Local Quant始终排除报价当地日期及未来日K，避免仅凭时钟推断供应商已定稿；证券Regime按上海日期过滤；跨市场Regime按各自交易所时区过滤并以截断bars计算指数基准；原始bars仍保留给图表 | 已编码；未编译、未跑Swift测试、未实网回放 |
+| EXT-01 | NAS历史分钟真实部署契约未通过：用户设备曾收到HTTP 200但字段与iOS decoder不符，并有兼容路径404 | 用户截图/错误文案记录于历史交接 | 本轮不猜服务端payload、不修改NAS部署；须用实际部署响应对齐契约 | 外部待验；不能标完成 |
+| EXT-02 | 同花顺新闻公开接口与Advisor引用真实可达性无当前设备E2E | 源码有来源/时间/链接校验和上下文约束，但无实机请求/真实回答证据 | 保留无新闻时明确降级；需联网设备验真 | 外部待验 |
+| EXT-03 | iPhone Air视觉、连续缩放/拖动、手势与导航冲突未人工实测 | Windows环境无Simulator；旧截图不等于当前HEAD | 等待可交互Apple设备，不能以CI截图导出替代 | 外部待验 |
+| EXT-04 | DeepSeek→Candidate→用户确认成交→Ledger→Advisor复判无真实E2E | 当前只有源码路径和旧提交CI记录 | 需真实设备/Key/用户确认成交流程逐环验证；禁止Candidate写Ledger | 外部待验 |
+
+### 本轮范围与证据限制
+
+- 这是源码静态审计和修复；本轮没有运行任何测试或Swift编译，也没有新增测试。当前HEAD的旧CI不覆盖本轮dirty Swift改动。
+- 本地`main`相对`origin/main` ahead 4；推送前仍需fetch/reconcile，Actions活跃数最多2，普通push后等待该SHA CI。
+- 这轮没有把所有产品级外部验收（主题截图、B/F同态对照、NAS、新闻、iPhone Air、DeepSeek真实闭环）伪装为代码Bug已修复。
+
 > 本清单以当前远端 `main` 为准，逐项记录源码核对、可执行验证和外部验收证据。`源码已确认`不等于运行通过；旧 SHA 的测试结果不自动继承到新 SHA。
 
 ## 本轮基线

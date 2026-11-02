@@ -111,14 +111,24 @@ public enum FLocalQuantEngine {
         let freshness = quote.freshness(at: now)
         let quoteIsUsable = freshness == .fresh && sessionStatus == .continuous
         let validDaily = dailyHistory.flatMap { history -> FDailyKlineSnapshot? in
-            guard let latestBar = history.bars.last else { return nil }
+            guard let timeZone = TimeZone(identifier: "Asia/Shanghai") else { return nil }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = timeZone
+            let quoteTradingDayStart = calendar.startOfDay(for: quote.quoteTimestamp)
+            // Tencent's daily endpoint does not mark an intraday bar as partial.
+            // Never use the quote's own calendar-day bar for Quant: wall-clock
+            // time alone cannot prove the provider has finalized that daily row.
+            let completedBars = history.bars.filter { $0.tradingDate < quoteTradingDayStart }
+            guard let latestBar = completedBars.last else { return nil }
             guard history.securityCode == code,
                   FMarketBarTrustPolicy.isTrustedSecurityDailySource(history.source),
                   history.fetchedAt <= now,
                   now.timeIntervalSince(history.fetchedAt) <= maximumDailyHistoryAge,
                   latestBar.tradingDate <= now,
                   now.timeIntervalSince(latestBar.tradingDate) <= maximumDailyBarAge else { return nil }
-            return history
+            return try? FDailyKlineSnapshot(securityCode: history.securityCode, bars: completedBars,
+                                            fetchedAt: history.fetchedAt, source: history.source,
+                                            adjustment: history.adjustment)
         }
         let validRegime = regime.flatMap { assessment -> FMarketRegimeAssessment? in
             let lastEvaluation = assessment.memory.lastEvaluationAt
