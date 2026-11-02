@@ -1207,3 +1207,11 @@ Ledger event-order follow-up validation: 247 locally importable Python tests pas
 - 中心摘要改用`home.star-map.center`；十主题UI用例现在断言组合导航角色只出现一次、四个导航节点都可点击且不与中心摘要重叠。Home/追踪Python合同30/30通过，`git diff --check`通过；本机无Simulator，Swift UI XCTest未执行。
 
 2026-11-01 NAS lower-chain follow-up: strict response-size handling, minute archive/providers/runtime/service, research evidence and dividend research tests passed 131/131 with temporary files redirected to the workspace. The official KRX KOSPI-series daily-history API documents an `AUTH_KEY` request header and a baseline-date query; current compose/runtime has no credential injection or KOSPI daily adapter. Keep history unavailable until a key path and compliant, bounded collection/attribution flow are implemented; the live KOSPI quote is not a substitute for Regime history. The full NAS-qualified strategy package to Local Quant remains an open requirement. No commit/push.
+## 2026-11-02 最新提交审计基线
+
+- 审计目标固定为 GitHub `main` 最新 SHA `73bfb479fb60e0d611661157045f6d593fa2c795`，干净克隆位于 `work/guanpan-f-latest-2026-11-02`。本地与`origin/main`一致；不采用交接包/旧克隆中比该提交更早的工作树状态。
+- 该 SHA 的 iOS Actions Run 222 与 Python/NAS Run 25均成功。iOS的包测试、XcodeGen、Device/Simulator构建、导航UI测试、截图导出、unsigned IPA及artifact上传步骤成功；测试数量没有从当前可用job摘要中取得，因此不填写数字。Python/NAS完整CI、compileall、架构边界步骤成功。
+- Windows本机复核：compileall和架构边界脚本成功；Python unittest共发现295项，293项通过，2个模块因缺少PyYAML无法导入。CI环境安装依赖后全绿。Windows不具备Swift/Xcode/Simulator。
+- 静态重点审阅：真实Ledger写入仍集中在确认写入口；手续费更正保留原始fill、以追加事件重放费用并重算成本基础；Candidate/Trigger读取行情与风险条件但未发现直接Ledger写权限。此次为静态抽查，不构成账本全场景或真实交易E2E证明。
+- `FNASConnection.swift`仅能证明客户端具备readyz/日K读取与状态检查逻辑；`FNewsClient.swift`指向同花顺公开网页接口，源码声明其不是签约稳定API。两者均无当前运行的手机实网证据。NAS历史分钟、新闻真实可达/相关性、DeepSeek真实引用和AI闭环仍未验收。
+- 视觉证据：CI截图artifact存在且导出步骤成功，但本轮未人工查看；B/F相对视觉、主题统一性、图表操控、iPhone Air均保持未验证，不能标记为PASS或“超过B”。

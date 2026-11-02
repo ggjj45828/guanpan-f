@@ -762,3 +762,20 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 第七轮仍在 P&L 极值测试开始后 signal 5，日志没有给出具体断言/堆栈，尚不能确认修改有效。四种算术输入已拆分为单独测试以定位触发项；数值溢出回归保持待验证。
 
 第八轮拆分后可确认 Decimal 极值加法、sum 溢出和相消测试已通过；signal 发生于非有限输入用例启动阶段，其测试值由 `Decimal(Double.infinity)` 构造。现改用 `Decimal.nan` 覆盖非有限拒绝路径，并同时修正账本、行情图与日K相关测试中的同类构造；Actions 待验证。
+## 2026-11-02 最新 main 执行证据校准
+
+以下记录只绑定最新提交 `73bfb479fb60e0d611661157045f6d593fa2c795`；不得把早期运行结果挪用到其他 SHA。
+
+| 验收项 | 最新 SHA 实际结果 | 证据边界 / 后续验收 |
+|---|---|---|
+| F Swift package tests | GitHub iOS Run 222 成功 | 本次工具返回的Job步骤没有测试计数；不猜测 defined/executed/passed 数字 |
+| XcodeGen / iOS Device Build / Simulator Build | 全部成功 | 仅CI构建证据 |
+| 导航 UI XCTest | Job成功 | 不等于人工交互或视觉验收 |
+| Simulator截图导出 | 成功，artifact ID `13114433497` | 本轮未人工查看截图；视觉状态仍待审 |
+| unsigned IPA打包、校验与上传 | 成功 | 不证明已在iPhone安装、签名或运行 |
+| Python/NAS完整CI、compileall、架构边界 | Run 25全部成功 | NAS真实服务、历史数据仍须实测 |
+| 本机Windows Python unittest | 295发现；293通过；2个模块因缺PyYAML不能导入 | 环境依赖差异；CI已安装依赖并全绿 |
+| NAS HTTPS / 指定历史日分钟→App | 无当前SHA实机端到端证据 | 未验收；Ready/HTTP 200不能替代数据查询成功 |
+| 新闻源真实响应与Advisor引用 | 无当前SHA实网证据 | 未验收；源码存在不等于新闻E2E |
+| DeepSeek真实服务、Candidate确认成交、Ledger更新后AI复判 | 无当前SHA端到端证据 | 未验收；候选永不直接写账 |
+| Simulator人工视觉 / iPhone Air | 未人工验证 | External Pending |

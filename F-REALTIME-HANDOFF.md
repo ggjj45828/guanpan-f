@@ -761,3 +761,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - NAS不可达不阻断实时行情、Ledger、本机有效策略包执行、Risk Guard或基础Advisor。但未经过历史回测、验证、样本外评估和资格签发的策略，或资格过期的参数包，Local Quant必须WAIT/NO_TRADE。
 - 研究/资格链必须独立异步运行。版本包至少带证券、Regime、策略版本、数据范围、样本数、Validation/OOS指标、来源、生成时间与有效期。
 - 实现现状：Advisor组上下文前检查本机新鲜缓存，并以后台Task刷新NAS摘要；静态代码路径未发现同步等待NAS后才分析。完整NAS→Quant资格研究与参数包下放仍未实现，不能标记完成。当前环境无Swift/Xcode；本轮不声称已编译或执行测试。
+## 2026-11-02 最新 main 基线（以远端最新提交为准）
+
+- 权威版本：GitHub `main` 与本地干净克隆均为 `73bfb479fb60e0d611661157045f6d593fa2c795`（`Restore UTF-8 encoding for navigation UI tests`）。本地目录 `work/guanpan-f-latest-2026-11-02`，状态 `main...origin/main`，无代码/文档未提交差异。早期交接包和旧工作树不覆盖此基线；没有将旧补丁移植到最新提交。
+- 最新同 SHA Actions 已实际完成且成功：iOS Run 222 [41383590113](https://github.com/ggjj45830/guanpan-f/actions/runs/41383590113)，Python/NAS Run 25 [41383590156](https://github.com/ggjj45830/guanpan-f/actions/runs/41383590156)。截至核对时最近100条运行中没有 queued/in-progress/waiting/requested 运行；当前同时运行数为0，符合推送最多2个运行的约束。
+- Run 222 成功步骤：F Swift package tests、XcodeGen、unsigned iOS Device Build、Simulator Build、导航 UI XCTest、Simulator截图导出、unsigned IPA打包/校验、artifact上传。截图artifact `guanpan-f-ios-build-evidence`（ID `13114433497`）存在；截图已导出但未由本轮人工逐张查看。CI成功是该 SHA 的编译/自动测试证据，不等于人工视觉、iPhone Air或真机验收。日志摘要接口未提供测试计数，本交接不猜测数字。
+- Run 25 成功步骤：安装CI依赖、完整Python/NAS及源码合同测试、Python compileall、架构边界检查。
+- 本机 Windows 对最新树的本地复核：`compileall -q nas Tools`通过；`Tools/verify_architecture_boundaries.py`通过；全仓Python unittest发现295项，293项通过，两个模块因本机缺少`PyYAML`而导入失败（`test_ios_app_structure`、`test_nas_deployment_package`）。CI安装该依赖且Run 25全绿。Windows没有Swift/Xcode/Simulator，不声称本机Apple编译。
+- 本轮审阅的Ledger成交/手续费重放和Local Quant/Trigger边界未发现可由当前源码证据确认的核心记账或候选写账缺陷；此结论限于静态抽查，不替代真实成交E2E。真实NAS HTTPS设备连接和指定日历史分钟、新闻源实网可达与顾问引用、DeepSeek真实E2E、Candidate→用户确认成交→Ledger→Advisor复判、Simulator人工截图审阅、iPhone Air均未由上述CI证明。
+- 当前产品缺口仍包括：B/F逐页视觉差距尚无本轮人工对照证据；多主题整套页面一致性尚未完成；NAS历史分钟响应契约与新闻实时来源需要设备/服务实测；自选评分/自动曲线体验须以实际页面验收。不可把构建绿灯解释为产品验收完成。
+- 下一步：继续以此 SHA 的真实源码审计和修复；涉及Swift的修改先完整审阅，再触发Apple CI。截图artifact应实际打开检查后再记录视觉结论。推送前重新核对运行数，最多保持2个Actions同时运行。
