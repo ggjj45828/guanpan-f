@@ -455,3 +455,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 第五轮 iOS CI 同一用例断言仍失败；将测试行情价同步到待测限价，避免“买入限价高于最新价”的追价门提前返回，继续确认 Decimal 溢出拒绝路径。
 
 - 复核完整FRiskGuard门控后发现该用例还缺少证券映射宽基指数的 Regime 证据；已补充真实格式的基准证据及候选引用，防止必要的市场风险门提前退出。
+
+- 第六轮 iOS CI：FCoreTests 已编译，Risk Guard 溢出用例通过；执行 Advisor P&L Decimal 极值回归时进程 signal 5。定位为 FDecisionFinancialMath 直接使用 `+`，溢出陷阱未返回 nil。已改用 NSDecimalAdd 并检查状态，等待下一轮 CI。

@@ -10,7 +10,11 @@ enum FDecisionFinancialMath {
         var total = Decimal.zero
         for value in values {
             guard value.isFinite else { return nil }
-            total += value
+            var lhs = total
+            var rhs = value
+            var next = Decimal.zero
+            guard NSDecimalAdd(&next, &lhs, &rhs, .plain) == .noError else { return nil }
+            total = next
             guard total.isFinite else { return nil }
         }
         return total
@@ -18,7 +22,10 @@ enum FDecisionFinancialMath {
 
     static func add(_ lhs: Decimal, _ rhs: Decimal) -> Decimal? {
         guard lhs.isFinite, rhs.isFinite else { return nil }
-        let total = lhs + rhs
+        var left = lhs
+        var right = rhs
+        var total = Decimal.zero
+        guard NSDecimalAdd(&total, &left, &right, .plain) == .noError else { return nil }
         return total.isFinite ? total : nil
     }
 }
