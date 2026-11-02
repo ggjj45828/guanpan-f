@@ -1,4 +1,3 @@
-warning: in the working copy of 'GuanpanFApp/Sources/HomeExperience.swift', LF will be replaced by CRLF the next time Git touches it
 import SwiftUI
 import FCore
 import FAdvisor
