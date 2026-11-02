@@ -1939,6 +1939,8 @@ struct FHomeRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
+        // Centralize drag-to-dismiss so every tab's scrollable content behaves consistently.
+        .scrollDismissesKeyboard(.interactively)
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FBottomNavigationBar(selection: $selectedTab, theme: theme)
@@ -2021,7 +2023,7 @@ private struct FBottomNavigationBar: View {
                                 Image(systemName: item.symbol)
                                     .font(.system(size: compact ? 19 : 23, weight: .semibold))
                                     .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(theme.manifest.tokens.accentForeground)
                                     .frame(width: compact ? 40 : 52, height: compact ? 40 : 52)
                                     .background {
                                         Circle().fill(LinearGradient(
@@ -2053,13 +2055,20 @@ private struct FBottomNavigationBar: View {
                             .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
                             .frame(maxWidth: .infinity)
                             .frame(height: compact ? 42 : 55)
+                            .overlay(alignment: .bottom) {
+                                if isSelected && usesTerminalNavigation {
+                                    Capsule().fill(theme.accent).frame(width: 22, height: 2)
+                                        .offset(y: compact ? 1 : 2)
+                                }
+                            }
                             .background {
-                                if isSelected {
-                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                        .fill(theme.accent.opacity(theme == .dashboard || theme == .minimalTerminal ? 0.2 : 0.11))
+                                if isSelected && usesPillSelection {
+                                    RoundedRectangle(cornerRadius: usesGlassNavigation ? 20 : 15,
+                                                     style: .continuous)
+                                        .fill(theme.accent.opacity(0.12))
                                         .padding(.horizontal, 3)
                                 }
-                        }
+                            }
                         }
                     }
                     .contentShape(Rectangle())
@@ -2073,14 +2082,57 @@ private struct FBottomNavigationBar: View {
         .padding(.top, compact ? 2 : 7)
         .padding(.bottom, compact ? 1 : 4)
         .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+            Group {
+                switch theme.surfaceTreatment {
+                case .terminal, .minimal:
+                    Rectangle().fill(theme.manifest.tokens.surface)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(theme.accent.opacity(0.48)).frame(height: 1)
+                        }
+                case .glass, .orbit:
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(theme.accent.opacity(0.22), lineWidth: 1))
+                        .shadow(color: theme.accent.opacity(0.12), radius: 15, y: 5)
+                case .ink, .magazine:
+                    Rectangle().fill(theme.manifest.tokens.background.opacity(0.96))
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(theme.accent.opacity(0.30)).frame(height: 0.8)
+                        }
+                case .bento, .adaptive:
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(.regularMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(theme.accent.opacity(0.18), lineWidth: 0.8))
+                case .editorial:
+                    Rectangle().fill(theme.manifest.tokens.surface)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+                        }
+                case .card:
+                    Rectangle().fill(.ultraThinMaterial)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+                        }
                 }
-                .ignoresSafeArea(edges: .bottom)
-                .allowsHitTesting(false)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
         }
+    }
+
+    private var usesTerminalNavigation: Bool {
+        theme.surfaceTreatment == .terminal || theme.surfaceTreatment == .minimal
+    }
+
+    private var usesGlassNavigation: Bool {
+        theme.surfaceTreatment == .glass || theme.surfaceTreatment == .orbit
+    }
+
+    private var usesPillSelection: Bool {
+        theme.surfaceTreatment != .terminal && theme.surfaceTreatment != .minimal &&
+            theme.surfaceTreatment != .ink && theme.surfaceTreatment != .magazine
     }
 }
 
