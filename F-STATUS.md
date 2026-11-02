@@ -453,3 +453,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 2026-11-02 iOS Actions第四轮：Swift测试目标已成功编译并执行；一项风险防护断言失败，因为用例的Int64.max委托份额先被单笔上限规则拒绝，没有覆盖Decimal乘法溢出。已将输入改为合法最大委托份额与超大价格，确保实际经过checkedTradeUsage溢出分支；等待下一轮Apple Actions验证。
 
 - 第五轮 iOS CI 同一用例断言仍失败；将测试行情价同步到待测限价，避免“买入限价高于最新价”的追价门提前返回，继续确认 Decimal 溢出拒绝路径。
+
+- 复核完整FRiskGuard门控后发现该用例还缺少证券映射宽基指数的 Regime 证据；已补充真实格式的基准证据及候选引用，防止必要的市场风险门提前退出。

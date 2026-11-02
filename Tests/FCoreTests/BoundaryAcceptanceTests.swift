@@ -1014,15 +1014,17 @@ final class BoundaryAcceptanceTests: XCTestCase {
         let riskGrant = FQuantStrategyQualificationGrant(securityCode: "159352", regime: .range, strategyID: "MeanReversion",
             strategyVersion: "v3", observationID: riskQualification.id, evaluatedAt: now)
         let riskRegime = securityRegimeObservation()
+        let riskBenchmark = try mappedBenchmarkObservation()
         let quoteSnapshot = try makeBook().readOnlySnapshot(capturedAt: now)
         let riskContext = FDecisionContext(snapshot: quoteSnapshot,
-            observations: [quote, riskQualification, riskRegime], strategyQualificationGrants: [riskGrant])
+            observations: [quote, riskQualification, riskRegime, riskBenchmark],
+            strategyQualificationGrants: [riskGrant])
         let oversizedPrice = try XCTUnwrap(Decimal(string: "1e126"))
         let overflowingCandidate = FCandidateRecommendation(
             accountDigest: riskContext.accountDigest, action: .buy, instrumentCode: "159352",
             units: FMainlandFundTradingRules.maximumOrderUnits, limitPrice: oversizedPrice,
             rationale: "超界算术必须拒绝",
-            citedObservationIDs: [quote.id, riskQualification.id, riskRegime.id])
+            citedObservationIDs: [quote.id, riskQualification.id, riskRegime.id, riskBenchmark.id])
         let overflowGuard = FRiskGuard.evaluate(overflowingCandidate, in: riskContext, now: now)
         XCTAssertFalse(overflowGuard.allowedForReview)
         XCTAssertTrue(overflowGuard.findings.contains(.invalidCandidate) ||
