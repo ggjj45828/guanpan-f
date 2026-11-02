@@ -14,7 +14,7 @@
 ### 本轮范围与证据限制
 
 - 这是源码静态审计和修复；本轮没有运行任何测试或Swift编译，也没有新增测试。当前HEAD的旧CI不覆盖本轮dirty Swift改动。
-- 本地`main`相对`origin/main` ahead 4；推送前仍需fetch/reconcile，Actions活跃数最多2，普通push后等待该SHA CI。
+- GitHub只读API确认远端`main`为`a1ba64582c29340596d5f5f1639ebc5478a5186c`，是本地提交链祖先；Actions queued/in_progress均为0。源码修复提交`19590bd`及本交接记录提交后，本地`main` ahead 6。普通push因`getaddrinfo() thread failed to start`失败；未强推、未触发CI。
 - 这轮没有把所有产品级外部验收（主题截图、B/F同态对照、NAS、新闻、iPhone Air、DeepSeek真实闭环）伪装为代码Bug已修复。
 
 > 本清单以当前远端 `main` 为准，逐项记录源码核对、可执行验证和外部验收证据。`源码已确认`不等于运行通过；旧 SHA 的测试结果不自动继承到新 SHA。

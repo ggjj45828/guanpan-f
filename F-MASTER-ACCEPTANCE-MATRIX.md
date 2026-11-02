@@ -883,4 +883,4 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | EXT-03 | iPhone Air当前版视觉、图表交互和多主题一致性 | 未进行人工Simulator/真机验证 | External Pending | 当前SHA截图逐页人工审阅与iPhone Air交互 |
 | EXT-04 | Candidate真实成交确认后Ledger更新并由Advisor重新读取 | 本轮未进行真实交易E2E | External Pending | 用户确认的真实fills全链路可核对且无候选自动写账 |
 
-上述源码改动尚无本SHA编译或测试证据；不得继承旧SHA的CI结果。
+上述源码改动尚无本SHA编译或测试证据；不得继承旧SHA的CI结果。当前修复提交为`19590bd`；GitHub只读API确认远端`main`=`a1ba64582c29340596d5f5f1639ebc5478a5186c`为本地链祖先、queued/in_progress Actions=0；普通push因本机`getaddrinfo() thread failed to start`失败，未触发CI。本交接状态记录提交后本地main ahead 6。

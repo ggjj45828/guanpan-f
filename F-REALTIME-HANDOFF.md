@@ -4,7 +4,7 @@
 
 ## 2026-11-02 全盘细微Bug审计与集中修复（当前工作树增量）
 
-- 审计基线：本地 `main` HEAD `3f930f0`，相对本地 `origin/main` ahead 4；审计开始时工作树干净。此前四个本地提交未推送；本轮未尝试强推。Windows无Xcode/Simulator，Swift编译、XCTest、iPhone Air视觉验收未执行。
+- 审计基线：本地 `main` HEAD `3f930f0`，相对本地 `origin/main` ahead 4；审计开始时工作树干净。GitHub只读API核对远端 `main` 为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`，是本地提交链祖先；Actions queued/in_progress 均为0。两处源码修复提交为 `19590bd`，随后本交接记录单独提交；提交后本地 `main` ahead 6。普通 `git push origin main` 因本机 `getaddrinfo() thread failed to start` 失败，未推送、未强推、未触发CI。Windows无Xcode/Simulator，Swift编译、XCTest、iPhone Air视觉验收未执行。
 - 本轮确认并集中修正两类因果时点缺陷：
   1. Advisor DecisionContext过去以Tencent参考响应中的 `latestPrice` 计算 IOPV 溢价，而Local Quant使用分钟快照价格；且Advisor上下文没有要求IOPV观测时点不晚于本次报价。现改为仅在参考/IOPV时点不晚于该报价时纳入，并以同一报价的 `latestPrice` 计算溢价，避免AI与Quant看到不同的溢价。
   2. 日K来源不提供“当日K线已完成”标记。Local Quant过去可把报价交易日的日K收盘值纳入趋势/均线因子；证券Regime和跨市场Regime也可能把当日进行中的日K当作完成bar。现仅对图表保留原始完整快照；Local Quant始终排除报价日及未来日K，不靠时钟推断供应商是否定稿；Regime按各市场当地日期排除当日进行中的bar；指数基准收益也用同样截断后的bars。
