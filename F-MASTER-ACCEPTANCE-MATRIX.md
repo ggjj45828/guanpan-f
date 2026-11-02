@@ -885,3 +885,16 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | EXT-04 | Candidate真实成交确认后Ledger更新并由Advisor重新读取 | 本轮未进行真实交易E2E | External Pending | 用户确认的真实fills全链路可核对且无候选自动写账 |
 
 上述源码改动尚无本SHA编译或测试证据；不得继承旧SHA的CI结果。当前修复提交为`19590bd`；GitHub只读API确认远端`main`=`a1ba64582c29340596d5f5f1639ebc5478a5186c`为本地链祖先、queued/in_progress Actions=0；普通push因本机`getaddrinfo() thread failed to start`失败，未触发CI。本交接状态记录提交后本地main ahead 6。
+# 2026-11-02 六套视觉概念执行增量
+
+| 验收项 | 状态 | 证据/剩余工作 |
+|---|---|---|
+| 六套首页概念进入Settings主题栏 | 已编码，未编译 | FHomeTheme.allCases限定六套；Apple CI待执行 |
+| 六套首页构图有明确差异 | 已编码，未视觉验收 | 山景头版、深空终端、珊瑚拼贴、蓝海资产、夜航量化、极光全景分别使用独立区域排序/模块结构 |
+| 单一真实业务模型 | 已编码，未编译 | 六套读取同一FHomeModel；未注入概念图假数据 |
+| 主题在首页/行情/详情/图表一致 | 已修源码，未编译 | 首页、市场、顾问、资产、设置、统一图表改用FHomeTheme.selected解析器 |
+| 六主题UI XCTest | 已更新，未执行 | 当前Windows无Xcode；必须由Apple CI验证当前HEAD |
+| 六套Simulator截图并排对比 | 未完成 | 需当前SHA CI导出后实际查看；导出成功不等于人工视觉通过 |
+| iPhone Air / 深浅色 / 动态字体 | External Pending | 需Apple Simulator或真实iPhone验收 |
+
+视觉结果不得因代码实现或测试通过升级为视觉Pass。逐屏截图和灰度构图审查完成前，状态保持“视觉未验收”。

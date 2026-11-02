@@ -64,6 +64,11 @@ struct FThemeSpacingScale {
 struct FThemeSemanticTokens {
     let background: Color
     let surface: Color
+    let portfolioSurface: Color
+    let advisorSurface: Color
+    let marketSurface: Color
+    let highlightSurface: Color
+    let surfaceGradient: [Color]
     let foreground: Color
     let secondaryForeground: Color
     let accent: Color
@@ -152,20 +157,23 @@ enum FThemeLayoutRegistry {
             background = adaptive(light: (0.942, 0.955, 0.972), dark: (0.055, 0.070, 0.090))
             surface = adaptive(light: (0.990, 0.995, 1.0), dark: (0.12, 0.14, 0.17))
         case .dashboard:
-            background = adaptive(light: (0.925, 0.943, 0.958), dark: (0.04, 0.07, 0.09))
-            surface = adaptive(light: (0.987, 0.993, 0.998), dark: (0.08, 0.12, 0.14))
+            background = adaptive(light: (0.018, 0.035, 0.075), dark: (0.018, 0.035, 0.075))
+            surface = adaptive(light: (0.035, 0.075, 0.14), dark: (0.035, 0.075, 0.14))
         case .magazine:
             background = adaptive(light: (0.975, 0.947, 0.914), dark: (0.08, 0.06, 0.045))
             surface = adaptive(light: (1.0, 0.982, 0.953), dark: (0.15, 0.11, 0.09))
-        case .bento, .adaptiveBento:
-            background = adaptive(light: (0.935, 0.957, 0.935), dark: (0.055, 0.08, 0.06))
-            surface = adaptive(light: (0.985, 0.995, 0.980), dark: (0.11, 0.14, 0.11))
+        case .bento:
+            background = adaptive(light: (0.958, 0.958, 0.985), dark: (0.055, 0.045, 0.15))
+            surface = adaptive(light: (1.0, 1.0, 1.0), dark: (0.12, 0.12, 0.22))
+        case .adaptiveBento:
+            background = adaptive(light: (0.15, 0.19, 0.88), dark: (0.07, 0.10, 0.50))
+            surface = adaptive(light: (0.99, 0.99, 1.0), dark: (0.10, 0.14, 0.48))
         case .inkModern:
             background = adaptive(light: (0.956, 0.944, 0.911), dark: (0.07, 0.06, 0.04))
             surface = adaptive(light: (0.992, 0.982, 0.955), dark: (0.13, 0.115, 0.085))
         case .minimalTerminal:
-            background = adaptive(light: (0.925, 0.944, 0.953), dark: (0.04, 0.065, 0.075))
-            surface = adaptive(light: (0.976, 0.986, 0.989), dark: (0.09, 0.12, 0.13))
+            background = adaptive(light: (0.008, 0.035, 0.09), dark: (0.008, 0.035, 0.09))
+            surface = adaptive(light: (0.025, 0.075, 0.15), dark: (0.025, 0.075, 0.15))
         case .fluidGlass:
             background = adaptive(light: (0.913, 0.933, 0.968), dark: (0.045, 0.065, 0.11))
             surface = adaptive(light: (0.979, 0.987, 1.0), dark: (0.10, 0.14, 0.21))
@@ -174,21 +182,73 @@ enum FThemeLayoutRegistry {
             surface = adaptive(light: (0.989, 0.984, 1.0), dark: (0.13, 0.11, 0.18))
         }
         let foreground = adaptive(light: (0.12, 0.15, 0.19), dark: (0.91, 0.93, 0.96))
+        let portfolioSurface: Color
+        let advisorSurface: Color
+        let marketSurface: Color
+        let highlightSurface: Color
+        let surfaceGradient: [Color]
+        switch theme {
+        case .editorial:
+            portfolioSurface = adaptive(light: (0.08, 0.22, 0.60), dark: (0.08, 0.22, 0.60))
+            advisorSurface = adaptive(light: (0.98, 0.34, 0.25), dark: (0.72, 0.19, 0.16))
+            marketSurface = adaptive(light: (1.0, 0.96, 0.88), dark: (0.17, 0.14, 0.11))
+            highlightSurface = adaptive(light: (0.97, 0.77, 0.55), dark: (0.42, 0.27, 0.18))
+            surfaceGradient = [adaptive(light: (0.99, 0.95, 0.86), dark: (0.16, 0.12, 0.08)), adaptive(light: (0.83, 0.73, 0.57), dark: (0.25, 0.18, 0.11))]
+        case .dashboard:
+            portfolioSurface = adaptive(light: (0.02, 0.17, 0.37), dark: (0.02, 0.17, 0.37))
+            advisorSurface = adaptive(light: (0.01, 0.33, 0.36), dark: (0.01, 0.33, 0.36))
+            marketSurface = adaptive(light: (0.04, 0.11, 0.22), dark: (0.04, 0.11, 0.22))
+            highlightSurface = adaptive(light: (0.30, 0.16, 0.44), dark: (0.30, 0.16, 0.44))
+            surfaceGradient = [adaptive(light: (0.01, 0.07, 0.16), dark: (0.01, 0.07, 0.16)), adaptive(light: (0.02, 0.19, 0.32), dark: (0.02, 0.19, 0.32))]
+        case .minimalTerminal:
+            portfolioSurface = adaptive(light: (0.035, 0.14, 0.34), dark: (0.035, 0.14, 0.34))
+            advisorSurface = adaptive(light: (0.04, 0.12, 0.24), dark: (0.04, 0.12, 0.24))
+            marketSurface = adaptive(light: (0.025, 0.10, 0.21), dark: (0.025, 0.10, 0.21))
+            highlightSurface = adaptive(light: (0.25, 0.13, 0.42), dark: (0.25, 0.13, 0.42))
+            surfaceGradient = [adaptive(light: (0.01, 0.04, 0.14), dark: (0.01, 0.04, 0.14)), adaptive(light: (0.03, 0.15, 0.30), dark: (0.03, 0.15, 0.30))]
+        case .bento:
+            portfolioSurface = adaptive(light: (0.06, 0.15, 0.48), dark: (0.06, 0.15, 0.48))
+            advisorSurface = adaptive(light: (0.98, 0.28, 0.35), dark: (0.72, 0.13, 0.24))
+            marketSurface = adaptive(light: (0.39, 0.82, 0.94), dark: (0.04, 0.35, 0.46))
+            highlightSurface = adaptive(light: (0.99, 0.76, 0.24), dark: (0.52, 0.35, 0.07))
+            surfaceGradient = [adaptive(light: (0.25, 0.20, 0.96), dark: (0.13, 0.12, 0.50)), adaptive(light: (0.06, 0.56, 0.98), dark: (0.04, 0.29, 0.72))]
+        case .adaptiveBento:
+            portfolioSurface = adaptive(light: (0.05, 0.39, 0.98), dark: (0.03, 0.23, 0.63))
+            advisorSurface = adaptive(light: (0.98, 0.30, 0.38), dark: (0.73, 0.14, 0.25))
+            marketSurface = adaptive(light: (0.92, 0.98, 1.0), dark: (0.04, 0.27, 0.54))
+            highlightSurface = adaptive(light: (1.0, 0.79, 0.25), dark: (0.55, 0.36, 0.06))
+            surfaceGradient = [adaptive(light: (0.23, 0.13, 0.93), dark: (0.11, 0.09, 0.48)), adaptive(light: (0.04, 0.45, 0.98), dark: (0.02, 0.26, 0.66))]
+        case .modern:
+            portfolioSurface = adaptive(light: (0.04, 0.34, 0.90), dark: (0.04, 0.34, 0.90))
+            advisorSurface = adaptive(light: (0.97, 0.32, 0.33), dark: (0.70, 0.13, 0.21))
+            marketSurface = adaptive(light: (0.98, 0.98, 1.0), dark: (0.11, 0.13, 0.19))
+            highlightSurface = adaptive(light: (0.22, 0.74, 0.62), dark: (0.04, 0.37, 0.31))
+            surfaceGradient = [adaptive(light: (0.05, 0.39, 0.98), dark: (0.04, 0.26, 0.62)), adaptive(light: (0.01, 0.20, 0.75), dark: (0.02, 0.12, 0.42))]
+        case .magazine, .inkModern, .fluidGlass, .dataStarMap:
+            portfolioSurface = surface
+            advisorSurface = accentFallback(theme)
+            marketSurface = surface
+            highlightSurface = surface
+            surfaceGradient = [background, surface]
+        }
         let accent: Color
         switch theme {
         case .editorial, .inkModern: accent = adaptive(light: (0.68, 0.29, 0.18), dark: (0.92, 0.55, 0.39))
         case .modern: accent = adaptive(light: (0.18, 0.39, 0.82), dark: (0.48, 0.65, 0.98))
         case .dashboard: accent = adaptive(light: (0.16, 0.53, 0.61), dark: (0.42, 0.77, 0.84))
         case .magazine: accent = adaptive(light: (0.69, 0.27, 0.19), dark: (0.95, 0.52, 0.40))
-        case .bento, .adaptiveBento: accent = adaptive(light: (0.28, 0.49, 0.35), dark: (0.50, 0.77, 0.57))
+        case .bento: accent = adaptive(light: (0.31, 0.24, 0.87), dark: (0.67, 0.62, 1.0))
+        case .adaptiveBento: accent = adaptive(light: (0.98, 0.98, 1.0), dark: (0.88, 0.91, 1.0))
         case .minimalTerminal: accent = adaptive(light: (0.52, 0.78, 0.88), dark: (0.58, 0.84, 0.94))
         case .fluidGlass: accent = adaptive(light: (0.42, 0.61, 0.93), dark: (0.62, 0.78, 1.0))
         case .dataStarMap: accent = adaptive(light: (0.76, 0.67, 0.95), dark: (0.87, 0.79, 1.0))
         }
         let accentForeground: Color
         switch theme {
-        case .editorial, .modern, .dashboard, .magazine, .bento, .adaptiveBento, .inkModern:
+        case .editorial, .modern, .dashboard, .magazine, .bento, .inkModern:
             accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (0.08, 0.09, 0.11))
+        case .adaptiveBento:
+            accentForeground = adaptive(light: (0.07, 0.08, 0.22), dark: (0.04, 0.05, 0.15))
         case .minimalTerminal:
             accentForeground = adaptive(light: (0.06, 0.12, 0.15), dark: (0.04, 0.08, 0.10))
         case .fluidGlass:
@@ -206,25 +266,25 @@ enum FThemeLayoutRegistry {
         let chart: String
         switch theme {
         case .editorial:
-            name = "东方编辑室"; useCase = "阅读市场、组合与建议的日常首页。"; typography = "编辑式衬线标题 + 清晰数字"
-            navigation = "标准底部导航"; advisor = "组合顾问输入置顶"; market = "章节入口"; assets = "组合摘要卡片"; chart = "纸感外围面板"
+            name = "山水头版"; useCase = "暖纸色、山景资产主视觉与朱红今日判断。"; typography = "财经刊物式标题 + 靛蓝资产数字"
+            navigation = "暖白底部导航"; advisor = "朱红主编判断面板"; market = "三栏指数速览"; assets = "山景叠层资产头版"; chart = "纸感内嵌图表"
         case .modern:
-            name = "现代卡片"; useCase = "快速浏览多个独立信息入口。"; typography = "现代无衬线"; navigation = "标准底部导航"
+            name = "蓝海资产"; useCase = "蓝色资产主卡、珊瑚顾问与轻量市场卡。"; typography = "大号资产数字 + 紧凑无衬线"; navigation = "明亮底部导航"
             advisor = "输入与快捷问题卡片"; market = "宽屏并列、窄屏堆叠的摘要卡片"; assets = "持仓列表摘要"; chart = "标准卡片容器"
         case .dashboard:
-            name = "交易仪表盘"; useCase = "偏好紧凑行情与现金指标的用户。"; typography = "等宽数字优先"; navigation = "终端式紧凑导航，随系统外观变化"
-            advisor = "数据台内的决策入口"; market = "紧凑行情入口"; assets = "现金/持仓头部指标"; chart = "暗色终端面板"
+            name = "深空终端"; useCase = "暗色行情终端，市场、分时和自选同屏。"; typography = "紧凑终端数字 + 青绿图表"; navigation = "深色终端底部导航"
+            advisor = "青色实时判断面板"; market = "三栏指数行情"; assets = "资产指标头部"; chart = "行情与真实分钟折线同屏"
         case .magazine:
             name = "杂志卡片"; useCase = "按专题阅读组合和市场信息。"; typography = "大标题 + 章节副标题"; navigation = "标准底部导航"
             advisor = "顾问专栏"; market = "专题章节"; assets = "头版组合摘要"; chart = "杂志版面容器"
         case .bento:
-            name = "创意拼图"; useCase = "同时查看资产、行情与AI入口。"; typography = "分级标题与数字"; navigation = "标准底部导航"
+            name = "珊瑚拼贴"; useCase = "白底异形网格，顾问、资产与行情各自成色。"; typography = "高对比标题 + 彩色功能节点"; navigation = "白底底部导航"
             advisor = "宽幅顾问模块"; market = "独立网格单元"; assets = "大尺寸组合单元"; chart = "拼图式边框容器"
         case .inkModern:
             name = "东方墨韵"; useCase = "偏好留白与现代东方财经编辑表达。"; typography = "墨色标题 + 朱砂数字强调"; navigation = "轻量文字导航"
             advisor = "今日主笔摘要"; market = "章节式观察栏"; assets = "编辑式资产摘要"; chart = "无边框纸面区"
         case .minimalTerminal:
-            name = "极简终端"; useCase = "偏好高密度、少装饰的行情阅读。"; typography = "等宽数字 + 细字号层级"; navigation = "紧凑终端导航"
+            name = "夜航量化"; useCase = "先看真实行情曲线，再看组合判断和量化状态。"; typography = "等宽数字 + 青色走势"; navigation = "暗色快捷导航"
             advisor = "直接进入数据流"; market = "表格式行情流"; assets = "单行账户摘要"; chart = "平面细分割容器"
         case .fluidGlass:
             name = "流体玻璃"; useCase = "偏好空间层次但仍需高可读性。"; typography = "清晰无衬线 + 突出关键数字"; navigation = "悬浮材质导航"
@@ -233,11 +293,13 @@ enum FThemeLayoutRegistry {
             name = "数据星图"; useCase = "从中心判断跳转外围市场与研究节点。"; typography = "中心数字 + 节点短标签"; navigation = "节点式首页入口 + 标准底栏"
             advisor = "中央决策摘要"; market = "外围市场节点"; assets = "中央真实资产节点"; chart = "专业页面保持稳定容器"
         case .adaptiveBento:
-            name = "动态 Bento"; useCase = "需要异常状态优先显示风险与AI信息。"; typography = "根据模块权重调整字号"; navigation = "标准底部导航"
+            name = "极光全景"; useCase = "高饱和蓝紫背景、浮动现金与彩色信息拼图。"; typography = "白色标题 + 明亮分区数字"; navigation = "高对比蓝色底部导航"
             advisor = "风险态自动扩展"; market = "状态感知小模块"; assets = "正常态大模块"; chart = "自适应网格外围"
         }
         let tokens = FThemeSemanticTokens(
-            background: background, surface: surface, foreground: foreground,
+            background: background, surface: surface, portfolioSurface: portfolioSurface,
+            advisorSurface: advisorSurface, marketSurface: marketSurface,
+            highlightSurface: highlightSurface, surfaceGradient: surfaceGradient, foreground: foreground,
             secondaryForeground: adaptive(light: (0.37, 0.40, 0.45), dark: (0.72, 0.75, 0.80)),
             accent: accent, accentForeground: accentForeground,
             positive: adaptive(light: (0.78, 0.18, 0.17), dark: (1.0, 0.43, 0.40)),
@@ -279,6 +341,15 @@ enum FThemeLayoutRegistry {
         })
     }
 
+    private static func accentFallback(_ theme: FHomeTheme) -> Color {
+        switch theme {
+        case .magazine, .inkModern: adaptive(light: (0.72, 0.28, 0.19), dark: (0.90, 0.48, 0.36))
+        case .fluidGlass: adaptive(light: (0.26, 0.48, 0.88), dark: (0.50, 0.70, 1.0))
+        case .dataStarMap: adaptive(light: (0.48, 0.30, 0.75), dark: (0.74, 0.62, 0.98))
+        default: adaptive(light: (0.22, 0.40, 0.70), dark: (0.45, 0.66, 0.95))
+        }
+    }
+
     private static func spacing(for family: FHomeLayoutFamily) -> FThemeSpacingScale {
         switch family {
         case .minimalTerminal, .terminalDashboard:
@@ -294,6 +365,14 @@ enum FThemeLayoutRegistry {
 }
 
 extension FHomeTheme {
+    /// Resolve only the six currently approved visual concepts. Old persisted
+    /// theme identifiers remain decodable for migration, but must not cause a
+    /// different theme to reappear on a detail screen or chart.
+    static func selected(_ rawValue: String) -> FHomeTheme {
+        guard let theme = FHomeTheme(rawValue: rawValue), allCases.contains(theme) else { return .editorial }
+        return theme
+    }
+
     var layoutFamily: FHomeLayoutFamily {
         switch self {
         case .editorial: .editorial

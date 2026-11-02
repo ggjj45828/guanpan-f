@@ -202,7 +202,8 @@ public enum FTencentMinuteParser {
     }
 
     public static func parse(_ data: Data, securityCode: String, fetchedAt: Date,
-                             timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current)
+                             timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current,
+                             source: String = Self.source)
         throws -> FCurrentIntradaySnapshot {
         let symbol = try symbol(for: securityCode)
         let text = String(decoding: data, as: UTF8.self)
@@ -314,7 +315,8 @@ public enum FTencentDailyKlineParser {
     public static let source = "Tencent Finance daily K-line"
 
     public static func parse(_ data: Data, securityCode: String, fetchedAt: Date,
-                             timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current)
+                             timeZone: TimeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current,
+                             source: String = Self.source)
         throws -> FDailyKlineSnapshot {
         let symbol = try FTencentMinuteParser.symbol(for: securityCode)
         let text = String(decoding: data, as: UTF8.self)

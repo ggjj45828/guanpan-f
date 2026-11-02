@@ -27,7 +27,7 @@ struct FUnifiedSecurityChart: View {
     private let plotLeftInset: CGFloat = 38
     private let plotRightInset: CGFloat = 8
     private var averageColors: [Color] { theme.manifest.tokens.movingAverages }
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
         GeometryReader { proxy in
@@ -339,14 +339,14 @@ struct FUnifiedSecurityChart: View {
         let minute = Double((parts.hour ?? 9) * 60 + (parts.minute ?? 30))
         if minute <= 570 { return 0 }
         if minute <= 690 { return minute - 570 }
-        if minute < 780 { return 120 + Double(minute - 690) / 90 * 12 }
-        if minute <= 900 { return 132 + minute - 780 }
-        return 252
+        if minute < 780 { return 120 }
+        if minute <= 900 { return 120 + minute - 780 }
+        return 240
     }
 
     private func minuteDisplayDomain(series: FChartSeries, range: Range<Int>,
                                      zoomScale: CGFloat, window: FChartWindow) -> ClosedRange<Double> {
-        guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
+        guard case let .minute(samples) = series, !range.isEmpty else { return 0...240 }
         if zoomScale > 1.01 {
             let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
             let first = visibleMinutes.min() ?? 0
@@ -368,13 +368,13 @@ struct FUnifiedSecurityChart: View {
         // keeps the first minutes readable instead of pinning them to 1% of a
         // full-day axis. Lunch is compressed consistently with sessionMinute.
         let observedEnd = sessionMinute(latest)
-        let sessionEnd = session == .lunchBreak ? 132 : observedEnd
+        let sessionEnd = session == .lunchBreak ? 120 : observedEnd
         return 0...max(sessionEnd, 1)
     }
 
     private func intradayClockLabel(_ sessionMinute: Double) -> String {
         let minute = Int(sessionMinute.rounded())
-        let clockMinute = minute <= 120 ? 570 + minute : 780 + minute - 132
+        let clockMinute = minute <= 120 ? 570 + minute : 780 + minute - 120
         return String(format: "%02d:%02d", clockMinute / 60, clockMinute % 60)
     }
 
@@ -454,8 +454,8 @@ struct FUnifiedSecurityChart: View {
                 previousSessionMinute = minute
             }
             context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.78, lineCap: .round, lineJoin: .round))
-            let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
-                                                    (132, "13:00"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
+            let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (118, "11:30"),
+                                                    (122, "13:00"), (180, "14:00"), (210, "14:30"), (240, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
             if ticks.isEmpty || ticks.first?.0 != minuteDomain.lowerBound {
                 ticks.insert((minuteDomain.lowerBound, intradayClockLabel(minuteDomain.lowerBound)), at: 0)

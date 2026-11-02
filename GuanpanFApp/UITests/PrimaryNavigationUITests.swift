@@ -335,10 +335,9 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachScreenshot("11-separate-cash-entry", app: app)
     }
 
-    func testAllTenThemesRenderHomeScreenshotsWithTheirDeclaredRoleArrangement() {
+    func testSixApprovedVisualConceptsRenderHomeScreenshots() {
         let themes = [
-            "editorial", "modern", "dashboard", "magazine", "bento",
-            "inkModern", "minimalTerminal", "fluidGlass", "dataStarMap", "adaptiveBento"
+            "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
             let app = XCUIApplication()
@@ -349,46 +348,18 @@ final class PrimaryNavigationUITests: XCTestCase {
                 .map { app.descendants(matching: .any).matching(identifier: "home.role.\($0)").firstMatch }
             for (role, element) in zip(["portfolio", "marketObservation", "crossMarketPulse", "advisorGuidance"], roles) {
                 XCTAssertTrue(element.waitForExistence(timeout: 3), "Theme \(theme) is missing home role \(role)")
-            }
-            if theme == "dataStarMap" {
-                let center = app.descendants(matching: .any)["home.star-map.center"]
-                XCTAssertTrue(center.waitForExistence(timeout: 3),
-                              "Star map must expose its central portfolio summary separately")
                 XCTAssertEqual(app.descendants(matching: .any)
-                    .matching(identifier: "home.role.portfolio").count, 1,
-                    "The navigable portfolio role must have one unique accessibility identity")
-                let portfolio = roles[0].frame
-                let market = roles[1].frame
-                let crossMarket = roles[2].frame
-                let advisor = roles[3].frame
-                XCTAssertGreaterThan(market.midX, portfolio.midX,
-                                     "Star map market node must sit to the right of the portfolio node")
-                XCTAssertGreaterThan(crossMarket.midX, advisor.midX,
-                                     "Star map cross-market node must sit to the right of advisor")
-                XCTAssertGreaterThan(crossMarket.midY, market.midY,
-                                     "Star map cross-market node must sit below market")
-                XCTAssertLessThan(advisor.midX, portfolio.midX,
-                                  "Star map advisor node must sit left of the portfolio node")
-                XCTAssertGreaterThan(advisor.midY, portfolio.midY,
-                                     "Star map advisor node must sit below the portfolio node")
-                XCTAssertTrue(roles.allSatisfy { !center.frame.intersects($0.frame) },
-                              "Star map center summary must not overlap any navigation node")
-                XCTAssertTrue(roles.allSatisfy(\.isHittable),
-                              "All star-map navigation nodes must remain tappable")
-            } else {
-                let verticalOrder = roles.map { $0.frame.midY }
-                XCTAssertEqual(verticalOrder, verticalOrder.sorted(),
-                               "Theme \(theme) must keep portfolio → market → cross-market → advisor order")
+                    .matching(identifier: "home.role.\(role)").count, 1,
+                    "Theme \(theme) must expose home role \(role) exactly once")
             }
             attachScreenshot("theme-\(theme)-home", app: app)
             app.terminate()
         }
     }
 
-    func testAllTenThemesRenderInSystemDarkAppearance() {
+    func testSixApprovedVisualConceptsRenderInSystemDarkAppearance() {
         let themes = [
-            "editorial", "modern", "dashboard", "magazine", "bento",
-            "inkModern", "minimalTerminal", "fluidGlass", "dataStarMap", "adaptiveBento"
+            "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
             let app = XCUIApplication()

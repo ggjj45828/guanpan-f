@@ -1401,16 +1401,11 @@ final class FHomeModel: ObservableObject {
     }
 
     func refreshDailyKline(for code: String) async {
-        let baseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-        let generation = synchronizeNASDataSource(baseAddress: baseAddress)
-        dailyKlineStateByCode[code] = "正在通过 NAS 读取证券历史日 K…"
+        dailyKlineStateByCode[code] = "正在由 iPhone 直连行情源读取历史日 K…"
         do {
-            let snapshot = try await FNASecurityDailyHistoryClient.fetch(
-                baseAddress: baseAddress, securityCode: code)
-            let currentBaseAddress = UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            guard synchronizeNASDataSource(baseAddress: currentBaseAddress) == generation else { return }
+            let snapshot = try await FQuoteHTTPClient.fetchDailyKline(code: code, count: 320)
             if let current = dailyKlineByCode[code], current.fetchedAt > snapshot.fetchedAt {
-                dailyKlineStateByCode[code] = "较旧的 NAS 响应已忽略；保留更新日 K。"
+                dailyKlineStateByCode[code] = "较旧的行情响应已忽略；保留更新日 K。"
                 return
             }
             dailyKlineByCode[code] = snapshot
@@ -1454,16 +1449,16 @@ final class FHomeModel: ObservableObject {
                 "证券自身：\(regime.regime.displayName) · \(regime.riskLevel.displayName) · \(availableFactors)/\(regime.factors.count) 个因子可用 · 日K至 \(dataTime)"
             let count = snapshot.bars.count
             let missing = [5, 10, 20, 60, 250].filter { count < $0 }
-            dailyKlineStateByCode[code] = "\(count) 个 NAS 归档真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
+            dailyKlineStateByCode[code] = "\(count) 个真实交易日 · \(snapshot.adjustment) · \(snapshot.source) · iPhone直连 · 获取于 \(snapshot.fetchedAt.formatted(date: .omitted, time: .standard))" +
                 (missing.isEmpty ? "" : " · MA\(missing.map { String($0) }.joined(separator: "/"))样本不足")
         } catch {
-            guard synchronizeNASDataSource(
-                baseAddress: UserDefaults.standard.string(forKey: "guanpan.f.nas.baseURL") ?? ""
-            ) == generation else { return }
-            dailyKlineStateByCode[code] = "日 K 不可用 · \(error.localizedDescription)"
-            dailyKlineByCode[code] = nil
-            securityRegimeByCode[code] = nil
-            securityRegimeStatusByCode[code] = "证券自身状态不可用 · 缺少可信日K"
+            if dailyKlineByCode[code] != nil {
+                dailyKlineStateByCode[code] = "日 K 更新失败，保留本机缓存 · \(error.localizedDescription)"
+            } else {
+                dailyKlineStateByCode[code] = "手机直连日 K 不可用 · \(error.localizedDescription)"
+                securityRegimeByCode[code] = nil
+                securityRegimeStatusByCode[code] = "证券自身状态不可用 · 缺少可信日K"
+            }
         }
     }
 
@@ -1512,16 +1507,8 @@ final class FHomeModel: ObservableObject {
         for code in archiveCodes {
             archiveRefreshStateByCode[code] = "NAS 地址已更改；请重新读取历史分钟。"
         }
-        var dailyCodes = Set(dailyKlineStateByCode.keys)
-        dailyCodes.formUnion(dailyKlineByCode.keys)
-        dailyCodes.formUnion(holdings.map(\.instrumentCode))
-        if let selectedInstrumentCode { dailyCodes.insert(selectedInstrumentCode) }
-        dailyKlineByCode.removeAll()
-        for code in dailyCodes {
-            dailyKlineStateByCode[code] = "NAS 地址已更改；请重新读取证券日 K。"
-        }
-        securityRegimeByCode.removeAll()
-        securityRegimeStatusByCode.removeAll()
+        // Daily K-lines and security-level regimes are sourced directly by the
+        // iPhone and remain usable when the optional NAS endpoint changes.
         marketIndexRegimesByCode.removeAll()
         marketIndexRegimeFetchedAtByCode.removeAll()
         marketIndexRegimeStatusByCode = FMarketIndexHTTPClient.indexCodes.reduce(into: [:]) {
@@ -1910,6 +1897,7 @@ final class FHomeModel: ObservableObject {
 enum FHomeTheme: String, CaseIterable, Identifiable {
     case editorial, modern, dashboard, magazine, bento
     case inkModern, minimalTerminal, fluidGlass, dataStarMap, adaptiveBento
+    static var allCases: [FHomeTheme] { [.editorial, .dashboard, .bento, .modern, .minimalTerminal, .adaptiveBento] }
     var id: String { rawValue }
 }
 enum FHomeRoute: Hashable {
@@ -1922,7 +1910,7 @@ struct FHomeRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @State private var selectedTab = FPrimaryTab.home
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -2349,6 +2337,38 @@ private enum FQuoteHTTPClient {
                 )
             }
         }
+    }
+
+    static func fetchDailyKline(code: String, count: Int) async throws -> FDailyKlineSnapshot {
+        let symbol = try FTencentMinuteParser.symbol(for: code)
+        let endpoints = [
+            "https://proxy.finance.qq.com/ifzqgtimg/appstock/app/newfqkline/get",
+            "https://ifzq.gtimg.cn/appstock/app/newfqkline/get",
+            "https://web.ifzq.gtimg.cn/appstock/app/newfqkline/get"
+        ]
+        var failures: [String] = []
+        for endpoint in endpoints {
+            do {
+                guard var components = URLComponents(string: endpoint) else { throw FMarketDataError.invalidPayload }
+                components.queryItems = [URLQueryItem(name: "param", value: "\(symbol),day,,,\(min(max(count, 1), 500))")]
+                guard let url = components.url else { throw FMarketDataError.invalidPayload }
+                var request = URLRequest(url: url, timeoutInterval: 10)
+                request.setValue("https://gu.qq.com/", forHTTPHeaderField: "Referer")
+                request.setValue("GuanpanF-iOS/1", forHTTPHeaderField: "User-Agent")
+                let (data, response) = try await FBoundedHTTPClient.data(for: request, maximumResponseBytes: 2_000_000)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw FMarketDataError.invalidPayload
+                }
+                return try FTencentDailyKlineParser.parse(
+                    data, securityCode: code, fetchedAt: Date(),
+                    source: "Tencent Finance daily K-line · iPhone直连"
+                )
+            } catch {
+                failures.append("\(URL(string: endpoint)?.host ?? endpoint): \(error.localizedDescription)")
+            }
+        }
+        throw NSError(domain: "FQuoteHTTPClient.DailyKline", code: 1,
+                       userInfo: [NSLocalizedDescriptionKey: "腾讯手机直连日K来源均失败：\(failures.joined(separator: "；"))"])
     }
 
     private static func fetchTencentCurrentMinutes(code: String) async throws -> FCurrentIntradaySnapshot {

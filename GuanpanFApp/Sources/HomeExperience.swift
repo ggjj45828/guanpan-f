@@ -15,16 +15,12 @@ struct HomeLayout: View {
         ScrollView {
             Group {
                 switch theme.layoutFamily {
-                case .editorial: editorial
-                case .cardGrid: modern
-                case .terminalDashboard: dashboard
+                case .editorial, .cardGrid, .terminalDashboard, .staticBento, .minimalTerminal, .adaptiveBento:
+                    FDesignedThemeHome(model: model, theme: theme)
                 case .magazine: magazine
-                case .staticBento: bento
                 case .inkEditorial: inkEditorial
-                case .minimalTerminal: minimalTerminal
                 case .spatialGlass: fluidGlass
                 case .radialMap: dataStarMap
-                case .adaptiveBento: adaptiveBento
                 }
             }
             .padding(theme.manifest.tokens.spacing.standard)
@@ -234,6 +230,516 @@ struct HomeLayout: View {
         FHomeRoleRenderer(role: role, model: model, theme: theme)
     }
 
+}
+
+/// Six complete homepage compositions based on the two approved concept boards.
+/// Every number and status comes from FHomeModel; the artwork is decorative only.
+private struct FDesignedThemeHome: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+    private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
+    private var focusedCodes: [String] {
+        Array(Set(model.holdings.map(\.instrumentCode) + model.watchlistCodes)).sorted().prefix(4).map { $0 }
+    }
+
+    var body: some View {
+        Group {
+            switch theme {
+            case .editorial: mountainCover
+            case .dashboard: deepSpaceTerminal
+            case .bento: coralCollage
+            case .modern: bluePortfolio
+            case .minimalTerminal: nightFlight
+            case .adaptiveBento: auroraPanorama
+            default: mountainCover
+            }
+        }
+        .padding(.horizontal, theme == .dashboard || theme == .minimalTerminal ? 12 : 16)
+        .padding(.top, 10)
+        .padding(.bottom, 30)
+        .frame(maxWidth: 760, alignment: .top)
+        .frame(maxWidth: .infinity)
+        .background(tokens.background.ignoresSafeArea())
+        .refreshable {
+            await model.autoRefreshMarketData()
+            await model.refreshMarketIndices()
+        }
+    }
+
+    private var mountainCover: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            masthead(eyebrow: "看清市场 · 做对决策", dark: false)
+            portfolioPanel(art: true, compact: false)
+                .accessibilityIdentifier("home.role.portfolio")
+            advisorPanel(dark: false, compact: false)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            marketSection(dark: false, columns: 3)
+            watchlist(dark: false, table: true)
+            crossMarketLine
+        }
+    }
+
+    private var deepSpaceTerminal: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            masthead(eyebrow: "专业视角 · 实时决策", dark: true)
+            portfolioPanel(art: false, compact: true)
+                .accessibilityIdentifier("home.role.portfolio")
+            advisorPanel(dark: true, compact: true)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            marketSection(dark: true, columns: 3)
+            intradayTape(dark: true)
+            watchlist(dark: true, table: false)
+            crossMarketLine
+        }
+    }
+
+    private var coralCollage: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            masthead(eyebrow: "让投资更从容", dark: false)
+            advisorPanel(dark: false, compact: false)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            HStack(alignment: .stretch, spacing: 10) {
+                portfolioPanel(art: false, compact: true)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("home.role.portfolio")
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(systemName: "chart.bar.xaxis").font(.title2)
+                        Text("资产分析").font(.headline)
+                        Text(model.ledgerState == .available ? "\(model.holdings.count) 项真实持仓" : model.ledgerStatus)
+                            .font(.caption).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.right.circle.fill").font(.title2)
+                    }
+                    .foregroundStyle(.black.opacity(0.82))
+                    .padding(14).frame(width: 112, alignment: .leading)
+                    .background(tokens.highlightSurface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            HStack(alignment: .stretch, spacing: 10) {
+                marketSection(dark: false, columns: 2)
+                    .frame(maxWidth: .infinity)
+                quantTile
+                    .frame(width: 112)
+            }
+            watchlist(dark: false, table: false)
+            crossMarketLine
+        }
+    }
+
+    private var bluePortfolio: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            masthead(eyebrow: "观盘max · 今日组合", dark: false)
+            portfolioPanel(art: false, compact: false)
+                .accessibilityIdentifier("home.role.portfolio")
+            advisorPanel(dark: false, compact: false)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            marketSection(dark: false, columns: 3)
+            watchlist(dark: false, table: false)
+            crossMarketLine
+        }
+    }
+
+    private var nightFlight: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            masthead(eyebrow: "LOCAL QUANT · LIVE", dark: true)
+            portfolioPanel(art: false, compact: true)
+                .accessibilityIdentifier("home.role.portfolio")
+            intradayTape(dark: true)
+            advisorPanel(dark: true, compact: true)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            quantSummary
+            marketSection(dark: true, columns: 4)
+            watchlist(dark: true, table: false)
+            crossMarketLine
+        }
+    }
+
+    private var auroraPanorama: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            masthead(eyebrow: "观盘max · 从容看盘", dark: true)
+            ZStack(alignment: .topTrailing) {
+                portfolioPanel(art: true, compact: false)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("home.role.portfolio")
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Image(systemName: "banknote.fill").foregroundStyle(.orange)
+                        Text("可用现金").font(.caption)
+                        Text(model.cashText).font(.headline.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
+                        Image(systemName: "chevron.right").font(.caption)
+                    }
+                    .foregroundStyle(.black).padding(12).frame(width: 118, alignment: .leading)
+                    .background(tokens.highlightSurface, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+                }
+                .buttonStyle(.plain).padding(8)
+            }
+            advisorPanel(dark: false, compact: false)
+                .accessibilityIdentifier("home.role.advisorGuidance")
+            marketSection(dark: false, columns: 3)
+            HStack(alignment: .top, spacing: 10) {
+                watchlist(dark: false, table: false)
+                quantTile.frame(width: 122)
+            }
+            crossMarketLine
+        }
+        .padding(7)
+        .background(LinearGradient(colors: tokens.surfaceGradient, startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+    }
+
+    private func masthead(eyebrow: String, dark: Bool) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("观盘max").font(.system(size: 22, weight: .heavy, design: .rounded))
+                Text(eyebrow).font(.caption).foregroundStyle(dark ? .white.opacity(0.72) : tokens.secondaryForeground)
+            }
+            Spacer()
+            Text(Date.now.formatted(.dateTime.month(.abbreviated).day().weekday(.wide)))
+                .font(.caption.monospacedDigit()).foregroundStyle(dark ? .white.opacity(0.72) : tokens.secondaryForeground)
+        }
+        .foregroundStyle(dark ? .white : tokens.foreground)
+    }
+
+    private func portfolioPanel(art: Bool, compact: Bool) -> some View {
+        let panel = tokens.portfolioSurface
+        return VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+            HStack {
+                Text("真实资产").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(model.ledgerState == .available ? "本机账本" : model.ledgerStatus)
+                    .font(.caption2).lineLimit(1)
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    Image(systemName: "arrow.up.right").font(.caption.weight(.bold))
+                }.buttonStyle(.plain)
+            }
+            Text(model.portfolioMarketValuation(at: Date()).displayLabel)
+                .font(.system(size: compact ? 29 : 35, weight: .bold, design: .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.68)
+                .accessibilityIdentifier("home.signature.portfolio-value")
+            let daily = model.portfolioSecurityDailyPnL(at: Date())
+            HStack(spacing: 8) {
+                Text("今日").font(.caption)
+                Text(daily.map { "\($0 >= 0 ? "+" : "−")¥\(NSDecimalNumber(decimal: abs($0)).stringValue)" }
+                     ?? "不可用 · 日初口径/行情未齐")
+                    .font(.caption.weight(.semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.72)
+            }
+            HStack(spacing: 0) {
+                metric("持仓市值", value: holdingsMarketValueText, compact: compact)
+                metric("可用现金", value: model.cashText, compact: compact)
+                metric("持仓", value: "\(model.holdings.count) 项", compact: compact)
+            }
+            if art {
+                FHomeMountainArtwork().frame(height: 58).opacity(0.62).accessibilityHidden(true)
+            } else if !compact {
+                FHomePortfolioSparkline(model: model, color: .white.opacity(0.9)).frame(height: 28)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(compact ? 13 : 17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: art && theme == .editorial ? [tokens.portfolioSurface, Color(red: 0.11, green: 0.35, blue: 0.72)] : [panel, tokens.surfaceGradient.last ?? panel],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: art ? 25 : 21, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: art ? 25 : 21).stroke(.white.opacity(0.18), lineWidth: 0.8))
+    }
+
+    private var holdingsMarketValueText: String {
+        let now = Date()
+        var total = Decimal.zero
+        for holding in model.holdings {
+            guard let quote = model.marketDataByCode[holding.instrumentCode],
+                  quote.freshness(at: now) == .fresh, let price = quote.latestPrice else { return "行情不齐" }
+            total += price * Decimal(holding.units)
+        }
+        return "¥\(NSDecimalNumber(decimal: total).stringValue)"
+    }
+
+    private func advisorPanel(dark: Bool, compact: Bool) -> some View {
+        let result = model.advisorResult.flatMap { $0.scope == .portfolio ? $0 : nil }
+        return VStack(alignment: .leading, spacing: compact ? 8 : 11) {
+            HStack {
+                Label("今日判断", systemImage: "sparkles").font(.headline)
+                Spacer()
+                Text(result?.candidate.action.displayName ?? "组合级").font(.caption.weight(.semibold))
+                    .padding(.horizontal, 9).padding(.vertical, 5)
+                    .background(.white.opacity(0.18), in: Capsule())
+            }
+            Text(result?.narrative.conclusion ?? "先看清真实组合，再决定今天是否操作。")
+                .font(.system(size: compact ? 18 : 21, weight: .bold, design: .rounded))
+                .fixedSize(horizontal: false, vertical: true).lineLimit(compact ? 3 : 4)
+            Text(result?.narrative.basis ?? model.advisorStatus)
+                .font(.caption).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                .opacity(0.86)
+            if let risk = result?.narrative.risks.first {
+                Label(risk, systemImage: "exclamationmark.shield.fill")
+                    .font(.caption2.weight(.medium)).lineLimit(2)
+            }
+            HStack {
+                Button {
+                    model.question = "今天我的持仓需要操作吗？"
+                    model.askAdvisor()
+                } label: {
+                    Text(model.isAskingAdvisor ? "正在分析" : (result == nil ? "生成今日判断" : "更新今日判断"))
+                        .font(.caption.weight(.bold)).padding(.horizontal, 13).padding(.vertical, 9)
+                        .foregroundStyle(dark ? .black : tokens.advisorSurface)
+                        .background(.white, in: Capsule())
+                }
+                .disabled(model.isAskingAdvisor || model.ledgerState != .available)
+                .accessibilityIdentifier("home.advisor.analyze-portfolio")
+                NavigationLink(value: FHomeRoute.advisor) {
+                    Text("完整依据 →").font(.caption.weight(.semibold))
+                }.buttonStyle(.plain)
+                Spacer(minLength: 0)
+                if let result { Text(result.generatedAt.formatted(date: .omitted, time: .shortened)).font(.caption2) }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(compact ? 13 : 17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [tokens.advisorSurface, theme == .dashboard || theme == .minimalTerminal ? Color(red: 0.02, green: 0.19, blue: 0.30) : Color(red: 0.98, green: 0.42, blue: 0.30)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 23, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 32, weight: .black)).foregroundStyle(.white.opacity(0.10))
+                .padding(20).accessibilityHidden(true)
+        }
+    }
+
+    private func metric(_ title: String, value: String, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption2).opacity(0.75)
+            Text(value).font(.system(size: compact ? 13 : 14, weight: .semibold, design: .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func marketSection(dark: Bool, columns: Int) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text("市场脉搏").font(.headline)
+                Spacer()
+                NavigationLink(value: FHomeRoute.crossMarket) { Text("查看全部 →").font(.caption) }
+                    .buttonStyle(.plain)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7), count: columns), spacing: 7) {
+                ForEach(Array(model.marketIndexQuotes.prefix(columns == 4 ? 4 : 3))) { quote in
+                    NavigationLink(value: FHomeRoute.crossMarket) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(quote.name).font(.caption2.weight(.semibold)).lineLimit(1)
+                            Text(quote.latestPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "—")
+                                .font(.system(size: 16, weight: .bold, design: .rounded)).monospacedDigit()
+                                .lineLimit(1).minimumScaleFactor(0.65)
+                            Text(quote.changePercent.map { "\($0 >= 0 ? "+" : "")\(NSDecimalNumber(decimal: $0).stringValue)%" } ?? (quote.marketStatus ?? "等待行情"))
+                                .font(.caption2.weight(.semibold)).lineLimit(1)
+                                .foregroundStyle(quote.changePercent.map { $0 >= 0 ? tokens.positive : tokens.negative } ?? (dark ? .white.opacity(0.7) : tokens.unavailable))
+                            Text(quote.observedAt?.formatted(date: .omitted, time: .shortened) ?? "无时间戳")
+                                .font(.system(size: 9)).opacity(0.65).lineLimit(1)
+                        }
+                        .foregroundStyle(dark ? .white : tokens.foreground)
+                        .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(9)
+                        .background(dark ? tokens.marketSurface : (theme == .bento ? tokens.marketSurface : tokens.surface),
+                                    in: RoundedRectangle(cornerRadius: theme == .dashboard || theme == .minimalTerminal ? 8 : 16, style: .continuous))
+                    }.buttonStyle(.plain)
+                }
+            }
+            NavigationLink(value: FHomeRoute.market) {
+                Text(model.marketCalendarStatusText).font(.caption2).foregroundStyle(dark ? .white.opacity(0.7) : tokens.secondaryForeground)
+            }.buttonStyle(.plain).accessibilityIdentifier("home.role.marketObservation")
+        }
+        .foregroundStyle(dark ? .white : tokens.foreground)
+        .padding(theme == .dashboard || theme == .minimalTerminal ? 10 : 12)
+        .background(dark ? Color.clear : (theme == .bento ? Color.clear : tokens.surface.opacity(0.58)),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func watchlist(dark: Bool, table: Bool) -> some View {
+        let codes = focusedCodes
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(table ? "自选观察" : "自选").font(.headline)
+                Spacer()
+                NavigationLink(value: FHomeRoute.market) { Text("查看全部 →").font(.caption) }
+                    .buttonStyle(.plain)
+            }
+            if codes.isEmpty {
+                NavigationLink(value: FHomeRoute.market) {
+                    Text("添加自选后，在这里查看实时行情和本地量化方向观察。")
+                        .font(.caption).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 14)
+                }.buttonStyle(.plain)
+            } else {
+                ForEach(codes, id: \.self) { code in
+                    let quote = model.marketDataByCode[code]
+                    let price = quote?.latestPrice
+                    let isFresh = quote.map { $0.freshness(at: Date()) == .fresh } ?? false
+                    let score = model.watchlistQuantAssessment(for: code)?.watchlistDirectionalScore
+                    NavigationLink(value: FHomeRoute.instrument(code)) {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.holdings.first(where: { $0.instrumentCode == code })?.name ?? code)
+                                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text("\(code) · \(model.holdings.contains(where: { $0.instrumentCode == code }) ? "持仓" : "自选")")
+                                    .font(.caption2.monospaced()).opacity(0.68)
+                            }
+                            Spacer(minLength: 4)
+                            FWatchlistSparkline(samples: quote?.samples ?? [], positiveColor: tokens.positive, negativeColor: tokens.negative)
+                                .frame(width: table ? 56 : 38, height: 22).accessibilityHidden(true)
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(price.map { "¥\(NSDecimalNumber(decimal: $0).stringValue)" } ?? "—")
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                Text(isFresh ? (score.map { "方向观察 \($0 > 0 ? "+" : "")\($0)" } ?? "Quant 样本不足") : "行情待更新")
+                                    .font(.system(size: 9)).opacity(0.7).lineLimit(1)
+                            }
+                        }
+                        .foregroundStyle(dark ? .white : tokens.foreground)
+                        .padding(.vertical, table ? 8 : 9)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if code != codes.last { Rectangle().fill(dark ? .white.opacity(0.1) : tokens.foreground.opacity(0.08)).frame(height: 0.5) }
+                }
+            }
+        }
+        .foregroundStyle(dark ? .white : tokens.foreground)
+        .padding(table ? 12 : 10)
+        .background(dark ? Color.black.opacity(0.16) : tokens.surface.opacity(0.82),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var quantTile: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Image(systemName: "waveform.path.ecg").font(.title3)
+            Text("本地量化").font(.caption.weight(.semibold))
+            Text(quantScoreText).font(.system(size: 24, weight: .bold, design: .rounded)).monospacedDigit()
+            Text("方向观察\n非买入结论").font(.caption2)
+            Spacer(minLength: 0)
+            NavigationLink(value: FHomeRoute.market) { Image(systemName: "arrow.right.circle.fill").font(.title2) }
+                .buttonStyle(.plain)
+        }
+        .foregroundStyle(theme == .dashboard || theme == .minimalTerminal ? .white : .black.opacity(0.82))
+        .padding(12).frame(minHeight: 115, alignment: .topLeading)
+        .background(tokens.highlightSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityIdentifier("home.quant.score")
+    }
+
+    private var quantScoreText: String {
+        guard let code = focusedCodes.first,
+              let score = model.watchlistQuantAssessment(for: code)?.watchlistDirectionalScore else { return "—" }
+        return "\(score > 0 ? "+" : "")\(score)"
+    }
+
+    private var quantSummary: some View {
+        HStack(spacing: 7) {
+            quantMini("市场", model.marketCalendarStatusText, color: tokens.advisorSurface)
+            quantMini("观察", quantScoreText, color: tokens.highlightSurface)
+            quantMini("风险", model.holdings.isEmpty ? "无持仓" : "按行情计算", color: tokens.marketSurface)
+        }
+    }
+
+    private func quantMini(_ title: String, _ value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2).opacity(0.72)
+            Text(value).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.65)
+        }
+        .foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading).padding(9)
+        .background(color, in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private var intradayCode: String? { focusedCodes.first }
+
+    private func intradayTape(dark: Bool) -> some View {
+        let quote = intradayCode.flatMap { model.marketDataByCode[$0] }
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text("实时走势").font(.caption.weight(.semibold))
+                Spacer()
+                Text(intradayCode ?? "暂无自选").font(.caption2.monospaced())
+                Text(quote?.quoteTimestamp.formatted(date: .omitted, time: .shortened) ?? "等待行情")
+                    .font(.caption2.monospacedDigit()).opacity(0.65)
+            }
+            FWatchlistSparkline(samples: quote?.samples ?? [], positiveColor: Color(red: 0.12, green: 0.89, blue: 0.75), negativeColor: Color(red: 1, green: 0.37, blue: 0.46))
+                .frame(height: theme == .minimalTerminal ? 96 : 70)
+            HStack {
+                Text("09:30")
+                Spacer()
+                Text("11:30 → 13:00")
+                Spacer()
+                Text("15:00")
+            }.font(.system(size: 9, design: .monospaced)).opacity(0.62)
+        }
+        .foregroundStyle(dark ? .white : tokens.foreground)
+        .padding(11)
+        .background(dark ? tokens.marketSurface : tokens.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var crossMarketLine: some View {
+        NavigationLink(value: FHomeRoute.crossMarket) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe.asia.australia").foregroundStyle(theme.accent)
+                Text("跨市场脉搏").font(.caption.weight(.semibold))
+                Text("指数 · 数据时点 · 状态").font(.caption2).foregroundStyle(tokens.secondaryForeground)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption2)
+            }
+            .foregroundStyle(tokens.foreground).padding(.vertical, 8)
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("home.role.crossMarketPulse")
+    }
+}
+
+private struct FHomeMountainArtwork: View {
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: proxy.size.height * 0.8))
+                    path.addCurve(to: CGPoint(x: proxy.size.width, y: proxy.size.height * 0.42),
+                                  control1: CGPoint(x: proxy.size.width * 0.28, y: proxy.size.height * 0.1),
+                                  control2: CGPoint(x: proxy.size.width * 0.6, y: proxy.size.height * 0.95))
+                    path.addLine(to: CGPoint(x: proxy.size.width, y: proxy.size.height))
+                    path.addLine(to: CGPoint(x: 0, y: proxy.size.height)); path.closeSubpath()
+                }.fill(Color(red: 0.84, green: 0.72, blue: 0.51).opacity(0.72))
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: proxy.size.height * 0.92))
+                    path.addCurve(to: CGPoint(x: proxy.size.width, y: proxy.size.height * 0.68),
+                                  control1: CGPoint(x: proxy.size.width * 0.32, y: proxy.size.height * 0.28),
+                                  control2: CGPoint(x: proxy.size.width * 0.7, y: proxy.size.height * 1.12))
+                    path.addLine(to: CGPoint(x: proxy.size.width, y: proxy.size.height))
+                    path.addLine(to: CGPoint(x: 0, y: proxy.size.height)); path.closeSubpath()
+                }.fill(Color(red: 0.18, green: 0.32, blue: 0.44).opacity(0.9))
+                Image(systemName: "figure.hiking").font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9)).offset(x: proxy.size.width * 0.34, y: -5)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct FHomePortfolioSparkline: View {
+    @ObservedObject var model: FHomeModel
+    let color: Color
+    var body: some View {
+        GeometryReader { proxy in
+            let snapshots = model.holdings.compactMap { model.marketDataByCode[$0.instrumentCode] }
+            let values = snapshots.compactMap { $0.latestPrice }.map { CGFloat(NSDecimalNumber(decimal: $0).doubleValue) }
+            if values.count >= 2 {
+                Path { path in
+                    for index in values.indices {
+                        let x = CGFloat(index) / CGFloat(max(values.count - 1, 1)) * proxy.size.width
+                        let minValue = values.min() ?? 0
+                        let span = max((values.max() ?? 1) - minValue, 0.000001)
+                        let y = proxy.size.height - ((values[index] - minValue) / span * (proxy.size.height - 4)) - 2
+                        if index == values.startIndex { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                }.stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            } else {
+                Rectangle().fill(color.opacity(0.45)).frame(height: 1).offset(y: proxy.size.height / 2)
+            }
+        }
+    }
 }
 
 /// A single finished editorial home built from the live F model. The hierarchy is
@@ -1832,7 +2338,7 @@ struct HomeDestination: View {
 struct AdvisorOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
         ScrollView {
@@ -2076,7 +2582,7 @@ struct RealAssetsOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @State private var selectedView = 0
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
         List {
@@ -2239,7 +2745,7 @@ struct SettingsOverview: View {
     @State private var preferenceAwaitingClear: FInvestorProfileAttributeKey?
     @State private var showingProfileClearConfirmation = false
     @FocusState private var settingsInputFocused: Bool
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
         Form {
@@ -2616,9 +3122,12 @@ struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
     @State private var securityLookupCode = ""
+    @State private var securityLookupName = ""
+    @State private var securityLookupStatus = ""
+    @State private var securityLookupRetry = 0
     @State private var listScope: FMarketListScope = .combined
     @FocusState private var securityLookupFocused: Bool
-    private var theme: FHomeTheme { FHomeTheme(rawValue: themeRaw) ?? .editorial }
+    private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     private var isValidSecurityCode: Bool {
         let bytes = securityLookupCode.utf8
@@ -2677,7 +3186,40 @@ struct MarketOverview: View {
                             let digits = String(value.unicodeScalars
                                 .filter { (48...57).contains($0.value) }.prefix(6))
                             if digits != value { securityLookupCode = digits }
+                            securityLookupName = ""
+                            securityLookupStatus = ""
                         }
+                        .task(id: "\(securityLookupCode)-\(securityLookupRetry)") {
+                            let requested = securityLookupCode
+                            guard requested.utf8.count == 6,
+                                  requested.utf8.allSatisfy({ (48...57).contains($0) }) else { return }
+                            securityLookupStatus = "正在识别证券名称…"
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            if let name = await model.lookupInstrumentName(code: requested),
+                               !Task.isCancelled, securityLookupCode == requested {
+                                securityLookupName = name
+                                securityLookupStatus = "已识别"
+                            } else if !Task.isCancelled, securityLookupCode == requested {
+                                securityLookupStatus = "行情源暂未识别到名称，可重试或继续查看详情"
+                            }
+                        }
+                    if !securityLookupName.isEmpty {
+                        Label(securityLookupName, systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(theme.manifest.tokens.positive)
+                            .accessibilityIdentifier("market.security-name")
+                    } else if !securityLookupStatus.isEmpty {
+                        HStack {
+                            Text(securityLookupStatus).font(.caption)
+                                .foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                            if securityLookupStatus.hasPrefix("行情源") {
+                                Button("重试") { securityLookupRetry += 1 }
+                                    .font(.caption.weight(.semibold))
+                                    .accessibilityIdentifier("market.security-name.retry")
+                            }
+                        }
+                    }
                     HStack(spacing: 12) {
                         NavigationLink(value: FHomeRoute.instrument(securityLookupCode)) {
                             Label("打开详情", systemImage: "arrow.up.forward")
@@ -3092,7 +3634,6 @@ private struct FInitialLedgerPositionDraft: Identifiable {
     let id = UUID()
     var instrumentCode = ""
     var name = ""
-    var nameWasManuallyEdited = false
     var units = ""
     var economicCostPerUnit = ""
 }
@@ -3102,8 +3643,6 @@ struct FInitialLedgerSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cashText = ""
     @State private var positions = [FInitialLedgerPositionDraft()]
-    @State private var confirmationNote = ""
-    @State private var showingCashEntry = false
     @FocusState private var inputFocused: Bool
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
@@ -3144,26 +3683,42 @@ struct FInitialLedgerSetupSheet: View {
         guard model.ledgerState == .notEstablished,
               let cash = Decimal(string: cashText, locale: Locale(identifier: "en_US_POSIX")),
               cash.isFinite, cash >= 0,
-              parsedPositions != nil,
-              !confirmationNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+              parsedPositions != nil else { return false }
         return true
     }
 
-    private var cashEntrySection: some View {
-        Section("券商现金（单独录入）") {
-            Button {
-                showingCashEntry = true
-            } label: {
-                Label(cashText.isEmpty ? "单独录入券商现金" : "修改券商现金", systemImage: "banknote")
+    private var validationMessage: String {
+        guard model.ledgerState == .notEstablished else { return "本机账本已建立；请通过真实成交更新持仓。" }
+        guard let cash = Decimal(string: cashText, locale: Locale(identifier: "en_US_POSIX")),
+              cash.isFinite, cash >= 0 else { return "请输入券商可用现金；没有现金请填写 0。" }
+        guard !positions.isEmpty else { return "至少录入一只当前持仓；空仓也可填入 0 份的现金账本。" }
+        for (index, position) in positions.enumerated() {
+            if position.instrumentCode.count != 6 { return "第 \(index + 1) 只：请输入 6 位证券代码。" }
+            if position.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "第 \(index + 1) 只：名称未识别，请手动填写证券名称。"
             }
-            .accessibilityIdentifier("ledger.opening.cash.open")
-            Text(cashText.isEmpty ? "现金单独填写；本页只录入持仓证券。" : "已录入可用现金：¥\(cashText)")
+            if Int64(position.units).map({ $0 > 0 }) != true { return "第 \(index + 1) 只：请输入大于 0 的持有份额。" }
+            if Decimal(string: position.economicCostPerUnit, locale: Locale(identifier: "en_US_POSIX")).map({ $0.isFinite && $0 >= 0 }) != true {
+                return "第 \(index + 1) 只：请输入有效的本轮每份成本。"
+            }
+        }
+        return "信息已齐，可以建立本机账本。"
+    }
+
+    private var cashEntrySection: some View {
+        Section("券商账户现金") {
+            TextField("可用现金（没有现金填写 0）", text: $cashText)
+                .keyboardType(.decimalPad)
+                .accessibilityIdentifier("ledger.opening.cash")
+            Text("按券商当前可用余额填写，用于计算真实账户总资产。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
     private var positionsSection: some View {
         Section("当前真实持仓") {
+            Text("录入一只就可以；如有多只，再点下方添加。这里记录券商当前余额，不会伪造成交。")
+                .font(.footnote).foregroundStyle(.secondary)
             ForEach($positions) { $position in
                 let positionID = position.id
                 let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
@@ -3179,17 +3734,19 @@ struct FInitialLedgerSetupSheet: View {
             Button {
                 positions.append(FInitialLedgerPositionDraft())
             } label: {
-                Label("再添加一只证券", systemImage: "plus")
+                Label("添加另一只证券（可选）", systemImage: "plus")
             }
             .accessibilityIdentifier("ledger.opening.position.add")
         }
     }
 
     private var confirmationSection: some View {
-        Section("确认快照") {
-            TextField("确认说明（必填）", text: $confirmationNote, axis: .vertical)
-                .lineLimit(2...4).focused($inputFocused)
-            Text("录入的份额与成本将作为今天的账本起点；由于没有导入前成交流水，App会明确标注更早的历史盈亏不可完整统计。保存后不能用此表覆盖账本。")
+        Section("保存前确认") {
+            Text(validationMessage)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(canSave ? .green : .secondary)
+                .accessibilityIdentifier("ledger.opening.validation")
+            Text("这些数字会作为本机真实账本的起点，不代表历史成交。导入前的历史盈亏不会被虚构；保存后请用真实成交更新。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -3213,20 +3770,17 @@ struct FInitialLedgerSetupSheet: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("录入现有持仓")
-            .sheet(isPresented: $showingCashEntry) {
-                FInitialCashEntrySheet(cashText: $cashText)
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }.disabled(model.writingInitialLedger)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(model.writingInitialLedger ? "保存中" : "确认建立账本") {
+                    Button(model.writingInitialLedger ? "保存中…" : "保存账本起点") {
                         guard let parsedPositions else { return }
                         Task {
                             let saved = await model.establishInitialLedger(
                                 cashText: cashText, positions: parsedPositions,
-                                note: confirmationNote)
+                                note: "用户确认录入券商当前现金与现有持仓，建立本机账本起点")
                             if saved { dismiss() }
                         }
                     }
@@ -3249,15 +3803,28 @@ private struct FInitialLedgerPositionRow: View {
     @ObservedObject var model: FHomeModel
     let remove: () -> Void
     @FocusState private var inputFocused: Bool
+    @State private var lookupStatus = ""
+    @State private var retryLookup = 0
+    @State private var lastResolvedName: String?
 
-    private func updateName(for code: String) async {
-        guard !draft.nameWasManuallyEdited,
-              code.utf8.count == 6,
+    private var lookupTaskID: String { "\(draft.instrumentCode)-\(retryLookup)" }
+
+    private func resolveName(for code: String) async {
+        guard code.utf8.count == 6,
               code.utf8.allSatisfy({ (48...57).contains($0) }),
-              let name = await model.lookupInstrumentName(code: code),
-              draft.instrumentCode == code,
-              !draft.nameWasManuallyEdited else { return }
-        draft.name = name
+              draft.instrumentCode == code else { return }
+        lookupStatus = "正在识别名称…"
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, draft.instrumentCode == code else { return }
+        if let name = await model.lookupInstrumentName(code: code),
+           !Task.isCancelled, draft.instrumentCode == code,
+           draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lastResolvedName = name
+            draft.name = name
+            lookupStatus = "已识别：\(name)"
+        } else if !Task.isCancelled, draft.instrumentCode == code {
+            lookupStatus = "行情源未识别到名称，可手动填写或重试。"
+        }
     }
 
     var body: some View {
@@ -3274,21 +3841,34 @@ private struct FInitialLedgerPositionRow: View {
                 .keyboardType(.numberPad).focused($inputFocused)
                 .accessibilityIdentifier("ledger.opening.position.code")
                 .onChange(of: draft.instrumentCode) { code in
+                    let digits = String(code.unicodeScalars
+                        .filter { (48...57).contains($0.value) }.prefix(6))
+                    if digits != code { draft.instrumentCode = digits; return }
                     draft.name = ""
-                    draft.nameWasManuallyEdited = false
-                    Task { await updateName(for: code) }
+                    lastResolvedName = nil
+                    lookupStatus = ""
                 }
+                .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
                 .focused($inputFocused)
                 .onChange(of: draft.name) { name in
-                    if !name.isEmpty { draft.nameWasManuallyEdited = true }
+                    if name != lastResolvedName { lastResolvedName = nil }
                 }
+            if !lookupStatus.isEmpty {
+                HStack(spacing: 8) {
+                    Text(lookupStatus).font(.caption).foregroundStyle(.secondary)
+                    if lookupStatus.hasPrefix("行情源") {
+                        Button("重试") { retryLookup += 1 }
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+            }
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($inputFocused)
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
                 .keyboardType(.decimalPad).focused($inputFocused)
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
-            Text("总经济成本会按份额 × 每份成本自动计算。")
+            Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)

@@ -80,28 +80,23 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertNotIn("HStack(alignment: .top", layout)
         self.assertIn("role(.portfolio).frame(minHeight: 210)", layout)
 
-    def test_star_map_nodes_are_diagonal_to_keep_the_center_clear(self):
-        start = self.home.index("    private var dataStarMap: some View {")
-        end = self.home.index("    private var adaptiveBento", start)
-        layout = self.home[start:end]
-        self.assertIn("width * 0.27, y: height * 0.19", layout)
-        self.assertIn("width * 0.73, y: height * 0.19", layout)
-        self.assertIn("width * 0.85, y: height * 0.81", layout)
-        self.assertIn("width * 0.15, y: height * 0.81", layout)
-        self.assertIn("testAllTenThemesRenderHomeScreenshotsWithTheirDeclaredRoleArrangement", self.ui_tests)
-        self.assertIn("XCTAssertLessThan(advisor.midX, portfolio.midX,", self.ui_tests)
+    def test_six_approved_home_compositions_share_real_model_but_change_layout(self):
+        self.assertIn("private struct FDesignedThemeHome", self.home)
+        for concept in ("mountainCover", "deepSpaceTerminal", "coralCollage",
+                        "bluePortfolio", "nightFlight", "auroraPanorama"):
+            self.assertIn(f"case .{ {'mountainCover':'editorial','deepSpaceTerminal':'dashboard','coralCollage':'bento','bluePortfolio':'modern','nightFlight':'minimalTerminal','auroraPanorama':'adaptiveBento'}[concept] }: {concept}", self.home)
+        self.assertIn("testSixApprovedVisualConceptsRenderHomeScreenshots", self.ui_tests)
+        self.assertIn("testSixApprovedVisualConceptsRenderInSystemDarkAppearance", self.ui_tests)
+        self.assertIn("model.portfolioMarketValuation(at: Date())", self.home)
+        self.assertIn("model.marketIndexQuotes", self.home)
+        self.assertIn("model.advisorResult", self.home)
 
     def test_all_theme_home_roles_expose_accessibility_identity_and_ui_order_assertions(self):
         self.assertIn('.accessibilityIdentifier("home.role.\\(role.rawValue)")', self.home)
         self.assertIn('.accessibilityIdentifier("home.role.portfolio")', self.home)
         self.assertIn('matching(identifier: "home.role.\\($0)")', self.ui_tests)
-        self.assertIn('verticalOrder.sorted()', self.ui_tests)
-        self.assertIn('if theme == "dataStarMap"', self.ui_tests)
-        self.assertIn('.accessibilityIdentifier("home.star-map.center")', self.home)
-        self.assertIn('matching(identifier: "home.role.portfolio").count, 1', self.ui_tests)
-        self.assertIn('XCTAssertTrue(roles.allSatisfy(\\.isHittable)', self.ui_tests)
-        self.assertIn('center.frame.intersects($0.frame)', self.ui_tests)
-        self.assertIn('XCTAssertGreaterThan(crossMarket.midY, market.midY,', self.ui_tests)
+        self.assertIn('Set(roles.map(\\.identifier)).count', self.ui_tests)
+        self.assertIn('allCases.contains(theme)', self.manifest)
 
     def test_custom_theme_leads_also_publish_the_shared_home_roles(self):
         editorial = self.home.split("    private var editorial: some View {", 1)[1].split(
@@ -126,7 +121,7 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn("tokens.accentForeground", self.home)
         self.assertNotIn(".environment(\\.colorScheme, .light)", self.app)
         self.assertNotIn(".toolbarColorScheme(theme == .dashboard", self.app)
-        self.assertIn("testAllTenThemesRenderInSystemDarkAppearance", self.ui_tests)
+        self.assertIn("testSixApprovedVisualConceptsRenderInSystemDarkAppearance", self.ui_tests)
 
     def test_home_and_security_chart_semantic_foregrounds_use_the_selected_theme_tokens(self):
         home = self.home.split("struct FLedgerConfirmationSheet: View", 1)[0]
