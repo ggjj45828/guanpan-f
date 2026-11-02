@@ -153,7 +153,7 @@ struct FUnifiedSecurityChart: View {
                         let ready = averages[index].dropFirst(range.lowerBound).prefix(range.count).contains { $0 != nil }
                         layerButton("MA\(period)", key: "ma\(period)", color: averageColors[index], available: ready)
                     }
-                    layerButton("成交量", key: "volume", color: .secondary, available: true)
+                    layerButton("成交量", key: "volume", color: theme.manifest.tokens.secondaryForeground, available: true)
                 }
                 ForEach(model.priceOverlays, id: \.kind.rawValue) { overlay in
                     layerButton(overlayTitle(overlay.kind), key: layerKey(overlay.kind),
@@ -414,13 +414,14 @@ struct FUnifiedSecurityChart: View {
             let fraction = Double(step) / 4
             let lineY = priceTop + priceHeight * CGFloat(fraction)
             var grid = Path(); grid.move(to: CGPoint(x: leftAxis, y: lineY)); grid.addLine(to: CGPoint(x: size.width - rightInset, y: lineY))
-            context.stroke(grid, with: .color(.secondary.opacity(0.12)), lineWidth: 1)
+            context.stroke(grid, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.12)), lineWidth: 1)
             let value = high - span * fraction
-            let label = Text(String(format: "%.3f", value)).font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+            let label = Text(String(format: "%.3f", value)).font(.system(size: 9, design: .monospaced))
+                .foregroundColor(theme.manifest.tokens.secondaryForeground)
             context.draw(label, at: CGPoint(x: leftAxis - 4, y: lineY), anchor: .trailing)
         }
         var axis = Path(); axis.move(to: CGPoint(x: leftAxis, y: priceTop)); axis.addLine(to: CGPoint(x: leftAxis, y: size.height - bottomAxis))
-        context.stroke(axis, with: .color(.secondary.opacity(0.18)), lineWidth: 1)
+        context.stroke(axis, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.18)), lineWidth: 1)
         switch series {
         case let .minute(samples):
             var path = Path()
@@ -463,9 +464,10 @@ struct FUnifiedSecurityChart: View {
                 let tickX = leftAxis + CGFloat((item.0 - minuteDomain.lowerBound) /
                                                max(minuteDomain.upperBound - minuteDomain.lowerBound, 1)) * plotWidth
                 var tick = Path(); tick.move(to: CGPoint(x: tickX, y: priceBottom)); tick.addLine(to: CGPoint(x: tickX, y: priceBottom + 3))
-                context.stroke(tick, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
+                context.stroke(tick, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.35)), lineWidth: 1)
                 let anchor: UnitPoint = index == 0 ? .leading : (index == ticks.count - 1 ? .trailing : .center)
-                context.draw(Text(item.1).font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary),
+                context.draw(Text(item.1).font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(theme.manifest.tokens.secondaryForeground),
                              at: CGPoint(x: tickX, y: size.height - 8), anchor: anchor)
             }
         case let .daily(bars):
@@ -495,8 +497,9 @@ struct FUnifiedSecurityChart: View {
             }
             if showVolume {
                 var divider = Path(); divider.move(to: CGPoint(x: leftAxis, y: subchartTop)); divider.addLine(to: CGPoint(x: size.width - rightInset, y: subchartTop))
-                context.stroke(divider, with: .color(.secondary.opacity(0.2)), lineWidth: 1)
-                context.draw(Text("VOL").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
+                context.stroke(divider, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.2)), lineWidth: 1)
+                context.draw(Text("VOL").font(.system(size: 8, weight: .medium))
+                                .foregroundColor(theme.manifest.tokens.secondaryForeground),
                             at: CGPoint(x: 3, y: subchartTop + subchartHeight / 2), anchor: .leading)
             }
             let desiredTickCount = min(5, max(2, Int(plotWidth / 74)))
@@ -507,7 +510,8 @@ struct FUnifiedSecurityChart: View {
                     let date = bars[index].tradingDate
                     let label = date.formatted(.dateTime.month(.abbreviated).day())
                     let anchor: UnitPoint = tick == 0 ? .leading : (tick == tickCount - 1 ? .trailing : .center)
-                    context.draw(Text(label).font(.system(size: 8)).foregroundColor(.secondary),
+                    context.draw(Text(label).font(.system(size: 8))
+                                    .foregroundColor(theme.manifest.tokens.secondaryForeground),
                                 at: CGPoint(x: x(index), y: size.height - 8), anchor: anchor)
                 }
             }
@@ -530,7 +534,7 @@ struct FUnifiedSecurityChart: View {
                 centerY - CGFloat(value / extent) * (subchartHeight * 0.43)
             }
             var baseline = Path(); baseline.move(to: CGPoint(x: leftAxis, y: centerY)); baseline.addLine(to: CGPoint(x: size.width - rightInset, y: centerY))
-            context.stroke(baseline, with: .color(.secondary.opacity(0.25)), lineWidth: 0.7)
+            context.stroke(baseline, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.25)), lineWidth: 0.7)
             var difPath = Path(); var deaPath = Path()
             for index in range {
                 let point = macd[index]
@@ -546,7 +550,8 @@ struct FUnifiedSecurityChart: View {
             }
             context.stroke(difPath, with: .color(averageColors[0]), lineWidth: 0.8)
             context.stroke(deaPath, with: .color(averageColors[1]), lineWidth: 0.8)
-            context.draw(Text("MACD").font(.system(size: 8, weight: .medium)).foregroundColor(.secondary),
+            context.draw(Text("MACD").font(.system(size: 8, weight: .medium))
+                            .foregroundColor(theme.manifest.tokens.secondaryForeground),
                          at: CGPoint(x: size.width - rightInset - 4, y: subchartTop + 7), anchor: .trailing)
         }
         for overlay in model.priceOverlays where !isUnavailable(overlay.quality) {
@@ -589,7 +594,8 @@ struct FUnifiedSecurityChart: View {
         if let selectedIndex, range.contains(selectedIndex) {
             let cursorX = x(selectedIndex)
             var cursor = Path(); cursor.move(to: CGPoint(x: cursorX, y: priceTop)); cursor.addLine(to: CGPoint(x: cursorX, y: size.height - bottomAxis))
-            context.stroke(cursor, with: .color(.secondary.opacity(0.8)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            context.stroke(cursor, with: .color(theme.manifest.tokens.secondaryForeground.opacity(0.8)),
+                           style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
         }
     }
 
@@ -677,7 +683,9 @@ struct FUnifiedSecurityChart: View {
                 Image(systemName: active ? "eye" : "eye.slash")
                     .font(.system(size: 7, weight: .semibold))
             }
-            .foregroundStyle(available ? (active ? color : Color.secondary) : Color.secondary.opacity(0.5))
+            .foregroundStyle(available
+                ? (active ? color : theme.manifest.tokens.secondaryForeground)
+                : theme.manifest.tokens.secondaryForeground.opacity(0.5))
             .padding(.horizontal, 5).padding(.vertical, 1)
             .background(active ? color.opacity(0.07) : Color.clear, in: Capsule())
             .frame(minHeight: 24)

@@ -1829,6 +1829,24 @@ final class FHomeModel: ObservableObject {
         watchlistCodes.contains(code)
     }
 
+    func watchlistQuantAssessment(for code: String, at now: Date = Date()) -> FLocalQuantAssessment? {
+        guard let quote = marketDataByCode[code] else { return nil }
+        let reference = marketReferenceByCode[code]
+        let iopv = reference.flatMap { value -> FIOPVObservation? in
+            guard value.securityCode == code, value.hasFreshIOPV(at: now), let iopv = value.iopv else { return nil }
+            return try? FIOPVObservation(securityCode: code, value: iopv,
+                observedAt: value.observedAt, fetchedAt: value.fetchedAt,
+                source: value.source, quality: .complete)
+        }
+        let mapping = FMarketIndexSecurityMappingRegistry.mapping(for: code)
+        return FLocalQuantEngine.evaluate(
+            quote: quote, dailyHistory: dailyKlineByCode[code], regime: securityRegimeByCode[code],
+            iopv: iopv, sessionStatus: FMainlandTradingCalendar.status(at: now),
+            mappedBenchmarkRegime: mapping.flatMap { marketIndexRegimesByCode[$0.indexCode] },
+            mappedBenchmarkFetchedAt: mapping.flatMap { marketIndexRegimeFetchedAtByCode[$0.indexCode] },
+            mappedBenchmarkIndexCode: mapping?.indexCode, now: now)
+    }
+
     func toggleWatchlist(_ code: String) {
         guard Self.isValidWatchlistCode(code) else { return }
         if watchlistCodes.contains(code) {

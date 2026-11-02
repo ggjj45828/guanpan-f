@@ -220,6 +220,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         let settingsForm = app.collectionViews.firstMatch
         XCTAssertTrue(settingsForm.waitForExistence(timeout: 3), app.debugDescription)
 
+        let profileDisclosure = app.descendants(matching: .any)["settings.profile.edit"]
+        scrollUntilHittable(profileDisclosure, in: settingsForm)
+        XCTAssertTrue(profileDisclosure.isHittable, app.debugDescription)
+        profileDisclosure.tap()
+
         let clear = app.buttons["profile.preference.clear.investmentHorizon"]
         if clear.exists {
             scrollUntilHittable(clear, in: settingsForm)

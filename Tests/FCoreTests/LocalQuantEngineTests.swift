@@ -78,9 +78,31 @@ final class LocalQuantEngineTests: XCTestCase {
         XCTAssertTrue(assessment.factors.first(where: { $0.kind == .vwapDeviation })?.isAvailable == true)
         XCTAssertNotNil(assessment.factors.first(where: { $0.kind == .vwapDeviation })?.directionalScore)
         XCTAssertTrue(assessment.factors.first(where: { $0.kind == .iopvPremium })?.isAvailable == true)
+        XCTAssertGreaterThanOrEqual(assessment.watchlistDirectionalFactorCount, 3)
+        XCTAssertNotNil(assessment.watchlistDirectionalScore)
         XCTAssertEqual(assessment.disposition, .wait)
         XCTAssertFalse(assessment.candidatePlanGenerated)
         XCTAssertTrue(assessment.strategies.allSatisfy { !$0.qualified })
+    }
+
+    func testWatchlistDirectionalScoreRequiresFreshQuoteAndThreeFactors() throws {
+        let now = Date()
+        let stale = FLocalQuantEngine.evaluate(quote: try quote(now: now, age: 600),
+            dailyHistory: nil, regime: nil, iopv: nil, sessionStatus: .continuous, now: now)
+        XCTAssertEqual(stale.quoteFreshness, .stale)
+        XCTAssertNil(stale.watchlistDirectionalScore)
+
+        let sparseFactors = (0..<2).map { index in
+            FLocalQuantFactorObservation(kind: index == 0 ? .vwapDeviation : .shortMomentum,
+                value: 0.01, directionalScore: 50, observedAt: now, supportingDataAsOf: nil,
+                source: "test", qualityNote: nil, unavailableReason: nil)
+        }
+        let sparse = FLocalQuantAssessment(securityCode: "159352", evaluatedAt: now,
+            quoteTimestamp: now, quoteFreshness: .fresh, marketRegime: nil, riskLevel: nil,
+            benchmarkIndexCode: nil, benchmarkRegime: nil, benchmarkRiskLevel: nil,
+            benchmarkUnavailableReason: nil, factors: sparseFactors, strategies: [],
+            disposition: .noTrade, reasonCodes: [], candidatePlanGenerated: false)
+        XCTAssertNil(sparse.watchlistDirectionalScore)
     }
 
     func testFreshQuoteAndRangeRegimeStillWaitForQualifiedNASParameters() throws {

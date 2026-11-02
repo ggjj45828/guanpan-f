@@ -35,7 +35,7 @@ enum FHomeCardRole: String, CaseIterable, Identifiable {
         switch self {
         case .portfolio: "本机 Ledger 的持仓与现金"
         case .marketObservation: "行情、时点、来源与质量"
-        case .crossMarketPulse: "跨市场行情 · NAS历史数据供Quant验证"
+        case .crossMarketPulse: "跨市场行情 · NAS为可选历史归档与研究增强"
         case .advisorGuidance: "组合上下文、风险与建议"
         }
     }

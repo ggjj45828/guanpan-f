@@ -67,6 +67,23 @@ public struct FLocalQuantAssessment: Equatable, Sendable {
     public let disposition: FLocalQuantDisposition
     public let reasonCodes: [String]
     public let candidatePlanGenerated: Bool
+
+    /// Descriptive watchlist observation, not a probability, expected return,
+    /// strategy qualification, or trade signal. Requires at least three valid
+    /// factor observations so sparse data does not produce a misleading score.
+    public var watchlistDirectionalScore: Int? {
+        guard quoteFreshness == .fresh else { return nil }
+        let scores = factors.compactMap { factor -> Int? in
+            guard factor.isAvailable, let score = factor.directionalScore else { return nil }
+            return score
+        }
+        guard scores.count >= 3 else { return nil }
+        return Int((Double(scores.reduce(0, +)) / Double(scores.count)).rounded())
+    }
+
+    public var watchlistDirectionalFactorCount: Int {
+        factors.filter { $0.isAvailable && $0.directionalScore != nil }.count
+    }
 }
 
 /// Deterministic, per-security factor calculations for local observation.

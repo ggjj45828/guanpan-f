@@ -20,3 +20,15 @@
 3. 首页第一轮结构迁移已编码，Run 73对该SHA的Device/Simulator Build和UI XCTest全通过；复用F模型与业务路由，没有搬入B策略/账本代码。截图已导出，待人工视觉审阅。
 4. 先在可交互 Simulator 取得 B参考、F旧版、F新版截图，再决定是否将结构方案推广到其他页。
 5. 只有截图审阅/操作完成，才能从“已定位B源码”推进到“已完成结构迁移”“Simulator验证”或视觉接近/达到/超过B。
+
+## 2026-11-02 逐页状态校正
+
+| 页面/能力 | 固定B Frozen源码对照 | 当前增量 | 视觉判断 |
+|---|---|---|---|
+| 首页 | `ThemeHome.swift` 多布局共享HomeSnapshot；B确切手机版身份未证 | 本轮未改首页布局 | F不如B，未新验 |
+| 行情/自选 | B完整筛选/列表与统一设计系统可作donor | F加真实分钟sparkline和有样本门槛的描述分 | 已编码未编译/未截图；不判胜 |
+| 证券详情 | B在单证券上下文/层级组织可借鉴，F数据字段保留 | 本轮未改 | F不如B，未新验 |
+| 分时/K线 | B `UnifiedChartView.swift` 为统一交互donor；绝不复制B数据业务 | 本轮未改图表 | F不如B，手势和视觉未验 |
+| AI Advisor | B共享DesignSystem与结构化区段；F保留真实DecisionContext | NAS可选文案清理 | DeepSeek实网/引用未验 |
+| 真实资产 | B页面组织可借鉴；F唯一真实Ledger | 本轮未改 | F不如B，真机未验 |
+| 设置/主题 | B `DesignSystem.swift` 全局tokens | F折叠低频区，主题选择保留 | 已编码未编译/截图；全主题跨页未验 |

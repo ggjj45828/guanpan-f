@@ -1,5 +1,17 @@
 ## 2026-11-02 当前远端 main 审计快照（本节为当前基线）
 
+## 2026-11-02 后续审计进度（覆盖本节以下旧基线）
+
+- GitHub最新 `main` 经提交列表核实为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`；本轮开始时本地工作树干净。最新Swift改动尚未提交/推送/编译，不能引用Run225旧代码的335/335、12/12作为当前改动结果。
+- A20自选：行内完整320pt图已改成基于上游分钟样本的细线趋势；增加`FLocalQuantAssessment.watchlistDirectionalScore`，要求报价fresh且至少3个有效方向因子，少于门槛显示“样本不足”，明确不是收益概率/交易信号。评分/过期门槛回归测试已定义。现状态：已编码，Swift执行0，Apple编译0，视觉证据0。
+- A24设置：画像字段移入“编辑明确偏好”折叠项，数据诊断/研究细节折叠，NAS地址与保存测试、主题栏保留在主层；画像UI测试现在会先展开该区域。现状态：已编码，未编译/未运行UI测试/无新截图。
+- A22/A23跨主题逐页一致、A29 B/F对照：本轮未取得十主题核心页面截图矩阵或B/F同状态视觉对比；仍未验，F不能报告达到B。
+- A16 NAS：历史指定日期HTTP 200响应schema与iOS decoder不符、兼容路径404仍是已知手机证据；本轮没有NAS生产实例/响应体访问，不宣称修好或可连。
+- A17新闻：客户端/DecisionContext实现存在，但用户网络真实可达性、新闻来源/时间/链接和DeepSeek引用没有新端到端证据。
+- A31 iPhone Air：当前Windows主机无iOS Simulator或用户设备，本轮截图人工审阅与实机验收均未进行，External Pending。
+- A32 DeepSeek真实成交闭环：无真实会话和用户券商成交证据；Candidate不得触发Ledger，不进行模拟/自动成交，仍未完成。
+- 下一步：在推送前查询Actions活跃数量，遵守最多2个并行；提交后等待该SHA的Apple构建、FCore与UI XCTest结果。失败按首个根因修复并重新验证；通过后继续人工视觉/实机所需步骤，不将自动截图导出当作人工验收。
+
 - 当前 `main` 与 `origin/main` 同为 `c6ba442835d712b444c27d158aefdc5f1aecdf04`，工作树干净。逐项目标清单见 [F-AUDIT-TARGET-CHECKLIST.md](F-AUDIT-TARGET-CHECKLIST.md)。清单逐条区分源码确认、CI证据和外部待验，不把实现存在写成产品验收通过。
 - 当前自动验证证据：Python/NAS Run 28（commit `c6ba442…`）306项、compileall、架构边界通过；定向 Home/traceability 合同本地30/30通过。本机全量 `unittest discover` 未在约40秒内返回并已中止，不记为全量通过。最近Apple Run 224（Swift SHA `f1f2c291…`）FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build及IPA流程通过；`c6ba442`只改了CI路径触发器，不改该次验证的Swift源码。截图已导出但未经人工逐页审阅。
 - 本轮源码确认：初始持仓录入入口在首页及真实资产页，已建空账本有登记真实成交开仓入口；UI XCTest检查了入口和表单。MACD代码和副图切换也存在。这不代表iPhone Air的入口可发现性和图表布局已人工验收。
@@ -805,3 +817,17 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Python/NAS Run 27 [41398262417](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262417)唯一失败为B-058追溯表引用旧测试方法名。锚点已改为 `testSecurityDetailChartsUseExpandedPhoneHeight`，当前本机相关追溯+布局合同30/30通过。该次修正仅涉及文档，Python/NAS workflow未自动触发；不声称全仓306项重跑通过。
 - 当前图表尺寸：证券详情实时分时、日K、NAS历史分时420pt；行情紧凑预览320pt。自动编译/测试通过不代表用户设备视觉达标。
 - 下一步：完成B-058追溯记录和本交接同步、核对远端并普通推送；随后继续基于最新main做剩余产品缺口审计。NAS真实HTTPS/历史数据、新闻E2E、DeepSeek成交闭环和人工Simulator/iPhone验收状态仍按未验证处理。
+
+## 2026-11-02 本轮复核：用户提出的八项目标
+
+- 当前远端 `main` 经GitHub API核为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`；检查前30条Actions活跃任务0。当前工作树有未提交Swift与追踪文档，不能继承旧SHA Apple CI。当前Windows没有Xcode/Simulator，本机Swift编译和XCTest执行均为0。
+- 自选观察分/趋势：代码已接入真实分钟快照与Local Quant有效因子分，报价fresh并至少3因子才显示方向观察分；不是概率/交易信号。每10秒行情刷新已有，图表线随快照变化；本轮修改未编译/未设备验收。
+- 设置页：画像、诊断、研究细节改折叠，主题/NAS配置留在主层；未编译/未截图。
+- 全主题跨页：已核共享主题key及token被核心页面读取；这只证明部分源码共享，10主题×核心页面的一致性无截图证据，仍External Pending。
+- B/F视觉：基于用户Frozen ZIP固定SHA `9ddfe32b787ad9e522a48eb55ff8231227d79599`再次读取B三个核心文件并静态对照。B有共享DesignSystem、五类首页renderer和单一图表交互；没有同设备B/F成品截图，F继续按用户反馈裁定不如B。
+- NAS历史分钟：仓库服务与iOS decoder的F endpoint静态字段相符；旧实机报错表明部署/版本或响应体仍待对照。无当前实际NAS payload、指定日期完成数据或手机穿透证据；未改NAS。
+- 新闻：同花顺公开web source→本地缓存→证券映射news observation→Advisor提示的源码链存在；实际设备可达、正文真实性边界和DeepSeek引用均未证实。
+- iPhone Air和真实DeepSeek→Candidate→用户确认真实成交→Ledger→Advisor复判：仍External Pending，不能用CI截图/测试定义/模拟成交关闭。
+- 下步：整理本轮追踪文档，确认Swift diff与换行，再查Actions不超过2后提交并普通推送；等待当前SHA Apple/Python Actions真实结果，按首个根因修复后再验证。
+
+- 本轮主题一致性小修：`FUnifiedSecurityChart.swift`图表网格、价格/日期刻度、VOL/MACD标注、十字线及非选中图层从系统`secondary`色转为当前主题`secondaryForeground`；这让图表中性元素跟随同一个已选主题token。尚未编译或截图对比，不算视觉验收完成。

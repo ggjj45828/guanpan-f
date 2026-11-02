@@ -1,5 +1,9 @@
 ## 2026-11-02 当前远端 main 状态（覆盖下方历史快照）
 
+> 后续逐项复核：本轮从GitHub核实最新main为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`。工作树新增自选方向观察分/迷你趋势与设置密度调整尚未编译；后续CI执行前均为“编码待验”。A22/A23/A29/A31/A32以及NAS历史、新闻真实到达仍不能标Pass。详情见 `F-AUDIT-TARGET-CHECKLIST.md` 的2026-11-02逐项复核。
+
+> 后续逐项复核：本轮从GitHub核实最新main为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`。工作树新增自选方向观察分/迷你趋势与设置密度调整尚未编译；后续CI执行前均为“编码待验”。A22/A23/A29/A31/A32以及NAS历史、新闻真实到达仍不能标Pass。详情见 `F-AUDIT-TARGET-CHECKLIST.md` 的2026-11-02逐项复核。
+
 - 当前远端/本地 HEAD：`c6ba442835d712b444c27d158aefdc5f1aecdf04`，工作树干净。
 - 全盘逐项目标、源码定位、当前证据和关闭条件：见 [F-AUDIT-TARGET-CHECKLIST.md](F-AUDIT-TARGET-CHECKLIST.md)，A01–A32。未人工验收项不得因代码存在或旧SHA CI通过而升级为完成。
 - 最新Python/NAS Run28（当前提交）306项、compileall和架构边界通过；本机定向合同30/30。Windows本机全量unittest未能及时返回，已中断，不记为通过。
@@ -823,3 +827,20 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 - 安全边界首轮扫描未发现券商自动下单路由或硬编码密钥；6处Ledger writer调用点均对应用户主动确认操作。出站请求字段/日志/fixture隐私检查尚未完成，不关闭A28。
 - 产品架构依照2026-11-02用户决策：实时行情 + 本机Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger为核心；NAS为可选增强，不得列为Advisor必经依赖。旧NAS主链条描述若冲突，以该决策为准。
 - Simulator截图只记录为“已导出”，未人工逐张审阅；iPhone Air、真实NAS/新闻/DeepSeek/确认成交端到端均保持External Pending。
+
+## 2026-11-02 八项用户目标状态（当前dirty SHA，不继承旧CI）
+
+| 目标 | F源码锚点 | 当前状态 | 关闭证据 |
+|---|---|---|---|
+| 自选方向观察分/分钟迷你线 | `Sources/FCore/LocalQuantEngine.swift`; `GuanpanFApp.swift`; `HomeExperience.swift` | 已编码、未编译；分数fresh且≥3有效因子 | 本SHA FCore/UI CI + 列表实机每10秒刷新视觉验收 |
+| 设置页密度 | `HomeExperience.swift` SettingsOverview | 已编码、未编译 | 当前SHA UI测试、Simulator/手机截图审阅 |
+| 主题跨页一致性 | `ThemeLayoutManifest.swift`; 核心View共用theme storage/tokens | 源码部分一致、截图矩阵未做 | 每个主题×6核心页面/明暗护眼截图及人工审阅 |
+| B/F逐页视觉比较 | `F-B-UI-PRODUCT-GAP-AUDIT.md`; Frozen SHA `9ddfe32…` | B Frozen源码静态对读；没有同态B/F图；F不如B | 逐页面结构迁移、同尺寸同状态B/F人工截图 |
+| NAS历史分钟真实契约 | `FNASConnection.swift`; `nas/fminute/http_api.py` | 源码字段静态匹配；部署端与手机HTTP 200 payload未验 | 同security/date真实响应、coverage/bar/timezone/source、iOS图表准确显示 |
+| 新闻真实可达及顾问引用 | `FNewsClient.swift`; Advisor pipeline | 来源实现/上下文传递已核；设备HTTP和DeepSeek引用未验 | iPhone收真实标题/来源/时间/URL并在本轮DeepSeek响应可核引用 |
+| iPhone Air | 外部设备验收 | External Pending | 真机界面/输入/导航/图表手势/主题切换录屏或截图 |
+| DeepSeek真实成交闭环 | Advisor/Candidate/`FConfirmedLedgerWriter`路径 | 代码路径存在；无真实E2E证据 | 真实会话、原Candidate、用户确认券商fills、Ledger对账、Advisor重新读取全过程 |
+
+旧版矩阵中的历史状态行不代表当前dirty修改已经验证；新增行以本轮核对为准。
+
+图表主题一致性增量：本轮把F图表轴、网格、VOL/MACD标签、十字线、非选中图层中性颜色接入当前theme secondaryForeground。仅编码，未Apple编译或Simulator视觉验证。

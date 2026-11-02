@@ -290,3 +290,26 @@ F `MarketOverview` 刷新动作现覆盖全部真实持仓与有效的当前证�
 - 行情页改为无外框、全宽ScrollView行，300pt实时图，不再受系统List行缩进挤压；MA/图层胶囊视觉触控高度30pt。双指缩放实时跟手；MACD从真实价格计算，日K VOL使用真实成交量。
 - 各主题的底色/表面色分别定义；Settings Form隐藏默认系统背景并接入当前主题颜色。导航栏、底栏、行情、图表与详情顾问使用同一个所选主题状态。
 - 静态源码检查不能证明图表在iPhone Air上的实际占屏/坐标/触控质量，也不能证明十个主题的页面构图统一。该项仍需当前SHA Apple CI、Simulator逐主题截图及iPhone Air人工验收；未获得证据前整体仍“不如B”。
+
+## 2026-11-02 固定Frozen源码补充对读
+
+- 本轮按ZIP声明的冻结SHA `9ddfe32b787ad9e522a48eb55ff8231227d79599` 再读GitHub原文件 `ThemeHome.swift`、`UnifiedChartView.swift` 与 `DesignSystem.swift`，不引用旧 `GuanpanNext-work` 副本作为Frozen证据。
+- B源码证据：HomeSnapshot统一输入给多种首页布局；单一UnifiedChartView组织周期、叠加线/副图和交互；DesignSystem提供跨页面palette/语义色/字号/间距和共享组件。F源码有10种布局manifest、统一图表和共用theme key，但静态存在不代表所有页面真实继承同一成熟层级；部分图表文字继续使用系统secondary色，专业页容器/排版也未证明与B一样统一。
+- 当前B/F逐页裁决仍为F不如B（依据用户安装体验）；这次静态对读没有同机B/F截图，不能把结论上调。源代码迁移关闭0项、视觉关闭0项。
+- 本轮非UI风险较低修改：行情列表自选行压为48pt真实分钟趋势线并加有门槛的描述性方向观察分；设置低频画像/诊断/研究项折叠；NAS文案明确可选。以上全部未编译、未Simulator查看。
+
+## 2026-11-02 B Frozen → F 页面逐项静态差距（固定SHA 9ddfe32b787ad9e522a48eb55ff8231227d79599）
+
+| 页面 | B Frozen 实际源码 | F 当前源码 | 静态差异/裁决 | 当前状态 |
+|---|---|---|---|---|
+| 首页 | `guanpan-pro-native/Sources/ThemeHome.swift`：`HomeSnapshot`复用5个首页Renderer；共享IndexBoard、机会、持仓摘要 | `HomeExperience.swift`：`HomeLayout`按10个layout family；角色组件复用F真实Ledger/Advisor/Quote | B五种首页renderer已有完整分支和共同设计语言；F十类名称/manifest多，但当前没有灰度截图证明构图可辨。用户体验裁决B wins。 | 结构未迁移完，视觉未验 |
+| 行情/自选 | `GuanpanAdvisorApp.swift`：`MarketScreen`/`InstrumentRow`；指数strip、筛选、row swipe/context actions、详情和分析入口 | `HomeExperience.swift`：`MarketOverview`持仓/自选/合并、代码输入、每10秒报价、真实分钟sparkline和方向观察分 | B可见操作更丰富（滑动快捷买卖/分析；仅作为导航操作donor，F不接B交易写入）；F新增分数是描述性因子值，不是表现胜出证据。 | 自选评分已编码未编译；B布局迁移未做 |
+| 证券详情 | `GuanpanAdvisorApp.swift`：`InstrumentDetailScreen`统一报价、数据、持仓/分析、图表和动作 | `HomeExperience.swift`：证券详情 route；F双成本、Daily/Episode/Lifetime/T、图层/Advisor/候选 | B上下文和字段组织可借；F真实口径更多但当前长页组织/视觉按用户反馈落后。 | 结构/视觉待改 |
+| 分时/日K/历史/全屏 | `UnifiedChartView.swift`：单一chart renderer，分时固定交易时段、缩放/选点、多个副图、图层状态和全屏共用 | `FUnifiedSecurityChart.swift`：F单一renderer、真实来源质量、MA/VOL/MACD/成本线；NAS指定日接口 | 数据语义F较严格；B成熟手势/完整副图是体验donor。F时间轴/比例/手势仍未设备验证；本轮仅将坐标与中性图层色改用theme token。 | 本轮token修复未编译；视觉与手势External Pending |
+| AI顾问 | `GuanpanAdvisorApp.swift` + `AIGuidanceViews.swift`：AIHub/结构化指导、消息、Candidate详情/成交sheet | `HomeExperience.swift` AdvisorOverview/AdvisorComposer；`FAdvisorVerticalSlice.swift`当前prompt/Guard | B证据、建议、快捷入口呈现可作donor；F保持scope、只读Ledger、Guard及用户确认写入边界。真实引用/DeepSeek目前无E2E证据。 | 功能源有，产品差距未关 |
+| 真实资产/持仓 | `GuanpanAdvisorApp.swift` `AssetsScreen`、`PortfolioSummaryViews.swift` `HoldingsBreakdownPanel`、`AddPositionSheet`/`TradeEntrySheet` | `HomeExperience.swift` `RealAssetsOverview`；F确认Writer和历史Episode | B入口与摘要层次清楚；F有真实记账入口但用户多次找不到，说明“存在”不等于“可发现”。B wins，需醒目化，不动F账本语义。 | 入口需真机可发现性验收 |
+| 设置/主题 | B `SettingsScreen` + `DesignSystem.swift` GPPalette、字号、page background、keyboard done | F `SettingsOverview` + `ThemeLayoutManifest.swift`/AppStorage theme；本轮折叠画像/诊断/研究项 | B共享tokens、字体缩放和键盘工具贯穿明确；F有主题token但跨专业页覆盖未证明。本轮减少设置首屏信息量，未验证结果。 | 未编译/无截图 |
+| NAS状态/历史数据 | B设置提供NAS和历史查询入口，页面代码不等于端点实网可用 | F `FNASConnection.swift`+详情历史页；当前静态decoder与仓库服务合同相符 | 旧F实机报告HTTP 200字段不匹配/兼容404；部署版本/原始响应缺失，不能判NAS通过，也不改服务端猜测。 | 实机契约External Pending |
+| 新闻/研究 | B可见新闻/研究页面与AI入口（业务provider可靠性另核） | F `FNewsClient.swift`、`news observation`与Advisor prompt | F明确只传标题/来源/时间/链接，不代表正文核验；当前没有手机可达和DeepSeek引用实证。 | External Pending |
+
+此表是源码级产品差距而非视觉验收：B Frozen仍是候选版本，和用户当前B安装版身份未逐字节确认；F整体仍按用户反馈判为不如B。

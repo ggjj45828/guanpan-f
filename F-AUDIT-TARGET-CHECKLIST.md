@@ -6,9 +6,9 @@
 
 - 审计日期：2026-11-02（Asia/Shanghai）
 - 审计开始时 HEAD / `origin/main`：`c6ba442835d712b444c27d158aefdc5f1aecdf04`；开始时工作树干净且与远端一致。
-- 当前 HEAD / `origin/main`：`edd14a397b70a8203467c39fa06133baa5e564ff`；该源码修复已普通推送并通过CI。本段CI结果回填和交接更新当前仍在工作树，待普通推送。
-- 当前 SHA iOS 证据：Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642)，FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、观盘max IPA校验/打包/上传全部通过。Artifact 13123048046。CI截图尚未人工逐张审阅。
-- 当前 SHA NAS/Python 证据：Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391)，306项、compileall、架构边界通过。
+- 本轮开始基线 HEAD / GitHub `main`：`a1ba64582c29340596d5f5f1639ebc5478a5186c`，经GitHub提交列表确认；工作树开始时干净。
+- 最近可复核的 iOS 证据：Run 225 [41404815642](https://github.com/ggjj45830/guanpan-f/actions/runs/41404815642)，FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、IPA校验/打包/上传通过。Artifact 13123048046对应其实际代码SHA；不是本轮新Swift修改的验证。CI截图尚未人工逐张审阅。
+- 最近可复核的 NAS/Python 证据：Run 29 [41404817391](https://github.com/ggjj45830/guanpan-f/actions/runs/41404817391)，306项、compileall、架构边界通过；其与当前SHA的包含关系需按Actions记录核对，不把数字自动继承到后续修改。
 - 静态修复：跨市场摘要涨跌颜色已从硬编码系统红/绿改用主题 `positive` / `negative` semantic token；Run 225已编译验证。
 - 本机验证：Home/追踪定向合同 30/30；本机全量Python导入曾受环境依赖影响并被中止，不记为全量通过。
 - Simulator 导出截图未人工逐页审阅；iPhone Air真机、图表手势、NAS指定日期数据、真实新闻可达性、DeepSeek真实E2E仍需实测。
@@ -44,11 +44,11 @@
 | A17 | 新闻源真实、可达、带来源/时间/链接并能进入AI上下文 | `FNewsClient`为同花顺公开网页接口；Advisor提示要求只引用上下文新闻；App显示失败/空状态 | 源码确认；手机真实可达性未验 | 实机连接验证source、publishedAt、URL和证券关联；无结果时不得让模型用记忆冒充新闻 |
 | A18 | Advisor使用真实组合/证券scope和数据新鲜度 | `FHomeModel`有portfolio/security scope和Ledger/quote evidence准备 | 源码确认；真实DeepSeek链未完成 | 验证组合问题不被详情证券覆盖；缺Ledger/行情时安全拒绝或降级；DeepSeek请求和Guard做实网E2E |
 | A19 | Guard、候选计划有效区间和失效规则 | Guard/量化状态模型已有代码与回归 | 源码确认；生产实时报价驱动触发器待核 | 检查行情Stale时暂停、离开价格区不追价；验证计划生命周期状态和候选版本不可变 |
-| A20 | 自选证券加入/移除、打分、曲线与自动更新 | MarketOverview支持搜索及watchlist入口；本轮尚未核实Quant评分/自选走势图是否完整接线 | 未核 | 沿UI→model→quote refresh追踪每个字段；缺Quant分值/迷你图则按既定本地确定性规则修复，不增加模型黑盒 |
+| A20 | 自选证券加入/移除、打分、曲线与自动更新 | 已有每10秒报价刷新；当前改动新增只读Local Quant方向因子均值（要求新鲜报价且≥3个有效因子）及基于真实分钟样本的紧凑迷你线；尚未Swift编译/CI | 编码未验证 | 当前改动需Apple CI；随后看行情列表截图与实机刷新。分数只叫方向观察分，不代表收益概率或交易建议 |
 | A21 | 首页第一屏信息层次与主题对应布局 | HomeLayout含10个family renderer；首页核心role组件存在 | 不达标—视觉验收；用户持续反馈丑/层级乱 | 逐主题截图审阅首页布局、信息层级；只针对可见问题调整，CI截图不能替代手工审阅 |
 | A22 | 一个主题在全App颜色/排版/卡片/导航一致 | 全局`@AppStorage`主题驱动manifest/token，页面使用共享theme | 源码部分确认；当前SHA CI通过，跨页面一致性未验证 | 已修复跨市场指数涨跌标签硬编码红/绿，改用正/负语义token；仍需逐主题截图抽查首页、行情、证券详情、AI、资产、设置的背景、字色、间距、导航 |
 | A23 | 10主题不是换色；保持全App结构和信息职责 | 10个theme/layout family及HomeLayout renderer存在；Settings gallery可折叠 | 源码确认；灰度构图与各页覆盖未验 | 建立各主题×核心页面截图矩阵；三套标杆先完成，未有截图证据不得写达标 |
-| A24 | 设置页信息密度、滚动与主题栏不混乱 | 设置为SwiftUI List分组，主题选择横向条、全部预览折叠 | 不达标—截图反馈显示行高/字段换行与长说明占用过大 | 压缩次要说明、把NAS/数据高级状态分组折叠，保留错误主状态；必须对比新旧截图后验收 |
+| A24 | 设置页信息密度、滚动与主题栏不混乱 | 本轮将投资者画像输入、数据诊断、研究细节改为折叠；NAS高级说明原已折叠；未编译/未截图验证 | 编码未验证 | Apple CI与新旧设置页截图；确认主要状态、主题选择、NAS地址与持仓入口没有藏进高级折叠 |
 | A25 | 键盘输入可收起且不遮挡操作 | 行情搜索有FocusState与“收起键盘”按钮；表单键盘关闭路径需逐页检 | 部分源码确认 | 搜索所有TextField/Form，统一有提交/关闭手段并可滚动至确认按钮；UI Test/Simulator验证 |
 | A26 | 五个主Tab互不混淆、返回栈保留 | 五个主Tab各自NavigationStack；Run224 UI 12/12 | 自动验证通过（Run224旧Swift SHA）；手工返回状态仍待验 | 真机检查切主题/切Tab返回原路由、选中的证券和图表周期/日期是否保留 |
 | A27 | App显示名、图标、IPA | Run224 IPA交付门检查通过，观盘max及AppIcon纳入编译产物 | 自动验证通过（Run224） | 用户安装后仅处理实机安装差异；当前无须继续改包线 |
@@ -89,3 +89,33 @@
 3. 按六个核心页面逐主题查看截图并修正明显问题；未有可视化证据的主题不关闭。
 4. 对NAS历史API、新闻、均价/前收/IOPV分别做实际provider契约核验；无法从当前环境证明的保持Unavailable并记录外测步骤。
 5. 更新 `F-REALTIME-HANDOFF.md` 与 `F-MASTER-ACCEPTANCE-MATRIX.md`，每个完成项绑定当前提交/测试/截图证据。
+
+## 2026-11-02 后续逐项复核（当前工作树）
+
+- 本轮开始先从GitHub确认 `main` 为 `a1ba64582c29340596d5f5f1639ebc5478a5186c`，工作树干净。`a1ba645` 的Combined Status未返回status检查；它是审计记录提交，不得继承Run225的Swift验证为本轮新增代码的CI。
+- **A20 自选评分与趋势（编码中，未编译）：** 自选行现在改为紧凑真实分钟迷你线；报价仍由既有10秒行情轮询刷新。新增方向观察分仅聚合新鲜报价下可用的Local Quant方向因子，少于3个因子或报价过期则显示样本不足；文案明确分数不是收益概率/策略信号。新增新鲜度和最少样本回归。当前Windows缺Swift/Xcode，未执行FCore XCTest，也未生成新截图；须进入Apple CI后再复核实际构建与UI。
+- **A24 设置密度（编码中，未编译）：** 画像编辑、数据诊断、高级研究细节折叠；投资者画像保存/清除可见性UI测试已加展开动作。NAS配置/测试和主题选择保持直接可见。未做Simulator截图对比，不能声称视觉验收通过。
+- **A22/A23 全主题跨页一致性：** 本轮没有足够截图逐一核对10主题×首页、行情、证券详情、AI、资产、设置。源码中虽使用共享manifest/token，仍记未验；不能用全局环境修改完成度替代逐页证据。
+- **A29 B/F逐页视觉对照：** B冻结源码文件地图与需求记录可用，但当前没有同设备、同状态的B/F逐页人工截图证据。本轮未声称达到B；逐页面比较仍未验，CI screenshot export不算审阅。
+- **A16 NAS历史分钟实机契约：** 已知用户手机截图返回HTTP 200但schema与iOS契约不一致，兼容路由返回404；当前环境没有用户NAS部署响应样本/地址与iPhone网络。此项没有修复或实机通过证据，仍是外部待验。`/readyz`只证明ready，不代表指定日期分钟可读。
+- **A17 新闻真实可达与顾问引用：** 源码有新闻客户端及DecisionContext引用边界，但本轮没有手机网络响应、标题/来源/发布时间/URL或真实DeepSeek请求证据；仍未验。若Google/新闻域名在用户网络不可达，必须基于实际设备错误换成可达源；不能以CI通网或编译通过代替。
+- **A31 iPhone Air验收：** 当前为Windows环境，无可交互Apple Simulator或iPhone Air。本轮没有启动真机，也没有触控/视觉验收；外部待验。
+- **A32 DeepSeek→真实成交闭环：** 没有可供本轮使用的真实用户DeepSeek密钥会话、Candidate执行、用户确认券商成交与复判证据。不得自动交易/模拟成交；仍未完成。
+- 本轮新Swift/UI代码尚无编译、测试或截图结果。外部待验项不因源码修改关闭。下次必须先检查Actions队列数量（并行不超过2），再推送该具体SHA；等待其实际结果，首错修复后再重跑。
+
+## 2026-11-02 逐项目标复核（本轮增量；覆盖本文件较早的冲突性旧状态）
+
+| 目标 | 当前检查/实际修改 | 状态与仍需证据 |
+|---|---|---|
+| 自选评分与自动趋势图 | `MarketOverview`沿用每10秒行情刷新；自选行由报价快照中的真实分钟样本绘制48pt趋势线。新增`FLocalQuantAssessment.watchlistDirectionalScore`：报价必须fresh且至少3个有效方向因子；样本不足不显示分数，且文案明确不是收益概率/交易信号；增加稀疏/过期单测定义。 | 已编码；本机Swift执行0、当前SHA Apple编译0；刷新连贯度和可读性未视觉验收。 |
+| 设置页密度 | 画像编辑、数据诊断和低频研究信息已折叠；NAS地址/测试及主题入口保持可见；UI测试加入先展开画像区。 | 已编码；未编译、未运行UI测试、未截图。 |
+| 全主题跨页面一致性 | 共用`guanpan.f.homeTheme`由首页、行情、图表、顾问、资产/设置等读取；共享语义tokens已使用。但跨页背景/表面/导航/字体/Dynamic Type覆盖不等于只共用一个key；图表坐标仍见系统secondary色。 | 部分源码一致；主题×页面视觉验收未执行，不能关项。逐主题检查首页、行情、证券详情/图表、顾问、资产、设置及浅/深/护眼仍待做。 |
+| B/F逐页视觉对照 | Frozen donor精确来源为用户包SHA `9ddfe32b787ad9e522a48eb55ff8231227d79599`；本轮再次读取该SHA的`ThemeHome.swift`、`UnifiedChartView.swift`、`DesignSystem.swift`。B使用共享palette/environment、5种首页renderer、统一图表/图层交互及动态字号；对读了F当前市场列表/主题/图表。 | 已有源码静态对读；无B/F同设备同状态截图；按用户真机反馈仍判F不如B。逐页视觉退化关闭0项。 |
+| NAS历史数据实机契约 | NAS `/api/v1/minute-history`查询参数和当前iOS decoder静态相符；旧手机截图曾报HTTP 200字段不合及兼容路由404。此环境访问不到实际部署容器与iPhone穿透响应。 | 仅代码契约静态匹配；指定日覆盖、bars数量、时间戳、Partial/Complete和图表显示External Pending。未改NAS服务端，无需部署。 |
+| 新闻真实可达与顾问引用 | `FNewsClient`使用同花顺公开网页接口；后台缓存后将证券关联的标题/来源/发布时间/HTTPS URL作为只读news observation；Advisor只可引用输入标题，不得冒充全文，缺新闻不阻塞基础分析。 | 源码链已核；当前设备实际响应、相关新闻关联和DeepSeek引用无实证，External Pending。 |
+| iPhone Air验收 | 当前Windows无Xcode/可操作Simulator/iPhone Air；旧CI截图只是artifact。 | External Pending；本轮人工截图审阅/触控证据0。 |
+| DeepSeek真实成交闭环 | Candidate、Guard、用户确认成交后的writer及Quant重算源码路径存在；本轮无真实DeepSeek会话、券商成交及复判证据。Candidate不能写Ledger。 | External Pending；需真实行情+DeepSeek+用户确认真实成交同链记录，不用模拟fill冒充。 |
+
+最新远端核对：GitHub `main`=`a1ba64582c29340596d5f5f1639ebc5478a5186c`；检查前30条Actions没有queued/in_progress/waiting（活跃0）。最新Apple Run仍是旧SHA `edd14a3…`，不覆盖当前Swift dirty修改。当前修改尚未提交、推送或编译。
+
+补充：本轮将`FUnifiedSecurityChart.swift`坐标/网格/副图标注/十字线/图层中性颜色接入当前主题secondaryForeground token。静态改动已做，未编译、未截图；不得关闭A22/A23。

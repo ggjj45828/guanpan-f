@@ -420,7 +420,7 @@ private struct FEditorialResearchLine: View {
                 Image(systemName: "globe.asia.australia").foregroundStyle(theme.accent).frame(width: 20)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("跨市场与研究").font(.caption.weight(.semibold)).foregroundStyle(theme.ink)
-                    Text("指数行情由手机直连 · NAS历史数据供Quant验证（\(model.nasConnectionStatus)）")
+                    Text("指数行情由手机直连 · NAS为可选归档与研究增强（\(model.nasConnectionStatus)）")
                         .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
@@ -758,7 +758,7 @@ private struct HomeMarketResearchStrip: View {
         let detail = isMarket
             ? (newestHoldingQuote.map { "持仓行情 · \($0.source) · \($0.quoteTimestamp.formatted(date: .omitted, time: .shortened))" }
                ?? "尚无可用的持仓实时行情")
-            : "指数逐项显示行情来源和时点；NAS历史分钟用于Quant策略验证，Advisor不等待NAS"
+            : "指数逐项显示行情来源和时点；NAS只提供可选历史归档与研究增强，不阻塞本机Quant或Advisor"
         return NavigationLink(value: isMarket ? FHomeRoute.market : FHomeRoute.crossMarket) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -1873,40 +1873,43 @@ struct SettingsOverview: View {
                 .accessibilityIdentifier("settings.ai.saveKey")
                 LabeledContent("状态", value: model.aiKeyStatus)
             }
-            Section("投资者画像 · 明确偏好") {
-                Text("只保存你明确填写的内容，不根据持仓变化或 AI 对话猜测。开始在线顾问分析时，相关偏好会随本次问题发送给 DeepSeek；画像只帮助顾问理解期限、风险和交易习惯，不会改写账本。")
-                    .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(FInvestorProfileAttributeKey.allCases, id: \.self) { key in
-                    VStack(alignment: .leading, spacing: 7) {
-                        TextField(profileTitle(key), text: Binding(
-                            get: { investorProfileDrafts[key] ?? currentPreferenceText(key) },
-                            set: { investorProfileDrafts[key] = $0 }
-                        ))
-                        .accessibilityIdentifier("profile.preference.\(key.rawValue)")
-                        HStack {
-                            Button("保存") {
-                                let value = investorProfileDrafts[key] ?? currentPreferenceText(key)
-                                Task {
-                                    await model.saveExplicitInvestorPreference(key, value: value)
-                                    investorProfileDrafts[key] = nil
+            Section("投资者画像") {
+                DisclosureGroup("编辑明确偏好") {
+                    Text("只保存你填写的内容，并在在线顾问分析时作为本次上下文；不会改写账本。")
+                        .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(FInvestorProfileAttributeKey.allCases, id: \.self) { key in
+                        VStack(alignment: .leading, spacing: 7) {
+                            TextField(profileTitle(key), text: Binding(
+                                get: { investorProfileDrafts[key] ?? currentPreferenceText(key) },
+                                set: { investorProfileDrafts[key] = $0 }
+                            ))
+                            .accessibilityIdentifier("profile.preference.\(key.rawValue)")
+                            HStack {
+                                Button("保存") {
+                                    let value = investorProfileDrafts[key] ?? currentPreferenceText(key)
+                                    Task {
+                                        await model.saveExplicitInvestorPreference(key, value: value)
+                                        investorProfileDrafts[key] = nil
+                                    }
                                 }
-                            }
-                            .disabled(model.loadingInvestorProfile || model.savingInvestorProfile ||
-                                      (investorProfileDrafts[key] ?? currentPreferenceText(key))
-                                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            .accessibilityIdentifier("profile.preference.save.\(key.rawValue)")
-                            if model.investorProfile.attribute(key)?.current() != nil {
-                                Button("清除", role: .destructive) {
-                                    preferenceAwaitingClear = key
-                                    showingProfileClearConfirmation = true
+                                .disabled(model.loadingInvestorProfile || model.savingInvestorProfile ||
+                                          (investorProfileDrafts[key] ?? currentPreferenceText(key))
+                                            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                .accessibilityIdentifier("profile.preference.save.\(key.rawValue)")
+                                if model.investorProfile.attribute(key)?.current() != nil {
+                                    Button("清除", role: .destructive) {
+                                        preferenceAwaitingClear = key
+                                        showingProfileClearConfirmation = true
+                                    }
+                                    .disabled(model.loadingInvestorProfile || model.savingInvestorProfile)
+                                    .accessibilityIdentifier("profile.preference.clear.\(key.rawValue)")
                                 }
-                                .disabled(model.loadingInvestorProfile || model.savingInvestorProfile)
-                                .accessibilityIdentifier("profile.preference.clear.\(key.rawValue)")
                             }
                         }
                     }
                 }
+                .accessibilityIdentifier("settings.profile.edit")
                 Text(model.investorProfileStatus)
                     .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     .accessibilityIdentifier("profile.preference.status")
@@ -1941,7 +1944,7 @@ struct SettingsOverview: View {
                 Text("局域网请连接同一 Wi‑Fi 或 VPN；蜂窝网络请使用可达的 HTTPS 地址。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 DisclosureGroup("连接方式与安全说明") {
-                Text("NAS历史分钟主要用于Quant研究、回测、验证、样本外评估与策略资格签发；Research Summary只是DeepSeek的次要缓存上下文。当前合格策略参数包尚未下放到Local Quant。NAS不可达不阻断实时行情或单次基础Advisor分析。连接测试只读取 /readyz，不发送持仓，也不要求单独令牌。NAS 的 8788 端口对可达网络开放，请限制网络入口。")
+                Text("NAS是可选同步、归档与备份服务，不是实时行情、Local Quant或基础顾问分析的前置条件。连接测试只读取 /readyz，不发送持仓。远程访问请使用可达的HTTPS入口并限制网络访问。")
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1996,6 +1999,7 @@ struct SettingsOverview: View {
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
             }
             Section("数据诊断") {
+                DisclosureGroup("查看账本、日历与行情请求状态") {
                 LabeledContent("真实账本", value: model.ledgerStatus)
                 LabeledContent("交易日历", value: model.marketCalendarStatusText)
                 if model.marketRefreshStateByCode.isEmpty {
@@ -2005,11 +2009,14 @@ struct SettingsOverview: View {
                         LabeledContent(code, value: model.marketRefreshStateByCode[code] ?? "状态未知")
                     }
                 }
+                }
             }
             Section("高级研究") {
+                DisclosureGroup("研究能力与限制") {
                 LabeledContent("股息判断", value: "自动 / AI 综合判断")
                 Text("4% 仅作为研究参考；当前 App 尚未提供自定义最低股息率设置。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                }
             }
         }
         .accessibilityIdentifier("settings.form")
@@ -2347,19 +2354,36 @@ struct MarketOverview: View {
                             .accessibilityIdentifier("market.watchlist.\(code)")
                         }
                         if let snapshot {
-                            FUnifiedSecurityChart(
-                                model: FChartPresentationBuilder.live(
-                                    snapshot, holding: holding,
-                                    candidate: model.advisorResult?.candidate,
-                                    ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt,
-                                    reference: model.marketReferenceByCode[code]),
-                                height: 320)
-                                .frame(maxWidth: .infinity)
-                                .accessibilityIdentifier("market.security-chart.compact")
+                            HStack(spacing: 12) {
+                                FWatchlistSparkline(samples: snapshot.samples,
+                                    positiveColor: theme.manifest.tokens.positive,
+                                    negativeColor: theme.manifest.tokens.negative)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 48)
+                                    .accessibilityLabel("\(code) 盘中趋势")
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    if let assessment = model.watchlistQuantAssessment(for: code),
+                                       let score = assessment.watchlistDirectionalScore {
+                                        Text("\(score > 0 ? "+" : "")\(score)")
+                                            .font(.subheadline.weight(.semibold).monospacedDigit())
+                                            .foregroundStyle(score >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                                        Text("方向观察分 · \(assessment.watchlistDirectionalFactorCount)因子")
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                                    } else {
+                                        Text("样本不足")
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(theme.manifest.tokens.unavailable)
+                                        Text("不代表收益概率")
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                                    }
+                                }
+                            }
                         } else {
-                            Text("暂无真实行情 · 点按刷新获取上游报价")
+                            Text("暂无真实行情 · 刷新后显示趋势与观察分")
                                 .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
-                                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                         }
                         Text(snapshot.map {
                             "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
@@ -2385,6 +2409,42 @@ struct MarketOverview: View {
         .tint(theme.accent)
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await model.refreshMarketData(for: refreshableSecurityCodes) }
+    }
+}
+
+private struct FWatchlistSparkline: View {
+    let samples: [FMinuteSample]
+    let positiveColor: Color
+    let negativeColor: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            let values = samples.compactMap { sample -> CGFloat? in
+                let value = NSDecimalNumber(decimal: sample.price).doubleValue
+                return value.isFinite && value > 0 ? CGFloat(value) : nil
+            }
+            if values.count >= 2, let first = values.first, let last = values.last {
+                let minimum = values.min() ?? first
+                let maximum = values.max() ?? last
+                let span = max(maximum - minimum, max(abs(maximum) * 0.0001, 0.000001))
+                Path { path in
+                    for (index, value) in values.enumerated() {
+                        let x = geometry.size.width * CGFloat(index) / CGFloat(values.count - 1)
+                        let y = geometry.size.height - ((value - minimum) / span * (geometry.size.height - 4)) - 2
+                        if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                }
+                .stroke(last >= first ? positiveColor : negativeColor,
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            } else {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: geometry.size.height / 2))
+                    path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height / 2))
+                }
+                .stroke(positiveColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            }
+        }
     }
 }
 
