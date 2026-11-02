@@ -8,6 +8,71 @@ extension FHomeTheme {
     var accent: Color { manifest.tokens.accent }
 }
 
+private struct FThemePageHero: View {
+    let theme: FHomeTheme
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let symbol: String
+    var value: String? = nil
+    var valueLabel: String? = nil
+
+    private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(eyebrow.uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.78))
+                    Text(title)
+                        .font(.system(size: 25, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: symbol)
+                    .font(.system(size: 21, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.17), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            }
+            if let value {
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    Text(value)
+                        .font(.system(size: 27, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let valueLabel {
+                        Text(valueLabel).font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.78))
+                    }
+                }
+                .foregroundStyle(.white)
+            }
+        }
+        .padding(17)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                LinearGradient(colors: [tokens.accent, tokens.advisorSurface], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Circle().fill(.white.opacity(0.10)).frame(width: 150, height: 150).offset(x: 48, y: -72)
+                Circle().stroke(.white.opacity(0.13), lineWidth: 1).frame(width: 118, height: 118).offset(x: 20, y: -46)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).stroke(.white.opacity(0.24), lineWidth: 0.8))
+        .shadow(color: tokens.accent.opacity(theme == .dashboard || theme == .minimalTerminal ? 0.10 : 0.18), radius: 16, x: 0, y: 8)
+    }
+}
+
 struct HomeLayout: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
@@ -2098,8 +2163,13 @@ struct HomeDestination: View {
         } else { nil }
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(instrumentName).font(.largeTitle.bold())
-                Text(code).font(.headline.monospaced())
+                FThemePageHero(theme: theme,
+                               eyebrow: holding == nil ? "自选观察 · 证券详情" : "真实持仓 · 证券详情",
+                               title: instrumentName,
+                               subtitle: "\(code) · \(quoteSnapshot.map { Self.quoteFreshnessText($0, now: quoteNow) } ?? "等待可靠行情")",
+                               symbol: holding == nil ? "chart.xyaxis.line" : "chart.line.uptrend.xyaxis",
+                               value: freshPrice.map { "¥\(NSDecimalNumber(decimal: $0).stringValue)" } ?? "行情不可用",
+                               valueLabel: "最新价")
                 if let holding {
                     Group {
                         LabeledContent("真实持仓", value: "\(holding.units) 份")
@@ -2355,11 +2425,15 @@ struct AdvisorOverview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
-                Text("AI 私人投资顾问")
-                    .font(.largeTitle.bold())
+                let portfolioResult = model.advisorResult.flatMap { $0.scope == .portfolio ? $0 : nil }
+                FThemePageHero(theme: theme, eyebrow: "观盘max · 决策中枢", title: "今日投资判断",
+                               subtitle: portfolioResult?.narrative.conclusion ?? "结合真实持仓、可靠行情与风险状态，再决定操作或等待。",
+                               symbol: "sparkles",
+                               value: portfolioResult?.candidate.action.displayName ?? model.aiKeyStatus,
+                               valueLabel: portfolioResult == nil ? "顾问状态" : "当前结论")
                 Text("未指定持仓证券的提问按真实组合分析；明确指定证券代码或从证券详情进入时按证券级分析。")
                     .foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                Text("发送时读取本机只读账本快照和带来源/时点的行情；若配置且可用，会附带合格 NAS 研究。NAS 不可用不阻止基础顾问判断。")
+                Text("分析读取本机只读账本和带来源、时间戳的行情；NAS仅作为可选增强。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 AdvisorComposer(model: model, theme: theme)
                 VStack(alignment: .leading, spacing: 10) {
@@ -2428,13 +2502,13 @@ private struct CrossMarketOverview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("跨市场指数").font(.title2.bold())
-                        Text("实时指数行情由手机直接读取；历史指数日K与分钟研究从 NAS 读取，缺失时明确显示不可用。")
-                            .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                    }
-                    Spacer()
+                FThemePageHero(theme: theme, eyebrow: "全球市场 · 指数观察", title: "跨市场脉搏",
+                               subtitle: "实时指数由手机读取；历史数据与研究服务为可选增强。",
+                               symbol: "globe.asia.australia",
+                               value: "\(model.marketIndexQuotes.filter { $0.latestPrice != nil }.count) / \(model.marketIndexQuotes.count)",
+                               valueLabel: "指数已更新")
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
                     Button {
                         Task { await model.refreshMarketIndices() }
                     } label: {
@@ -2598,6 +2672,25 @@ struct RealAssetsOverview: View {
 
     var body: some View {
         List {
+            Section {
+                FThemePageHero(theme: theme, eyebrow: "本机账本 · 真实成交", title: "账户总览",
+                               subtitle: "持仓、现金与成交记录均来自确认后的真实账本。",
+                               symbol: "briefcase.fill",
+                               value: model.portfolioMarketValuation(at: Date()).displayLabel,
+                               valueLabel: "资产估值")
+                    .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 10, trailing: 10))
+                    .listRowBackground(Color.clear)
+                HStack(spacing: 0) {
+                    assetMetric("可用现金", value: model.cashText, color: theme.manifest.tokens.candidate)
+                    Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.12)).frame(width: 1, height: 34)
+                    assetMetric("持仓证券", value: "\(model.holdings.count) 项", color: theme.manifest.tokens.iopv)
+                    Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.12)).frame(width: 1, height: 34)
+                    assetMetric("账本状态", value: model.ledgerState == .available ? "正常" : "待处理",
+                                color: model.ledgerState == .available ? theme.manifest.tokens.positive : theme.manifest.tokens.warning)
+                }
+                .padding(.vertical, 12)
+                .listRowBackground(theme.manifest.tokens.surface)
+            }
             Section("本机真实账本") {
                 assetSummaryRow("账本状态", value: model.ledgerStatus)
                 assetSummaryRow("可用现金", value: model.cashText)
@@ -2703,6 +2796,7 @@ struct RealAssetsOverview: View {
         }
         .accessibilityIdentifier("assets.list")
         .navigationTitle("真实资产")
+        .listStyle(.insetGrouped)
         .sheet(isPresented: $model.showingFeeCorrection) {
             FLedgerFeeCorrectionSheet(model: model)
         }
@@ -2728,6 +2822,16 @@ struct RealAssetsOverview: View {
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title)：\(value)")
+    }
+
+    private func assetMetric(_ title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+            Text(value).font(.caption.weight(.bold)).foregroundStyle(color)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
     }
 }
 
@@ -2761,6 +2865,14 @@ struct SettingsOverview: View {
 
     var body: some View {
         Form {
+            Section {
+                FThemePageHero(theme: theme, eyebrow: "观盘max · 个性空间", title: "账户与体验",
+                               subtitle: "统一调整顾问连接、可选数据服务与整套界面风格。",
+                               symbol: "slider.horizontal.3", value: theme.manifest.name,
+                               valueLabel: "当前主题")
+                    .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 10, trailing: 10))
+                    .listRowBackground(Color.clear)
+            }
             Section("在线 AI") {
                 SecureField("DeepSeek API Key", text: $deepSeekKeyDraft)
                     .textInputAutocapitalization(.never)
@@ -2938,6 +3050,7 @@ struct SettingsOverview: View {
             }
         }
         .accessibilityIdentifier("settings.form")
+        .listStyle(.insetGrouped)
         .confirmationDialog("清除画像偏好？", isPresented: $showingProfileClearConfirmation,
                             titleVisibility: .visible) {
             Button("清除该项画像", role: .destructive) {
@@ -3163,14 +3276,14 @@ struct MarketOverview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("实时行情").font(.title3.weight(.semibold)).foregroundStyle(theme.ink)
-                        Text("报价每 10 秒更新；曲线按上游分钟时间戳绘制。")
-                            .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                        Text(model.marketCalendarStatusText).font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                    }
-                    Spacer(minLength: 4)
+                FThemePageHero(theme: theme, eyebrow: "实时雷达 · 更新 10 秒", title: "行情新鲜度",
+                               subtitle: "手机直连行情源 · 曲线按上游分钟时点绘制",
+                               symbol: "waveform.path.ecg", value: model.marketCalendarStatusText,
+                               valueLabel: "市场时段")
+                HStack {
+                    Label("\(visibleSecurityCodes.count) 个关注标的", systemImage: "line.3.horizontal.decrease")
+                        .font(.caption.weight(.semibold)).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    Spacer()
                     Button {
                         Task { await model.refreshMarketData(for: refreshableSecurityCodes) }
                     } label: {
@@ -3252,6 +3365,11 @@ struct MarketOverview: View {
                     Text("自选只保存关注关系，不会创建真实持仓或改变账本。")
                         .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
+                .padding(14)
+                .background(theme.manifest.tokens.highlightSurface.opacity(theme == .dashboard || theme == .minimalTerminal ? 0.20 : 0.30),
+                            in: RoundedRectangle(cornerRadius: 21, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 21, style: .continuous)
+                    .stroke(theme.accent.opacity(0.16), lineWidth: 0.8))
 
                 Picker("证券列表", selection: $listScope) {
                     ForEach(FMarketListScope.allCases) { scope in Text(scope.title).tag(scope) }
@@ -3348,10 +3466,16 @@ struct MarketOverview: View {
                         Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
                             .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
                     }
-                    .padding(.bottom, theme.manifest.tokens.spacing.standard)
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+                    .padding(13)
+                    .background {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(LinearGradient(colors: theme.manifest.tokens.surfaceGradient.isEmpty
+                                                ? [theme.manifest.tokens.surface]
+                                                : theme.manifest.tokens.surfaceGradient,
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(theme.manifest.tokens.accent.opacity(0.16), lineWidth: 0.8))
                 }
             }
             .padding(.horizontal, 8)
@@ -4021,4 +4145,5 @@ private struct FInitialCashEntrySheet: View {
         }
     }
 }
+
 

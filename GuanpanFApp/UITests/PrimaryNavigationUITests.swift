@@ -16,7 +16,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(valuation.waitForExistence(timeout: 3),
             "Home must expose the ledger-only portfolio valuation, including its unavailable state.\n\(app.debugDescription)")
 
-        app.tabBars.buttons["行情"].tap()
+        app.buttons["navigation.tab.行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 3))
         attachScreenshot("02-market-empty-ledger", app: app)
 
@@ -63,16 +63,16 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(historyQueryButton.isHittable, app.debugDescription)
         attachScreenshot("05-security-history-chart", app: app)
 
-        app.tabBars.buttons["AI顾问"].tap()
+        app.buttons["navigation.tab.AI顾问"].tap()
         XCTAssertTrue(app.navigationBars["AI 私人投资顾问"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["发送"].exists)
         attachScreenshot("06-advisor", app: app)
 
-        app.tabBars.buttons["真实资产"].tap()
+        app.buttons["navigation.tab.资产"].tap()
         XCTAssertTrue(app.navigationBars["真实资产"].waitForExistence(timeout: 3))
         attachScreenshot("07-real-assets-current", app: app)
 
-        app.tabBars.buttons["设置"].tap()
+        app.buttons["navigation.tab.我的"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.secureTextFields["settings.nas.token"].exists)
         XCTAssertTrue(app.secureTextFields["settings.ai.deepseekKey"].exists)
@@ -95,7 +95,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testSecurityDetailChartsUseExpandedPhoneHeight() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["行情"].tap()
+        app.buttons["navigation.tab.行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 5))
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 3))
@@ -133,7 +133,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testAdvisorExplainsUnavailableOnlineService() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["AI顾问"].tap()
+        app.buttons["navigation.tab.AI顾问"].tap()
 
         let aiStatus = app.descendants(matching: .any)["advisor.ai-key-status"]
         XCTAssertTrue(aiStatus.waitForExistence(timeout: 5))
@@ -145,7 +145,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testWatchlistIsSeparateAndAppearsInItsOwnMarketFilter() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["行情"].tap()
+        app.buttons["navigation.tab.行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 5))
 
         let code = "159352"
@@ -193,7 +193,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testAdvisorExposesStructuredQuestionAndContextSections() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["AI顾问"].tap()
+        app.buttons["navigation.tab.AI顾问"].tap()
 
         XCTAssertTrue(app.navigationBars["AI 私人投资顾问"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["advisor.composer.question"].exists)
@@ -216,7 +216,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testInvestorProfilePreferenceCanBeSavedAndClearedExplicitly() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["设置"].tap()
+        app.buttons["navigation.tab.我的"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         let settingsForm = app.collectionViews.firstMatch
         XCTAssertTrue(settingsForm.waitForExistence(timeout: 3), app.debugDescription)
@@ -293,7 +293,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testRealAssetsExposeCurrentClosedAndCashSections() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["真实资产"].tap()
+        app.buttons["navigation.tab.资产"].tap()
 
         XCTAssertTrue(app.navigationBars["真实资产"].waitForExistence(timeout: 5))
         let assetList = app.descendants(matching: .any)["assets.list"]
@@ -318,7 +318,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     func testEmptyLedgerOffersInlineCashAndHoldingsEntry() {
         let app = XCUIApplication()
         app.launch()
-        app.tabBars.buttons["真实资产"].tap()
+        app.buttons["navigation.tab.资产"].tap()
 
         let entry = app.buttons["ledger.opening-snapshot.begin"]
         XCTAssertTrue(entry.waitForExistence(timeout: 5), app.debugDescription)
@@ -398,7 +398,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8))
-        app.tabBars.buttons["行情"].tap()
+        app.buttons["navigation.tab.行情"].tap()
 
         let lookup = app.textFields["market.security-code"]
         XCTAssertTrue(lookup.waitForExistence(timeout: 5))
@@ -448,4 +448,5 @@ final class PrimaryNavigationUITests: XCTestCase {
         }
     }
 }
+
 

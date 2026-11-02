@@ -1939,8 +1939,10 @@ struct FHomeRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .tint(theme.accent)
-        .toolbarBackground(theme.manifest.tokens.background, for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            FBottomNavigationBar(selection: $selectedTab, theme: theme)
+        }
         .alert("观盘max", isPresented: Binding(
             get: { model.alertMessage != nil },
             set: { if !$0 { model.alertMessage = nil } }
@@ -1974,6 +1976,7 @@ struct FHomeRoot: View {
                     HomeDestination(route: route, model: model, theme: theme)
                 }
         }
+        .toolbar(.hidden, for: .tabBar)
         .background(theme.background.ignoresSafeArea())
         .toolbarBackground(theme.manifest.tokens.background, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -1982,6 +1985,100 @@ struct FHomeRoot: View {
 }
 
 private enum FPrimaryTab: Hashable { case home, market, advisor, assets, settings }
+
+private struct FBottomNavigationItem: Identifiable {
+    let id: FPrimaryTab
+    let title: String
+    let symbol: String
+}
+
+private struct FBottomNavigationBar: View {
+    @Binding var selection: FPrimaryTab
+    let theme: FHomeTheme
+
+    private let items: [FBottomNavigationItem] = [
+        .init(id: .home, title: "首页", symbol: "house.fill"),
+        .init(id: .market, title: "行情", symbol: "chart.xyaxis.line"),
+        .init(id: .advisor, title: "AI顾问", symbol: "sparkles"),
+        .init(id: .assets, title: "资产", symbol: "wallet.bifold.fill"),
+        .init(id: .settings, title: "我的", symbol: "person.crop.circle")
+    ]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(items) { item in
+                let isSelected = selection == item.id
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        selection = item.id
+                    }
+                } label: {
+                    Group {
+                        if item.id == .advisor {
+                            VStack(spacing: 3) {
+                                Image(systemName: item.symbol)
+                                    .font(.system(size: 23, weight: .semibold))
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 52, height: 52)
+                                    .background {
+                                        Circle().fill(LinearGradient(
+                                            colors: [theme.manifest.tokens.advisorSurface, theme.accent],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    }
+                                    .overlay(Circle().stroke(.white.opacity(0.82), lineWidth: 3))
+                                    .shadow(color: theme.accent.opacity(0.34), radius: 10, x: 0, y: 5)
+                                    .offset(y: -13)
+                                Text(item.title)
+                                    .font(.system(size: 10, weight: isSelected ? .bold : .semibold))
+                                    .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                                    .offset(y: -11)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 59)
+                        } else {
+                            VStack(spacing: 5) {
+                                Image(systemName: item.symbol)
+                                    .font(.system(size: isSelected ? 23 : 21, weight: isSelected ? .semibold : .regular))
+                                    .symbolRenderingMode(.hierarchical)
+                                    .frame(height: 25)
+                                Text(item.title)
+                                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 55)
+                            .background {
+                                if isSelected {
+                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                        .fill(theme.accent.opacity(theme == .dashboard || theme == .minimalTerminal ? 0.2 : 0.11))
+                                        .padding(.horizontal, 3)
+                                }
+                        }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("navigation.tab.\(item.title)")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.top, 7)
+        .padding(.bottom, 4)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
 
 private enum FMarketIndexHTTPClient {
     private struct Definition: Sendable {
@@ -2544,3 +2641,4 @@ private enum FQuoteHTTPClient {
         return date
     }
 }
+

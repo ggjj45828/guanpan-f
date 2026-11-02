@@ -905,3 +905,14 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 |---|---|---|
 | 自选中已持仓证券的身份提示 | Run `41462998125` UI XCTest 12/12通过 | “真实持仓 · 自选”状态和自选筛选回归已由当前SHA验证 |
 | 当前SHA编译/完整UI/IPA | Run `41462998125` FCore 338/338、XcodeGen、设备构建、Simulator构建、UI XCTest 12/12、截图导出、IPA校验/打包和Artifact上传全部通过 | Simulator截图已导出；人工逐张视觉审阅及iPhone Air实机验收仍未完成 |
+
+## 2026-11-02 全局页面风格与主导航增量
+
+| 验收项 | 当前实现 | 状态 |
+|---|---|---|
+| 五项底栏与中央圆形AI入口 | 自绘导航，标签为首页/行情/AI顾问/资产/我的；继续使用原Tab路由 | 已编码；待当前SHA Apple CI |
+| 行情、证券详情、AI、跨市场、资产、设置主题统一 | 共享主题感知主视觉和主题色表面已接入核心页面 | 已编码；待当前SHA编译与逐页截图核验 |
+| 业务数据与页面真实数据 | 保留现有ViewModel、Ledger、行情和Advisor数据流；未向真实账本注入预览数据 | 已编码；待CI验证 |
+| 与用户概念图的视觉一致性 | 已照着暖色底、彩色强调、中央圆形AI导航推进 | 尚未通过截图人工对照；不能标记视觉完成 |
+| Windows/Simulator及iPhone Air验收 | 本环境无Xcode/iOS Simulator；需Apple CI图像导出与真实iPhone检查 | External Pending |
+

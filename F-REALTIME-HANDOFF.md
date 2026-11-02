@@ -923,8 +923,16 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - CI 截图已导出并随artifact保存，但尚未人工逐张审阅；这只能证明自动截图生成，不代表视觉验收通过。B/F整体视觉差距、六主题全页面统一、iPhone Air实测仍未完成。
 - 本机Git网络的fetch/push通道无法连接GitHub端口443；已核对API远端HEAD并用期望SHA保护完成非强制快进提交。工作区origin现为`https://github.com/ggjj45828/guanpan-f.git`，镜像标志已关闭，fetch refspec改为远端分支跟踪。后续本机Git网络恢复时先fetch并与API提交对齐再继续普通push。
 
+## 2026-11-02 — 按用户选定概念图推进全局视觉与底栏
+
+- 已将主导航改成自绘五项底栏：`首页 / 行情 / AI顾问 / 资产 / 我的`；AI固定在中间，以高起的圆形渐变和星光图标突出。Tab仍复用原路由与ViewModel，不改变业务状态和账本权限。
+- 为证券详情、行情、跨市场、AI顾问、真实资产、设置增加同一套主题感知的页面主视觉；色彩由当前`FHomeTheme`语义令牌驱动。行情列表和资产摘要改成主题表面/强调色组织，减少系统默认白色行的割裂感。改动仅在iOS源码，未触碰NAS服务或Python/NAS工作流。
+- UI导航回归已改为定位自绘按钮。当前远端基线为`07952628465ffc1b07f633a95398ed5b5cb24163`，该提交的父提交正是本地`feffa0a91b4ae5e3a8272d5b515c6495c06aaeeb`；GitHub API显示最新iOS Actions已完成且无运行中的任务。
+- 本轮Swift修改与UI XCTest尚未由Apple CI编译。Windows没有Xcode/Simulator；界面匹配、CI截图人工审阅和iPhone Air实机验收均保持待验，不能标记视觉完成。
+
 ## 2026-11-02 — CI 第二轮失败根因
 
 - 推送 `df431b7` 后只启动 iOS run `41458070851`，没有启动 Python/NAS workflow；Swift Package、XcodeGen、Device Build、Simulator Build均成功，六主题首页角色测试也不再失败。
 - UI仍有两个失败：开户表单子字段被父级 `ledger.opening.position.<UUID>` 标识覆盖；首页组合卡父级 `home.role.portfolio` 标识覆盖了估值文本的标识。已在对应SwiftUI父容器声明 `accessibilityElement(children: .contain)`，保留父级角色标识并恢复子控件独立标识；本地Home layout合同28/28通过，尚待Apple CI验证。
 - 本轮截图导出步骤成功并上传artifact，但测试失败使IPA步骤跳过。尚未把artifact中的截图人工审阅为通过；新一次CI需先验证标识修复并重新取出截图。
+
