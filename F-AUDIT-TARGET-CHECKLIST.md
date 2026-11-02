@@ -116,6 +116,8 @@
 | iPhone Air验收 | 当前Windows无Xcode/可操作Simulator/iPhone Air；旧CI截图只是artifact。 | External Pending；本轮人工截图审阅/触控证据0。 |
 | DeepSeek真实成交闭环 | Candidate、Guard、用户确认成交后的writer及Quant重算源码路径存在；本轮无真实DeepSeek会话、券商成交及复判证据。Candidate不能写Ledger。 | External Pending；需真实行情+DeepSeek+用户确认真实成交同链记录，不用模拟fill冒充。 |
 
-最新远端核对：GitHub `main`=`a1ba64582c29340596d5f5f1639ebc5478a5186c`；检查前30条Actions没有queued/in_progress/waiting（活跃0）。最新Apple Run仍是旧SHA `edd14a3…`，不覆盖当前Swift dirty修改。当前修改尚未提交、推送或编译。
+最新远端核对（本轮结束）：GitHub `main`仍为`a1ba64582c29340596d5f5f1639ebc5478a5186c`；检查前30条Actions活跃数0。当前审计修复已在本地提交`c93ea4cb2667f9dff945b3a68f9376a809d71f51`，未推送。普通`git push origin main`连续两次在本机网络层失败：`getaddrinfo() thread failed to start`；GitHub连接器仍可读取远端，但不代表本地push成功。Apple CI未运行，当前Swift变更未编译/测试。
+
+方向观察分边界补充：`watchlistDirectionalScore`是对当前可用、带波动归一化的因子分数做等权均值，至少3个因子且实时报价fresh时显示。它不是经过历史验证的预测评分/胜率，UI已明确标注“方向观察分”；“自选评分有效性”仍待真实历史验证，不得称为已验证AI评分。
 
 补充：本轮将`FUnifiedSecurityChart.swift`坐标/网格/副图标注/十字线/图层中性颜色接入当前主题secondaryForeground token。静态改动已做，未编译、未截图；不得关闭A22/A23。
