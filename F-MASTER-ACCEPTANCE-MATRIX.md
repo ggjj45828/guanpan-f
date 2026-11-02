@@ -1,3 +1,12 @@
+## 2026-11-02 当前远端 main 状态（覆盖下方历史快照）
+
+- 当前远端/本地 HEAD：`c6ba442835d712b444c27d158aefdc5f1aecdf04`，工作树干净。
+- 全盘逐项目标、源码定位、当前证据和关闭条件：见 [F-AUDIT-TARGET-CHECKLIST.md](F-AUDIT-TARGET-CHECKLIST.md)，A01–A32。未人工验收项不得因代码存在或旧SHA CI通过而升级为完成。
+- 最新Python/NAS Run28（当前提交）306项、compileall和架构边界通过；本机定向合同30/30。Windows本机全量unittest未能及时返回，已中断，不记为通过。
+- 最新Apple Run224验证Swift SHA `f1f2c291…`：FCore335/335、UI XCTest12/12、XcodeGen、Device/Simulator Build和IPA通过。当前`c6ba442`只变更workflow路径过滤，不改该Swift代码。截图未人工审阅，UI自动测试不等同视觉通过。
+- 当前证实的产品入口：持仓录入入口存在（未建账快照；已建空账本登记真实成交开仓）；MACD副图存在。其实际发现性、状态保持和视觉布局仍待设备验收。
+- 继续未完成：NAS历史日期真实payload/coverage联调；新闻源设备可达和AI引用；前收/均价/IOPV可信数据源；Quant自选评分/曲线接线；Candidate实时Trigger生产链；设置与多主题全页面一致性；图表手势与iPhone Air；DeepSeek真实E2E和成交后Advisor复判。对应状态详见清单，缺数据时继续Unavailable/Fail Closed。
+
 ## 2026-11-01 当前工作树校准（覆盖下方较早快照）
 
 - FCore XCTest定义332项、App UI定义12项；当前dirty源码没有Apple CI运行证据，本机Swift/Xcode/XcodeGen均不可用，故本地Apple执行数为0。不得继承旧SHA的CI结果。

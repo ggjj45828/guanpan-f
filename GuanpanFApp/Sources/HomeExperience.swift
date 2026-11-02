@@ -1609,7 +1609,9 @@ private struct CrossMarketOverview: View {
                             .font(.title3.monospacedDigit().weight(.semibold))
                         Text(percentText(change))
                             .font(.subheadline.monospacedDigit().weight(.medium))
-                            .foregroundStyle(change >= 0 ? Color.red : Color.green)
+                            .foregroundStyle(change >= 0
+                                ? theme.manifest.tokens.positive
+                                : theme.manifest.tokens.negative)
                     }
                 } else {
                     Text("不可用").font(.subheadline.weight(.medium)).foregroundStyle(theme.manifest.tokens.secondaryForeground)

@@ -1,3 +1,11 @@
+## 2026-11-02 当前远端 main 审计快照（本节为当前基线）
+
+- 当前 `main` 与 `origin/main` 同为 `c6ba442835d712b444c27d158aefdc5f1aecdf04`，工作树干净。逐项目标清单见 [F-AUDIT-TARGET-CHECKLIST.md](F-AUDIT-TARGET-CHECKLIST.md)。清单逐条区分源码确认、CI证据和外部待验，不把实现存在写成产品验收通过。
+- 当前自动验证证据：Python/NAS Run 28（commit `c6ba442…`）306项、compileall、架构边界通过；定向 Home/traceability 合同本地30/30通过。本机全量 `unittest discover` 未在约40秒内返回并已中止，不记为全量通过。最近Apple Run 224（Swift SHA `f1f2c291…`）FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build及IPA流程通过；`c6ba442`只改了CI路径触发器，不改该次验证的Swift源码。截图已导出但未经人工逐页审阅。
+- 本轮源码确认：初始持仓录入入口在首页及真实资产页，已建空账本有登记真实成交开仓入口；UI XCTest检查了入口和表单。MACD代码和副图切换也存在。这不代表iPhone Air的入口可发现性和图表布局已人工验收。
+- 产品未关闭项：设置页信息层级拥挤、主题全App一致性没有截图矩阵；图表分时横轴/比例/手势需真机审阅。NAS手机端曾收到HTTP 200但响应schema与iOS契约不符；当前源码NAS与服务器路由匹配，但必须核对用户实际部署版本和payload，不能推断当前NAS连接已修好。新闻采用同花顺公开网页接口，设备可达性无实证。均价、前收、IOPV无可信新鲜来源时继续显示Unavailable。
+- 没有可依据静态信息安全地伪装修好的真实NAS、新闻或券商数据链；这些项目保持外部待验。本轮逐项状态与关闭条件见清单A01–A32。当前产品未证明超过B。
+
 ## 2026-10-29 Run 99/100：新闻标题证据接入与Apple CI
 
 - 当前Swift代码提交：Run 100 SHA `31bee6ce6559d5500d9ef82a1d01b75797d1fe17`，GitHub Actions [Run 100](https://github.com/ggjj45830/guanpan-f/actions/runs/40886452459) 全部成功。FCore **165/165**；XcodeGen；Device Build；Simulator Build；UI XCTest **4/4**；截图导出；未签名IPA校验/打包；Artifact上传均通过。
