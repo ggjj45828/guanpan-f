@@ -777,4 +777,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 本轮真实源码审计确认：统一图表仍在证券详情实时分时、日K、NAS历史分钟三个位置使用固定320pt视图高度；用户多次反馈绘图区偏小。已将这三个详情视图提高到420pt，行情列表的紧凑预览仍保持320pt。提交 `898849a29f8bce31c7fc75ce14bed8b1e67c2d55` 的iOS Run 223实际完成：FCore 335/335、XcodeGen、Device Build、Simulator Build成功；UI XCTest 12项中10通过、2项失败，根因是两处旧断言仍把详情图上限写成320pt（实测420.05pt）。截图导出/Artifact上传成功，因UI失败IPA步骤跳过。
 - 静态图表检查：共享renderer含VOL/MACD切换、MA5/10/20/60/250、成本/券商成本/Candidate/可用IOPV图层、十字光标、拖动、缩放与午休压缩时间轴。源码存在不等于交互或视觉验收；分钟缺口是否应显式断线、不同主题图表表现及真实手机比例仍需设备截图与数据验证。
 - 当前产品状态仍不宣称超过B：没有本轮人工Simulator/iPhone Air截图验收；NAS HTTPS与历史分钟实际响应、新闻feed端到端、持仓入口在已建立空账本场景、真实DeepSeek闭环各自仍需实机验证。新闻代码已配置同花顺公开网页快讯源，但真实性/可达性/顾问引用尚无真实E2E证据。
-- 下一步：Python/NAS Run 26的唯一失败同样是旧的320pt高度合同。已修正两处UI尺寸断言和静态合同；关联静态合同测试本机27/27通过。整套本地Python测试尝试因多项外部/环境错误持续无进展而中止；完整重跑待下一轮CI。推送前需重新确认Actions并保持同时运行不超过2个。CI成功后人工审阅新截图，再继续图表比例/主题跨页一致性和Advisor/Quant闭环。不得把构建或截图导出写成人工视觉通过。
+- Run 223后的测试合同修正及Run 224完整成功结果见紧接的“当前主线验证记录”；本节较早的状态行仅保留作为问题追踪历史，不代表当前待执行状态。
+## 当前主线验证记录（2026-11-02）
+
+- 最新Swift源码提交 `f1f2c2914a4b57e178ab03142e7bb6e57aed7acd` 已由Apple iOS Run 224 [41398262288](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262288) 全链验证：FCore 335/335、XcodeGen、Device Build、Simulator Build、UI XCTest 12/12、截图导出、观盘max显示名/AppIcon校验、IPA打包与Artifact上传成功（Artifact 13120891486）。当前后续提交只更新追溯/状态文档，不改变Swift源码。
+- Run 224验证420pt证券详情图可编译，自动UI尺寸断言实际通过；CI导出的截图没有人工逐张审阅，iPhone Air图表手势/视觉仍External Pending。
+- Python/NAS Run 27 [41398262417](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262417)唯一失败为B-058追溯表引用旧测试方法名。锚点已改为 `testSecurityDetailChartsUseExpandedPhoneHeight`，当前本机相关追溯+布局合同30/30通过。该次修正仅涉及文档，Python/NAS workflow未自动触发；不声称全仓306项重跑通过。
+- 当前图表尺寸：证券详情实时分时、日K、NAS历史分时420pt；行情紧凑预览320pt。自动编译/测试通过不代表用户设备视觉达标。
+- 下一步：完成B-058追溯记录和本交接同步、核对远端并普通推送；随后继续基于最新main做剩余产品缺口审计。NAS真实HTTPS/历史数据、新闻E2E、DeepSeek成交闭环和人工Simulator/iPhone验收状态仍按未验证处理。

@@ -783,9 +783,9 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 
 | 条目 | 最新状态 | 证据/限制 |
 |---|---|---|
-| 统一图表详情尺寸（实时分时/日K/NAS历史分钟） | 已编码，待Apple编译 | `GuanpanFApp/Sources/HomeExperience.swift` 三处详情图由320pt增至420pt；行情列表紧凑图仍320pt。无本轮构建或视觉证据。 |
+| 统一图表详情尺寸（实时分时/日K/NAS历史分钟） | 已编码并经Apple CI编译/UI XCTest通过 | `GuanpanFApp/Sources/HomeExperience.swift` 三处详情图由320pt增至420pt；行情列表紧凑图仍320pt。无本轮构建或视觉证据。 |
 | 统一renderer的指标与手势 | 源码存在，Simulator人工验收待完成 | `FUnifiedSecurityChart.swift` 提供VOL/MACD、MA5/10/20/60/250、成本/候选层、IOPV参考、十字/拖动/缩放；不能据此认定图表体验通过。 |
-| 最新已执行Apple CI | 通过，但仅对应Swift源码SHA `73bfb479fb60e0d611661157045f6d593fa2c795` | Run 222；当前图表高度增量不在该SHA，必须由新CI执行后才能记为已编译。 |
+| 最新已执行Apple CI | Run 224 [41398262288] / Swift SHA `f1f2c2914a4b57e178ab03142e7bb6e57aed7acd`：FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、IPA校验/打包均成功 | 420pt图表Swift已编译，自动UI通过；CI截图未人工审阅，iPhone Air仍External Pending |
 | 用户设备视觉反馈 | 未通过/External Pending | 用户截图明确指出图表小、轴标签/图层操作观感差；本轮尚无新截图人工审阅。 |
 
 ## 2026-11-02 当前HEAD 898849a CI与图表高度回归修正
@@ -795,5 +795,12 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | HEAD | `898849a29f8bce31c7fc75ce14bed8b1e67c2d55`，本地与 `origin/main` 对齐 | 已推送 |
 | iOS Run 223 | [41396767565](https://github.com/ggjj45830/guanpan-f/actions/runs/41396767565)：FCore 335/335、XcodeGen、Device Build、Simulator Build成功；UI XCTest 12项中10通过、2项失败，均为旧320pt上限断言；截图导出及Artifact上传成功，IPA步骤跳过 | 尚不能记为整条通过 |
 | Python/NAS Run 26 | [41396767567](https://github.com/ggjj45830/guanpan-f/actions/runs/41396767567)：306项中305通过；唯一失败为`test_home_layout_contract.py:41`仍断言详情图320pt，和新420pt产品要求冲突 | 测试合同需同步，非NAS运行时故障 |
-| 测试合同修正 | 静态合同改为详情3处420pt、紧凑图1处320pt；UI XCTest增加详情图400–424.5pt范围断言 | 已编码；关联静态合同27/27通过；待新SHA完整CI |
-| Simulator/人工视觉 | Run 223自动测试/截图导出未完成；无人工截图审阅或iPhone Air实测 | External Pending |
+| 测试合同修正 | 静态合同改为详情3处420pt、紧凑图1处320pt；UI XCTest增加详情图400–424.5pt范围断言 | Run 224 UI XCTest 12/12通过；追溯/布局静态合同本机30/30通过 |
+| Simulator/人工视觉 | Run 224自动截图已导出但未人工审阅；无iPhone Air实测 | External Pending |
+## 2026-11-02 f1f2c29最终CI结果与追溯修正
+
+| 项目 | 证据 | 当前处理 |
+|---|---|---|
+| Python/NAS Run 27 | [41398262417](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262417)：306项唯一失败为B-058追溯矩阵引用旧UI测试方法 | 已更新B-058锚点；本机相关追溯+布局合同30/30通过；未声称全量CI重跑 |
+| iOS Run 224 | [41398262288](https://github.com/ggjj45830/guanpan-f/actions/runs/41398262288)，SHA `f1f2c2914a4b57e178ab03142e7bb6e57aed7acd` | FCore 335/335、UI XCTest 12/12、XcodeGen、Device/Simulator Build、截图导出、观盘max IPA校验与打包均成功 |
+| 视觉验收 | Run 224截图Artifact 13120891486 | 已导出，尚未人工逐张审阅；iPhone Air真机验收仍External Pending |
