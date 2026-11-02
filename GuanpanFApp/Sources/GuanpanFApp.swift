@@ -2065,7 +2065,8 @@ private enum FMarketIndexHTTPClient {
         // retrieval time, and provider identity. The core filters market, source,
         // freshness, duplicate and session synchronization mismatches.
         let evaluationTime = Date()
-        let completedBarsByCode = Dictionary(uniqueKeysWithValues: results.compactMap { result in
+        let completedBarsByCode: [String: [FMarketRegimeBar]] = Dictionary(
+            uniqueKeysWithValues: results.compactMap { result -> (String, [FMarketRegimeBar])? in
             guard let history = result.history,
                   let definition = definitions.first(where: { $0.code == result.code }),
                   let timeZone = TimeZone(identifier: definition.timeZone) else { return nil }
