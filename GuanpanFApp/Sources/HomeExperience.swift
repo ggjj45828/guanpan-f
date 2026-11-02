@@ -448,12 +448,15 @@ private struct FSignatureHome: View {
     private var marketTape: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .lastTextBaseline) {
-                Text("市场在看什么").font(.system(size: 20, weight: .semibold, design: .serif)).foregroundStyle(theme.ink)
+                Text("市场在看什么")
+                    .font(.system(size: 20, weight: .semibold, design: .serif))
+                    .foregroundStyle(theme.ink)
                 Spacer()
                 NavigationLink(value: FHomeRoute.market) {
                     Label("全部行情", systemImage: "arrow.up.right").font(.caption.weight(.medium))
                 }
                 .buttonStyle(.plain).foregroundStyle(theme.accent)
+                .accessibilityIdentifier("home.role.marketObservation")
             }
             if focusCodes.isEmpty {
                 Text("添加自选后，真实行情与本地观察分会出现在这里。")
@@ -468,8 +471,6 @@ private struct FSignatureHome: View {
                 }
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.role.marketObservation")
     }
 
     private func marketRow(_ code: String) -> some View {
@@ -588,6 +589,7 @@ private struct FSignatureHome: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("home.role.crossMarketPulse")
             hairline
             HStack(spacing: 7) {
                 Image(systemName: "clock").font(.caption2)
@@ -597,8 +599,6 @@ private struct FSignatureHome: View {
             .foregroundStyle(theme.manifest.tokens.secondaryForeground)
             .padding(.top, 12)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.role.crossMarketPulse")
     }
 
     private func summaryMetric(_ title: String, _ value: String) -> some View {
@@ -2246,11 +2246,27 @@ struct SettingsOverview: View {
                 LabeledContent("状态", value: model.aiKeyStatus)
             }
             Section("投资者画像") {
-                DisclosureGroup(isExpanded: $investorPreferencesExpanded) {
-                    Text("只保存你填写的内容，并在在线顾问分析时作为本次上下文；不会改写账本。")
-                        .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(FInvestorProfileAttributeKey.allCases, id: \.self) { key in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        investorPreferencesExpanded.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text(investorPreferencesExpanded ? "收起其他偏好" : "更多投资偏好")
+                        Spacer()
+                        Image(systemName: investorPreferencesExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("settings.profile.edit")
+                Text("只保存你填写的内容，并在在线顾问分析时作为本次上下文；不会改写账本。")
+                    .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(FInvestorProfileAttributeKey.allCases, id: \.self) { key in
+                    if key == .investmentHorizon || investorPreferencesExpanded {
                         VStack(alignment: .leading, spacing: 7) {
                             TextField(profileTitle(key), text: Binding(
                                 get: { investorProfileDrafts[key] ?? currentPreferenceText(key) },
@@ -2280,10 +2296,7 @@ struct SettingsOverview: View {
                             }
                         }
                     }
-                } label: {
-                    Text("编辑明确偏好")
                 }
-                .accessibilityIdentifier("settings.profile.edit")
                 Text(model.investorProfileStatus)
                     .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     .accessibilityIdentifier("profile.preference.status")
