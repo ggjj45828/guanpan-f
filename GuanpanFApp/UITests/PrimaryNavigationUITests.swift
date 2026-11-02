@@ -437,28 +437,50 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
-        for _ in 0..<20 {
+        for _ in 0..<30 {
             if element.isHittable && element.frame.height >= minimumVisibleHeight { return }
             guard element.exists else {
-                scrollContainer.swipeUp(velocity: .slow)
+                dragScroll(scrollContainer, toward: .up)
                 continue
             }
 
             let viewport = scrollContainer.frame
             let target = element.frame
-            let topSafeEdge = viewport.minY + 90
-            let bottomSafeEdge = viewport.maxY - 90
-
-            if target.maxY < topSafeEdge || target.minY < topSafeEdge {
-                scrollContainer.swipeDown(velocity: .slow)
-            } else if target.minY > bottomSafeEdge {
-                scrollContainer.swipeUp(velocity: .slow)
+            // XCUIElement.frame is clipped to the visible portion of a
+            // partially obscured SwiftUI chart. Large swipes oscillate between
+            // clipping the chart at the top and bottom; use short drags so the
+            // full chart can settle inside the viewport.
+            if target.minY <= viewport.minY + 48 {
+                dragScroll(scrollContainer, toward: .down)
+            } else if target.maxY >= viewport.maxY - 48 {
+                dragScroll(scrollContainer, toward: .up)
             } else if target.midY < viewport.midY {
-                scrollContainer.swipeDown(velocity: .slow)
+                dragScroll(scrollContainer, toward: .down)
             } else {
-                scrollContainer.swipeUp(velocity: .slow)
+                dragScroll(scrollContainer, toward: .up)
             }
         }
+    }
+
+    private func dragScroll(_ scrollContainer: XCUIElement, toward direction: ScrollDirection) {
+        let startOffset: CGVector
+        let endOffset: CGVector
+        switch direction {
+        case .up:
+            startOffset = CGVector(dx: 0.5, dy: 0.76)
+            endOffset = CGVector(dx: 0.5, dy: 0.64)
+        case .down:
+            startOffset = CGVector(dx: 0.5, dy: 0.64)
+            endOffset = CGVector(dx: 0.5, dy: 0.76)
+        }
+        scrollContainer.coordinate(withNormalizedOffset: startOffset)
+            .press(forDuration: 0.05,
+                   thenDragTo: scrollContainer.coordinate(withNormalizedOffset: endOffset))
+    }
+
+    private enum ScrollDirection {
+        case up
+        case down
     }
 }
 
