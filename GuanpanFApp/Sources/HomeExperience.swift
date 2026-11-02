@@ -455,7 +455,6 @@ private struct FSignatureHome: View {
             .shadow(color: theme.ink.opacity(0.045), radius: 18, x: 0, y: 7)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.role.advisorGuidance")
-        }
     }
 
     private var marketTape: some View {
