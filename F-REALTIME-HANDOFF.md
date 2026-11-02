@@ -908,3 +908,9 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 为开户表单证券名称及份额输入补充稳定的可访问标识，便于端到端验证。上述 UI 修改尚未获得新的 Apple CI 结果；下次普通推送应只自动启动 Native iOS workflow。手动运行 Python/NAS 测试仍可按需进行。
 - 本地 `Tools.test_home_layout_contract` 28/28通过。全量 Python discovery 在本机显示多项失败/错误并长时间无结束摘要，已中止，不计为通过；本机无可用 Xcode/iOS Simulator，因此 Swift 与 UI 测试必须由下一次 Apple CI执行。
 - 用户确认的全 App 视觉整改仍覆盖首页以外页面、字体/卡片/颜色及底部导航；此处本轮处理的是 CI 失败，并不代表整套页面已完成视觉重做。Simulator截图需从新 CI artifact实际取出并查看，iPhone Air人工验收仍待实机。
+
+## 2026-11-02 — CI 第二轮失败根因
+
+- 推送 `df431b7` 后只启动 iOS run `41458070851`，没有启动 Python/NAS workflow；Swift Package、XcodeGen、Device Build、Simulator Build均成功，六主题首页角色测试也不再失败。
+- UI仍有两个失败：开户表单子字段被父级 `ledger.opening.position.<UUID>` 标识覆盖；首页组合卡父级 `home.role.portfolio` 标识覆盖了估值文本的标识。已在对应SwiftUI父容器声明 `accessibilityElement(children: .contain)`，保留父级角色标识并恢复子控件独立标识；本地Home layout合同28/28通过，尚待Apple CI验证。
+- 本轮截图导出步骤成功并上传artifact，但测试失败使IPA步骤跳过。尚未把artifact中的截图人工审阅为通过；新一次CI需先验证标识修复并重新取出截图。

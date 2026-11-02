@@ -270,8 +270,10 @@ private struct FDesignedThemeHome: View {
         VStack(alignment: .leading, spacing: 18) {
             masthead(eyebrow: "看清市场 · 做对决策", dark: false)
             portfolioPanel(art: true, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.portfolio")
             advisorPanel(dark: false, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             marketSection(dark: false, columns: 3)
             watchlist(dark: false, table: true)
@@ -283,8 +285,10 @@ private struct FDesignedThemeHome: View {
         VStack(alignment: .leading, spacing: 12) {
             masthead(eyebrow: "专业视角 · 实时决策", dark: true)
             portfolioPanel(art: false, compact: true)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.portfolio")
             advisorPanel(dark: true, compact: true)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             marketSection(dark: true, columns: 3)
             intradayTape(dark: true)
@@ -297,10 +301,12 @@ private struct FDesignedThemeHome: View {
         VStack(alignment: .leading, spacing: 12) {
             masthead(eyebrow: "让投资更从容", dark: false)
             advisorPanel(dark: false, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             HStack(alignment: .top, spacing: 10) {
                 portfolioPanel(art: false, compact: true)
                     .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.role.portfolio")
                 NavigationLink(value: FHomeRoute.portfolio) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -332,8 +338,10 @@ private struct FDesignedThemeHome: View {
         VStack(alignment: .leading, spacing: 14) {
             masthead(eyebrow: "观盘max · 今日组合", dark: false)
             portfolioPanel(art: false, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.portfolio")
             advisorPanel(dark: false, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             marketSection(dark: false, columns: 3)
             watchlist(dark: false, table: false)
@@ -345,9 +353,11 @@ private struct FDesignedThemeHome: View {
         VStack(alignment: .leading, spacing: 11) {
             masthead(eyebrow: "LOCAL QUANT · LIVE", dark: true)
             portfolioPanel(art: false, compact: true)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.portfolio")
             intradayTape(dark: true)
             advisorPanel(dark: true, compact: true)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             quantSummary
             marketSection(dark: true, columns: 4)
@@ -362,6 +372,7 @@ private struct FDesignedThemeHome: View {
             ZStack(alignment: .topTrailing) {
                 portfolioPanel(art: true, compact: false)
                     .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("home.role.portfolio")
                 NavigationLink(value: FHomeRoute.portfolio) {
                     VStack(alignment: .leading, spacing: 7) {
@@ -376,6 +387,7 @@ private struct FDesignedThemeHome: View {
                 .buttonStyle(.plain).padding(8)
             }
             advisorPanel(dark: false, compact: false)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.role.advisorGuidance")
             marketSection(dark: false, columns: 3)
             HStack(alignment: .top, spacing: 10) {
@@ -3874,6 +3886,7 @@ private struct FInitialLedgerPositionRow: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ledger.opening.position.\(draft.id.uuidString)")
     }
 }
