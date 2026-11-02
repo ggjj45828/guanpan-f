@@ -3851,6 +3851,7 @@ private struct FInitialLedgerPositionRow: View {
                 .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
                 .focused($inputFocused)
+                .accessibilityIdentifier("ledger.opening.position.name")
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
                 }
@@ -3865,6 +3866,7 @@ private struct FInitialLedgerPositionRow: View {
             }
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($inputFocused)
+                .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
                 .keyboardType(.decimalPad).focused($inputFocused)
                 .accessibilityIdentifier("ledger.opening.position.unitCost")

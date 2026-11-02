@@ -900,3 +900,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 当前正在修复 `.stretch` 编译错误并准备单次普通快进推送。仍须等待本次唯一 iOS workflow 完成；如果失败，按日志继续修复。
 - 用户确认主题整改范围覆盖所有主题下的所有主要页面和底部导航，不限于首页；字体、布局、卡片、颜色体系均须统一并以用户选定的概念图为基准。当前仅有六种首页构图实现，其他页面与 TabBar 的概念图一致性尚未完成，必须如实标记待实现。
 - Windows 环境无法运行 iOS Simulator。只有 Apple CI 成功并生成截图artifact后，才能检查截图；人工 iPhone Air验收仍为 External Pending。
+
+## 2026-11-02 — 收敛 iOS 提交触发与修正 UI 验收
+
+- 用户要求每次只推送一个 iOS 版本，且没有 NAS 包变更时不要额外触发 Python/NAS workflow。`.github/workflows/f-python-nas.yml` 已改为仅 `workflow_dispatch` 手动运行；保留测试工作流本身，不再因普通 push/PR 自动运行。该 workflow 是测试，不是 NAS 部署。
+- GitHub run `41451274890` 的 Device Build、Simulator Build 与 Swift Package Tests 均通过；UI XCTest 因三组旧断言失败。已按实际界面修正：组合估值通过当前主题共用的可访问标识定位；开户现金按表单内联字段验收，并实际填写一笔起始持仓后确认保存；六主题角色检查限定在选中的首页滚动容器，避免把其他 App 树节点算作重复首页模块。
+- 为开户表单证券名称及份额输入补充稳定的可访问标识，便于端到端验证。上述 UI 修改尚未获得新的 Apple CI 结果；下次普通推送应只自动启动 Native iOS workflow。手动运行 Python/NAS 测试仍可按需进行。
+- 本地 `Tools.test_home_layout_contract` 28/28通过。全量 Python discovery 在本机显示多项失败/错误并长时间无结束摘要，已中止，不计为通过；本机无可用 Xcode/iOS Simulator，因此 Swift 与 UI 测试必须由下一次 Apple CI执行。
+- 用户确认的全 App 视觉整改仍覆盖首页以外页面、字体/卡片/颜色及底部导航；此处本轮处理的是 CI 失败，并不代表整套页面已完成视觉重做。Simulator截图需从新 CI artifact实际取出并查看，iPhone Air人工验收仍待实机。

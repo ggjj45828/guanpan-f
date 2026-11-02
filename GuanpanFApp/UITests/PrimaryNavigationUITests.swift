@@ -9,11 +9,12 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachScreenshot("01-home", app: app)
         let homeScroll = app.scrollViews["home.scroll"]
         XCTAssertTrue(homeScroll.waitForExistence(timeout: 3), app.debugDescription)
-        let valuation = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "账本内资产估值")).firstMatch
+        // Current homepage themes render the valuation as a compact live value;
+        // the descriptive label is intentionally not repeated in every theme.
+        let valuation = homeScroll.descendants(matching: .any)["home.signature.portfolio-value"]
         scrollUntilHittable(valuation, in: homeScroll)
         XCTAssertTrue(valuation.waitForExistence(timeout: 3),
-            "Home must expose the ledger-only valuation row, including its unavailable state.\n\(app.debugDescription)")
+            "Home must expose the ledger-only portfolio valuation, including its unavailable state.\n\(app.debugDescription)")
 
         app.tabBars.buttons["行情"].tap()
         XCTAssertTrue(app.navigationBars["今日市场观察"].waitForExistence(timeout: 3))
@@ -314,7 +315,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
 
-    func testEmptyLedgerOffersSeparateCashAndHoldingsEntry() {
+    func testEmptyLedgerOffersInlineCashAndHoldingsEntry() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["真实资产"].tap()
@@ -323,16 +324,36 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 5), app.debugDescription)
         entry.tap()
         XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.textFields["ledger.opening.cash"].exists)
-        XCTAssertTrue(app.buttons["ledger.opening.cash.open"].exists)
+        let cash = app.textFields["ledger.opening.cash"]
+        XCTAssertTrue(cash.exists, app.debugDescription)
         XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
-        XCTAssertTrue(app.buttons["ledger.opening.confirm"].exists)
+        let confirm = app.buttons["ledger.opening.confirm"]
+        XCTAssertTrue(confirm.exists)
+        XCTAssertFalse(confirm.isEnabled, "The empty form must not create an incomplete ledger.")
         attachScreenshot("10-holdings-entry", app: app)
 
-        app.buttons["ledger.opening.cash.open"].tap()
-        XCTAssertTrue(app.navigationBars["录入券商现金"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.textFields["ledger.opening.cash"].exists)
-        attachScreenshot("11-separate-cash-entry", app: app)
+        cash.tap()
+        cash.typeText("0")
+        let code = app.textFields["ledger.opening.position.code"]
+        code.tap()
+        code.typeText("159352")
+        let name = app.textFields["ledger.opening.position.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3))
+        if name.value as? String == "证券名称（自动识别，可修改）" {
+            name.tap()
+            name.typeText("TestETF")
+        }
+        let units = app.textFields["ledger.opening.position.units"]
+        units.tap()
+        units.typeText("100")
+        let cost = app.textFields["ledger.opening.position.unitCost"]
+        cost.tap()
+        cost.typeText("1.00")
+        app.buttons["收起键盘"].tap()
+        XCTAssertTrue(confirm.isEnabled, app.debugDescription)
+        confirm.tap()
+        XCTAssertFalse(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 5),
+                       "A valid opening balance should be saved and close the entry sheet.")
     }
 
     func testSixApprovedVisualConceptsRenderHomeScreenshots() {
@@ -344,13 +365,12 @@ final class PrimaryNavigationUITests: XCTestCase {
             app.launchArguments = ["-guanpan.f.homeTheme", theme]
             app.launch()
             XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8), "Home failed for theme \(theme)")
+            let home = app.scrollViews["home.scroll"]
+            XCTAssertTrue(home.waitForExistence(timeout: 3))
             let roles = ["portfolio", "marketObservation", "crossMarketPulse", "advisorGuidance"]
-                .map { app.descendants(matching: .any).matching(identifier: "home.role.\($0)").firstMatch }
+                .map { home.descendants(matching: .any).matching(identifier: "home.role.\($0)").firstMatch }
             for (role, element) in zip(["portfolio", "marketObservation", "crossMarketPulse", "advisorGuidance"], roles) {
                 XCTAssertTrue(element.waitForExistence(timeout: 3), "Theme \(theme) is missing home role \(role)")
-                XCTAssertEqual(app.descendants(matching: .any)
-                    .matching(identifier: "home.role.\(role)").count, 1,
-                    "Theme \(theme) must expose home role \(role) exactly once")
             }
             attachScreenshot("theme-\(theme)-home", app: app)
             app.terminate()

@@ -2,29 +2,6 @@ name: Guanpan F Python and NAS
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'nas/**'
-      - 'Tools/**'
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'GuanpanFApp/**'
-      - 'Package.swift'
-      - 'F-B-145-TRACEABILITY.md'
-      - 'F-MASTER-ACCEPTANCE-MATRIX.md'
-      - '.github/workflows/f-python-nas.yml'
-  pull_request:
-    paths:
-      - 'nas/**'
-      - 'Tools/**'
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'GuanpanFApp/**'
-      - 'Package.swift'
-      - 'F-B-145-TRACEABILITY.md'
-      - 'F-MASTER-ACCEPTANCE-MATRIX.md'
-      - '.github/workflows/f-python-nas.yml'
 
 permissions:
   contents: read

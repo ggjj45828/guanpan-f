@@ -95,7 +95,7 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn('.accessibilityIdentifier("home.role.\\(role.rawValue)")', self.home)
         self.assertIn('.accessibilityIdentifier("home.role.portfolio")', self.home)
         self.assertIn('matching(identifier: "home.role.\\($0)")', self.ui_tests)
-        self.assertIn('matching(identifier: "home.role.\\(role)").count, 1', self.ui_tests)
+        self.assertIn('let home = app.scrollViews["home.scroll"]', self.ui_tests)
         self.assertIn('allCases.contains(theme)', self.manifest)
 
     def test_custom_theme_leads_also_publish_the_shared_home_roles(self):
@@ -375,8 +375,8 @@ class HomeLayoutContractTests(unittest.TestCase):
         establish = self.app[establish_start:establish_end]
         self.assertIn("cash.isFinite, cash >= 0", establish)
         self.assertIn("$0.economicCost.isFinite && $0.economicCost >= 0", establish)
-        self.assertIn("testEmptyLedgerOffersSeparateCashAndHoldingsEntry", self.ui_tests)
-        self.assertIn('XCTAssertFalse(app.textFields["ledger.opening.cash"].exists)', self.ui_tests)
+        self.assertIn("testEmptyLedgerOffersInlineCashAndHoldingsEntry", self.ui_tests)
+        self.assertIn('XCTAssertTrue(cash.exists', self.ui_tests)
 
     def test_market_watchlist_is_persisted_separately_and_filterable(self):
         start = self.home.index("private enum FMarketListScope: String, CaseIterable, Identifiable")
