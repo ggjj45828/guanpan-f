@@ -31,8 +31,10 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["NAS 历史分时"].exists)
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
         XCTAssertTrue(liveChart.waitForExistence(timeout: 3), app.debugDescription)
-        XCTAssertLessThanOrEqual(liveChart.frame.height, 324.5,
-                                 "Security detail chart must respect its 320pt height cap")
+        XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
+                                    "Security detail chart should use the expanded 420pt plot height")
+        XCTAssertLessThanOrEqual(liveChart.frame.height, 424.5,
+                                 "Security detail chart must stay within its 420pt height cap")
         attachScreenshot("03-security-detail-top", app: app)
         let detailScroll = app.scrollViews["market.security-detail.scroll"]
         XCTAssertTrue(detailScroll.waitForExistence(timeout: 3))
@@ -42,8 +44,10 @@ final class PrimaryNavigationUITests: XCTestCase {
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.waitForExistence(timeout: 1) {
             scrollUntilHittable(dailyChart, in: detailScroll)
-            XCTAssertLessThanOrEqual(dailyChart.frame.height, 324.5,
-                                     "Daily chart must respect its 320pt height cap")
+            XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
+                                        "Daily chart should use the expanded 420pt plot height")
+            XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
+                                     "Daily chart must stay within its 420pt height cap")
         } else {
             XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
                           "Without NAS daily history, the page must show an explicit unavailable state")
@@ -87,7 +91,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachScreenshot("08-settings", app: app)
     }
 
-    func testSecurityChartsStayWithinTheReducedPhoneHeight() {
+    func testSecurityDetailChartsUseExpandedPhoneHeight() {
         let app = XCUIApplication()
         app.launch()
         app.tabBars.buttons["行情"].tap()
@@ -105,16 +109,20 @@ final class PrimaryNavigationUITests: XCTestCase {
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
         scrollUntilHittable(liveChart, in: detailScroll)
         XCTAssertTrue(liveChart.exists, app.debugDescription)
-        XCTAssertLessThanOrEqual(liveChart.frame.height, 324.5,
-                                 "Live chart exceeded the 320pt phone chart height")
+        XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
+                                    "Live chart should use the expanded 420pt phone chart height")
+        XCTAssertLessThanOrEqual(liveChart.frame.height, 424.5,
+                                 "Live chart exceeded the 420pt phone chart height")
 
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.exists {
             scrollUntilHittable(dailyChart, in: detailScroll)
-            XCTAssertLessThanOrEqual(dailyChart.frame.height, 324.5,
-                                     "Daily chart exceeded the 320pt phone chart height")
+            XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
+                                        "Daily chart should use the expanded 420pt phone chart height")
+            XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
+                                     "Daily chart exceeded the 420pt phone chart height")
         } else {
             XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
                           "Missing NAS history must remain explicit instead of rendering a fabricated chart")

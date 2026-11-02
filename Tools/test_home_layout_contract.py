@@ -37,13 +37,14 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn("testHistoricalIntradayChartExcludesCurrentIOPVFromPriceRange",
                       (ROOT / "Tests/FCoreTests/MarketChartAcceptanceTests.swift").read_text(encoding="utf-8"))
 
-    def test_security_charts_use_the_reduced_vertical_height_without_hidden_expansion(self):
-        self.assertEqual(self.home.count("height: 320)"), 4)
+    def test_security_detail_charts_are_expanded_and_compact_preview_stays_small(self):
+        self.assertEqual(self.home.count("height: 420)"), 3)
+        self.assertEqual(self.home.count("height: 320)"), 1)
         for role in ("live", "daily", "history", "compact"):
             self.assertIn(f'market.security-chart.{role}', self.home)
         self.assertIn(".frame(height: height)", self.chart)
         self.assertNotIn("height >= 600 ? height + 80", self.chart)
-        self.assertIn("testSecurityChartsStayWithinTheReducedPhoneHeight", self.ui_tests)
+        self.assertIn("testSecurityDetailChartsUseExpandedPhoneHeight", self.ui_tests)
 
     def test_modern_theme_keeps_portfolio_and_advisor_full_width_with_adaptive_market_grid(self):
         start = self.home.index("    private var modern: some View {")

@@ -788,3 +788,12 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 最新已执行Apple CI | 通过，但仅对应Swift源码SHA `73bfb479fb60e0d611661157045f6d593fa2c795` | Run 222；当前图表高度增量不在该SHA，必须由新CI执行后才能记为已编译。 |
 | 用户设备视觉反馈 | 未通过/External Pending | 用户截图明确指出图表小、轴标签/图层操作观感差；本轮尚无新截图人工审阅。 |
 
+## 2026-11-02 当前HEAD 898849a CI与图表高度回归修正
+
+| 项目 | 当前证据 | 状态 |
+|---|---|---|
+| HEAD | `898849a29f8bce31c7fc75ce14bed8b1e67c2d55`，本地与 `origin/main` 对齐 | 已推送 |
+| iOS Run 223 | [41396767565](https://github.com/ggjj45830/guanpan-f/actions/runs/41396767565)：FCore 335/335、XcodeGen、Device Build、Simulator Build成功；UI XCTest 12项中10通过、2项失败，均为旧320pt上限断言；截图导出及Artifact上传成功，IPA步骤跳过 | 尚不能记为整条通过 |
+| Python/NAS Run 26 | [41396767567](https://github.com/ggjj45830/guanpan-f/actions/runs/41396767567)：306项中305通过；唯一失败为`test_home_layout_contract.py:41`仍断言详情图320pt，和新420pt产品要求冲突 | 测试合同需同步，非NAS运行时故障 |
+| 测试合同修正 | 静态合同改为详情3处420pt、紧凑图1处320pt；UI XCTest增加详情图400–424.5pt范围断言 | 已编码；关联静态合同27/27通过；待新SHA完整CI |
+| Simulator/人工视觉 | Run 223自动测试/截图导出未完成；无人工截图审阅或iPhone Air实测 | External Pending |
