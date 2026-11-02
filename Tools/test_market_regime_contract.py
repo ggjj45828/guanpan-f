@@ -9,6 +9,7 @@ class MarketRegimeNumericContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = (ROOT / "Sources/FCore/MarketRegimeEngine.swift").read_text(encoding="utf-8")
+        cls.local_quant = (ROOT / "Sources/FCore/LocalQuantEngine.swift").read_text(encoding="utf-8")
         cls.quality = (ROOT / "Sources/FCore/MarketDataQuality.swift").read_text(encoding="utf-8")
         cls.acceptance = (ROOT / "Tests/FCoreTests/MarketRegimeEngineTests.swift").read_text(encoding="utf-8")
         cls.trigger = (ROOT / "Sources/FCore/RealtimeQuantTrigger.swift").read_text(encoding="utf-8")
@@ -104,8 +105,19 @@ class MarketRegimeNumericContractTests(unittest.TestCase):
         self.assertIn("regimeDataAsOf <= regimeMemoryEvaluatedAt", self.trigger)
         self.assertIn("regimeMemoryEvaluatedAt <= now", self.trigger)
         self.assertIn("now.timeIntervalSince(regimeMemoryEvaluatedAt) <= 5 * 86_400", self.trigger)
+        self.assertIn("regimeDataAsOf <= quoteTimestamp", self.trigger)
+        self.assertIn("regimeMemoryEvaluatedAt <= quoteTimestamp", self.trigger)
+        self.assertIn('["market_context_postdates_quote"]', self.trigger)
         self.assertIn("testMissingMarketRegimeCannotProduceAnAssetChangingTrigger", self.trigger_acceptance)
         self.assertIn("testStaleMarketRegimeCannotProduceAnAssetChangingTrigger", self.trigger_acceptance)
+        self.assertIn("testRegimeEvidenceLaterThanQuoteCannotTriggerFromOlderQuote",
+                      self.trigger_acceptance)
+        self.assertIn("dataAsOf <= quote.quoteTimestamp", self.local_quant)
+        self.assertIn("assessment.memory.lastEvaluationAt <= quote.quoteTimestamp", self.local_quant)
+        self.assertIn("observedAt <= quote.quoteTimestamp", self.local_quant)
+        self.assertIn("lastEvaluation <= quote.quoteTimestamp", self.local_quant)
+        self.assertIn("testRegimeEvidenceLaterThanQuoteCannotInfluenceLocalQuant",
+                      (ROOT / "Tests/FCoreTests/LocalQuantEngineTests.swift").read_text(encoding="utf-8"))
         self.assertIn("testFutureOrInconsistentRegimeMemoryCannotProduceAnAssetChangingTrigger",
                       self.trigger_acceptance)
 

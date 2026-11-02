@@ -845,6 +845,14 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 
 图表主题一致性增量：本轮把F图表轴、网格、VOL/MACD标签、十字线、非选中图层中性颜色接入当前theme secondaryForeground。仅编码，未Apple编译或Simulator视觉验证。
 
+## 2026-11-02 量化时间因果顺序回归增量
+
+| 验收项 | 源码要求 | 测试证据 | 当前状态 |
+|---|---|---|---|
+| 本机Quant Regime不得晚于输入报价 | `FLocalQuantEngine`证券Regime和映射指数Regime的dataAsOf与记忆评估时间均要求不晚于`quote.quoteTimestamp` | `LocalQuantEngineTests.testRegimeEvidenceLaterThanQuoteCannotInfluenceLocalQuant`覆盖证据与记忆时间晚于报价；相关Python源码合同集82/82通过 | 已编码/合同通过；Swift XCTest未在本机执行，待Apple CI |
+| IOPV溢价不得混用不同报价时点 | `FLocalQuantEngine`仅接受观察时间不晚于报价时点的IOPV；较新IOPV不参与较早报价的溢价因子 | `LocalQuantEngineTests.testIOPVFactorRejectsUnknownOrStaleReferenceSource`增加较新IOPV+旧报价场景；相关Python源码合同集82/82通过 | 已编码/合同通过；Swift XCTest未在本机执行，待Apple CI |
+| 实时Trigger不得以未来Regime评估旧报价 | `FRealtimeQuantTrigger`要求Regime数据与记忆评估时间均不晚于`quoteTimestamp`；违规暂停且confidence=0 | `RealtimeQuantTriggerTests.testRegimeEvidenceLaterThanQuoteCannotTriggerFromOlderQuote`覆盖证据/记忆时点；相关Python源码合同集82/82通过 | 已编码/合同通过；Swift XCTest未在本机执行，待Apple CI |
+
 
 ## 2026-11-02 dirty worktree 审计补充（基于 HEAD b65ee7c）
 

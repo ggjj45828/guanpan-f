@@ -294,12 +294,21 @@ public enum FRealtimeQuantTrigger {
               regimeMemoryEvaluatedAt.timeIntervalSince1970.isFinite,
               (0...100).contains(marketContext.confidence),
               regimeDataAsOf <= regimeMemoryEvaluatedAt,
+              regimeMemoryEvaluatedAt <= quoteTimestamp,
               regimeMemoryEvaluatedAt <= now,
               regimeDataAsOf <= now,
               now.timeIntervalSince(regimeDataAsOf) <= 5 * 86_400,
               now.timeIntervalSince(regimeMemoryEvaluatedAt) <= 5 * 86_400 else {
             return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
                               reasons: ["market_context_stale_or_unverified"], confidence: 0,
+                              resumeState: operationalState)
+        }
+        // A fresh quote must not be evaluated against regime evidence from a
+        // later market observation. Wall-clock freshness alone does not prevent
+        // this form of look-ahead when quotes arrive out of order.
+        guard regimeDataAsOf <= quoteTimestamp else {
+            return assessment(plan: plan, quote: quote, marketContext: marketContext, state: .paused,
+                              reasons: ["market_context_postdates_quote"], confidence: 0,
                               resumeState: operationalState)
         }
         if marketContext.riskLevel == .r4Extreme &&

@@ -105,6 +105,14 @@
 
 ## 2026-11-02 逐项目标复核（本轮增量；覆盖本文件较早的冲突性旧状态）
 
+### 新增微小缺陷：行情与Regime观察时间错配
+
+- 风险：只检查Regime相对当前时钟足够新，无法防止旧/乱序报价搭配报价之后才观察到的Regime状态，形成决策时间穿越。
+- 修复：本机Quant的证券/映射指数Regime以及实时Trigger均要求研究证据时间不晚于输入行情时间；违规安全降级为WAIT/暂停，不产生交易触发。
+- 同类修复：IOPV观察时间必须不晚于对应报价时间，防止用之后的IOPV给旧报价计算溢价。
+- 回归锚点：`LocalQuantEngineTests.testRegimeEvidenceLaterThanQuoteCannotInfluenceLocalQuant`；`RealtimeQuantTriggerTests.testRegimeEvidenceLaterThanQuoteCannotTriggerFromOlderQuote`。
+- 实测：相关静态合同82/82通过，格式检查通过；Swift/XCTest当前环境未执行，等待Apple CI。该项在Apple CI通过前不可标记为已验证。
+
 | 目标 | 当前检查/实际修改 | 状态与仍需证据 |
 |---|---|---|
 | 自选评分与自动趋势图 | `MarketOverview`沿用每10秒行情刷新；自选行由报价快照中的真实分钟样本绘制48pt趋势线。新增`FLocalQuantAssessment.watchlistDirectionalScore`：报价必须fresh且至少3个有效方向因子；样本不足不显示分数，且文案明确不是收益概率/交易信号；增加稀疏/过期单测定义。 | 已编码；本机Swift执行0、当前SHA Apple编译0；刷新连贯度和可读性未视觉验收。 |

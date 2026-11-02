@@ -805,6 +805,15 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 旧段落若把NAS历史研究写成核心Advisor前置，与2026-11-02用户最终决策冲突：核心改为实时行情 + 真实Ledger + iPhone Local Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger；NAS仅为可选同步、归档、备份和扩展证据，不可阻断基础顾问链。
 # 2026-11-02 最新主线续审（工作树基于当前 main）
 
+## 2026-11-02 细微时间顺序漏洞复核（本轮增量）
+
+- 起始本地 HEAD：`ce90030d66e57318a3b3e76e6e01ebdc9acb9937`，分支 `main`；起始状态 `origin/main` 前方3个提交。本轮未重新fetch成功或触发Apple CI，因此不声称当前源码与GitHub最新主线一致。
+- 发现并修复无未来数据泄漏约束遗漏：`RealtimeQuantTrigger`此前只验证市场Regime不晚于当前时钟，未要求其数据及记忆状态不晚于所评估报价。乱序旧报价可能搭配较新的Regime快照。现在数据与记忆时间都必须`<= quoteTimestamp`，否则触发暂停且confidence=0。
+- 同类风险也在`LocalQuantEngine`：证券Regime与映射指数Regime的数据时间及记忆评估时间现在都必须`<= quote.quoteTimestamp`，否则对应Regime不可用并安全降级；IOPV观察时间也必须不晚于报价时间，防止使用更新的IOPV为旧报价计算溢价。
+- 增加Swift回归测试覆盖旧报价不得触发/影响本机Quant、Regime数据或记忆状态更新于报价之后，以及报价之后的IOPV不得与旧报价混算；增加Python源码合同锚点。定向测试集实际执行82/82通过；`git diff --check`通过；NAS `compileall`通过（NAS源码本轮未改动）。
+- 验证边界：Windows当前环境无Swift/Xcode/Simulator；以上Swift改动仍是“已编码、测试已定义”，尚未Apple编译或执行XCTest，不能继承旧SHA的CI结果。下一步应在fetch/reconcile后将当前Swift改动送Apple CI，再按首个真实失败修复。
+- 本轮修复已保存在本地提交中（当前HEAD为最终追踪来源）。GitHub API复核`main`为`a1ba64582c29340596d5f5f1639ebc5478a5186c`，与本地`origin/main`一致且为本地提交链祖先；最近30条Actions状态中活跃运行0。普通`git fetch`与普通`git push`均因本机Git网络层`getaddrinfo() thread failed to start`失败，未推送、未触发CI；无强推。
+
 - 校准基线：文档起始HEAD `31c30077b53256adaf307ea8534eeeb7843bc63b`，其中Swift源码基线为 `73bfb479fb60e0d611661157045f6d593fa2c795`；此前最新iOS Actions Run 222及NAS/Python Run 25均为该源码SHA成功。Run 222完成FCore、XcodeGen、Device/Simulator Build、UI XCTest、截图导出和未签名IPA打包；CI截图没有人工视觉审阅。Windows无Xcode/Simulator。
 - 本轮真实源码审计确认：统一图表仍在证券详情实时分时、日K、NAS历史分钟三个位置使用固定320pt视图高度；用户多次反馈绘图区偏小。已将这三个详情视图提高到420pt，行情列表的紧凑预览仍保持320pt。提交 `898849a29f8bce31c7fc75ce14bed8b1e67c2d55` 的iOS Run 223实际完成：FCore 335/335、XcodeGen、Device Build、Simulator Build成功；UI XCTest 12项中10通过、2项失败，根因是两处旧断言仍把详情图上限写成320pt（实测420.05pt）。截图导出/Artifact上传成功，因UI失败IPA步骤跳过。
 - 静态图表检查：共享renderer含VOL/MACD切换、MA5/10/20/60/250、成本/券商成本/Candidate/可用IOPV图层、十字光标、拖动、缩放与午休压缩时间轴。源码存在不等于交互或视觉验收；分钟缺口是否应显式断线、不同主题图表表现及真实手机比例仍需设备截图与数据验证。

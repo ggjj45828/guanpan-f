@@ -23,6 +23,7 @@ final class LocalQuantEngineTests: XCTestCase {
     }
 
     private func rangeRegime(now: Date, dataAsOfOverride: Date? = nil,
+                             evaluationOverride: Date? = nil,
                              omitDataAsOf: Bool = false,
                              code: String = "159352",
                              regime: FMarketRegime = .range,
@@ -30,7 +31,7 @@ final class LocalQuantEngineTests: XCTestCase {
         let dataAsOf = omitDataAsOf ? nil : (dataAsOfOverride ?? now.addingTimeInterval(-86_400))
         let memory = FMarketRegimeMemory(confirmedRegime: regime,
                                          confirmedRiskLevel: risk,
-                                         lastEvaluationAt: now.addingTimeInterval(-3_600))
+                                         lastEvaluationAt: evaluationOverride ?? now.addingTimeInterval(-3_600))
         return FMarketRegimeAssessment(market: "security:\(code)", securityCode: code,
                                        regime: regime, riskLevel: risk, confidence: 80,
                                        factors: [], reasons: ["fixture"], dataAsOf: dataAsOf,
@@ -232,6 +233,15 @@ final class LocalQuantEngineTests: XCTestCase {
                 regime: nil, iopv: iopv, sessionStatus: .continuous, now: now)
             XCTAssertFalse(assessment.factors.first { $0.kind == .iopvPremium }?.isAvailable ?? true)
         }
+
+        let olderQuote = try quote(now: now, age: 60)
+        let postQuoteIOPV = try FIOPVObservation(securityCode: "159352", value: 1.01,
+            observedAt: now.addingTimeInterval(-5), fetchedAt: now.addingTimeInterval(-2),
+            source: FMarketQuoteTrustPolicy.tencentReferenceSource, quality: .complete)
+        let mismatched = FLocalQuantEngine.evaluate(
+            quote: olderQuote, dailyHistory: nil, regime: nil, iopv: postQuoteIOPV,
+            sessionStatus: .continuous, now: now)
+        XCTAssertFalse(mismatched.factors.first { $0.kind == .iopvPremium }?.isAvailable ?? true)
     }
 
     func testRegimeWithMissingFutureOrStaleDataTimeFailsClosed() throws {
@@ -253,6 +263,28 @@ final class LocalQuantEngineTests: XCTestCase {
             XCTAssertTrue(assessment.reasonCodes.contains("security_regime_unavailable"))
             XCTAssertTrue(assessment.strategies.allSatisfy { $0.readiness == .unavailableRegime })
         }
+    }
+
+    func testRegimeEvidenceLaterThanQuoteCannotInfluenceLocalQuant() throws {
+        let now = Date()
+        let quote = try quote(now: now, age: 60)
+        let regime = rangeRegime(now: now, dataAsOfOverride: now.addingTimeInterval(-30))
+
+        let assessment = FLocalQuantEngine.evaluate(
+            quote: quote, dailyHistory: nil, regime: regime, iopv: nil,
+            sessionStatus: .continuous, now: now)
+
+        XCTAssertNil(assessment.marketRegime)
+        XCTAssertEqual(assessment.disposition, .wait)
+        XCTAssertTrue(assessment.reasonCodes.contains("security_regime_unavailable"))
+
+        let laterMemory = FLocalQuantEngine.evaluate(
+            quote: quote, dailyHistory: nil,
+            regime: rangeRegime(now: now, dataAsOfOverride: now.addingTimeInterval(-90),
+                                evaluationOverride: now.addingTimeInterval(-30)),
+            iopv: nil, sessionStatus: .continuous, now: now)
+        XCTAssertNil(laterMemory.marketRegime)
+        XCTAssertTrue(laterMemory.reasonCodes.contains("security_regime_unavailable"))
     }
 
     func testStaleQuoteOrClosedSessionCannotProvideLiveFactors() throws {

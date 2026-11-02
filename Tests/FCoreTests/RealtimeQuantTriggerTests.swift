@@ -25,16 +25,40 @@ final class RealtimeQuantTriggerTests: XCTestCase {
                 source: source, timestampTrust: trust, marketSessionStatus: session))
     }
 
-    private func rangeRegime(asOf: Date? = nil) -> FMarketRegimeAssessment {
-        let evaluationTime = asOf ?? now
+    private func rangeRegime(asOf: Date? = nil,
+                             memoryEvaluationTime: Date? = nil) -> FMarketRegimeAssessment {
+        // Keep fixture evidence no later than the default quote timestamp.
+        let evaluationTime = asOf ?? now.addingTimeInterval(-2)
         let bars = (0..<80).map { index in
             FMarketRegimeBar(timestamp: evaluationTime.addingTimeInterval(Double(index - 79) * 86_400),
                              close: 100, volume: 1_000)
         }
-        return FMarketRegimeEngine.evaluate(
+        let assessment = FMarketRegimeEngine.evaluate(
             FMarketRegimeInput(market: "security:159352", securityCode: "159352", asOf: evaluationTime,
                 sourceUpdatedAt: evaluationTime, source: FMarketBarTrustPolicy.tencentDailySource, bars: bars),
             now: evaluationTime)
+        guard let memoryEvaluationTime else { return assessment }
+        let originalMemory = assessment.memory
+        let memory = FMarketRegimeMemory(
+            confirmedRegime: originalMemory.confirmedRegime,
+            confirmedRiskLevel: originalMemory.confirmedRiskLevel,
+            pendingRegime: originalMemory.pendingRegime,
+            pendingRegimeSessions: originalMemory.pendingRegimeSessions,
+            pendingRiskLevel: originalMemory.pendingRiskLevel,
+            pendingRiskSessions: originalMemory.pendingRiskSessions,
+            lastEvaluationAt: memoryEvaluationTime)
+        return FMarketRegimeAssessment(
+            market: assessment.market, securityCode: assessment.securityCode,
+            regime: assessment.regime, riskLevel: assessment.riskLevel,
+            confidence: assessment.confidence, factors: assessment.factors,
+            reasons: assessment.reasons, dataAsOf: assessment.dataAsOf,
+            movingAverages: assessment.movingAverages, return5Sessions: assessment.return5Sessions,
+            return20Sessions: assessment.return20Sessions,
+            drawdown20Sessions: assessment.drawdown20Sessions,
+            realizedVolatility20Sessions: assessment.realizedVolatility20Sessions,
+            volumeExpansion: assessment.volumeExpansion, allowedStrategies: assessment.allowedStrategies,
+            observationOnly: assessment.observationOnly,
+            ordinaryTBuyAllowed: assessment.ordinaryTBuyAllowed, memory: memory)
     }
 
     func testNoPlanProducesWaitWithoutInventingOpportunity() throws {
@@ -330,6 +354,26 @@ final class RealtimeQuantTriggerTests: XCTestCase {
         XCTAssertEqual(result.signal, .wait)
         XCTAssertEqual(result.confidence, 0)
         XCTAssertEqual(result.reasonCodes, ["market_context_stale_or_unverified"])
+    }
+
+    func testRegimeEvidenceLaterThanQuoteCannotTriggerFromOlderQuote() throws {
+        let quote = try quote("1.104", age: 1)
+        let regime = rangeRegime(asOf: now.addingTimeInterval(-0.5))
+
+        let result = FRealtimeQuantTrigger.evaluate(
+            plan: try plan(), quote: quote, marketContext: regime, now: now)
+
+        XCTAssertEqual(result.state, .paused)
+        XCTAssertEqual(result.signal, .wait)
+        XCTAssertEqual(result.confidence, 0)
+        XCTAssertEqual(result.reasonCodes, ["market_context_postdates_quote"])
+
+        let oldEvidenceNewMemory = rangeRegime(
+            asOf: now.addingTimeInterval(-2), memoryEvaluationTime: now.addingTimeInterval(-0.5))
+        let second = FRealtimeQuantTrigger.evaluate(
+            plan: try plan(), quote: quote("1.104", age: 1), marketContext: oldEvidenceNewMemory, now: now)
+        XCTAssertEqual(second.state, .paused)
+        XCTAssertEqual(second.reasonCodes, ["market_context_stale_or_unverified"])
     }
 
     func testFutureOrInconsistentRegimeMemoryCannotProduceAnAssetChangingTrigger() throws {

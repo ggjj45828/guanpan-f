@@ -125,6 +125,8 @@ public enum FLocalQuantEngine {
             guard let dataAsOf = assessment.dataAsOf,
                   dataAsOf.timeIntervalSince1970.isFinite,
                   dataAsOf <= lastEvaluation,
+                  dataAsOf <= quote.quoteTimestamp,
+                  lastEvaluation <= quote.quoteTimestamp,
                   dataAsOf <= now,
                   now.timeIntervalSince(dataAsOf) <= maximumRegimeAge,
                   (0...100).contains(assessment.confidence) else { return nil }
@@ -145,6 +147,8 @@ public enum FLocalQuantEngine {
                   let dataAsOf = assessment.dataAsOf,
                   dataAsOf.timeIntervalSince1970.isFinite,
                   dataAsOf <= assessment.memory.lastEvaluationAt,
+                  dataAsOf <= quote.quoteTimestamp,
+                  assessment.memory.lastEvaluationAt <= quote.quoteTimestamp,
                   dataAsOf <= fetchedAt,
                   fetchedAt <= now, dataAsOf <= now,
                   now.timeIntervalSince(fetchedAt) <= maximumRegimeAge,
@@ -160,6 +164,7 @@ public enum FLocalQuantEngine {
                   let source = observation.source,
                   source == FMarketQuoteTrustPolicy.tencentReferenceSource,
                   isComplete(observation.quality),
+                  observedAt <= quote.quoteTimestamp,
                   observedAt <= fetchedAt, fetchedAt <= now,
                   now.timeIntervalSince(observedAt) <= 90,
                   !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
