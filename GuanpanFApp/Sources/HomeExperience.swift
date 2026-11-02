@@ -1,3 +1,4 @@
+warning: in the working copy of 'GuanpanFApp/Sources/HomeExperience.swift', LF will be replaced by CRLF the next time Git touches it
 import SwiftUI
 import FCore
 import FAdvisor
@@ -265,7 +266,6 @@ private struct FSignatureHome: View {
         .padding(.bottom, 28)
         .frame(maxWidth: 760, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .top)
-        .accessibilityIdentifier("home.signature")
         .refreshable {
             await model.autoRefreshMarketData()
             await model.refreshMarketIndices()
