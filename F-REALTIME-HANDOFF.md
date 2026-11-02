@@ -948,3 +948,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 ## 2026-11-02 — Theme hero 编译修复
 
 - Apple run `41472998168` 在设备构建失败；FCore、XcodeGen通过。Swift日志显示跨页面 Theme Hero 的布局族视图块少了一个结束大括号，导致后续扩展被解析到结构体内部并产生级联错误。已补齐闭合；本修复待新一轮 Apple CI 验证。
+
+
+## 2026-11-02 — 跨主题页面实现 CI 结果
+
+- 提交 `aa42d36` 的 Apple run `41473653986` 全部成功：FCore 338/338、设备构建、Simulator构建、UI XCTest 12/12、截图导出、IPA校验/打包、Artifact上传。
+- 六套当前可选主题仍分别保留既有首页布局，并新增跨页面布局族主视觉Renderer和共享语义token。资产切换控件与方向/键盘测试回归通过。
+- CI截图只记录为已导出；未人工逐张审阅，故不能标记主题视觉验收、iPhone Air或真机交互完成。Windows工作机无Simulator/真机环境。
+- 最近一次修复与全绿结果：`https://github.com/ggjj45828/guanpan-f/actions/runs/41473653986`。

@@ -928,3 +928,14 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 资产控件、键盘与方向回归 | 已修复查找/测试方向并等待Apple CI |
 | iPhone Air/手势人工验收 | External Pending |
 | 整体主题验收 | 未完成，不以源码存在或CI截图导出替代视觉验收 |
+
+
+## 2026-11-02 — Theme/Layout 本轮 CI 记录
+
+| 验收项 | 证据 / 状态 |
+|---|---|
+| 六套当前可选主题跨页面渲染 | Renderer按编辑、终端、玻璃、星图、网格、Bento布局族分流，语义token维持单主题颜色体系；代码已提交 `aa42d36` |
+| 当前SHA Apple CI | Run `41473653986`：FCore 338/338、Device Build、Simulator Build、UI XCTest 12/12、截图导出、IPA校验/打包和Artifact上传通过 |
+| 视觉截图人工审阅 | 未完成；只证明截图导出成功 |
+| iPhone Air、真机滚动/主题切换/交互 | External Pending |
+| 主题最终验收 | 部分完成：Swift实现和自动测试通过，人工视觉对照未通过/未执行，不宣称整体视觉完成 |
