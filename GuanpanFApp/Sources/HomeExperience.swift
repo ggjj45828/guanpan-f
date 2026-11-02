@@ -1852,6 +1852,7 @@ struct SettingsOverview: View {
     @State private var deepSeekKeyDraft = ""
     @State private var hasAutoCheckedNAS = false
     @State private var investorProfileDrafts: [FInvestorProfileAttributeKey: String] = [:]
+    @State private var investorPreferencesExpanded = false
     @State private var preferenceAwaitingClear: FInvestorProfileAttributeKey?
     @State private var showingProfileClearConfirmation = false
     @FocusState private var settingsInputFocused: Bool
@@ -1874,7 +1875,7 @@ struct SettingsOverview: View {
                 LabeledContent("状态", value: model.aiKeyStatus)
             }
             Section("投资者画像") {
-                DisclosureGroup("编辑明确偏好") {
+                DisclosureGroup(isExpanded: $investorPreferencesExpanded) {
                     Text("只保存你填写的内容，并在在线顾问分析时作为本次上下文；不会改写账本。")
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1908,6 +1909,8 @@ struct SettingsOverview: View {
                             }
                         }
                     }
+                } label: {
+                    Text("编辑明确偏好")
                 }
                 .accessibilityIdentifier("settings.profile.edit")
                 Text(model.investorProfileStatus)
