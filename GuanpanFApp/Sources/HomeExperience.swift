@@ -620,12 +620,7 @@ private struct HomePortfolioLead: View {
                 metric("当前持仓", value: model.ledgerState == .available ? "\(model.holdings.count) 只" : "未确认")
             }
 
-            TimelineView(.periodic(from: .now, by: 15)) { context in
-                HomePortfolioValuationRow(
-                    value: model.portfolioMarketValuation(at: context.date).displayLabel)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("portfolio.valuation.total")
+            HomePortfolioValuationRow(model: model)
 
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: "chart.line.uptrend.xyaxis")
@@ -864,9 +859,9 @@ private struct PortfolioCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("真实组合").font(.headline)
             LabeledContent("现金", value: model.cashText)
+            HomePortfolioValuationRow(model: model)
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 let valuation = model.portfolioMarketValuation(at: context.date)
-                HomePortfolioValuationRow(value: valuation.displayLabel)
                 Text("现金 + 全部真实持仓市值 · 持仓行情必须可信且在120秒内")
                     .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 if case .success(let value) = valuation, let quotesAsOf = value.quotesAsOf {
@@ -874,8 +869,6 @@ private struct PortfolioCard: View {
                         .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("portfolio.valuation.total")
             LabeledContent("持仓", value: "\(model.holdings.count) 项")
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 let dailyPnL = model.portfolioSecurityDailyPnL(at: context.date)
@@ -951,13 +944,24 @@ private struct PortfolioCard: View {
 }
 
 private struct HomePortfolioValuationRow: View {
-    let value: String
+    @ObservedObject var model: FHomeModel
+    @State private var evaluationDate = Date()
 
     var body: some View {
         HStack(spacing: 8) {
             Text("账本内资产估值")
             Spacer(minLength: 8)
-            Text(value).monospacedDigit().multilineTextAlignment(.trailing)
+            Text(model.portfolioMarketValuation(at: evaluationDate).displayLabel)
+                .monospacedDigit().multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("portfolio.valuation.total")
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard !Task.isCancelled else { return }
+                evaluationDate = Date()
+            }
         }
     }
 }
