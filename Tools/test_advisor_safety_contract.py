@@ -148,8 +148,10 @@ class AdvisorSafetyContractTests(unittest.TestCase):
         self.assertIn("components.host = components.host?.lowercased()", cache)
         self.assertIn("nasResearchEvidenceByCode.removeAll()", cache)
         self.assertIn("archivedIntradayByCode.removeAll()", cache)
-        self.assertIn("dailyKlineByCode.removeAll()", cache)
-        self.assertIn("securityRegimeByCode.removeAll()", cache)
+        # Daily K-lines are fetched and cached directly on iPhone; changing an
+        # optional NAS endpoint must not invalidate that independent data.
+        self.assertNotIn("dailyKlineByCode.removeAll()", cache)
+        self.assertNotIn("securityRegimeByCode.removeAll()", cache)
         self.assertIn("marketIndexRegimesByCode.removeAll()", cache)
         self.assertIn("regimeMemoryByCode.removeAll()", cache)
         self.assertIn("nasDataGeneration &+= 1", cache)
@@ -161,7 +163,6 @@ class AdvisorSafetyContractTests(unittest.TestCase):
                       self.app)
         for function_start, function_end in [
             ("    func loadArchivedIntraday(for code: String) async {", "    func refreshDailyKline(for code: String) async {"),
-            ("    func refreshDailyKline(for code: String) async {", "    private func researchSummaryStatus("),
         ]:
             operation = self.app[self.app.index(function_start):self.app.index(function_end)]
             self.assertIn("synchronizeNASDataSource(baseAddress: baseAddress)", operation)
@@ -172,6 +173,8 @@ class AdvisorSafetyContractTests(unittest.TestCase):
         daily_start = archived_end
         daily_end = self.app.index("    private func researchSummaryStatus(", daily_start)
         self.assertIn("current.fetchedAt > snapshot.fetchedAt", self.app[daily_start:daily_end])
+        self.assertIn("FQuoteHTTPClient.fetchDailyKline", self.app[daily_start:daily_end])
+        self.assertNotIn("synchronizeNASDataSource", self.app[daily_start:daily_end])
         regime_start = self.app.index("    func refreshHistoricalIndexRegimes() async {")
         regime_end = self.app.index("    private static func isValidSixDigitSecurityCode", regime_start)
         regime_refresh = self.app[regime_start:regime_end]

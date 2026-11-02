@@ -16,12 +16,12 @@ class DailyHistoryWiringTests(unittest.TestCase):
         cls.minute_provider = (ROOT / "nas/fminute/providers.py").read_text(encoding="utf-8")
         cls.market_quality = (ROOT / "Sources/FCore/MarketDataQuality.swift").read_text(encoding="utf-8")
 
-    def test_security_daily_kline_uses_nas_and_live_quote_path_remains_separate(self):
+    def test_security_daily_kline_uses_iphone_provider_and_live_quote_path_remains_separate(self):
         start = self.app.index("    func refreshDailyKline(for code: String) async {")
         end = self.app.index("    private func researchSummaryStatus", start)
         refresh = self.app[start:end]
-        self.assertIn("FNASecurityDailyHistoryClient.fetch", refresh)
-        self.assertNotIn("FQuoteHTTPClient.fetchDailyKline", refresh)
+        self.assertIn("FQuoteHTTPClient.fetchDailyKline", refresh)
+        self.assertNotIn("FNASecurityDailyHistoryClient.fetch", refresh)
         self.assertIn("func refreshMarketData", self.app)
 
     def test_ios_nas_reader_validates_identity_freshness_and_real_daily_bars(self):

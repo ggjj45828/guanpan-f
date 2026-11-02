@@ -298,7 +298,7 @@ private struct FDesignedThemeHome: View {
             masthead(eyebrow: "让投资更从容", dark: false)
             advisorPanel(dark: false, compact: false)
                 .accessibilityIdentifier("home.role.advisorGuidance")
-            HStack(alignment: .stretch, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 portfolioPanel(art: false, compact: true)
                     .frame(maxWidth: .infinity)
                     .accessibilityIdentifier("home.role.portfolio")
@@ -317,7 +317,7 @@ private struct FDesignedThemeHome: View {
                 }
                 .buttonStyle(.plain)
             }
-            HStack(alignment: .stretch, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 marketSection(dark: false, columns: 2)
                     .frame(maxWidth: .infinity)
                 quantTile

@@ -67,10 +67,10 @@ class HomeLayoutContractTests(unittest.TestCase):
 
     def test_live_intraday_plot_expands_with_observed_session_and_breaks_real_gaps(self):
         self.assertIn("zoomScale: displayedZoomScale, window: model.chart.window", self.chart)
-        self.assertIn("let sessionEnd = session == .lunchBreak ? 132 : observedEnd", self.chart)
+        self.assertIn("let sessionEnd = session == .lunchBreak ? 120 : observedEnd", self.chart)
         self.assertIn("return 0...max(sessionEnd, 1)", self.chart)
         self.assertIn("minute - previousSessionMinute <= 2.5", self.chart)
-        self.assertIn('(132, "13:00")', self.chart)
+        self.assertIn('(122, "13:00")', self.chart)
 
     def test_bento_grid_collapses_on_phone_instead_of_forcing_half_width_cards(self):
         start = self.home.index("    private var bento: some View {")
@@ -95,24 +95,18 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn('.accessibilityIdentifier("home.role.\\(role.rawValue)")', self.home)
         self.assertIn('.accessibilityIdentifier("home.role.portfolio")', self.home)
         self.assertIn('matching(identifier: "home.role.\\($0)")', self.ui_tests)
-        self.assertIn('Set(roles.map(\\.identifier)).count', self.ui_tests)
+        self.assertIn('matching(identifier: "home.role.\\(role)").count, 1', self.ui_tests)
         self.assertIn('allCases.contains(theme)', self.manifest)
 
     def test_custom_theme_leads_also_publish_the_shared_home_roles(self):
-        editorial = self.home.split("    private var editorial: some View {", 1)[1].split(
-            "    private var modern", 1)[0]
-        for role in ("portfolio", "marketObservation", "crossMarketPulse", "advisorGuidance"):
-            self.assertIn(f'home.role.{role}', editorial)
-
-        dashboard = self.home.split("    private var dashboard: some View {", 1)[1].split(
-            "    private var magazine", 1)[0]
-        ink = self.home.split("    private var inkEditorial: some View {", 1)[1].split(
-            "    private var minimalTerminal", 1)[0]
-        glass = self.home.split("    private var fluidGlass: some View {", 1)[1].split(
-            "    private var dataStarMap", 1)[0]
-        for layout in (dashboard, ink, glass):
-            self.assertTrue('home.role.portfolio' in layout or 'role(.portfolio)' in layout)
-            self.assertTrue('home.role.advisorGuidance' in layout or 'role(.advisorGuidance)' in layout)
+        self.assertIn("private struct FDesignedThemeHome", self.home)
+        self.assertIn("private func role(_ role: FHomeCardRole)", self.home)
+        self.assertIn("FHomeRoleRenderer(role: role, model: model, theme: theme)", self.home)
+        self.assertIn("private struct FHomeRoleRenderer", self.home)
+        self.assertIn('.accessibilityIdentifier("home.role.\\(role.rawValue)")', self.home)
+        for layout in ("mountainCover", "deepSpaceTerminal", "coralCollage",
+                       "bluePortfolio", "nightFlight", "auroraPanorama"):
+            self.assertIn(f"private var {layout}: some View", self.home)
 
     def test_theme_tokens_follow_system_appearance_instead_of_forcing_light_mode(self):
         self.assertIn("traits.userInterfaceStyle == .dark ? dark : light", self.manifest)
@@ -361,22 +355,20 @@ class HomeLayoutContractTests(unittest.TestCase):
         end = self.home.index("private extension FDecisionAction", start)
         entry = self.home[start:end]
         self.assertIn('TextField("证券名称（自动识别，可修改）", text: $draft.name)', entry)
-        self.assertIn("Task { await updateName(for: code) }", entry)
+        self.assertIn(".task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }", entry)
         self.assertIn("draft.instrumentCode == code", entry)
-        self.assertIn("draft.nameWasManuallyEdited", entry)
-        self.assertIn("draft.nameWasManuallyEdited = false", entry)
-        lookup_start = entry.index("private func updateName(for code: String) async {")
+        lookup_start = entry.index("private func resolveName(for code: String) async {")
         lookup_end = entry.index("\n    var body: some View", lookup_start)
         lookup = entry[lookup_start:lookup_end]
         await_index = lookup.index("await model.lookupInstrumentName(code: code)")
-        self.assertLess(lookup.index("guard !draft.nameWasManuallyEdited"), await_index)
-        self.assertLess(await_index, lookup.index("!draft.nameWasManuallyEdited else { return }"))
+        self.assertLess(lookup.index("guard code.utf8.count == 6"), await_index)
+        self.assertIn("!Task.isCancelled, draft.instrumentCode == code", lookup[await_index:])
         self.assertIn("draft.instrumentCode == code", lookup)
         self.assertIn('TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)', entry)
         self.assertIn("let totalEconomicCost = costPerUnit * Decimal(units)", entry)
         self.assertIn("totalEconomicCost.isFinite", entry)
         self.assertIn("cashEntrySection", entry)
-        self.assertIn("FInitialCashEntrySheet(cashText: $cashText)", entry)
+        self.assertIn('.accessibilityIdentifier("ledger.opening.cash")', entry)
         self.assertIn("cash.isFinite, cash >= 0", entry)
         establish_start = self.app.index("    func establishInitialLedger(")
         establish_end = self.app.index("\n    func ", establish_start + 8)

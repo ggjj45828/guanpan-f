@@ -891,3 +891,12 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 实际本轮测试：Home layout contract 28/28、NAS/Local Quant/Advisor/Traceability contracts 41/41通过。曾尝试跑宽套件，运行过程出现大量测试错误并长时间无结束摘要，故不采纳为通过；此前295/295仅为前一快照结果，不能算当前设置改动后的全套结果。PyYAML相关两个模块未执行。
 - GitHub只读核对：远端`main=a1ba64582c29340596d5f5f1639ebc5478a5186c`；最近Actions活跃任务0。当前修改基于本地`b65ee7c9bd7275a9a03089a10e4b310aec62cdac`并提交在本地分支；推送前仍须fetch/reconcile。刚才再次尝试fetch，仍失败于本机`getaddrinfo() thread failed to start`；未push、未触发新CI。Swift编译/Simulator截图人工审阅均为0。
 - 仍需外部证据：部署NAS对指定security/date返回的真实payload及iPhone穿透；同花顺新闻在手机上的请求结果并由DeepSeek实际引用；B/F同设备状态截图比较；iPhone Air验收；真实DeepSeek→Candidate→用户确认成交→Ledger变更→Advisor复判。以上保持未通过，不用源码存在替代验收。
+
+## 2026-11-02 — 推送后 Apple CI 失败，修复中
+
+- 已推送提交：`88d42eaa4dc5ad323f35edbeaa90a63b48f24026`（`Implement six visual homepage themes`）。
+- iOS workflow run `41449575353`：Swift Package tests、XcodeGen通过；设备构建因 `HomeExperience.swift` 使用无效 `VerticalAlignment.stretch` 失败。Simulator build、UI XCTest、截图产出、IPA均未执行；不要把截图导出步骤的“成功”当作有截图，该步骤明确报告没有 xcresult。
+- 同次推送的 `41449575371` 是 Python/NAS/源码契约测试，不是 NAS 服务部署或 NAS 包发布；308项中7项因断言停留在旧实现而失败。本地已按当前 iPhone 日K直连、NAS可选、六种首页主题和名称自动识别实现修正这些断言，相关7项定向测试通过。
+- 当前正在修复 `.stretch` 编译错误并准备单次普通快进推送。仍须等待本次唯一 iOS workflow 完成；如果失败，按日志继续修复。
+- 用户确认主题整改范围覆盖所有主题下的所有主要页面和底部导航，不限于首页；字体、布局、卡片、颜色体系均须统一并以用户选定的概念图为基准。当前仅有六种首页构图实现，其他页面与 TabBar 的概念图一致性尚未完成，必须如实标记待实现。
+- Windows 环境无法运行 iOS Simulator。只有 Apple CI 成功并生成截图artifact后，才能检查截图；人工 iPhone Air验收仍为 External Pending。
