@@ -758,3 +758,5 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 进一步复核发现 `159352` 买入候选也必须提供映射指数的 Regime 证据；该证据此前未加入测试上下文。现已补齐基准证据及候选引用，下一轮重新验证金额溢出分支。
 
 第六轮运行中该 Risk Guard 用例通过；随后 FDecisionFinancialMath 对 Decimal 极值执行原生 `+` 导致 XCTest 进程 signal 5。已将 `add` / `sum` 改为 `NSDecimalAdd`，遇到任何非 noError 状态都返回 nil。下一轮验证数值修复与完整构建。
+
+第七轮仍在 P&L 极值测试开始后 signal 5，日志没有给出具体断言/堆栈，尚不能确认修改有效。四种算术输入已拆分为单独测试以定位触发项；数值溢出回归保持待验证。

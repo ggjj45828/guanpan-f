@@ -1617,11 +1617,23 @@ final class BoundaryAcceptanceTests: XCTestCase {
         XCTAssertNotEqual(restoredDigest, clearedDigest)
     }
 
-    func testAdvisorPnLAggregatesBecomeUnavailableWhenDecimalOverflows() {
+    func testAdvisorPnLAddReturnsUnavailableWhenDecimalOverflows() {
         let maximum = Decimal.greatestFiniteMagnitude
         XCTAssertNil(FDecisionFinancialMath.add(maximum, maximum))
+    }
+
+    func testAdvisorPnLSumReturnsUnavailableWhenDecimalOverflows() {
+        let maximum = Decimal.greatestFiniteMagnitude
         XCTAssertNil(FDecisionFinancialMath.sum([maximum, maximum]))
+    }
+
+    func testAdvisorPnLAddPreservesCancellationOfFiniteExtremes() {
+        let maximum = Decimal.greatestFiniteMagnitude
         XCTAssertEqual(FDecisionFinancialMath.add(maximum, -maximum), .zero)
+    }
+
+    func testAdvisorPnLSumRejectsNonFiniteInput() {
+        let maximum = Decimal.greatestFiniteMagnitude
         XCTAssertNil(FDecisionFinancialMath.sum([maximum, Decimal(Double.infinity)]))
     }
 }
