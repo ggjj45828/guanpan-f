@@ -779,3 +779,12 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 新闻源真实响应与Advisor引用 | 无当前SHA实网证据 | 未验收；源码存在不等于新闻E2E |
 | DeepSeek真实服务、Candidate确认成交、Ledger更新后AI复判 | 无当前SHA端到端证据 | 未验收；候选永不直接写账 |
 | Simulator人工视觉 / iPhone Air | 未人工验证 | External Pending |
+# 2026-11-02 增量验收记录（当前主线续审）
+
+| 条目 | 最新状态 | 证据/限制 |
+|---|---|---|
+| 统一图表详情尺寸（实时分时/日K/NAS历史分钟） | 已编码，待Apple编译 | `GuanpanFApp/Sources/HomeExperience.swift` 三处详情图由320pt增至420pt；行情列表紧凑图仍320pt。无本轮构建或视觉证据。 |
+| 统一renderer的指标与手势 | 源码存在，Simulator人工验收待完成 | `FUnifiedSecurityChart.swift` 提供VOL/MACD、MA5/10/20/60/250、成本/候选层、IOPV参考、十字/拖动/缩放；不能据此认定图表体验通过。 |
+| 最新已执行Apple CI | 通过，但仅对应Swift源码SHA `73bfb479fb60e0d611661157045f6d593fa2c795` | Run 222；当前图表高度增量不在该SHA，必须由新CI执行后才能记为已编译。 |
+| 用户设备视觉反馈 | 未通过/External Pending | 用户截图明确指出图表小、轴标签/图层操作观感差；本轮尚无新截图人工审阅。 |
+

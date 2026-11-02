@@ -1313,7 +1313,7 @@ struct HomeDestination: View {
                                                               candidate: model.advisorResult?.candidate,
                                                               ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt,
                                                               reference: model.marketReferenceByCode[code]),
-                        height: 320)
+                        height: 420)
                     .padding(.horizontal, -8)
                     .accessibilityIdentifier("market.security-chart.live")
                     VStack(alignment: .leading, spacing: 8) {
@@ -1330,7 +1330,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.daily(daily, holding: holding,
                                                                        candidate: model.advisorResult?.candidate,
                                                                        ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt),
-                                height: 320)
+                                height: 420)
                             .padding(.horizontal, -8)
                             .accessibilityIdentifier("market.security-chart.daily")
                         } else {
@@ -1396,7 +1396,7 @@ struct HomeDestination: View {
                                 model: FChartPresentationBuilder.historical(archived, holding: holding,
                                                                              ledgerCapturedAt: model.latestLedgerSnapshot?.capturedAt,
                                                                              daily: model.dailyKlineByCode[code]),
-                                height: 320)
+                                height: 420)
                             .padding(.horizontal, -8)
                             .accessibilityIdentifier("market.security-chart.history")
                             Text("真实归档数据 · \(archived.sourceSummary) · \(archived.coverageSummary)")
