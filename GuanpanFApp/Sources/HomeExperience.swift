@@ -624,6 +624,8 @@ private struct HomePortfolioLead: View {
                 HomePortfolioValuationRow(
                     value: model.portfolioMarketValuation(at: context.date).displayLabel)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("portfolio.valuation.total")
 
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: "chart.line.uptrend.xyaxis")
@@ -872,6 +874,8 @@ private struct PortfolioCard: View {
                         .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("portfolio.valuation.total")
             LabeledContent("持仓", value: "\(model.holdings.count) 项")
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 let dailyPnL = model.portfolioSecurityDailyPnL(at: context.date)
@@ -955,8 +959,6 @@ private struct HomePortfolioValuationRow: View {
             Spacer(minLength: 8)
             Text(value).monospacedDigit().multilineTextAlignment(.trailing)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("portfolio.valuation.total")
     }
 }
 

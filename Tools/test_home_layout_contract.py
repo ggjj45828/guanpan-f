@@ -138,8 +138,9 @@ class HomeLayoutContractTests(unittest.TestCase):
         valuation_row = self.home.split("private struct HomePortfolioValuationRow: View", 1)[1].split(
             "private extension Result", 1)[0]
         self.assertIn('Text("账本内资产估值")', valuation_row)
-        self.assertIn(".accessibilityElement(children: .combine)", valuation_row)
-        self.assertIn('accessibilityIdentifier("portfolio.valuation.total")', valuation_row)
+        self.assertGreaterEqual(self.home.count('accessibilityIdentifier("portfolio.valuation.total")'), 2)
+        self.assertIn('.accessibilityIdentifier("portfolio.valuation.total")', card)
+        self.assertIn(".accessibilityElement(children: .combine)", card)
         self.assertIn("全部真实持仓市值", card)
         self.assertIn("FQuoteTemporalMetadata.defaultMaximumAge", valuation)
         self.assertIn("FMarketQuoteTrustPolicy.isTrusted",
