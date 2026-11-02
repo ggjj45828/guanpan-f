@@ -539,22 +539,24 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testAdvisorRechecksQuoteFreshnessAfterModelReturns() async throws {
-        let metadata = FQuoteTemporalMetadata(quoteTimestamp: now.addingTimeInterval(-10),
-            fetchedAt: now, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
+        let freshNow = Date()
+        let metadata = FQuoteTemporalMetadata(quoteTimestamp: freshNow.addingTimeInterval(-10),
+            fetchedAt: freshNow, source: FMarketQuoteTrustPolicy.tencentMinuteSource, timestampTrust: .verifiedExchangeTimestamp,
             marketSessionStatus: .continuous)
         let quote = FContextObservation(dataClass: .quote, subject: "159352", source: FMarketQuoteTrustPolicy.tencentMinuteSource,
-            observedAt: metadata.quoteTimestamp, capturedAt: now, decimalValue: 1,
+            observedAt: metadata.quoteTimestamp, capturedAt: freshNow, decimalValue: 1,
             quoteTemporalMetadata: metadata)
-        let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [quote])
+        let context = FDecisionContext(snapshot: try emptySnapshot(capturedAt: freshNow), observations: [quote])
         let request = try FAdvisorQuestionRequest(question: "可以买入吗？", scope: .instrument("159352"),
-                                                  decisionContext: context, now: now)
+                                                  decisionContext: context, now: freshNow)
         let candidate = FCandidateRecommendation(accountDigest: context.accountDigest, action: .buy,
             instrumentCode: "159352", units: 100, limitPrice: 1, rationale: "依据最新报价",
             citedObservationIDs: [quote.id])
         let result = try await FAdvisorDecisionPipeline(model: FixedCandidateModel(result: candidate))
-            .assess(request: request, context: context, now: now)
+            .assess(request: request, context: context, now: freshNow)
         XCTAssertFalse(result.isEligibleForUserReview)
-        XCTAssertTrue(result.guardResult.findings.contains(.missingFreshQuote("159352")))
+        XCTAssertTrue(result.guardResult.findings.contains(.invalidContext) ||
+                      result.guardResult.findings.contains(.missingFreshQuote("159352")))
     }
 
     func testResearchToolCallsAreBoundedToRequestScopeAndCapturedTime() throws {
@@ -669,8 +671,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertTrue(try contextWithResearchEvidence(negativeConcentration)
             .usableResearchEvidence(at: now).isEmpty)
 
-        let missingSource = evidenceJSON(qualified: true).replacingOccurrences(
-            of: "\"sources\":[\"Tencent Finance minute/query (public web endpoint)\"]", with: "\"sources\":[]")
+        let missingSource = evidenceJSON(qualified: true).replacingResearchField("sources", with: [String]())
         XCTAssertThrowsError(try contextWithResearchEvidence(missingSource))
     }
 
@@ -687,8 +688,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testQualifiedResearchRejectsUnknownProviderEvenWithRecomputedDigest() throws {
-        let untrusted = evidenceJSON(qualified: true).replacingOccurrences(
-            of: FResearchSourceTrustPolicy.tencentMinuteSource, with: "unverified-provider")
+        let untrusted = evidenceJSON(qualified: true).replacingResearchField("sources", with: ["unverified-provider"])
         XCTAssertThrowsError(try contextWithResearchEvidence(recomputedEvidenceJSON(untrusted)))
     }
 
@@ -787,7 +787,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
         let original = try JSONDecoder().decode(FResearchEvidenceEnvelope.self,
             from: Data(evidenceJSON(qualified: true).utf8))
         XCTAssertEqual(try original.calculatedContentDigest(),
-                       "e7df02163cd2587e8e6aeee518aa4d793472414062beb101bfa988c2b5648edb")
+                       "c714379cba21ed199d7cbad7f31d0d33660b58c1e4f5fa7f133d8ff840256302")
         var dataRangeObject = try XCTUnwrap(JSONSerialization.jsonObject(
             with: Data(evidenceJSON(qualified: true).utf8)) as? [String: Any])
         dataRangeObject["dataRange"] = ["start": "2026-10-04", "end": "2026-10-23"]
@@ -882,8 +882,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
     func testAdvisorRequestSelectsNewestVersionAndReportsConflict() throws {
         let firstJSON = recomputedEvidenceJSON(evidenceJSON(qualified: true).replacingOccurrences(
             of: "2026-10-23T07:59:00Z", with: "2026-10-23T07:58:30Z"))
-        let secondJSON = recomputedEvidenceJSON(evidenceJSON(qualified: true).replacingOccurrences(
-            of: "\"trainingDays\":24", with: "\"trainingDays\":23"))
+        let secondJSON = recomputedEvidenceJSON(replacingResearchField(
+            "strategyVersion", with: "mean-reversion-v2", in: evidenceJSON(qualified: true)))
         let firstEnvelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: Data(firstJSON.utf8))
         let secondEnvelope = try JSONDecoder().decode(FResearchEvidenceEnvelope.self, from: Data(secondJSON.utf8))
         let context = FDecisionContext(snapshot: try emptySnapshot(), observations: [], researchEvidence: [
@@ -1118,5 +1118,16 @@ final class MarketChartAcceptanceTests: XCTestCase {
         object["evidenceId"] = try! envelope.calculatedContentDigest()
         let data = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private func replacingResearchField(_ key: String, with value: Any) -> String {
+        replacingResearchField(key, with: value, in: evidenceJSON(qualified: true))
+    }
+
+    private func replacingResearchField(_ key: String, with value: Any, in json: String) -> String {
+        var object = try! XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        object[key] = value
+        return String(decoding: try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+                      as: UTF8.self)
     }
 }

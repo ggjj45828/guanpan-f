@@ -52,7 +52,8 @@ class MarketRegimeNumericContractTests(unittest.TestCase):
         for condition in [
             "bar.close.isFinite, bar.close > 0",
             "present.allSatisfy(\\.isFinite)",
-            "volume >= 0",
+            "volume < 0",
+            "if let volume = bar.volume",
             "high >= max(open, bar.close)",
             "low <= min(open, bar.close)",
         ]:
@@ -85,11 +86,11 @@ class MarketRegimeNumericContractTests(unittest.TestCase):
         ]:
             self.assertIn(acceptance, self.acceptance)
 
-    def test_moving_average_divides_before_accumulating(self):
+    def test_moving_average_uses_stable_incremental_mean(self):
         start = self.engine.index("private static func averageTail(")
         end = self.engine.index("private static func returnOver(", start)
         average = self.engine[start:end]
-        self.assertIn("$0 + $1 / divisor", average)
+        self.assertIn("result += (value - result) / Double(offset + 2)", average)
         self.assertNotIn("tail.reduce(0, +)", average)
         self.assertIn("testMovingAverageAvoidsIntermediateOverflowForLargeFinitePrices", self.acceptance)
 

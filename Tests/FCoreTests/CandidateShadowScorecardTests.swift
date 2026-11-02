@@ -107,7 +107,8 @@ final class CandidateShadowScorecardTests: XCTestCase {
         let fill = FConfirmedFill(id: fillID, sequence: 1, tradedAt: fillTime,
             instrumentCode: "159352", side: .buy, units: 100, price: 1.10, fee: 0,
             userConfirmation: .init(confirmedAt: fillTime, confirmationNote: "用户确认成交"))
-        let ledger = try FAccountBook(openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
+        let ledger = try FAccountBook(accountID: context.accountID,
+            openingSnapshot: .init(capturedAt: base, cashBalance: 1_000),
             cashBalance: 890, positions: [FPosition(instrumentCode: "159352", name: "测试ETF",
                 units: 100, bookCost: 110, acquiredAt: fillTime)], fills: [fill],
             updatedAt: fillTime).readOnlySnapshot(capturedAt: base.addingTimeInterval(11))
@@ -498,7 +499,8 @@ final class CandidateShadowScorecardTests: XCTestCase {
                        "一小时以后的数据不得混入已触发候选的影子观察窗口")
         XCTAssertEqual(evaluation.status, .observationWindowComplete)
         XCTAssertTrue(evaluation.observationWindowComplete)
-        XCTAssertEqual(evaluation.maximumFavorableExcursion, 0)
+        XCTAssertEqual(try XCTUnwrap(evaluation.maximumFavorableExcursion),
+                       Decimal(string: "0.00362318840579710144927536231884057971")!)
     }
 
     func testSparseTriggeredWindowIsInsufficientInsteadOfComplete() throws {

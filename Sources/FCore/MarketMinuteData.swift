@@ -34,18 +34,26 @@ public struct FDailyBar: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Shared overflow-safe moving-average calculation for daily bars. Dividing each
-/// observation before summing avoids an overflowing intermediate total.
+/// Shared overflow-safe incremental moving-average calculation for daily bars.
 public enum FDailyMovingAverage {
     public static func values(for bars: [FDailyBar], period: Int) -> [Decimal?] {
         guard period > 0 else { return Array(repeating: nil, count: bars.count) }
-        let divisor = Decimal(period)
         return bars.indices.map { index -> Decimal? in
             guard index + 1 >= period else { return nil }
-            var average = Decimal.zero
-            for bar in bars[(index + 1 - period)...index] {
-                average += bar.close / divisor
-                guard average.isFinite else { return nil }
+            let window = bars[(index + 1 - period)...index]
+            guard let first = window.first?.close else { return nil }
+            var average = first
+            for (offset, bar) in window.dropFirst().enumerated() {
+                var difference = Decimal.zero
+                var current = bar.close
+                guard NSDecimalSubtract(&difference, &current, &average, .plain) == .noError else { return nil }
+                var adjustment = Decimal.zero
+                var delta = difference
+                let divisor = Decimal(offset + 2)
+                guard NSDecimalDivide(&adjustment, &delta, &divisor, .plain) == .noError else { return nil }
+                var updated = Decimal.zero
+                guard NSDecimalAdd(&updated, &average, &adjustment, .plain) == .noError else { return nil }
+                average = updated
             }
             return average
         }

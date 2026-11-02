@@ -505,13 +505,13 @@ public enum FMarketRegimeEngine {
 
     private static func hasValidPriceData(_ bar: FMarketRegimeBar) -> Bool {
         guard bar.close.isFinite, bar.close > 0 else { return false }
-        let fields = [bar.open, bar.high, bar.low, bar.volume]
-        let present = fields.compactMap { $0 }
-        guard present.isEmpty || present.count == fields.count,
+        if let volume = bar.volume, (!volume.isFinite || volume < 0) { return false }
+        let ohlc = [bar.open, bar.high, bar.low]
+        let present = ohlc.compactMap { $0 }
+        guard present.isEmpty || present.count == ohlc.count,
               present.allSatisfy(\.isFinite) else { return false }
-        guard let open = bar.open, let high = bar.high,
-              let low = bar.low, let volume = bar.volume else { return true }
-        return low > 0 && volume >= 0 && high >= max(open, bar.close) &&
+        guard let open = bar.open, let high = bar.high, let low = bar.low else { return true }
+        return low > 0 && high >= max(open, bar.close) &&
             low <= min(open, bar.close) && high >= low
     }
 
@@ -627,8 +627,13 @@ public enum FMarketRegimeEngine {
     private static func averageTail(_ values: [Double], count: Int) -> Double? {
         guard values.count >= count else { return nil }
         let tail = values.suffix(count)
-        let divisor = Double(count)
-        let result = tail.reduce(0) { $0 + $1 / divisor }
+        guard let first = tail.first, first.isFinite, first > 0 else { return nil }
+        var result = first
+        for (offset, value) in tail.dropFirst().enumerated() {
+            guard value.isFinite, value > 0 else { return nil }
+            result += (value - result) / Double(offset + 2)
+            guard result.isFinite else { return nil }
+        }
         return result.isFinite && result > 0 ? result : nil
     }
     private static func returnOver(_ values: [Double], sessions: Int) -> Double? {

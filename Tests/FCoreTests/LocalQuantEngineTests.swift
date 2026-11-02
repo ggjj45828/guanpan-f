@@ -18,7 +18,7 @@ final class LocalQuantEngineTests: XCTestCase {
                                  volume: Decimal(index < 15 ? 100 : 200))
         }
         return try FCurrentIntradaySnapshot(securityCode: code, samples: samples,
-                                            quoteTimestamp: lastTimestamp, fetchedAt: fetchedAt,
+                                            quoteTimestamp: samples.last!.timestamp, fetchedAt: fetchedAt,
                                             source: source)
     }
 

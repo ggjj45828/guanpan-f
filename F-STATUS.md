@@ -461,3 +461,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 第七轮 iOS CI 仍在 P&L 极值测试开始后 signal 5，尚未产生具体断言或堆栈信息。已将四种算术场景拆分为独立 XCTest，以确定究竟是哪项 Decimal 操作导致进程终止；数值修复尚不能宣告通过。
 
 - 第八轮定位：Decimal 极值加法、sum 溢出和相消用例均通过；进程在非有限输入用例开始时退出。该用例通过 `Decimal(Double.infinity)` 构造测试值。已统一使用安全的 `Decimal.nan` 表示非有限值，并修正相应边界测试；等待 CI 确认。
+
+- 2026-11-02 第九轮 CI 全量 XCTest 已揭示多项潜伏问题：研究摘要半毫秒哈希与NAS不一致、研究测试的源字段替换未实际生效、研究版本选择测试生成了不合格证据、Shadow账户夹具不一致、分钟缺口夹具时间戳错位、Market Regime 均值/ OHLCV校验和Decimal日均值存在边界问题。已修复上述源码与测试夹具；研究工具响应可用性门控仍待本轮 Actions 复核。Python可运行测试293项通过；本机Python运行时缺PyYAML，另2个依赖YAML模块未能导入；Windows无Swift/Xcode。尚未推送。

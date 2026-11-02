@@ -357,8 +357,8 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
                 .object(["start": .string($0.start), "end": .string($0.end)])
             } ?? .null,
             "strategyVersion": strategyVersion.map(FResearchJSONValue.string) ?? .null,
-            "asOfEpochMillis": .number((asOfDate.timeIntervalSince1970 * 1_000).rounded()),
-            "generatedAtEpochMillis": .number((generatedDate.timeIntervalSince1970 * 1_000).rounded()),
+            "asOfEpochMillis": .number(Double(try Self.epochMillis(asOf))),
+            "generatedAtEpochMillis": .number(Double(try Self.epochMillis(generatedAt))),
             "timezone": timezone.map(FResearchJSONValue.string) ?? .null,
             "sessionCoverage": .object(sessionCoverage.mapValues { .number(Double($0)) }),
             "qualifiedIndependentDays": .number(Double(qualifiedIndependentDays)),
@@ -395,6 +395,38 @@ public struct FResearchEvidenceEnvelope: Codable, Equatable, Sendable {
             if let parsed = formatter.date(from: value) { return parsed }
         }
         return nil
+    }
+
+    /// Converts the timestamp text directly so half-millisecond ties use the
+    /// same exact, ties-away-from-zero rounding as the NAS Python serializer.
+    private static func epochMillis(_ value: String) throws -> Int64 {
+        let pattern = #"^(.*?)(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)),
+              let baseRange = Range(match.range(at: 1), in: value),
+              let zoneRange = Range(match.range(at: 3), in: value) else {
+            throw FDecisionContextError.invalidResearchEvidence(evidenceId)
+        }
+        let baseText = String(value[baseRange]) + String(value[zoneRange])
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        guard let baseDate = formatter.date(from: baseText) else {
+            throw FDecisionContextError.invalidResearchEvidence(evidenceId)
+        }
+        let (baseMillis, overflow) = Int64(baseDate.timeIntervalSince1970).multipliedReportingOverflow(by: 1_000)
+        guard !overflow else { throw FDecisionContextError.invalidResearchEvidence(evidenceId) }
+        guard match.range(at: 2).location != NSNotFound,
+              let fractionRange = Range(match.range(at: 2), in: value) else { return baseMillis }
+        let digits = String(value[fractionRange])
+        let firstThree = String((digits + "000").prefix(3))
+        guard let fractionMillis = Int64(firstThree) else {
+            throw FDecisionContextError.invalidResearchEvidence(evidenceId)
+        }
+        let roundedUp = digits.count > 3 && digits[digits.index(digits.startIndex, offsetBy: 3)] >= "5"
+        let fractionalMillis = fractionMillis + (roundedUp ? 1 : 0)
+        let (result, additionOverflow) = baseMillis.addingReportingOverflow(fractionalMillis)
+        guard !additionOverflow else { throw FDecisionContextError.invalidResearchEvidence(evidenceId) }
+        return result
     }
 }
 
