@@ -621,9 +621,8 @@ private struct HomePortfolioLead: View {
             }
 
             TimelineView(.periodic(from: .now, by: 15)) { context in
-                LabeledContent("账本内资产估值",
-                               value: model.portfolioMarketValuation(at: context.date).displayLabel)
-                    .accessibilityIdentifier("portfolio.valuation.total")
+                HomePortfolioValuationRow(
+                    value: model.portfolioMarketValuation(at: context.date).displayLabel)
             }
 
             HStack(alignment: .top, spacing: 9) {
@@ -865,8 +864,7 @@ private struct PortfolioCard: View {
             LabeledContent("现金", value: model.cashText)
             TimelineView(.periodic(from: .now, by: 15)) { context in
                 let valuation = model.portfolioMarketValuation(at: context.date)
-                LabeledContent("账本内资产估值", value: valuation.displayLabel)
-                    .accessibilityIdentifier("portfolio.valuation.total")
+                HomePortfolioValuationRow(value: valuation.displayLabel)
                 Text("现金 + 全部真实持仓市值 · 持仓行情必须可信且在120秒内")
                     .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 if case .success(let value) = valuation, let quotesAsOf = value.quotesAsOf {
@@ -945,6 +943,20 @@ private struct PortfolioCard: View {
                 .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+private struct HomePortfolioValuationRow: View {
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("账本内资产估值")
+            Spacer(minLength: 8)
+            Text(value).monospacedDigit().multilineTextAlignment(.trailing)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("portfolio.valuation.total")
     }
 }
 
