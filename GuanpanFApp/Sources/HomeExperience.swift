@@ -259,6 +259,7 @@ private struct FSignatureHome: View {
             marketTape
             positionList
             researchFooter
+            advisorBriefing
         }
         .padding(.horizontal, 22)
         .padding(.top, 16)
@@ -347,7 +348,21 @@ private struct FSignatureHome: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.role.portfolio")
 
-            HStack(alignment: .top, spacing: 11) {
+        }
+        .padding(19)
+        .background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2).fill(theme.accent).frame(width: 3).padding(.vertical, 22)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous)
+            .stroke(theme.ink.opacity(0.075), lineWidth: 0.7))
+        .shadow(color: theme.ink.opacity(0.045), radius: 18, x: 0, y: 7)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.briefing-surface")
+    }
+
+    private var advisorBriefing: some View {
+        HStack(alignment: .top, spacing: 11) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(theme.accent)
@@ -429,19 +444,18 @@ private struct FSignatureHome: View {
                 }
             }
             .padding(.top, 15)
+            .padding(19)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2).fill(theme.accent).frame(width: 3).padding(.vertical, 22)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous)
+                .stroke(theme.ink.opacity(0.075), lineWidth: 0.7))
+            .shadow(color: theme.ink.opacity(0.045), radius: 18, x: 0, y: 7)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.role.advisorGuidance")
         }
-        .padding(19)
-        .background(theme.manifest.tokens.surface, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2).fill(theme.accent).frame(width: 3).padding(.vertical, 22)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous)
-            .stroke(theme.ink.opacity(0.075), lineWidth: 0.7))
-        .shadow(color: theme.ink.opacity(0.045), radius: 18, x: 0, y: 7)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.briefing-surface")
     }
 
     private var marketTape: some View {
