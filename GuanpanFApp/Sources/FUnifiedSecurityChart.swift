@@ -136,6 +136,7 @@ struct FUnifiedSecurityChart: View {
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
         .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("统一证券图表")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }

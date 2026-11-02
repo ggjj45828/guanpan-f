@@ -2,6 +2,8 @@
 
 ## 当前源树状态覆盖（2026-11-01；优先于下方历史记录）
 
+- 2026-11-02 `8429a776` CI复审：NAS/Python 306项中305通过，唯一失败是跨市场任务源码合同要求保留并行实时/历史刷新。已本地恢复`async let`并预先捕获actor属性。iOS Swift Package测试、设备构建和Simulator构建通过；12项导航UI测试中8项失败，集中在星图节点坐标、编辑主题缺少首页资产估值行、无NAS日K时UI测试错误要求图表存在、画像测试没有等到可操作/持久化状态。已在本地修复并调整UI验收为检查真实空状态与保存后的控件结果；尚未复跑或推送。
+- 2026-11-02 iOS App目标集成编译修复：删除对非可选每日交易日的错误条件绑定；成交影子关联传入已确认账本快照；IOPV溢折价计算移至App可访问范围；因子数字字符串转换显式消除重载歧义；Guard原因改用实际`findings`；行情刷新状态处理可选字典值；Result展示扩展限定Success类型；SwiftUI行情说明去掉ViewBuilder条件赋值；跨市场启动任务预先捕获actor状态再并行刷新。`8429a776`的macOS CI确认Swift包、iOS设备和模拟器app构建通过。
 - 2026-11-01 韩股历史指数接入：NAS增设Naver KOSPI日线provider，独立于iPhone实时报价，支持Naver常见日期格式、过滤当日未完成bar、校验OHLCV，并接入日线归档、iPhone可信来源门与KR Regime；新增路由、解析和API回归。Naver历史端点为未签约公开接口，本机无法实网验证，须由NAS部署后的实际请求确认可用性与覆盖。提交推送授权已给出，每次最多两个Actions run；当前尚未提交。
 - 2026-11-02 连续CI复审：两批NAS/Python Actions均成功；两批iOS Actions仍在Swift package compile失败。第1批发现缓存默认参数引用`Self`、Ledger现金流水map闭包漏`return`、Regime字典分组推断失败并已修复；第2批继续发现ResearchEvidence缺少FCore import、Shadow快照参数声明和方向收益数组推断错误、DecisionContext把非可选交易日字符串当字符集合处理，均已修复。55项指数/Regime/接线Python回归、Python编译、架构边界检查和差异检查通过；Windows无Swift/Xcode，修复仍需第三批Apple CI确认。
 - 2026-11-01 用户图表反馈续审：详情分时、日K、NAS历史分钟及行情卡片图表统一从400/360pt收至320pt；新增稳定可访问性标识、UI高度验收及源码合同。Home/追踪合同30/30通过；全量Python发现293项、291项通过，2项因缺PyYAML无法导入；`git diff --check`通过。Swift/XCTest与Simulator不可用，尚无截图视觉确认。B-058已更新；未提交/推送。

@@ -36,9 +36,14 @@ final class PrimaryNavigationUITests: XCTestCase {
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
-        XCTAssertTrue(dailyChart.waitForExistence(timeout: 3), app.debugDescription)
-        XCTAssertLessThanOrEqual(dailyChart.frame.height, 324.5,
-                                 "Daily chart must respect its 320pt height cap")
+        if dailyChart.waitForExistence(timeout: 1) {
+            scrollUntilHittable(dailyChart, in: detailScroll)
+            XCTAssertLessThanOrEqual(dailyChart.frame.height, 324.5,
+                                     "Daily chart must respect its 320pt height cap")
+        } else {
+            XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
+                          "Without NAS daily history, the page must show an explicit unavailable state")
+        }
         attachScreenshot("04-security-daily-chart", app: app)
         let historyHeading = app.staticTexts["NAS 历史分时"]
         detailScroll.swipeUp(velocity: .fast)
@@ -93,12 +98,22 @@ final class PrimaryNavigationUITests: XCTestCase {
 
         let detailScroll = app.scrollViews["market.security-detail.scroll"]
         XCTAssertTrue(detailScroll.waitForExistence(timeout: 5))
-        for identifier in ["market.security-chart.live", "market.security-chart.daily"] {
-            let chart = app.descendants(matching: .any)[identifier]
-            scrollUntilHittable(chart, in: detailScroll)
-            XCTAssertTrue(chart.exists, app.debugDescription)
-            XCTAssertLessThanOrEqual(chart.frame.height, 324.5,
-                                     "\(identifier) exceeded the 320pt phone chart height")
+        let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
+        scrollUntilHittable(liveChart, in: detailScroll)
+        XCTAssertTrue(liveChart.exists, app.debugDescription)
+        XCTAssertLessThanOrEqual(liveChart.frame.height, 324.5,
+                                 "Live chart exceeded the 320pt phone chart height")
+
+        let dailyChartHeading = app.staticTexts["日 K 与均线"]
+        scrollUntilHittable(dailyChartHeading, in: detailScroll)
+        let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
+        if dailyChart.exists {
+            scrollUntilHittable(dailyChart, in: detailScroll)
+            XCTAssertLessThanOrEqual(dailyChart.frame.height, 324.5,
+                                     "Daily chart exceeded the 320pt phone chart height")
+        } else {
+            XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
+                          "Missing NAS history must remain explicit instead of rendering a fabricated chart")
         }
     }
 
@@ -193,10 +208,20 @@ final class PrimaryNavigationUITests: XCTestCase {
         let settingsForm = app.collectionViews.firstMatch
         XCTAssertTrue(settingsForm.waitForExistence(timeout: 3), app.debugDescription)
 
+        let clear = app.buttons["profile.preference.clear.investmentHorizon"]
+        if clear.exists {
+            scrollUntilHittable(clear, in: settingsForm)
+            clear.tap()
+            let initialConfirm = app.buttons["清除该项画像"]
+            XCTAssertTrue(initialConfirm.waitForExistence(timeout: 3), app.debugDescription)
+            initialConfirm.tap()
+            let removed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: clear)
+            wait(for: [removed], timeout: 10)
+        }
+
         let field = app.textFields["profile.preference.investmentHorizon"]
         scrollUntilHittable(field, in: settingsForm)
         XCTAssertTrue(field.isHittable, app.debugDescription)
-        let status = app.staticTexts["profile.preference.status"]
         field.tap()
         if let current = field.value as? String, current != "投资期限", !current.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
@@ -206,19 +231,21 @@ final class PrimaryNavigationUITests: XCTestCase {
         if dismissKeyboard.exists { dismissKeyboard.tap() }
         let save = app.buttons["profile.preference.save.investmentHorizon"]
         scrollUntilHittable(save, in: settingsForm)
+        let saveEnabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: save)
+        wait(for: [saveEnabled], timeout: 10)
+        XCTAssertTrue(save.isEnabled, app.debugDescription)
         save.tap()
-        scrollUntilHittable(status, in: settingsForm)
-        let saved = expectation(for: NSPredicate(format: "label CONTAINS %@", "已保存"), evaluatedWith: status)
-        wait(for: [saved], timeout: 3)
-
-        let clear = app.buttons["profile.preference.clear.investmentHorizon"]
         scrollUntilHittable(clear, in: settingsForm)
+        let saved = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: clear)
+        wait(for: [saved], timeout: 10)
+        XCTAssertTrue(clear.exists, app.debugDescription)
         clear.tap()
         let confirm = app.buttons["清除该项画像"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 2), app.debugDescription)
         confirm.tap()
-        let cleared = expectation(for: NSPredicate(format: "label CONTAINS %@", "已清除"), evaluatedWith: status)
-        wait(for: [cleared], timeout: 3)
+        let cleared = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: clear)
+        wait(for: [cleared], timeout: 10)
+        XCTAssertFalse(clear.exists, app.debugDescription)
     }
 
     func testCrossMarketIndexBoardIsDiscoverableAndListsConfiguredMarkets() {

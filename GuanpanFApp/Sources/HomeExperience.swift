@@ -172,19 +172,19 @@ struct HomeLayout: View {
                         .position(x: width / 2, y: height / 2)
                     Path { path in
                         let center = CGPoint(x: width / 2, y: height / 2)
-                        for point in [CGPoint(x: width * 0.17, y: height * 0.19),
-                                      CGPoint(x: width * 0.83, y: height * 0.19),
-                                      CGPoint(x: width * 0.83, y: height * 0.81),
-                                      CGPoint(x: width * 0.17, y: height * 0.81)] {
+                        for point in [CGPoint(x: width * 0.27, y: height * 0.19),
+                                      CGPoint(x: width * 0.73, y: height * 0.19),
+                                      CGPoint(x: width * 0.85, y: height * 0.81),
+                                      CGPoint(x: width * 0.15, y: height * 0.81)] {
                             path.move(to: center); path.addLine(to: point)
                         }
                     }.stroke(theme.accent.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     centralStarSummary.frame(width: min(width * 0.52, 210), height: 150)
                         .position(x: width / 2, y: height / 2)
-                    orbitNode(.portfolio, shortTitle: "持仓", x: width * 0.17, y: height * 0.19)
-                    orbitNode(.marketObservation, shortTitle: "市场", x: width * 0.83, y: height * 0.19)
-                    orbitNode(.crossMarketPulse, shortTitle: "跨市场", x: width * 0.83, y: height * 0.81)
-                    orbitNode(.advisorGuidance, shortTitle: "AI 决策", x: width * 0.17, y: height * 0.81)
+                    orbitNode(.portfolio, shortTitle: "持仓", x: width * 0.27, y: height * 0.19)
+                    orbitNode(.marketObservation, shortTitle: "市场", x: width * 0.73, y: height * 0.19)
+                    orbitNode(.crossMarketPulse, shortTitle: "跨市场", x: width * 0.85, y: height * 0.81)
+                    orbitNode(.advisorGuidance, shortTitle: "AI 决策", x: width * 0.15, y: height * 0.81)
                 }
             }
             .frame(height: 430)
@@ -617,6 +617,12 @@ private struct HomePortfolioLead: View {
                 Rectangle().fill(theme.ink.opacity(0.12)).frame(width: 1, height: 42)
                     .padding(.horizontal, 14)
                 metric("当前持仓", value: model.ledgerState == .available ? "\(model.holdings.count) 只" : "未确认")
+            }
+
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                LabeledContent("账本内资产估值",
+                               value: model.portfolioMarketValuation(at: context.date).displayLabel)
+                    .accessibilityIdentifier("portfolio.valuation.total")
             }
 
             HStack(alignment: .top, spacing: 9) {
@@ -1312,6 +1318,7 @@ struct HomeDestination: View {
                             Text("尚无真实日 K 数据；请求失败时不会用分时点拼接。")
                                 .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                                 .frame(maxWidth: .infinity, minHeight: 64)
+                                .accessibilityIdentifier("market.security-chart.daily.unavailable")
                         }
                         Text(model.securityRegimeStatusByCode[code] ?? "证券自身状态：等待真实日K；市场广度等缺失因子不会估算")
                             .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
@@ -1558,8 +1565,12 @@ private struct CrossMarketOverview: View {
         .accessibilityIdentifier("crossmarket.list")
         .navigationTitle("跨市场脉搏")
         .task {
-            if model.marketIndicesUpdatedAt == nil { await model.refreshMarketIndices() }
-            await model.refreshHistoricalIndexRegimes()
+            let shouldRefreshLiveQuotes = model.marketIndicesUpdatedAt == nil
+            async let liveQuotes: Void = {
+                if shouldRefreshLiveQuotes { await model.refreshMarketIndices() }
+            }()
+            async let historicalRegimes: Void = model.refreshHistoricalIndexRegimes()
+            _ = await (liveQuotes, historicalRegimes)
         }
     }
 

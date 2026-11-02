@@ -76,11 +76,12 @@ class HomeLayoutContractTests(unittest.TestCase):
         start = self.home.index("    private var dataStarMap: some View {")
         end = self.home.index("    private var adaptiveBento", start)
         layout = self.home[start:end]
-        self.assertIn("width * 0.17, y: height * 0.19", layout)
-        self.assertIn("width * 0.83, y: height * 0.19", layout)
-        self.assertIn("width * 0.83, y: height * 0.81", layout)
-        self.assertIn("width * 0.17, y: height * 0.81", layout)
+        self.assertIn("width * 0.27, y: height * 0.19", layout)
+        self.assertIn("width * 0.73, y: height * 0.19", layout)
+        self.assertIn("width * 0.85, y: height * 0.81", layout)
+        self.assertIn("width * 0.15, y: height * 0.81", layout)
         self.assertIn("testAllTenThemesRenderHomeScreenshotsWithTheirDeclaredRoleArrangement", self.ui_tests)
+        self.assertIn("XCTAssertLessThan(advisor.midX, portfolio.midX,", self.ui_tests)
 
     def test_all_theme_home_roles_expose_accessibility_identity_and_ui_order_assertions(self):
         self.assertIn('.accessibilityIdentifier("home.role.\\(role.rawValue)")', self.home)
