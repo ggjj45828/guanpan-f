@@ -49,7 +49,7 @@ public enum FDailyMovingAverage {
                 guard NSDecimalSubtract(&difference, &current, &average, .plain) == .noError else { return nil }
                 var adjustment = Decimal.zero
                 var delta = difference
-                let divisor = Decimal(offset + 2)
+                var divisor = Decimal(offset + 2)
                 guard NSDecimalDivide(&adjustment, &delta, &divisor, .plain) == .noError else { return nil }
                 var updated = Decimal.zero
                 guard NSDecimalAdd(&updated, &average, &adjustment, .plain) == .noError else { return nil }
