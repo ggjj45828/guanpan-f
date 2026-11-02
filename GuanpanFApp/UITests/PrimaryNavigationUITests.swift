@@ -178,7 +178,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let row = app.descendants(matching: .any)["market.instrument.\(code)"]
         XCTAssertTrue(row.waitForExistence(timeout: 3), app.debugDescription)
         XCTAssertTrue(row.label.contains(code), row.label)
-        XCTAssertTrue(row.label.contains("自选关注"), row.label)
+        XCTAssertTrue(row.label.contains("自选"), row.label)
 
         // Restore the starting watchlist state so this UI test does not leave
         // user preference data behind for later tests or local app runs.

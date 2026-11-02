@@ -909,6 +909,13 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 本地 `Tools.test_home_layout_contract` 28/28通过。全量 Python discovery 在本机显示多项失败/错误并长时间无结束摘要，已中止，不计为通过；本机无可用 Xcode/iOS Simulator，因此 Swift 与 UI 测试必须由下一次 Apple CI执行。
 - 用户确认的全 App 视觉整改仍覆盖首页以外页面、字体/卡片/颜色及底部导航；此处本轮处理的是 CI 失败，并不代表整套页面已完成视觉重做。Simulator截图需从新 CI artifact实际取出并查看，iPhone Air人工验收仍待实机。
 
+## 2026-11-02 — CI 第三轮失败与自选/持仓标签修正
+
+- Apple iOS run `41459794655`（SHA `feffa0a91b4ae5e3a8272d5b515c6495c06aaeeb`）结果：Swift Package、XcodeGen、设备构建、Simulator构建均通过；UI XCTest 12项中11项通过，唯一失败为 `testWatchlistIsSeparateAndAppearsInItsOwnMarketFilter`。截图导出与artifact上传成功，IPA因UI失败跳过。
+- 失败根因来自实际状态：先运行的开户UI测试创建了真实持仓 `159352 / TestETF`，随后自选测试又把同一证券加入自选；证券行正确显示“真实持仓”，但此前测试错误地要求仅显示“自选关注”。此情况也暴露出列表没有明确表达“已持仓且已加入自选”。
+- 修正市场行状态标签：两者同时成立时显示“真实持仓 · 自选”；自选测试现在要求行标识清楚体现自选身份。自选列表筛选仍只由自选代码集合决定，测试结束会移除本测试新增的自选项。
+- 这次修正尚未编译或通过Apple CI。已检查本地diff无空白错误；推送前需要再次核对远端主线和Actions并普通快进推送。截图artifact中已导出首页、行情、证券详情、AI、资产、设置及6种主题浅/深色截图，但目前还没有人工逐张视觉审阅，不能写成视觉通过。
+
 ## 2026-11-02 — CI 第二轮失败根因
 
 - 推送 `df431b7` 后只启动 iOS run `41458070851`，没有启动 Python/NAS workflow；Swift Package、XcodeGen、Device Build、Simulator Build均成功，六主题首页角色测试也不再失败。

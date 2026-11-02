@@ -3285,7 +3285,9 @@ struct MarketOverview: View {
                                         Text(holding?.name ?? code).font(.headline).foregroundStyle(theme.ink)
                                         HStack(spacing: 6) {
                                             Text(code).font(.caption.monospaced())
-                                            Text(holding == nil ? "自选关注" : "真实持仓")
+                                            Text(holding == nil
+                                                 ? "自选关注"
+                                                 : (model.isInWatchlist(code) ? "真实持仓 · 自选" : "真实持仓"))
                                         }
                                         .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                                     }
