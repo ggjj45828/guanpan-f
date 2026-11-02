@@ -459,3 +459,5 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 第六轮 iOS CI：FCoreTests 已编译，Risk Guard 溢出用例通过；执行 Advisor P&L Decimal 极值回归时进程 signal 5。定位为 FDecisionFinancialMath 直接使用 `+`，溢出陷阱未返回 nil。已改用 NSDecimalAdd 并检查状态，等待下一轮 CI。
 
 - 第七轮 iOS CI 仍在 P&L 极值测试开始后 signal 5，尚未产生具体断言或堆栈信息。已将四种算术场景拆分为独立 XCTest，以确定究竟是哪项 Decimal 操作导致进程终止；数值修复尚不能宣告通过。
+
+- 第八轮定位：Decimal 极值加法、sum 溢出和相消用例均通过；进程在非有限输入用例开始时退出。该用例通过 `Decimal(Double.infinity)` 构造测试值。已统一使用安全的 `Decimal.nan` 表示非有限值，并修正相应边界测试；等待 CI 确认。

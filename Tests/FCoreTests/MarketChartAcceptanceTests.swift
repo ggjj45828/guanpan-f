@@ -255,7 +255,7 @@ final class MarketChartAcceptanceTests: XCTestCase {
             window: .historicalIntraday(tradingDate: first),
             series: .minute([FMinuteSample(timestamp: first, price: .nan)]),
             quality: .complete, temporalMetadata: metadata))
-        let infinity = Decimal(Double.infinity)
+        let infinity = Decimal.nan
         XCTAssertThrowsError(try FChartDataModel(securityCode: "159352",
             window: .historicalIntraday(tradingDate: first),
             series: .minute([FMinuteSample(timestamp: first, price: infinity)]),

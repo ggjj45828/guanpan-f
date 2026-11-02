@@ -68,9 +68,9 @@ final class LedgerSchemaTests: XCTestCase {
         }
     }
 
-    func testRejectsInfiniteCashAndFillPrice() {
-        let infinity = Decimal(Double.infinity)
-        XCTAssertTrue(infinity.isInfinite)
+    func testRejectsNonFiniteCashAndFillPrice() {
+        let infinity = Decimal.nan
+        XCTAssertTrue(infinity.isNaN)
         XCTAssertThrowsError(try FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: infinity,
             updatedAt: now).validate(now: now)) {
             XCTAssertEqual($0 as? FLedgerValidationError, .invalidCash)
@@ -84,7 +84,7 @@ final class LedgerSchemaTests: XCTestCase {
     }
 
     func testLedgerMutationsRejectInfiniteValuesWithoutChangingSourceBook() throws {
-        let infinity = Decimal(Double.infinity)
+        let infinity = Decimal.nan
         let source = FAccountBook(openingSnapshot: opening(cash: 10), cashBalance: 10,
                                   updatedAt: now.addingTimeInterval(-60))
         let movement = FCashMovement(sequence: 1, occurredAt: now, amount: infinity,

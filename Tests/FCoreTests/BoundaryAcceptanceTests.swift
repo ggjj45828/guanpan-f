@@ -1634,6 +1634,6 @@ final class BoundaryAcceptanceTests: XCTestCase {
 
     func testAdvisorPnLSumRejectsNonFiniteInput() {
         let maximum = Decimal.greatestFiniteMagnitude
-        XCTAssertNil(FDecisionFinancialMath.sum([maximum, Decimal(Double.infinity)]))
+        XCTAssertNil(FDecisionFinancialMath.sum([maximum, .nan]))
     }
 }

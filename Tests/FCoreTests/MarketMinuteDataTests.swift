@@ -142,8 +142,8 @@ final class MarketMinuteDataTests: XCTestCase {
         XCTAssertThrowsError(try FCurrentIntradaySnapshot(securityCode: "159352",
             samples: [FMinuteSample(timestamp: fetchedAt, price: .nan)],
             quoteTimestamp: fetchedAt, fetchedAt: fetchedAt, source: "fixture"))
-        let infinity = Decimal(Double.infinity)
-        XCTAssertTrue(infinity.isInfinite)
+        let infinity = Decimal.nan
+        XCTAssertTrue(infinity.isNaN)
         XCTAssertThrowsError(try FCurrentIntradaySnapshot(securityCode: "159352",
             samples: [FMinuteSample(timestamp: fetchedAt, price: infinity)],
             quoteTimestamp: fetchedAt, fetchedAt: fetchedAt, source: "fixture"))
@@ -163,7 +163,7 @@ final class MarketMinuteDataTests: XCTestCase {
         XCTAssertThrowsError(try FDailyKlineSnapshot(securityCode: "159352", bars: [invalid],
             fetchedAt: fetchedAt, source: "fixture", adjustment: "不复权"))
         let infiniteVolume = FDailyBar(tradingDate: day, open: 1, close: 1,
-            high: 1, low: 1, volume: Decimal(Double.infinity))
+            high: 1, low: 1, volume: Decimal.nan)
         XCTAssertThrowsError(try FDailyKlineSnapshot(securityCode: "159352", bars: [infiniteVolume],
             fetchedAt: fetchedAt, source: "fixture", adjustment: "不复权"))
     }
