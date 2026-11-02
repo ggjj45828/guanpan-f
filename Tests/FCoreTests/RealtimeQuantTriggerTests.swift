@@ -357,11 +357,11 @@ final class RealtimeQuantTriggerTests: XCTestCase {
     }
 
     func testRegimeEvidenceLaterThanQuoteCannotTriggerFromOlderQuote() throws {
-        let quote = try quote("1.104", age: 1)
+        let quoteSnapshot = try quote("1.104", age: 1)
         let regime = rangeRegime(asOf: now.addingTimeInterval(-0.5))
 
         let result = FRealtimeQuantTrigger.evaluate(
-            plan: try plan(), quote: quote, marketContext: regime, now: now)
+            plan: try plan(), quote: quoteSnapshot, marketContext: regime, now: now)
 
         XCTAssertEqual(result.state, .paused)
         XCTAssertEqual(result.signal, .wait)
@@ -371,7 +371,10 @@ final class RealtimeQuantTriggerTests: XCTestCase {
         let oldEvidenceNewMemory = rangeRegime(
             asOf: now.addingTimeInterval(-2), memoryEvaluationTime: now.addingTimeInterval(-0.5))
         let second = FRealtimeQuantTrigger.evaluate(
-            plan: try plan(), quote: quote("1.104", age: 1), marketContext: oldEvidenceNewMemory, now: now)
+            plan: try plan(),
+            quote: try quote("1.104", age: 1),
+            marketContext: oldEvidenceNewMemory,
+            now: now)
         XCTAssertEqual(second.state, .paused)
         XCTAssertEqual(second.reasonCodes, ["market_context_stale_or_unverified"])
     }
