@@ -671,7 +671,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
         XCTAssertTrue(try contextWithResearchEvidence(negativeConcentration)
             .usableResearchEvidence(at: now).isEmpty)
 
-        let missingSource = evidenceJSON(qualified: true).replacingResearchField("sources", with: [String]())
+        let missingSource = replacingResearchField("sources", with: [String](),
+                                                   in: evidenceJSON(qualified: true))
         XCTAssertThrowsError(try contextWithResearchEvidence(missingSource))
     }
 
@@ -688,7 +689,8 @@ final class MarketChartAcceptanceTests: XCTestCase {
     }
 
     func testQualifiedResearchRejectsUnknownProviderEvenWithRecomputedDigest() throws {
-        let untrusted = evidenceJSON(qualified: true).replacingResearchField("sources", with: ["unverified-provider"])
+        let untrusted = replacingResearchField("sources", with: ["unverified-provider"],
+                                               in: evidenceJSON(qualified: true))
         XCTAssertThrowsError(try contextWithResearchEvidence(recomputedEvidenceJSON(untrusted)))
     }
 

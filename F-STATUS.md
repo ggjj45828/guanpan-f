@@ -465,3 +465,4 @@ Swift/Xcode 与 XCTest、iOS Simulator/iPhone、NAS 8788 生产部署和真实�
 - 2026-11-02 第九轮 CI 全量 XCTest 已揭示多项潜伏问题：研究摘要半毫秒哈希与NAS不一致、研究测试的源字段替换未实际生效、研究版本选择测试生成了不合格证据、Shadow账户夹具不一致、分钟缺口夹具时间戳错位、Market Regime 均值/ OHLCV校验和Decimal日均值存在边界问题。已修复上述源码与测试夹具；研究工具响应可用性门控仍待本轮 Actions 复核。Python可运行测试293项通过；本机Python运行时缺PyYAML，另2个依赖YAML模块未能导入；Windows无Swift/Xcode。尚未推送。
 - 第九轮推送的 Python/NAS workflow 通过；iOS 编译在 NSDecimalDivide 的不可变除数 inout 用法处停止，未开始 XCTest。已将除数改为可变副本，本机无Swift工具链，等待下一轮 Actions 编译和测试。
 - 第十轮 Python/NAS workflow 通过；Swift 编译继续暴露 ResearchEvidence 的静态时间格式辅助函数引用实例 evidenceId。现将标识显式作为参数传入；等待下一轮Apple Actions验证。
+- 第十一轮 Python/NAS workflow 通过；Swift生产模块成功编译，测试源编译发现两处研究来源测试误把私有JSON helper当作String扩展调用。现已改为显式传入JSON参数，下一轮验证完整XCTest。
