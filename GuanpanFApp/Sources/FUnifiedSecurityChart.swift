@@ -41,7 +41,7 @@ struct FUnifiedSecurityChart: View {
                 let start = max(0, end - visibleCount)
                 let visibleRange = start..<end
                 let minuteDomain = minuteDisplayDomain(series: series, range: visibleRange,
-                                                       zoomScale: displayedZoomScale)
+                                                       zoomScale: displayedZoomScale, window: model.chart.window)
                 let visibleTimes = Set(visibleRange.map { timestamps[$0] })
                 let selectedIndex = selectedTimestamp.flatMap { timestamp in
                     visibleRange.first(where: { timestamps[$0] == timestamp })
@@ -345,7 +345,7 @@ struct FUnifiedSecurityChart: View {
     }
 
     private func minuteDisplayDomain(series: FChartSeries, range: Range<Int>,
-                                     zoomScale: CGFloat) -> ClosedRange<Double> {
+                                     zoomScale: CGFloat, window: FChartWindow) -> ClosedRange<Double> {
         guard case let .minute(samples) = series, !range.isEmpty else { return 0...252 }
         if zoomScale > 1.01 {
             let visibleMinutes = range.map { sessionMinute(samples[$0].timestamp) }
@@ -353,9 +353,23 @@ struct FUnifiedSecurityChart: View {
             let last = visibleMinutes.max() ?? first + 1
             return first...max(first + 1, last)
         }
-        // Keep the unzoomed live and archived minute charts anchored to the
-        // complete CN trading session so realtime updates never move the axis.
-        return 0...252
+        guard case .liveIntraday = window,
+              let latest = samples.last?.timestamp else { return 0...252 }
+
+        let timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let now = Date()
+        guard calendar.isDate(latest, inSameDayAs: now) else { return 0...252 }
+        let session = FMainlandTradingCalendar.status(at: now, timeZone: timeZone)
+        guard session == .continuous || session == .lunchBreak else { return 0...252 }
+
+        // Expand the live plot only through the observed trading session. This
+        // keeps the first minutes readable instead of pinning them to 1% of a
+        // full-day axis. Lunch is compressed consistently with sessionMinute.
+        let observedEnd = sessionMinute(latest)
+        let sessionEnd = session == .lunchBreak ? 132 : observedEnd
+        return 0...max(sessionEnd, 1)
     }
 
     private func intradayClockLabel(_ sessionMinute: Double) -> String {
@@ -425,13 +439,23 @@ struct FUnifiedSecurityChart: View {
         switch series {
         case let .minute(samples):
             var path = Path()
+            var previousSessionMinute: Double?
             for index in range {
+                let timestamp = samples[index].timestamp
                 let point = CGPoint(x: x(index), y: y(samples[index].price))
-                if index == range.lowerBound { path.move(to: point) } else { path.addLine(to: point) }
+                let minute = sessionMinute(timestamp)
+                if let previousSessionMinute, minute - previousSessionMinute <= 2.5 {
+                    path.addLine(to: point)
+                } else {
+                    // Leave real coverage gaps visible; never draw an invented
+                    // straight bridge through missing minutes or the lunch break.
+                    path.move(to: point)
+                }
+                previousSessionMinute = minute
             }
             context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.78, lineCap: .round, lineJoin: .round))
             let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30"),
-                                                    (162, "13:30"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
+                                                    (132, "13:00"), (192, "14:00"), (222, "14:30"), (252, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
             if ticks.isEmpty || ticks.first?.0 != minuteDomain.lowerBound {
                 ticks.insert((minuteDomain.lowerBound, intradayClockLabel(minuteDomain.lowerBound)), at: 0)
@@ -444,7 +468,9 @@ struct FUnifiedSecurityChart: View {
                 // A stride can keep both 14:30 and 15:00 at the right edge, where
                 // the two labels collide on an iPhone-width plot.
                 let domainWidth = max(minuteDomain.upperBound - minuteDomain.lowerBound, 1)
-                let minimumLabelSpacing: CGFloat = 44
+                // Leave room for localized labels on narrower iPhones. The
+                // chart still draws every tick mark; only text labels are thinned.
+                let minimumLabelSpacing: CGFloat = 52
                 var spacedTicks = [ticks[0]]
                 for item in ticks.dropFirst().dropLast() {
                     guard let previous = spacedTicks.last else { continue }

@@ -42,7 +42,8 @@ class IOSAppStructureTests(unittest.TestCase):
         self.assertIn('accessibilityIdentifier("advisor.ai-key-status")', self.views)
         self.assertIn('accessibilityIdentifier("advisor.context.nas-research")', self.views)
         self.assertIn("历史Quant研究摘要暂不可用", self.app_source)
-        self.assertIn('Section("NAS 历史研究与数据服务")', self.views)
+        self.assertIn('Section("可选同步与数据服务")', self.views)
+        self.assertIn('LabeledContent("新闻最近状态", value: model.newsStatus)', self.views)
         self.assertIn("尚未填写 NAS 地址，连接测试还没有开始。", self.views)
 
     def test_app_only_reads_the_real_ledger_snapshot(self) -> None:

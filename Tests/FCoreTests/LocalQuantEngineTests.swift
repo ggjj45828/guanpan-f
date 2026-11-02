@@ -117,7 +117,7 @@ final class LocalQuantEngineTests: XCTestCase {
 
         XCTAssertEqual(assessment.disposition, .noTrade)
         XCTAssertEqual(meanReversion.readiness, .awaitingQualifiedParameters)
-        XCTAssertEqual(meanReversion.reasonCode, "nas_strategy_parameters_not_qualified")
+        XCTAssertEqual(meanReversion.reasonCode, "local_strategy_parameters_not_qualified")
         XCTAssertFalse(meanReversion.qualified)
         XCTAssertFalse(assessment.candidatePlanGenerated)
     }

@@ -47,11 +47,11 @@ class AdvisorSafetyContractTests(unittest.TestCase):
         self.assertNotIn("FNAS", quote_refresh)
         self.assertNotIn("refreshHistoricalIndexRegimes", quote_refresh)
 
-    def test_advisor_prompt_prioritizes_nas_for_quant_and_limits_summary_to_fresh_cache(self):
+    def test_advisor_prompt_keeps_nas_optional_and_limits_summary_to_fresh_cache(self):
         prompt_start = self.advisor.index('var system = """')
         prompt_end = self.advisor.index('\n        """', prompt_start)
         system_prompt = self.advisor[prompt_start:prompt_end]
-        self.assertIn("NAS历史分钟数据的主要用途是Quant Research", system_prompt)
+        self.assertIn("NAS仅为可选同步、历史归档与研究增强", system_prompt)
         self.assertIn("单次分析绝不请求或等待NAS", system_prompt)
         self.assertIn("历史Quant研究摘要暂不可用", system_prompt)
         self.assertIn("判断变化规则", system_prompt)

@@ -6,9 +6,9 @@
 
 ## 产品决策
 
-NAS 不属于盘中实时行情、iPhone 已安装策略包的本地执行、Risk Guard 或 DeepSeek 单次分析的同步依赖；NAS故障不得阻断这些基础流程。NAS历史分钟数据仍是Quant策略研究与资格验证的主数据源，正式策略包必须经过 Backtest、Validation、Out-of-Sample 与 Strategy Qualification 后才可下放iPhone。没有可用且未过期的合格策略包时，Local Quant必须保持 WAIT/NO_TRADE，不得用手写参数替代。NAS Research Summary可作为DeepSeek的可选缓存上下文，但单次提问绝不等待NAS。
+NAS 不属于盘中实时行情、iPhone 已安装策略包的本地执行、Risk Guard 或 DeepSeek 单次分析的同步依赖；NAS故障不得阻断这些基础流程。策略参数包必须经过可复核的 Backtest、Validation、Out-of-Sample 与 Strategy Qualification 后才可下放iPhone；历史数据可以来自本机缓存、用户提供数据或可选NAS归档，NAS不是资格认证方或运行前置。没有可用且未过期的合格策略包时，Local Quant必须保持 WAIT/NO_TRADE，不得用手写参数替代。NAS Research Summary可作为DeepSeek的可选缓存上下文，但单次提问绝不等待NAS。
 
-慢速研究链：NAS历史分钟数据 → Quant Research → Backtest → Validation → Out-of-Sample → Strategy Qualification → 不可变Strategy Version/参数包 → iPhone Local Quant。它与盘中快通道异步运行；DeepSeek Advisor只消费本机已有且未过期的Research Summary（若有）。
+策略验证链：可用历史数据（本机缓存/导入/可选NAS） → Quant Research → Backtest → Validation → Out-of-Sample → Strategy Qualification → 不可变Strategy Version/参数包 → iPhone Local Quant。NAS只是可选数据来源之一。它与盘中快通道异步运行；DeepSeek Advisor只消费本机已有且未过期的Research Summary（若有）。
 
 ## 唯一业务事实源
 
@@ -22,7 +22,7 @@ NAS 不属于盘中实时行情、iPhone 已安装策略包的本地执行、Ris
 日线/近期分钟、市场背景/新闻、Quant 状态、本机已有的可选 NAS Research Summary
 
 慢速资格链（不进入盘中请求等待链）
-NAS历史分钟 → Backtest/Validation/OOS → Strategy Qualification/Version → iPhone策略包
+可用历史数据（本地/导入/可选NAS） → Backtest/Validation/OOS → Strategy Qualification/Version → iPhone策略包
 
 用户在券商手工成交 → 用户明确确认 → FConfirmedLedgerWriter → Ledger → Quant 重算 → Advisor按需复判
 ```
@@ -82,7 +82,7 @@ Candidate Plan 从 Waiting 到 Approaching/Triggered；当价格已离开计划�
 
 1. P0：保留 Ledger/T/手续费语义；确认当前首页 Swift 修改的 Apple CI 证据。Run 58 已取消，不能记作编译或测试结果。
 2. P1：继续首页及核心页面 B→F 体验整改；Simulator/真机视觉状态单独标记。
-3. P2：在 FCore 引入纯确定性 Quant 输入/输出与本地计算，先用真实 quote/ledger 事实和保守 WAIT 策略；单元测试覆盖新鲜/过期、信号冲突、成本口径、无持仓/低现金、IOPV unavailable、NO TRADE。只读因子观察已接入Advisor冻结上下文；尚未接Risk Guard/Trigger，没有NAS合格参数，也不是完整Quant v1。
+3. P2：在 FCore 引入纯确定性 Quant 输入/输出与本地计算，先用真实 quote/ledger 事实和保守 WAIT 策略；单元测试覆盖新鲜/过期、信号冲突、成本口径、无持仓/低现金、IOPV unavailable、NO TRADE。只读因子观察已接入Advisor冻结上下文；尚未接Risk Guard/Trigger，没有独立验证通过的本地策略参数包，也不是完整Quant v1。NAS为可选研究/归档增强，不是本地策略资格的强制授权方。
 4. P3：先将当前纯状态评估器接入经Risk Guard批准的Candidate，再实现可持久化、幂等、可恢复的状态管理与本地提醒；迟到时LeftZone、不追价。当前没有实时订阅、持久化或提醒接线。
 5. P4：向首页、证券详情、Advisor 接入本地 Quant 状态；NAS 缺席不得阻断核心基础流程。
 6. P5-P6：DeepSeek 将 Quant 当作确定性只读事实；完成 Candidate→快通道触发→手工成交确认→Ledger→Quant 重算→Advisor 复判。
@@ -95,8 +95,8 @@ Candidate Plan 从 Waiting 到 Approaching/Triggered；当价格已离开计划�
 本节覆盖上方2026-10-28开发快照中的旧状态描述：
 
 - `FMarketRegimeEngine`现已接入确定性多因子分类和风险门控，个股与指数历史各自计算，不会仅凭代码相近自动映射市场。输入样本至少60个真实日K；MA60/MA250因子只有在250个日K可用时才启用；短期趋势与MA250长趋势冲突时进入Transition。
-- `FLocalQuantEngine`现有FCore只读因子观察切片，输出8项因子测量、可用时的波动率归一化方向评分/不可用原因，以及Mean Reversion、Trend Pullback、VWAP Deviation策略准备状态；证券Regime必须精确匹配代码且未过期；日K必须来自按市场白名单确认的来源，实时因子要求120秒内、来源allowlist验证的报价和连续交易时段，短周期因子还要求最近20条分钟样本间隔不超过180秒。每个因子摘要包含自身来源和观测时点；Trend Structure同时注明所用日线的最后日期及实时行情源，纯日线MA Structure不再冒用实时行情时间。159352和159941的发行方映射Regime也参与策略准备：缺失/过期/错指数则映射证券策略Unavailable，策略需同时被ETF Regime与映射市场Regime允许，严重风险禁用。App已将摘要写入Advisor冻结上下文，IOPV仅消费当时已有的新鲜缓存，不增加请求等待。它不生成价位、份额、Candidate或NAS资格；缺少NAS验证策略参数时保持未qualified/NO_TRADE。其余未映射证券不借用其他指数状态。
+- `FLocalQuantEngine`现有FCore只读因子观察切片，输出8项因子测量、可用时的波动率归一化方向评分/不可用原因，以及Mean Reversion、Trend Pullback、VWAP Deviation策略准备状态；证券Regime必须精确匹配代码且未过期；日K必须来自按市场白名单确认的来源，实时因子要求120秒内、来源allowlist验证的报价和连续交易时段，短周期因子还要求最近20条分钟样本间隔不超过180秒。每个因子摘要包含自身来源和观测时点；Trend Structure同时注明所用日线的最后日期及实时行情源，纯日线MA Structure不再冒用实时行情时间。159352和159941的发行方映射Regime也参与策略准备：缺失/过期/错指数则映射证券策略Unavailable，策略需同时被ETF Regime与映射市场Regime允许，严重风险禁用。App已将摘要写入Advisor冻结上下文，IOPV仅消费当时已有的新鲜缓存，不增加请求等待。它不生成价位、份额、Candidate或NAS资格；策略参数尚无独立的本地验证/授权包时保持未qualified/NO_TRADE，NAS仅为可选历史研究来源。其余未映射证券不借用其他指数状态。
 - `FRealtimeQuantTrigger`及`FRiskGuard`的核心类型已存在；159352/159941的发行方映射Regime现进入Local Quant策略准备，并在买入Guard中校验映射来源/时效、要求引用，严重/极端风险时拒绝普通买入。全标的实时策略评估、符合资格的本地策略包、持久化与提醒尚未闭环。缺少验证资格时，资产变化候选保持阻止。
-- 当前没有生产代码可以签发 `FQuantStrategyQualificationGrant`；Advisor解码的DecisionContext会丢弃运行时授权，Guard只有测试显式注入授权才能放行量化候选。Python源码合同现阻止NAS资格验证器接线前出现生产授权签发调用。
+- 当前没有生产代码可以签发 `FQuantStrategyQualificationGrant`；Advisor解码的DecisionContext会丢弃运行时授权，Guard只有测试显式注入授权才能放行量化候选。Python源码合同现阻止本地策略参数验证器实现前出现生产授权签发调用；NAS不是生产授权的必经路径。
 - 当前跨市场指数板有8个实时行情位；NAS历史日K已支持七个Tencent指数代码，日经可取官方收盘价，KOSPI历史来源仍Unavailable。159352→CSI A500与159941→Nasdaq-100发行方映射现进入Advisor背景、Local Quant策略准备和Risk Guard严重风险门控；映射自身不构成NAS策略资格，映射缺失/过期时对应标的策略保持Unavailable。其他证券映射、跨市场Lead-Lag、宽度真实来源、各市场完整日历及样本外策略研究仍未实现或未验收。
 - MA250与指数时间戳新增回归定义尚未在Apple/Python环境执行。不得用旧Run 69结果证明当前dirty worktree通过。

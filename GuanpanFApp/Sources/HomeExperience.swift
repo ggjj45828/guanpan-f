@@ -1914,7 +1914,7 @@ struct SettingsOverview: View {
                     .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     .accessibilityIdentifier("profile.preference.status")
             }
-            Section("NAS 历史研究与数据服务") {
+            Section("可选同步与数据服务") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -1941,7 +1941,7 @@ struct SettingsOverview: View {
                     Text(model.nasConnectionStatus)
                         .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 }
-                Text("局域网请连接同一 Wi‑Fi 或 VPN；蜂窝网络请使用可达的 HTTPS 地址。")
+                Text("局域网需同一 Wi‑Fi/VPN；外网请使用手机可达的 HTTPS 地址。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                 DisclosureGroup("连接方式与安全说明") {
                 Text("NAS是可选同步、归档与备份服务，不是实时行情、Local Quant或基础顾问分析的前置条件。连接测试只读取 /readyz，不发送持仓。远程访问请使用可达的HTTPS入口并限制网络访问。")
@@ -1956,7 +1956,8 @@ struct SettingsOverview: View {
                     LabeledContent("NAS 后台历史采集", value: nasBaseAddress.isEmpty
                         ? "需配置 NAS" : "按部署标的清单运行；队列与覆盖见连接状态")
                     LabeledContent("新闻来源", value: "同花顺财经 7×24 · 公开网页接口")
-                    Text("顾问请求同花顺财经近24小时7×24市场快讯，不发送持仓或账本。只有来源明确标注证券代码的快讯才作为个股直接关联；其余仅作市场背景。该公开网页接口并非签约数据服务，标题/摘要不等于已核实全文。NAS Ready只表示服务在线，不代表指定日期已有完整分钟归档。缺失数据不会补造。")
+                    LabeledContent("新闻最近状态", value: model.newsStatus)
+                    Text("新闻仅在实际请求成功且快讯时间有效时进入顾问上下文；关联证券必须由来源明确标注。公开网页接口不保证稳定，标题/摘要不等于已核实全文。NAS Ready只表示服务在线，不代表指定日期已有完整历史分钟。缺失数据不会补造。")
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
                 }

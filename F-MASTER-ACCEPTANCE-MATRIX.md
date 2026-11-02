@@ -17,7 +17,7 @@
 - 本轮完整Python发现293项，291项通过；`test_ios_app_structure`与`test_nas_deployment_package`因当前主机缺PyYAML未能导入。用户图表高度反馈后的Home/追踪合同30/30通过，`compileall`、架构边界检查和`git diff --check`通过。NAS Python CI明确安装PyYAML。
 - 2026-11-01按用户参考截图再次缩短统一图表高度：证券详情实时/日K/NAS历史与行情卡片均为320pt；Swift/XCTest/Simulator未运行，截图观感尚未验收，不视为图表视觉通过。
 - 数据星图中心摘要与真实资产导航节点的重复可访问性标识已拆分；十主题UI用例加上角色唯一性、四节点可点击和中心无重叠断言。源码合同通过，Simulator验证仍待执行。
-- 本地Quant现有八类描述性因子观察、来源/时点/质量理由和三类策略准备状态，已进入Advisor只读上下文；它尚未生成交易信号、价格区间、份额、Candidate或生产资格票据。NAS验证签发链、策略组合、持续行情评估、Trigger生产接线、状态持久化/通知仍未闭环，资产变化Candidate继续fail-closed。
+- 本地Quant现有八类描述性因子观察、来源/时点/质量理由和三类策略准备状态，已进入Advisor只读上下文；它尚未生成交易信号、价格区间、份额、Candidate或生产资格票据。独立验证策略包、策略组合、持续行情评估、Trigger生产接线、状态持久化/通知仍未闭环；NAS不是核心依赖，资产变化Candidate继续fail-closed。
 - 八类跨市场实时指数行情已编码；NAS历史K线现增加Naver公开网页接口的KOSPI日线provider，并接入iPhone历史来源信任与KR Regime。解析/路由/API回归覆盖；该未签约接口尚未NAS实网验证，不能据此声称已具备真实覆盖或稳定可用性。
 - 2026-11-02 两批 NAS/Python Actions 成功；iOS Swift package compile 连续暴露的源码错误已修复两轮，仍待第三轮 Apple CI 确认；本机无Swift/Xcode。
 - 全量145行追踪表结构连续不代表功能全部完成。NAS部署、真实行情/新闻/DeepSeek、Apple构建与截图、真机视觉、跨市场交易日历和实际策略效果仍需分别验收。本轮无提交或推送。
@@ -34,7 +34,7 @@
 - Candidate Shadow新增真实账本Fill关联校验：ID、成交时间、证券、买卖方向和关联份额必须与只读Ledger快照一致；测试仅定义，尚无Apple执行证据。当前无App生产调用方，不能称真实成交复盘流程已接通。
 - 账户级未归属杂费新增独立现金流水类别；仅改变账户现金，不影响证券成本或盈亏。新增Swift回归定义但未能在当前Windows工具链执行。
 - Risk Guard新增同证券、未过期且必须引用的Market Regime证据门槛；严重风险、Risk-Off、Uncertain和不可靠数据会阻止买入类候选，并拒绝高于最新成交价的买入限价。回归已定义，Swift未执行；Provider没有可验证盘口数据，价差/深度门槛仍未实现。
-- Local Quant策略资格票据改为绑定“证券×Regime×策略版本”，跨Regime借用会失败关闭；回归已定义，生产NAS资格包和Swift执行仍待验。
+- Local Quant策略资格票据改为绑定“证券×Regime×策略版本”，跨Regime借用会失败关闭；回归已定义，生产本地策略资格包和Swift执行仍待验；NAS为可选数据源。
 - 指数供应商若只返回纽约本地墙上时间，秋季回拨重复时点现在拒绝解析，春季跳时不存在时点也拒绝；新增DST边界XCTest定义。全跨市场UTC归一与官方日历仍缺。
 - 同一证券若DecisionContext携带多条相互冲突的新鲜Regime观察，Risk Guard现拒绝按数组顺序选一条；回归已定义，Swift未执行。
 - 继续保留旧日期段落作为历史证据；其中标为“当前”的旧测试数量、旧HEAD状态不适用于本段时间的工作树。未提交、未推送。
@@ -215,7 +215,7 @@
 | 成绩单分策略/Regime、Hold基准、收盘机会成本、Advice层对照 | 新架构文档第Shadow章节 | 尚未实现；明确不显示胜率 | 先形成完整数据契约、市场基准与可审计评分实现，再以真实历史/Out-of-Sample验收 |
 | WAIT/NO_TRADE成绩 | 当前无区间规则时保存Candidate但显示不可评分 | 部分编码；无结构化WAIT机会规则不能声称有效 | 结构化机会/失效条件、未触发/机会结果和数据质量规则及回归测试 |
 | 本地Quant/Regime、Risk Guard、Trigger完整快通道 | `F-LOCAL-QUANT-ARCHITECTURE.md` | 只有旧价格区间Trigger；完整Quant/Guard/订阅与通知未完成 | 对照新定稿从最小可解释因子开始，当前处于fail-closed |
-| NAS非阻塞与策略资格分离 | `GuanpanFApp/Sources/GuanpanFApp.swift`及NAS客户端；`F-LOCAL-QUANT-ARCHITECTURE.md` | Advisor不等待NAS；NAS服务E2E与资格包闭环未验证 | NAS离线时基础Advisor继续；但策略包必须经NAS历史数据Backtest/Validation/OOS/Qualification，否则Local Quant只能WAIT/NO_TRADE |
+| NAS非阻塞与策略资格分离 | `GuanpanFApp/Sources/GuanpanFApp.swift`及NAS客户端；`F-LOCAL-QUANT-ARCHITECTURE.md` | Advisor不等待NAS；NAS服务E2E与资格包闭环未验证 | NAS离线时基础Advisor与本地Quant流程仍可用；只有缺少任何独立验证合格的策略包时Local Quant才保持WAIT/NO_TRADE，NAS不是强制验证服务 |
 
 ## 历史HEAD与验证快照（已由上方当前工作树补记覆盖）
 
@@ -237,7 +237,7 @@
 | P1 品牌/安装包 | 工程配置已写显示名“观盘max”、F自有AppIcon源资源存在；当前dirty HEAD尚未Apple构建及安装验证 | 保留现有名称和图标配置，不重复扩展打包链；在CI/实际安装后核对桌面名称与图标 | 源码资源存在；当前IPA/手机桌面未验证 |
 | P1 NAS客户端与研究链 | 用户报告手机HTTPS NAS未连接；本轮没有手机现场响应或NAS目标可访问证据 | 基础Advisor不等待NAS；研究样本及资格包仍依赖可用NAS历史数据；不猜测、不改NAS服务端 | 连接与研究覆盖未解决/未验证；基础顾问不阻断，未qualified策略不放行 |
 | P2 顾问/成交 | 没有当前HEAD真实DeepSeek→Guard→Candidate→确认成交→Writer→现金/成本/盈亏/T事实→复判E2E | 保持Candidate只读、只有用户确认真实成交写账 | 未完成；需外部Key、服务和真实操作验收 |
-| P2 数据/市场 | 实时报价、跨市场实时数据、可靠新闻、均价/前收/IOPV的真实数据质量不能由静态代码证明；历史策略资格链未闭环 | 缺源保持Unavailable；NAS历史数据用于Quant验证，不造研究证据 | 多项未接入或External Pending |
+| P2 数据/市场 | 实时报价、跨市场实时数据、可靠新闻、均价/前收/IOPV的真实数据质量不能由静态代码证明；本地合格策略参数包及其验证证据未闭环；NAS历史数据可选 | 缺源保持Unavailable；NAS历史数据用于Quant验证，不造研究证据 | 多项未接入或External Pending |
 | P2 恢复/提醒 | 通知中心、价格/计划提醒、跨设备同步恢复、完整备份恢复仍是B/F差距项 | 未新增大页面；保留在NRG清单 | 未完成 |
 | P3 兼容/交互 | 横屏全屏状态恢复、图表手势冲突、长文本/Dynamic Type、iPhone Air适配、10主题灰度构图对比没有本轮实测 | 不把CI自动截图或UI XCTest当人工视觉结果 | External Pending |
 | P4 发布 | 当前dirty Swift未编译，当前HEAD Apple CI未执行；当前Windows无Swift/XcodeGen/xcodebuild | 禁止继承旧CI结果；静态检查通过，架构边界脚本因Python启动器不可用未运行 | External Verification Pending |
@@ -247,7 +247,7 @@
 
 | 验收项 | 当前工作树证据 | 状态 |
 |---|---|---|
-| NAS非阻塞请求与资格门 | Advisor无NAS配置时跳过请求；仅引用本机已有新鲜Research Summary。NAS不阻断基础Advisor；但NAS历史数据仍是策略资格链输入，缺少qualified包时Local Quant fail-closed | 非阻塞接线已编码；完整研究/资格包闭环未实现；当前Swift未编译；NAS服务端未改 |
+| NAS非阻塞请求与资格门 | Advisor无NAS配置时跳过请求；仅引用本机已有新鲜Research Summary。NAS不阻断基础Advisor或Quant；缺少独立验证合格包时Local Quant fail-closed，NAS数据仅可选进入研究 | 非阻塞接线已编码；完整研究/资格包闭环未实现；当前Swift未编译；NAS服务端未改 |
 | Trigger状态机回归 | `Tests/FCoreTests/RealtimeQuantTriggerTests.swift`新增12项定义；涵盖等待、接近/触发、过期、stale/未验证/休市暂停、暂停恢复后错过价格区、证券/计划身份错配、显式失效、T信号和Filled边界 | FCore总计153 defined；当前HEAD 0 executed / 0 passed / 0 failed |
 | Apple CI/Simulator | 当前本机无Swift/Xcode/XcodeGen；最近Run 58为取消，不能为当前dirty工作树提供构建结果 | External Verification Pending；无当前树Simulator截图/人工验收 |
 | Git同步 | HEAD `e500fc84f6dd8acf93cc32305aefcff28e700f4e`；相对缓存origin/main ahead 1 / behind 8，远端实时状态未确认 | 未reconcile、未push；禁止强推 |
@@ -257,7 +257,7 @@
 ## 2026-10-28 核心架构决策更新（覆盖旧的NAS必经表述）
 
 - 产品决策：NAS不属于实时行情、已安装合格包本地执行或DeepSeek请求的同步依赖；但NAS历史分钟数据是Quant研究/回测/Validation/OOS/Qualification的主依据。核心仍为实时行情 + 真实Ledger + iPhone本地Quant + Risk Guard + DeepSeek Advisor + Realtime Trigger。完整契约见 `F-LOCAL-QUANT-ARCHITECTURE.md`。
-- 旧行中将“NAS分钟研究”设为所有 Advisor 请求的同步等待门槛，均被本次决策取代。NAS Research Summary对Advisor是可选缓存上下文；无NAS不可阻断基础Advisor。NAS历史数据仍用于Quant策略资格验证；没有有效qualified包时必须fail-closed。T/网格等动作须由可验证的合格本地Quant条件替代并通过测试后才可放行。
+- 旧行中将“NAS分钟研究”设为所有 Advisor 请求的同步等待门槛，均被本次决策取代。NAS Research Summary对Advisor是可选缓存上下文；无NAS不可阻断基础Advisor。策略资格必须有可复核的历史验证证据，但数据来源不限定NAS；没有有效qualified包时必须fail-closed。T/网格等动作须由可验证的合格本地Quant条件替代并通过测试后才可放行。
 - 快通道不得等待DeepSeek；慢通道由DeepSeek读取真实账本、可靠行情、Quant状态和可选背景信息制定策略。Trigger只提示、不交易、不写Ledger；真实成交仍只由用户确认后经唯一Writer写入。
 - 当前实现状态：无NAS时跳过可选研究请求；资产变化Candidate仍以“Quant尚未接入”fail-closed。本地已新增纯价格区间Realtime Trigger评估器，但完整Quant、Guard接线和调用方仍未实现。`FAIGuard`仍保留dayTrade/vwapBreak和grid/gridSpacingReplay历史研究条件；在新的本地Quant安全条件未接好并验证前不移除。
 - 当前HEAD的CI Run 58 `40693877430`已取消；没有当前工作树编译、FCore/UI测试或IPA新通过证据。Windows无Swift/Xcode。旧Run结果不得继承到新dirty源码。
@@ -489,7 +489,7 @@ FCore XCTest：121 defined / 121 executed / 121 passed / 0 failed；两项图表
 | F-13 | Investor Profile 有来源、置信度、修订/撤销与学习边界 | defined | 来源/置信度/解释、显式值保护、临时属性过期、修订及受限投影已编码；App 请求现通过 assembler 读取既有 Profile 投影，但尚无原生编辑/撤销 UI；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
 | F-14 | DecisionContext 数据新鲜度、时点与来源可追溯 | defined | Observation、Quote、Research Evidence 来源/时间/质量门控已编码；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
 | F-15 | Risk Guard 与 AI Guard 可阻断不合规候选并说明原因 | defined | 现金、仓位、报价新鲜度、证据引用、上下文绑定及成本溢出 fail-closed 已编码；模型层约束未接入；本轮 FCore 119 项已实际执行并通过；该验收项仍需专项/外部验收 |
-| F-16 | AI 最终建议读取真实持仓、行情、可选背景与风险证据 | defined | DeepSeek provider、只读账本快照、DecisionContext、Risk/AI Guard及组合/证券scope已编码；NAS历史分钟主要服务Quant资格研究，Summary仅为Advisor次要缓存且单次请求不等待NAS；新闻仅使用新鲜内存缓存并在后台更新，无缓存则标Unavailable；本地Quant尚未接入，资产变化候选由“Quant未接入”fail-closed；当前HEAD未编译/未联调 |
+| F-16 | AI 最终建议读取真实持仓、行情、可选背景与风险证据 | defined | DeepSeek provider、只读账本快照、DecisionContext、Risk/AI Guard及组合/证券scope已编码；NAS历史分钟与Research Summary均为可选研究增强且单次请求不等待NAS；新闻仅使用新鲜内存缓存并在后台更新，无缓存则标Unavailable；本地Quant尚未接入，资产变化候选由“Quant未接入”fail-closed；当前HEAD未编译/未联调 |
 | F-17 | T、网格、回本仅为 AI 可调用分析工具，不自动交易 | defined | NAS研究工具保留为可选能力；FAIGuard仍保留T/vwapBreak、网格/gridSpacingReplay条件，须待本地Quant安全条件替代并验证后才可改；策略和真实服务适配未完成。旧119项CI数字仅为历史，不代表当前HEAD |
 | F-18 | 行情、分时、日K、MA250、IOPV、盘口标注来源/新鲜度 | defined | 统一`FUnifiedSecurityChart`由当前/历史分钟和日K共用；MA/成交量/成本/券商成本/Candidate按可见层参与范围；当前IOPV仅进入实时分时参考线，不进入历史分时或日K纵轴/绘制，图注明确无历史IOPV序列。实时分时快照现有本机版本化原子缓存，重启后最多恢复250只/30天且保留原行情时点；Advisor/Trigger继续按120秒严格验新鲜度。IOPV没有可靠来源，保持Unavailable。Swift与图表语义色改动未编译；视觉、手势和真机仍待验 |
 | F-19 | 可选NAS归档/研究、跨市场和新闻与真实账本隔离 | defined | NAS v6曾有用户提供的实时分钟归档烟测；NAS不再是Advisor核心前置。NAS历史补采曾返回empty source response；跨市场/新闻/iOS端到端和长期运行未验证。跨市场非对称关系与证券级映射没有合格样本，不进入DecisionContext |
@@ -844,3 +844,23 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 旧版矩阵中的历史状态行不代表当前dirty修改已经验证；新增行以本轮核对为准。
 
 图表主题一致性增量：本轮把F图表轴、网格、VOL/MACD标签、十字线、非选中图层中性颜色接入当前theme secondaryForeground。仅编码，未Apple编译或Simulator视觉验证。
+
+
+## 2026-11-02 dirty worktree 审计补充（基于 HEAD b65ee7c）
+
+| 项目 | 源码处理 | 实际验证 | 仍未完成 |
+|---|---|---|---|
+| 实时分时横轴/真实采样断档 | 按实际当日分钟扩展绘图区；午休压缩；长缺口断线；横轴标签增加最小间距 | Python合同包含图表源码约束；本地合同集通过 | Swift编译、运行截图、iPhone Air连续刷新/手势 |
+| NAS历史HTTP 200契约错误诊断 | 非404/405直接显示新路由首错；仅路由不存在才走B兼容路径 | 新增NAS客户端合同，定向合同通过 | 生产NAS payload和指定交易日实际分钟仍未取得 |
+| NAS与本地Quant依赖分离 | 本地参数验证不再错误标为NAS qualification；仍未合格时安全WAIT | Advisor/Local Quant静态合同通过 | 参数包/回测质量与Apple编译尚待完成 |
+| Python验证 | — | 定向73/73；除2个缺PyYAML模块，其余Tools测试295/295；NAS compileall通过 | 需CI依赖完整环境跑两个未执行模块及完整CI |
+
+此补充工作树dirty且尚未CI编译；以上不得作为最终交付验收。
+
+| 2026-11-02 续审增量 | 变更/结果 | 当前裁决 |
+|---|---|---|
+| 设置页可选服务与新闻状态 | 将NAS分组命名为“可选同步与数据服务”，缩短网络说明；新闻区域显示`model.newsStatus`并明确公开源与顾问引用边界 | 静态合同通过；Swift未编译/Simulator未验 |
+| 自选自动趋势/观察分 | 行情快照10秒轮询并绘制真实分钟迷你线；fresh报价且≥3个有效因子时提供方向观察分 | 已有源码，不等于预测有效；需要历史验证及真机刷新视觉验收 |
+| 持仓入口/MACD | 初始真实持仓快照、空仓真实成交建仓、日K MACD源码均存在 | 入口可发现性和交互仍External Pending |
+| B/F、全主题、NAS实网、新闻DeepSeek引用、iPhone Air及真实成交闭环 | 保持实际验收要求 | 未通过；不能由源码或旧CI关闭 |
+| 本轮证据 | Home布局合同28/28；NAS/Local Quant/Advisor/Traceability 41/41；宽套件运行异常不计通过。远端main=`a1ba64582c29340596d5f5f1639ebc5478a5186c`，最近Actions活跃0；fetch失败，未推送/未触发CI | 当前Swift编译和人工截图验收均未执行 |

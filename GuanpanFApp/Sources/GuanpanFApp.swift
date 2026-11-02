@@ -1186,7 +1186,7 @@ final class FHomeModel: ObservableObject {
                 observations.append(FContextObservation(
                     dataClass: .quantState, subject: "risk-gate:\(code)", source: "F App Local Quant / Risk Gate",
                     observedAt: nil, capturedAt: contextCaptureTime, decimalValue: nil,
-                    unavailableReason: "Local Quant因子观察已接入，但NAS验证策略参数包及资格尚未接入；BUY/SELL/T_BUY/T_SELL候选当前会被硬门槛阻止。其余候选仍会经过确定性 Risk Guard 与 AI Guard。"))
+                    unavailableReason: "Local Quant因子观察已接入，但本地验证策略参数包及资格尚未接入；BUY/SELL/T_BUY/T_SELL候选当前会被硬门槛阻止。其余候选仍会经过确定性 Risk Guard 与 AI Guard。"))
             }
             if let feed = marketNewsFeed, !feed.articles.isEmpty,
                let latestPublishedAt = feed.articles.map(\.publishedAt).max() {

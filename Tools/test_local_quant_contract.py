@@ -10,7 +10,7 @@ ADVISOR = (ROOT / "GuanpanFApp/Sources/FAdvisorVerticalSlice.swift").read_text(e
 
 def _check_local_quant_is_read_only_and_never_invents_candidate_plans():
     assert "candidatePlanGenerated: false" in ENGINE
-    assert "nas_strategy_parameters_not_qualified" in ENGINE
+    assert "local_strategy_parameters_not_qualified" in ENGINE
     assert "qualified: false" in ENGINE
     assert "FConfirmedLedgerWriter" not in ENGINE
     assert "targetPrice" not in ENGINE
@@ -104,7 +104,7 @@ def _check_advisor_receives_local_quant_observation_without_qualifying_it():
     assert 'let localQuantSource = "FCore Local Quant Engine · observation only"' in APP
     assert "reference.hasFreshIOPV(at: contextCaptureTime)" in APP
     assert "策略未qualified时不得据此生成buy/sell/dayTrade/grid候选" in ADVISOR
-    assert "NAS验证策略参数包及资格尚未接入" in APP
+    assert "本地验证策略参数包及资格尚未接入" in APP
     assert "availableFactorCount=\\(availableFactorCount)" in APP
     assert "supportingDataAsOf=\\(supportingDataAsOf);source=\\(source)" in APP
     assert "supportingDataAsOf: validDaily?.bars.last?.tradingDate" in ENGINE

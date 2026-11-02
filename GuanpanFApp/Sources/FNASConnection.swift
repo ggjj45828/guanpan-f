@@ -528,6 +528,16 @@ enum FNASHistoricalMinuteClient {
                                                  expectedSecurityCode: securityCode,
                                                  expectedTradingDate: dateText)
         }
+
+        // Only use the legacy route when the deployment explicitly does not
+        // expose the current endpoint. A 200 with an incompatible payload (or
+        // a server/transport failure) is actionable evidence about the current
+        // endpoint; probing the unrelated legacy route after it only appends a
+        // secondary 404 and obscures the first, useful failure.
+        guard http.statusCode == 404 || http.statusCode == 405 else {
+            throw FNASConnectionError.historyUnavailable(modernFailure ??
+                "NAS 历史分钟接口返回 HTTP \(http.statusCode)，未取得可用数据")
+        }
         do {
             return try await fetchLegacyB(baseURL: baseAddress, securityCode: securityCode,
                                           dateText: dateText, timeZone: timeZone)

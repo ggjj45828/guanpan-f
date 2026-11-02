@@ -37,10 +37,10 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn("testHistoricalIntradayChartExcludesCurrentIOPVFromPriceRange",
                       (ROOT / "Tests/FCoreTests/MarketChartAcceptanceTests.swift").read_text(encoding="utf-8"))
 
-    def test_security_detail_charts_are_expanded_and_compact_preview_stays_small(self):
+    def test_security_detail_charts_use_the_expanded_shared_renderer(self):
         self.assertEqual(self.home.count("height: 420)"), 3)
-        self.assertEqual(self.home.count("height: 320)"), 1)
-        for role in ("live", "daily", "history", "compact"):
+        self.assertNotIn("height: 320)", self.home)
+        for role in ("live", "daily", "history"):
             self.assertIn(f'market.security-chart.{role}', self.home)
         self.assertIn(".frame(height: height)", self.chart)
         self.assertNotIn("height >= 600 ? height + 80", self.chart)
@@ -56,14 +56,21 @@ class HomeLayoutContractTests(unittest.TestCase):
         self.assertIn("role(.crossMarketPulse)", layout)
         self.assertIn("role(.advisorGuidance)", layout)
 
-    def test_nas_ui_distinguishes_quant_research_from_nonblocking_advisor_use(self):
-        self.assertIn("NAS历史数据供Quant验证", self.manifest)
-        self.assertIn("NAS历史分钟用于Quant策略验证，Advisor不等待NAS", self.home)
-        self.assertIn("Section(\"NAS 历史研究与数据服务\")", self.home)
-        self.assertIn("NAS历史分钟主要用于Quant研究、回测、验证、样本外评估与策略资格签发", self.home)
-        self.assertIn("当前合格策略参数包尚未下放到Local Quant", self.home)
-        self.assertNotIn("NAS 可选增强", self.manifest)
-        self.assertNotIn("NAS 提供可选历史研究", self.home)
+    def test_nas_is_optional_for_local_quant_and_advisor(self):
+        self.assertIn("NAS为可选历史归档与研究增强", self.manifest)
+        self.assertIn("NAS只提供可选历史归档与研究增强，不阻塞本机Quant或Advisor", self.home)
+        self.assertIn("Section(\"可选同步与数据服务\")", self.home)
+        self.assertIn('LabeledContent("新闻最近状态", value: model.newsStatus)', self.home)
+        self.assertIn("NAS是可选同步、归档与备份服务", self.home)
+        self.assertNotIn("NAS历史分钟用于Quant策略验证，Advisor不等待NAS", self.home)
+        self.assertNotIn("当前合格策略参数包尚未下放到Local Quant", self.home)
+
+    def test_live_intraday_plot_expands_with_observed_session_and_breaks_real_gaps(self):
+        self.assertIn("zoomScale: displayedZoomScale, window: model.chart.window", self.chart)
+        self.assertIn("let sessionEnd = session == .lunchBreak ? 132 : observedEnd", self.chart)
+        self.assertIn("return 0...max(sessionEnd, 1)", self.chart)
+        self.assertIn("minute - previousSessionMinute <= 2.5", self.chart)
+        self.assertIn('(132, "13:00")', self.chart)
 
     def test_bento_grid_collapses_on_phone_instead_of_forcing_half_width_cards(self):
         start = self.home.index("    private var bento: some View {")

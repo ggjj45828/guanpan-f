@@ -49,7 +49,7 @@ public enum FLocalQuantDisposition: String, Equatable, Sendable {
 }
 
 /// Read-only factor assessment. Candidate zones and quantities are deliberately
-/// absent until a per-security strategy parameter package has passed NAS
+/// absent until a per-security strategy parameter package has passed independent local
 /// validation and the Risk Guard has approved a reviewable plan.
 public struct FLocalQuantAssessment: Equatable, Sendable {
     public let securityCode: String
@@ -88,7 +88,7 @@ public struct FLocalQuantAssessment: Equatable, Sendable {
 
 /// Deterministic, per-security factor calculations for local observation.
 /// Scores describe relative factor direction only. This engine does not invent
-/// entry prices, suggested quantities, or NAS qualification.
+/// entry prices, suggested quantities, or local strategy qualification.
 public enum FLocalQuantEngine {
     private static let maximumDailyHistoryAge: TimeInterval = 36 * 60 * 60
     private static let maximumDailyBarAge: TimeInterval = 5 * 86_400
@@ -237,7 +237,7 @@ public enum FLocalQuantEngine {
                              reasonCode: "strategy_disabled_by_regime")
             }
             return .init(strategy: strategy, readiness: .awaitingQualifiedParameters,
-                         qualified: false, reasonCode: "nas_strategy_parameters_not_qualified")
+                         qualified: false, reasonCode: "local_strategy_parameters_not_qualified")
         }
 
         var reasons: [String] = []
@@ -258,7 +258,7 @@ public enum FLocalQuantEngine {
         if strategies.allSatisfy({ $0.readiness != .awaitingQualifiedParameters }) {
             reasons.append("no_regime_permitted_strategy")
         } else {
-            reasons.append("nas_strategy_parameters_not_qualified")
+            reasons.append("local_strategy_parameters_not_qualified")
         }
         return FLocalQuantAssessment(
             securityCode: code, evaluatedAt: now, quoteTimestamp: quote.quoteTimestamp,

@@ -840,3 +840,20 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 目标逐项状态：自选迷你线与方向观察分已编码但未验证历史预测效力；设置密度已编码但未截图；主题跨页一致性部分编码且整体未验证；B/F逐页目前是源码静态对读，无同状态对比图；NAS历史数据仅静态路由/decoder对照，HTTP 200 schema mismatch与旧路由404问题没有本轮设备响应证明已解决；同花顺公开新闻客户端及只读Observation/Advisor引用约束存在，设备可达和DeepSeek引用未实测；iPhone Air不可操作，External Pending；DeepSeek→用户真实成交→Ledger→Advisor复判无真实E2E证据。
 - 下一步：先等待本机Git推送通道恢复或使用正常Git链路重试；推送前重新核对远端HEAD和活跃Actions（同时运行不超过2），推送成功后等待当前SHA完整Apple CI，按首个真实失败修复。实机项目只用真实iPhone/服务响应关闭，不将CI截图、Ready或HTTP 200视作验证。
 
+
+
+## 2026-11-02 本地续审：图表时间轴、NAS诊断和NAS可选边界
+
+- `FUnifiedSecurityChart.swift`：实时分时横轴现在随当日实际行情延展；午休仍按连续交易分钟压缩；样本缺口超过2.5交易分钟时不连线；窄屏横坐标文字留出更大间距。静态合同与Python检查通过，Swift未编译、截图未人工查看。
+- `FNASConnection.swift`：仅在 `/api/v1/minute-history` 返回404/405时探测B旧路由。HTTP 200 schema不匹配时直接显示新接口诊断，避免把后续旧路由404误当首因。新增静态合同测试；尚无新的NAS实际HTTP响应/指定日期bar，不代表连接已修好。
+- Local Quant准备状态文案与Advisor边界测试同步为NAS可选、本地策略参数验证独立。参数包仍未接入，因此继续保守WAIT；没有虚构信号。
+- 验证：定向Python合同73/73；除当前Python运行时缺PyYAML的两个模块外，其余仓库工具测试295/295；NAS Python源码compileall通过。此工作树的Swift未编译、Apple CI未运行、Simulator截图未人工审阅。
+- Git证据：本地HEAD `b65ee7c9bd7275a9a03089a10e4b310aec62cdac`，dirty且本地记录ahead 2；此轮未fetch/push，因此远端仍需重新核对。当前没有依据称当前Swift已编译或CI已触发。
+
+## 2026-11-02 继续处理审计未过项
+
+- 设置页更新为“可选同步与数据服务”，避免把NAS显示成产品核心前置；网络提示压缩，新闻来源旁增加最近请求状态，说明仅真实成功且时间有效的快讯才进入顾问上下文。代码/静态合同已更新，未Swift编译、未Simulator验收、未验证用户手机上的新闻服务可达性。
+- 本轮核对现有能力：自选行已绘制真实行情分钟快照迷你线，并在报价fresh且至少3个有效方向因子时显示“方向观察分”；这不是经历史回测验证的预测分。初始持仓快照入口、已建账后的真实成交开仓入口、MACD副图renderer均有源码；入口可见性/图表交互未真机验收。
+- 实际本轮测试：Home layout contract 28/28、NAS/Local Quant/Advisor/Traceability contracts 41/41通过。曾尝试跑宽套件，运行过程出现大量测试错误并长时间无结束摘要，故不采纳为通过；此前295/295仅为前一快照结果，不能算当前设置改动后的全套结果。PyYAML相关两个模块未执行。
+- GitHub只读核对：远端`main=a1ba64582c29340596d5f5f1639ebc5478a5186c`；最近Actions活跃任务0。当前修改基于本地`b65ee7c9bd7275a9a03089a10e4b310aec62cdac`并提交在本地分支；推送前仍须fetch/reconcile。刚才再次尝试fetch，仍失败于本机`getaddrinfo() thread failed to start`；未push、未触发新CI。Swift编译/Simulator截图人工审阅均为0。
+- 仍需外部证据：部署NAS对指定security/date返回的真实payload及iPhone穿透；同花顺新闻在手机上的请求结果并由DeepSeek实际引用；B/F同设备状态截图比较；iPhone Air验收；真实DeepSeek→Candidate→用户确认成交→Ledger变更→Advisor复判。以上保持未通过，不用源码存在替代验收。
