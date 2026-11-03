@@ -962,3 +962,12 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 当前SHA Apple CI / IPA | 远端Run 17 UI失败，Artifact上传受配额阻止，IPA未产出 | 本地后续修改尚未CI |
 | Simulator截图逐页审阅、灰度构图与iPhone Air | 尚无本轮截图人工审阅或目标设备证据 | External Pending |
 
+
+
+## 2026-11-03 · Run 18 build failure and source repair
+
+- GitHub Actions run 18 (41583104926) for 0e765926372169bbb78f7c3a5b503ca47ec1ed6b completed **failure**. FCore tests passed; the iOS device app compile failed, so Simulator build and UI XCTest were skipped. No Simulator screenshot result or IPA was produced.
+- The compiler log identifies literal truncation text inside GuanpanFApp/Sources/HomeExperience.swift (Warning: truncated output… and …10904 tokens truncated…). The resulting Swift syntax errors are cascades from the damaged source file, not evidence of a Quant test failure.
+- Repair prepared from the complete, untruncated d8c2947 parent source. It retains the homepage index-card direct route to the selected index detail and its accessibility identifier; theme-semantic cash/accent foreground fixes are reapplied. This repair remains unverified until a new Apple CI run completes.
+- Local Quant remains deterministic factor observation: watchlist score is directional, not a probability or buy recommendation. Full user-facing decision quality/history validation and visual acceptance remain open.
+- All-theme/full-page visual completion remains **not accepted**. No CI screenshot is counted as human visual review.
