@@ -981,3 +981,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - Repair prepared from the complete, untruncated d8c2947 parent source. It retains the homepage index-card direct route to the selected index detail and its accessibility identifier; theme-semantic cash/accent foreground fixes are reapplied. This repair remains unverified until a new Apple CI run completes.
 - Local Quant remains deterministic factor observation: watchlist score is directional, not a probability or buy recommendation. Full user-facing decision quality/history validation and visual acceptance remain open.
 - All-theme/full-page visual completion remains **not accepted**. No CI screenshot is counted as human visual review.
+
+
+## 2026-11-03 · Run 19 UI and artifact results
+
+- Run 19 (41584612567) for 153ed1f64ef60a4f35ffcb9a1f8a496b6d23505e: FCore tests, XcodeGen, iOS device build and Simulator build **passed**. UI XCTest **failed in two index-detail assertions** because the selected index code lacked an explicit accessibility identity; the index detail route itself opened. The remaining UI tests, including six home compositions in light/dark appearance, passed.
+- Screenshot export step completed, but artifact upload failed with GitHub Actions storage quota. IPA packaging was skipped because UI tests failed. No IPA artifact is available from this run.
+- Follow-up adds the selected index code identifier on the single authoritative detail screen. The fix is unverified until Run 20 completes.
+- Human visual review of the exported screenshots remains pending; screenshots cannot be retrieved from GitHub while artifact upload is blocked. Theme/page visual acceptance remains open.

@@ -2706,6 +2706,7 @@ private struct MarketIndexDetailOverview: View {
                 if let quote {
                     VStack(alignment: .leading, spacing: 12) {
                         LabeledContent("指数代码", value: quote.code)
+                            .accessibilityIdentifier("crossmarket.index.detail.identity")
                         LabeledContent("市场", value: quote.market)
                         LabeledContent("涨跌幅", value: quote.changePercent.map { String(format: "%+.2f%%", NSDecimalNumber(decimal: $0).doubleValue) } ?? "不可用")
                         LabeledContent("行情时间", value: quote.observedAt?.formatted(date: .numeric, time: .standard) ?? "未验证")
