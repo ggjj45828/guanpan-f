@@ -979,3 +979,11 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 - Screenshot export step completed, but artifact upload failed with GitHub Actions storage quota. IPA packaging was skipped because UI tests failed. No IPA artifact is available from this run.
 - Follow-up adds the selected index code identifier on the single authoritative detail screen. The fix is unverified until Run 20 completes.
 - Human visual review of the exported screenshots remains pending; screenshots cannot be retrieved from GitHub while artifact upload is blocked. Theme/page visual acceptance remains open.
+
+
+## 2026-11-03 · Run 20 verification and theme status
+
+- Run 20 (41585784674), commit 84a57e5123a6e3000c66beee961400ddc530c02f: FCore tests, XcodeGen, iOS device build, Simulator build, navigation UI XCTest, screenshot export, and IPA packaging all **passed**. The overall Actions job failed only at artifact upload: GitHub reports the Actions storage quota is full. The IPA was built on the runner but is not downloadable from this run.
+- Simulator tests rendered all six approved home compositions in light and dark appearance. These exports were not retrievable for human review because artifact upload failed; this is test evidence only, not visual acceptance.
+- Full theme/layout acceptance remains open: professional pages, theme consistency across all routes, visual screenshot review, Dynamic Type/long text, and iPhone Air manual verification remain pending. No claim that all theme layouts are complete.
+- Theme-directed app changes in this correction were limited to restoring the complete homepage Swift source after run 18 corruption, routing each home index card to its matching index detail, making the cash accent/theme text semantic, and exposing the selected index identity for reliable navigation tests.
