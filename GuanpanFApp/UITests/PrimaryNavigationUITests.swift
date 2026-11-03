@@ -25,6 +25,8 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
+        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
+        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.isEnabled)
         openSecurity.tap()
@@ -107,6 +109,8 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
+        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
+        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
         openSecurity.tap()
@@ -467,11 +471,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         let endOffset: CGVector
         switch direction {
         case .up:
-            startOffset = CGVector(dx: 0.5, dy: 0.76)
-            endOffset = CGVector(dx: 0.5, dy: 0.64)
+            startOffset = CGVector(dx: 0.95, dy: 0.82)
+            endOffset = CGVector(dx: 0.95, dy: 0.62)
         case .down:
-            startOffset = CGVector(dx: 0.5, dy: 0.64)
-            endOffset = CGVector(dx: 0.5, dy: 0.76)
+            startOffset = CGVector(dx: 0.95, dy: 0.62)
+            endOffset = CGVector(dx: 0.95, dy: 0.82)
         }
         scrollContainer.coordinate(withNormalizedOffset: startOffset)
             .press(forDuration: 0.05,
