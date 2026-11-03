@@ -2890,6 +2890,14 @@ private struct CrossMarketOverview: View {
         .accessibilityHint("打开指数详情")
     }
 
+
+    private func observedRangeChange(_ snapshot: FCurrentIntradaySnapshot) -> Decimal? {
+        guard let first = snapshot.samples.first?.price,
+              let latest = snapshot.latestPrice,
+              first > 0 else { return nil }
+        return ((latest - first) / first) * 100
+    }
+
     private func percentText(_ value: Decimal) -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
         return String(format: "%+.2f%%", number)
@@ -3686,92 +3694,7 @@ struct MarketOverview: View {
                     .frame(maxWidth: .infinity, minHeight: 150)
                 }
 
-                ForEach(visibleSecurityCodes, id: \.self) { code in
-                    let holding = model.holdings.first { $0.instrumentCode == code }
-                    let snapshot = model.marketDataByCode[code]
-                    VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
-                        HStack(spacing: 8) {
-                            NavigationLink(value: FHomeRoute.instrument(code)) {
-                                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(holding?.name ?? code).font(.headline).foregroundStyle(theme.ink)
-                                        HStack(spacing: 6) {
-                                            Text(code).font(.caption.monospaced())
-                                            Text(holding == nil
-                                                 ? "自选关注"
-                                                 : (model.isInWatchlist(code) ? "真实持仓 · 自选" : "真实持仓"))
-                                        }
-                                        .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                                    }
-                                    Spacer(minLength: 6)
-                                    Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
-                                        .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(theme.ink)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("market.instrument.\(code)")
-                            Button { model.toggleWatchlist(code) } label: {
-                                Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
-                                    .foregroundStyle(model.isInWatchlist(code) ? theme.accent : theme.manifest.tokens.secondaryForeground)
-                                    .frame(minWidth: 40, minHeight: 40).contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
-                            .accessibilityIdentifier("market.watchlist.\(code)")
-                        }
-                        if let snapshot {
-                            HStack(spacing: 12) {
-                                FWatchlistSparkline(samples: snapshot.samples,
-                                    positiveColor: theme.manifest.tokens.positive,
-                                    negativeColor: theme.manifest.tokens.negative)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 48)
-                                    .accessibilityLabel("\(code) 盘中趋势")
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    if let assessment = model.watchlistQuantAssessment(for: code),
-                                       let score = assessment.watchlistDirectionalScore {
-                                        Text("\(score > 0 ? "+" : "")\(score)")
-                                            .font(.subheadline.weight(.semibold).monospacedDigit())
-                                            .foregroundStyle(score >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
-                                        Text("方向观察分 · \(assessment.watchlistDirectionalFactorCount)因子")
-                                            .font(.caption2)
-                                            .foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                                    } else {
-                                        Text("样本不足")
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(theme.manifest.tokens.unavailable)
-                                        Text("不代表收益概率")
-                                            .font(.caption2)
-                                            .foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                                    }
-                                }
-                            }
-                        } else {
-                            Text("暂无真实行情 · 刷新后显示趋势与观察分")
-                                .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
-                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                        }
-                        Text(snapshot.map {
-                            "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
-                        } ?? "行情时间/来源待获取")
-                            .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
-                        Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
-                            .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
-                    }
-                    .padding(13)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(LinearGradient(
-                                colors: [theme.manifest.tokens.surface,
-                                         theme.manifest.tokens.marketSurface.opacity(
-                                            theme.surfaceTreatment == .bento || theme.surfaceTreatment == .adaptive ? 0.30 : 0.16)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                    }
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(theme.manifest.tokens.marketSurface.opacity(0.48), lineWidth: 0.9))
-                }
+                marketSecurityCollection
             }
             .padding(.horizontal, 8)
             .padding(.top, theme.manifest.tokens.spacing.compact)
@@ -3784,6 +3707,279 @@ struct MarketOverview: View {
         .tint(theme.accent)
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await model.refreshMarketData(for: refreshableSecurityCodes) }
+    }
+
+    @ViewBuilder
+    private var marketSecurityCollection: some View {
+        if visibleSecurityCodes.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: listScope == .watchlist ? "star" : "chart.line.uptrend.xyaxis")
+                    .font(.title2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                Text(listScope == .watchlist ? "自选列表为空" : "当前没有真实持仓")
+                    .font(.headline).foregroundStyle(theme.ink)
+                Text(listScope == .watchlist
+                     ? "在上方输入证券代码并加入自选。自选不会创建持仓。"
+                     : "添加关注证券，或切换到“自选”查看未持仓标的的真实行情。")
+                    .font(.subheadline).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 150)
+        } else {
+            switch theme.layoutFamily {
+            case .terminalDashboard, .minimalTerminal:
+                VStack(spacing: 0) {
+                    ForEach(visibleSecurityCodes, id: \.self) { code in
+                        terminalMarketRow(code)
+                        if code != visibleSecurityCodes.last {
+                            Rectangle()
+                                .fill(theme.manifest.tokens.foreground.opacity(0.12))
+                                .frame(height: 1)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .background(theme.manifest.tokens.surface.opacity(0.96),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(theme.accent.opacity(0.34), lineWidth: 0.8))
+            case .staticBento, .adaptiveBento:
+                LazyVGrid(columns: [GridItem(.flexible(minimum: 148), spacing: 10),
+                                    GridItem(.flexible(minimum: 148), spacing: 10)], spacing: 10) {
+                    ForEach(visibleSecurityCodes, id: \.self) { code in
+                        bentoMarketTile(code)
+                    }
+                }
+            default:
+                LazyVStack(spacing: 13) {
+                    ForEach(visibleSecurityCodes, id: \.self) { code in
+                        editorialMarketCard(code)
+                    }
+                }
+            }
+        }
+    }
+
+    private func terminalMarketRow(_ code: String) -> some View {
+        let holding = model.holdings.first { $0.instrumentCode == code }
+        let snapshot = model.marketDataByCode[code]
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                NavigationLink(value: FHomeRoute.instrument(code)) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(holding?.name ?? code)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(theme.ink).lineLimit(1)
+                        Text("\(code) · \(holding == nil ? "自选关注" : "真实持仓")")
+                            .font(.caption2.monospaced()).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("market.instrument.\(code)")
+                Spacer(minLength: 5)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
+                        .font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(theme.ink)
+                    if let change = snapshot.flatMap(observedRangeChange) {
+                        Text(percentText(change))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(change >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                    }
+                }
+                Button { model.toggleWatchlist(code) } label: {
+                    Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
+                        .foregroundStyle(model.isInWatchlist(code) ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                        .frame(width: 34, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
+                .accessibilityIdentifier("market.watchlist.\(code)")
+            }
+            HStack(spacing: 8) {
+                if let snapshot {
+                    FWatchlistSparkline(samples: snapshot.samples,
+                        positiveColor: theme.manifest.tokens.positive,
+                        negativeColor: theme.manifest.tokens.negative)
+                        .frame(width: 74, height: 22)
+                    if let assessment = model.watchlistQuantAssessment(for: code),
+                       let score = assessment.watchlistDirectionalScore {
+                        Text("量化观察 \(score > 0 ? "+" : "")\(score)")
+                            .font(.caption2.monospacedDigit().weight(.medium))
+                            .foregroundStyle(score >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                    } else {
+                        Text("量化观察：样本不足")
+                            .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable)
+                    }
+                    Text(snapshot.source).font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(1)
+                } else {
+                    Text(model.marketRefreshStateByCode[code] ?? "等待首次行情")
+                        .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func bentoMarketTile(_ code: String) -> some View {
+        let holding = model.holdings.first { $0.instrumentCode == code }
+        let snapshot = model.marketDataByCode[code]
+        let change = snapshot.flatMap(observedRangeChange)
+        let positive = (change ?? 0) >= 0
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(holding?.name ?? code)
+                        .font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.82)
+                    Text(code).font(.caption2.monospaced()).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                }
+                Spacer(minLength: 0)
+                Button { model.toggleWatchlist(code) } label: {
+                    Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
+                        .font(.caption).foregroundStyle(theme.accent)
+                        .frame(width: 26, height: 26).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
+                .accessibilityIdentifier("market.watchlist.\(code)")
+            }
+            NavigationLink(value: FHomeRoute.instrument(code)) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
+                        .font(.title3.weight(.bold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.75)
+                    Text(change.map { percentText($0) } ?? "等待行情")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(change == nil ? theme.manifest.tokens.unavailable :
+                                            (positive ? theme.manifest.tokens.positive : theme.manifest.tokens.negative))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("market.instrument.\(code)")
+            if let snapshot {
+                FWatchlistSparkline(samples: snapshot.samples,
+                    positiveColor: theme.manifest.tokens.positive,
+                    negativeColor: theme.manifest.tokens.negative)
+                    .frame(height: 30)
+                HStack(spacing: 4) {
+                    Text("量化")
+                    if let score = model.watchlistQuantAssessment(for: code)?.watchlistDirectionalScore {
+                        Text("\(score > 0 ? "+" : "")\(score)")
+                            .foregroundStyle(score >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                    } else {
+                        Text("样本不足").foregroundStyle(theme.manifest.tokens.unavailable)
+                    }
+                    Spacer(minLength: 0)
+                    Text(snapshot.quoteTimestamp.formatted(date: .omitted, time: .shortened))
+                        .lineLimit(1)
+                }
+                .font(.caption2.monospacedDigit()).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+            } else {
+                Text(model.marketRefreshStateByCode[code] ?? "暂无真实行情")
+                    .font(.caption2).foregroundStyle(theme.manifest.tokens.unavailable).lineLimit(2)
+            }
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .background(LinearGradient(
+            colors: [theme.manifest.tokens.marketSurface.opacity(0.95),
+                     theme.manifest.tokens.highlightSurface.opacity(0.38)],
+            startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous)
+            .stroke(theme.manifest.tokens.marketSurface.opacity(0.55), lineWidth: 0.8))
+    }
+
+    private func editorialMarketCard(_ code: String) -> some View {
+        let holding = model.holdings.first { $0.instrumentCode == code }
+        let snapshot = model.marketDataByCode[code]
+        return VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
+            HStack(spacing: 8) {
+                NavigationLink(value: FHomeRoute.instrument(code)) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(holding?.name ?? code)
+                                .font(.headline).foregroundStyle(theme.ink)
+                            HStack(spacing: 6) {
+                                Text(code).font(.caption.monospaced())
+                                Text(holding == nil ? "自选关注" :
+                                     (model.isInWatchlist(code) ? "真实持仓 · 自选" : "真实持仓"))
+                            }
+                            .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                        }
+                        Spacer(minLength: 6)
+                        Text(snapshot?.latestPrice.map { "¥\($0.description)" } ?? "—")
+                            .font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(theme.ink)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("market.instrument.\(code)")
+                Button { model.toggleWatchlist(code) } label: {
+                    Image(systemName: model.isInWatchlist(code) ? "star.fill" : "star")
+                        .foregroundStyle(model.isInWatchlist(code) ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                        .frame(minWidth: 40, minHeight: 40).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.isInWatchlist(code) ? "移出自选" : "加入自选")
+                .accessibilityIdentifier("market.watchlist.\(code)")
+            }
+            if let snapshot {
+                HStack(spacing: 12) {
+                    FWatchlistSparkline(samples: snapshot.samples,
+                        positiveColor: theme.manifest.tokens.positive,
+                        negativeColor: theme.manifest.tokens.negative)
+                        .frame(maxWidth: .infinity).frame(height: 48)
+                        .accessibilityLabel("\(code) 盘中趋势")
+                    VStack(alignment: .trailing, spacing: 3) {
+                        if let assessment = model.watchlistQuantAssessment(for: code),
+                           let score = assessment.watchlistDirectionalScore {
+                            Text("\(score > 0 ? "+" : "")\(score)")
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(score >= 0 ? theme.manifest.tokens.positive : theme.manifest.tokens.negative)
+                            Text("方向观察分 · \(assessment.watchlistDirectionalFactorCount)因子")
+                                .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                        } else {
+                            Text("样本不足").font(.caption.weight(.medium)).foregroundStyle(theme.manifest.tokens.unavailable)
+                            Text("不代表收益概率").font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                        }
+                    }
+                }
+            } else {
+                Text("暂无真实行情 · 刷新后显示趋势与观察分")
+                    .font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            }
+            Text(snapshot.map {
+                "行情时间 \($0.quoteTimestamp.formatted(date: .omitted, time: .standard)) · 获取于 \($0.fetchedAt.formatted(date: .omitted, time: .standard)) · \($0.source)"
+            } ?? "行情时间/来源待获取")
+                .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(2)
+            Text(model.marketRefreshStateByCode[code] ?? "等待首次请求")
+                .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground).lineLimit(2)
+        }
+        .padding(13)
+        .background {
+            RoundedRectangle(cornerRadius: theme.layoutFamily == .editorial ? 24 : 16, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [theme.manifest.tokens.marketSurface.opacity(0.18),
+                             theme.manifest.tokens.surface],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+        }
+        .overlay(alignment: .leading) {
+            if theme.layoutFamily == .editorial {
+                RoundedRectangle(cornerRadius: 2).fill(theme.accent).frame(width: 3).padding(.vertical, 13)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: theme.layoutFamily == .editorial ? 24 : 16, style: .continuous)
+            .stroke(theme.accent.opacity(0.18), lineWidth: 0.8))
+    }
+
+    private func percentText(_ value: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: value).doubleValue
+        return String(format: "%+.2f%%", number)
     }
 }
 
