@@ -2890,14 +2890,6 @@ private struct CrossMarketOverview: View {
         .accessibilityHint("打开指数详情")
     }
 
-
-    private func observedRangeChange(_ snapshot: FCurrentIntradaySnapshot) -> Decimal? {
-        guard let first = snapshot.samples.first?.price,
-              let latest = snapshot.latestPrice,
-              first > 0 else { return nil }
-        return ((latest - first) / first) * 100
-    }
-
     private func percentText(_ value: Decimal) -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
         return String(format: "%+.2f%%", number)
@@ -3975,6 +3967,14 @@ struct MarketOverview: View {
         }
         .overlay(RoundedRectangle(cornerRadius: theme.layoutFamily == .editorial ? 24 : 16, style: .continuous)
             .stroke(theme.accent.opacity(0.18), lineWidth: 0.8))
+    }
+
+
+    private func observedRangeChange(_ snapshot: FCurrentIntradaySnapshot) -> Decimal? {
+        guard let first = snapshot.samples.first?.price,
+              let latest = snapshot.latestPrice,
+              first > 0 else { return nil }
+        return ((latest - first) / first) * 100
     }
 
     private func percentText(_ value: Decimal) -> String {
