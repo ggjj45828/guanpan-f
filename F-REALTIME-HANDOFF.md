@@ -964,3 +964,11 @@ Run 69验证的是Swift源码SHA 0dff6c3d84af3870d4a10adcb02fcbea0d492b2a。随�
 - 主题增量把资产/顾问/行情/研究语义色应用到证券详情、Advisor上下文与成绩单、跨市场指数卡、资产列表和行情关注行；资产/设置页背景跟随主题。杂志、东方、玻璃、星图方向补充独立彩色角色色组。
 - 仍是单一Ledger、行情、Quant与Advisor数据流；页面按证券、顾问、市场、跨市场、资产、设置角色排版并由主题渲染。没有向真实账本注入演示数据，也没有更改NAS/Python服务。
 - 当前实现未由Apple CI验证；Windows无Xcode/Simulator。自动截图待本轮CI导出，人工查看和iPhone Air实测仍External Pending。概念图逐像素匹配与全主题视觉Pass均未完成。
+## 2026-11-03 — 首页指数直达与主题语义色修正
+
+- 本地 `main=c6af621` 基于远端 `d8c2947`；工作区还包含证券日K数据源说明的一项未提交修正。GitHub API确认最近只有 Run `41580064505`，已结束且失败，没有活跃Actions；`gh` CLI未安装。
+- Run `41580064505`：FCore 338/338、XcodeGen、iOS Device Build、Simulator Build通过；UI XCTest因指数详情accessibility查询失败；截图导出执行过，但Artifact上传因存储配额满而失败；IPA未产出。该结果不代表后续本地SHA。
+- 当前源码修改：首页指数速览卡按代码直接打开对应指数详情，并增加UI回归；现金图标、资产/顾问渐变、Advisor按钮、实时迷你走势改为当前主题semantic token；设置页证券日K说明修正为iPhone直连腾讯接口、失败时用本机真实缓存。
+- 本轮修改尚无Apple CI结果，也没有可供人工查看的本轮Simulator截图。六主题全页面视觉、设计图逐细节对照、灰度构图比较仍未完成；iPhone Air仍External Pending。不得把主题工作标成全部完成。
+- 下一次推送前需重新fetch/reconcile并核对活跃Actions数量；本轮只涉及iOS，无NAS/Python改动。
+

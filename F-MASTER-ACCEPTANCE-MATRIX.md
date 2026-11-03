@@ -951,3 +951,14 @@ Run 73 (`bd01362fc72160ebb0fb28ccccb7c9fc4de5071c`) 随后实际通过 FCore 164
 | 六主题跨页面统一 | 页面角色和主题token已接入；市场、资产和设置背景跟随主题 | 待逐页Simulator截图查看 |
 | 概念图一致性/灰度构图比较 | 尚无人工对照结论 | 未验收 |
 | iPhone Air、浅深色、护眼、横屏及实机手势 | 当前Windows无Xcode/iOS Simulator和目标iPhone | External Pending |
+## 2026-11-03 首页指数直达与主题语义色修正
+
+| 验收项 | 本轮实现 | 状态 |
+|---|---|---|
+| 首页指数卡直达所选指数详情 | 按指数代码路由；新增 `testHomeMarketPulseOpensTheSelectedIndexDetailDirectly` | 已编码；当前SHA CI待验证 |
+| 首页色彩跟随所选主题 | 现金、顾问CTA、顾问面板及实时迷你走势改用semantic tokens | 已编码；截图视觉验收待完成 |
+| 证券历史日K来源说明 | 设置页改为iPhone直连腾讯公开接口，失败时仅用本机真实缓存 | 已修正；设备实测待确认 |
+| 六主题全页面视觉一致性 | 本轮只修首页色值/路由和数据源说明，未逐页全部整改 | 未完成 |
+| 当前SHA Apple CI / IPA | 远端Run 17 UI失败，Artifact上传受配额阻止，IPA未产出 | 本地后续修改尚未CI |
+| Simulator截图逐页审阅、灰度构图与iPhone Air | 尚无本轮截图人工审阅或目标设备证据 | External Pending |
+

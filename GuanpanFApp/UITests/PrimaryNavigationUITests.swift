@@ -298,7 +298,25 @@ final class PrimaryNavigationUITests: XCTestCase {
         shanghaiIndex.tap()
         XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["crossmarket.index.refresh.sh000001"].exists, app.debugDescription)
-        XCTAssertTrue(app.staticTexts["sh000001"].exists, "Index detail must show the selected index identity.")
+        XCTAssertTrue(app.descendants(matching: .any)["crossmarket.index.detail.identity"].exists,
+                      "Index detail must expose its selected index identity.")
+    }
+
+    func testHomeMarketPulseOpensTheSelectedIndexDetailDirectly() {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8), app.debugDescription)
+
+        let index = app.descendants(matching: .any)["home.market-index.sh000001"]
+        let home = app.scrollViews["home.scroll"]
+        XCTAssertTrue(home.waitForExistence(timeout: 3), app.debugDescription)
+        scrollUntilHittable(index, in: home)
+        XCTAssertTrue(index.isHittable, app.debugDescription)
+        index.tap()
+
+        XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["crossmarket.index.detail.identity"].exists,
+                      "The home pulse must open the selected index detail, not the generic index board.")
     }
 
     func testRealAssetsExposeCurrentClosedAndCashSections() {
@@ -488,5 +506,6 @@ final class PrimaryNavigationUITests: XCTestCase {
         case down
     }
 }
+
 
 
