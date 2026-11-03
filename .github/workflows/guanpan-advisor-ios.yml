@@ -181,12 +181,7 @@ jobs:
         with:
           name: guanpan-f-ios-build-evidence
           path: |
-            F-core-tests.log
-            GuanpanFApp/build-device.log
-            GuanpanFApp/build-simulator.log
-            GuanpanFApp/build-ui-tests.log
-            GuanpanFApp/build/FApp-UI.xcresult
             GuanpanFApp/build/UI-Screenshots/**
             GuanpanFApp/build/观盘max.ipa
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
