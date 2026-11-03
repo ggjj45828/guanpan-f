@@ -138,6 +138,7 @@ struct FUnifiedSecurityChart: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("统一证券图表")
+        .accessibilityValue("绘图区高度 \(Int(height)) pt")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
     }
 

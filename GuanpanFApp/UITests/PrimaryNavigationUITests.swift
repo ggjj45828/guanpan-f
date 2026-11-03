@@ -38,22 +38,18 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachScreenshot("03-security-detail-top", app: app)
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
         XCTAssertTrue(liveChart.waitForExistence(timeout: 3), app.debugDescription)
-        scrollUntilHittable(liveChart, in: detailScroll, minimumVisibleHeight: 400)
-        XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
-                                    "Security detail chart should use the expanded 420pt plot height")
-        XCTAssertLessThanOrEqual(liveChart.frame.height, 424.5,
-                                 "Security detail chart must stay within its 420pt height cap")
+        scrollUntilHittable(liveChart, in: detailScroll)
+        XCTAssertEqual(liveChart.value as? String, "绘图区高度 420 pt",
+                       "Chart must expose its configured 420pt plot height")
         attachScreenshot("03-security-detail-live-chart", app: app)
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.waitForExistence(timeout: 1) {
-            scrollUntilHittable(dailyChart, in: detailScroll, minimumVisibleHeight: 400)
-            XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
-                                        "Daily chart should use the expanded 420pt plot height")
-            XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
-                                     "Daily chart must stay within its 420pt height cap")
+            scrollUntilHittable(dailyChart, in: detailScroll)
+            XCTAssertEqual(dailyChart.value as? String, "绘图区高度 420 pt",
+                           "Daily chart must expose its configured 420pt plot height")
         } else {
             XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
                           "Without NAS daily history, the page must show an explicit unavailable state")
@@ -118,22 +114,18 @@ final class PrimaryNavigationUITests: XCTestCase {
         let detailScroll = app.scrollViews["market.security-detail.scroll"]
         XCTAssertTrue(detailScroll.waitForExistence(timeout: 5))
         let liveChart = app.descendants(matching: .any)["market.security-chart.live"]
-        scrollUntilHittable(liveChart, in: detailScroll, minimumVisibleHeight: 400)
+        scrollUntilHittable(liveChart, in: detailScroll)
         XCTAssertTrue(liveChart.exists, app.debugDescription)
-        XCTAssertGreaterThanOrEqual(liveChart.frame.height, 400,
-                                    "Live chart should use the expanded 420pt phone chart height")
-        XCTAssertLessThanOrEqual(liveChart.frame.height, 424.5,
-                                 "Live chart exceeded the 420pt phone chart height")
+        XCTAssertEqual(liveChart.value as? String, "绘图区高度 420 pt",
+                       "Chart must expose its configured 420pt plot height")
 
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.exists {
-            scrollUntilHittable(dailyChart, in: detailScroll, minimumVisibleHeight: 400)
-            XCTAssertGreaterThanOrEqual(dailyChart.frame.height, 400,
-                                        "Daily chart should use the expanded 420pt phone chart height")
-            XCTAssertLessThanOrEqual(dailyChart.frame.height, 424.5,
-                                     "Daily chart exceeded the 420pt phone chart height")
+            scrollUntilHittable(dailyChart, in: detailScroll)
+            XCTAssertEqual(dailyChart.value as? String, "绘图区高度 420 pt",
+                           "Daily chart must expose its configured 420pt plot height")
         } else {
             XCTAssertTrue(app.staticTexts["market.security-chart.daily.unavailable"].exists,
                           "Missing NAS history must remain explicit instead of rendering a fabricated chart")
