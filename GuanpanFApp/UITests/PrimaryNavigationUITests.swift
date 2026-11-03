@@ -293,6 +293,12 @@ final class PrimaryNavigationUITests: XCTestCase {
             XCTAssertTrue(indexCard.label.contains("交易时段"),
                           "Missing explicit or unverified trading-session status for \(code).\n\(app.debugDescription)")
         }
+        let shanghaiIndex = app.descendants(matching: .any)["crossmarket.index.sh000001"]
+        scrollUntilHittable(shanghaiIndex, in: indexList)
+        shanghaiIndex.tap()
+        XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons["crossmarket.index.refresh.sh000001"].exists, app.debugDescription)
+        XCTAssertTrue(app.staticTexts["sh000001"].exists, "Index detail must show the selected index identity.")
     }
 
     func testRealAssetsExposeCurrentClosedAndCashSections() {
@@ -334,7 +340,10 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
         let confirm = app.buttons["ledger.opening.confirm"]
         XCTAssertTrue(confirm.exists)
-        XCTAssertFalse(confirm.isEnabled, "The empty form must not create an incomplete ledger.")
+        XCTAssertTrue(confirm.isEnabled, "The confirm action must remain tappable so incomplete fields can explain what is missing.")
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["ledger.opening.validation"].label.contains("请输入券商可用现金"),
+                      "An incomplete form must explain why the ledger cannot be saved.")
         attachScreenshot("10-holdings-entry", app: app)
 
         cash.tap()

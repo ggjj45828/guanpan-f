@@ -2242,6 +2242,8 @@ struct HomeDestination: View {
                 MarketOverview(model: model)
             case .crossMarket:
                 CrossMarketOverview(model: model, theme: theme)
+            case let .marketIndex(code):
+                MarketIndexDetailOverview(model: model, theme: theme, code: code)
             case .advisor:
                 AdvisorOverview(model: model)
             case .portfolio:
@@ -2498,7 +2500,7 @@ struct HomeDestination: View {
                         }
                         Text(model.securityRegimeStatusByCode[code] ?? "证券自身状态：等待真实日K；市场广度等缺失因子不会估算")
                             .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                        Text(model.dailyKlineStateByCode[code] ?? "数据源：NAS 归档日 K · 未复权；等待请求")
+                        Text(model.dailyKlineStateByCode[code] ?? "数据源：Tencent Finance daily K-line · iPhone直连 · 未复权；等待请求")
                             .font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                     }
                     .padding(.vertical, 8)
@@ -2683,6 +2685,70 @@ struct AdvisorOverview: View {
     }
 }
 
+private struct MarketIndexDetailOverview: View {
+    @ObservedObject var model: FHomeModel
+    let theme: FHomeTheme
+    let code: String
+
+    private var quote: FMarketIndexQuote? { model.marketIndexQuotes.first { $0.code == code } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.standard) {
+                FThemePageHeader(theme: theme, role: .crossMarket, eyebrow: "跨市场 · 指数详情",
+                    title: quote?.name ?? code,
+                    subtitle: "\(quote?.market ?? "市场状态待更新") · 独立指数行情，不映射为ETF持仓",
+                    symbol: "chart.xyaxis.line",
+                    value: quote?.latestPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "不可用",
+                    valueLabel: "指数点位")
+                if let quote {
+                    VStack(alignment: .leading, spacing: 12) {
+                        LabeledContent("指数代码", value: quote.code)
+                        LabeledContent("市场", value: quote.market)
+                        LabeledContent("涨跌幅", value: quote.changePercent.map { String(format: "%+.2f%%", NSDecimalNumber(decimal: $0).doubleValue) } ?? "不可用")
+                        LabeledContent("行情时间", value: quote.observedAt?.formatted(date: .numeric, time: .standard) ?? "未验证")
+                        LabeledContent("数据来源", value: quote.source ?? "待获取")
+                        LabeledContent("交易时段", value: quote.marketStatus ?? "未验证")
+                        if let reason = quote.unavailableReason {
+                            Text(reason).font(.caption).foregroundStyle(theme.manifest.tokens.unavailable)
+                        }
+                    }
+                    .padding(16)
+                    .modifier(FThemeSurfaceModifier(theme: theme, radius: 18, role: .market))
+                    LabeledContent("历史状态", value: model.marketIndexRegimeStatusByCode[code] ?? "历史状态尚未读取")
+                        .font(.subheadline)
+                        .padding(14)
+                        .modifier(FThemeSurfaceModifier(theme: theme, radius: 14, role: .research))
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "chart.xyaxis.line").font(.title2).foregroundStyle(theme.manifest.tokens.unavailable)
+                        Text("指数行情暂不可用").font(.headline)
+                        Text("刷新后查看真实行情，不使用模拟点位。")
+                            .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 110)
+                }
+                Button {
+                    Task {
+                        await model.refreshMarketIndices()
+                        await model.refreshHistoricalIndexRegimes()
+                    }
+                } label: {
+                    Label("刷新指数数据", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("crossmarket.index.refresh.\(code)")
+            }
+            .padding(16)
+        }
+        .background(theme.background.ignoresSafeArea())
+        .navigationTitle(quote?.name ?? code)
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if quote == nil { await model.refreshMarketIndices() }
+        }
+    }
+}
 private struct CrossMarketOverview: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
@@ -2728,11 +2794,8 @@ private struct CrossMarketOverview: View {
                         .accessibilityIdentifier("crossmarket.partial-status")
                 }
 
-                LazyVStack(spacing: 10) {
-                    ForEach(model.marketIndexQuotes) { quote in
-                        indexCard(quote)
-                    }
-                }
+                indexCollection
+
 
                 Text("已支持的指数日K会单独计算指数级 Regime；数据不足或历史源未验证时显示不可用。仅159352→中证A500、159941→纳指100有发行方确认的基准映射，可用于顾问背景和Local Quant策略准备；不代表策略资格或交易信号。其他ETF不自动套用指数状态。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
@@ -2757,7 +2820,30 @@ private struct CrossMarketOverview: View {
     }
 
     @ViewBuilder
+    private var indexCollection: some View {
+        switch theme.layoutFamily {
+        case .cardGrid, .staticBento, .adaptiveBento:
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 154), spacing: 10)], spacing: 10) {
+                ForEach(model.marketIndexQuotes) { quote in indexCard(quote) }
+            }
+        case .terminalDashboard, .minimalTerminal:
+            VStack(spacing: 0) {
+                ForEach(model.marketIndexQuotes) { quote in
+                    indexCard(quote)
+                    if quote.id != model.marketIndexQuotes.last?.id {
+                        Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.12)).frame(height: 1)
+                    }
+                }
+            }
+        default:
+            LazyVStack(spacing: 13) {
+                ForEach(model.marketIndexQuotes) { quote in indexCard(quote) }
+            }
+        }
+    }
+    @ViewBuilder
     private func indexCard(_ quote: FMarketIndexQuote) -> some View {
+        NavigationLink(value: FHomeRoute.marketIndex(quote.code)) {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -2791,11 +2877,14 @@ private struct CrossMarketOverview: View {
                 Text(reason).font(.caption2).foregroundStyle(theme.manifest.tokens.secondaryForeground)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: 16, role: .market))
+        .padding(theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal ? 9 : 14)
+        .frame(maxWidth: .infinity, minHeight: theme.layoutFamily == .staticBento ? 132 : nil, alignment: .leading)
+        .modifier(FThemeSurfaceModifier(theme: theme, radius: theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal ? 5 : 16, role: .market))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("crossmarket.index.\(quote.code)")
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("打开指数详情")
     }
 
     private func percentText(_ value: Decimal) -> String {
@@ -2992,6 +3081,7 @@ struct RealAssetsOverview: View {
         .accessibilityIdentifier("assets.list")
         .navigationTitle("真实资产")
         .listStyle(.insetGrouped)
+        .environment(\.defaultMinListRowHeight, theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal ? 39 : (theme.layoutFamily == .staticBento ? 58 : 50))
         .scrollContentBackground(.hidden)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .sheet(isPresented: $model.showingFeeCorrection) {
@@ -3249,6 +3339,7 @@ struct SettingsOverview: View {
         .accessibilityIdentifier("settings.form")
         .scrollDismissesKeyboard(.interactively)
         .listStyle(.insetGrouped)
+        .environment(\.defaultMinListRowHeight, theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal ? 39 : (theme.layoutFamily == .staticBento ? 58 : 50))
         .scrollContentBackground(.hidden)
         .background(theme.manifest.tokens.background.ignoresSafeArea())
         .confirmationDialog("清除画像偏好？", isPresented: $showingProfileClearConfirmation,
@@ -3982,6 +4073,7 @@ struct FInitialLedgerSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cashText = ""
     @State private var positions = [FInitialLedgerPositionDraft()]
+    @State private var attemptedSave = false
     @FocusState private var inputFocused: Bool
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
@@ -4083,7 +4175,7 @@ struct FInitialLedgerSetupSheet: View {
         Section("保存前确认") {
             Text(validationMessage)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(canSave ? .green : .secondary)
+                .foregroundStyle(canSave ? .green : (attemptedSave ? Color.red : .secondary))
                 .accessibilityIdentifier("ledger.opening.validation")
             Text("这些数字会作为本机真实账本的起点，不代表历史成交。导入前的历史盈亏不会被虚构；保存后请用真实成交更新。")
                 .font(.footnote).foregroundStyle(.secondary)
@@ -4115,7 +4207,10 @@ struct FInitialLedgerSetupSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.writingInitialLedger ? "保存中…" : "保存账本起点") {
-                        guard let parsedPositions else { return }
+                        guard canSave, let parsedPositions else {
+                            attemptedSave = true
+                            return
+                        }
                         Task {
                             let saved = await model.establishInitialLedger(
                                 cashText: cashText, positions: parsedPositions,
@@ -4123,7 +4218,7 @@ struct FInitialLedgerSetupSheet: View {
                             if saved { dismiss() }
                         }
                     }
-                    .disabled(!canSave || model.writingInitialLedger)
+                    .disabled(model.writingInitialLedger)
                     .accessibilityIdentifier("ledger.opening.confirm")
                 }
                 ToolbarItemGroup(placement: .keyboard) {

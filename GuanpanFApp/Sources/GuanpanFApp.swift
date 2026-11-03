@@ -1903,6 +1903,7 @@ enum FHomeTheme: String, CaseIterable, Identifiable {
 enum FHomeRoute: Hashable {
     case market, crossMarket, advisor, portfolio
     case instrument(String)
+    case marketIndex(String)
 }
 
 struct FHomeRoot: View {

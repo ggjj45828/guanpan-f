@@ -455,8 +455,8 @@ struct FUnifiedSecurityChart: View {
                 previousSessionMinute = minute
             }
             context.stroke(path, with: .color(theme.accent), style: StrokeStyle(lineWidth: 0.78, lineCap: .round, lineJoin: .round))
-            let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (118, "11:30"),
-                                                    (122, "13:00"), (180, "14:00"), (210, "14:30"), (240, "15:00")]
+            let standardTicks: [(Double, String)] = [(0, "09:30"), (60, "10:30"), (120, "11:30 / 13:00"),
+                                                    (180, "14:00"), (210, "14:30"), (240, "15:00")]
             var ticks = standardTicks.filter { $0.0 >= minuteDomain.lowerBound && $0.0 <= minuteDomain.upperBound }
             if ticks.isEmpty || ticks.first?.0 != minuteDomain.lowerBound {
                 ticks.insert((minuteDomain.lowerBound, intradayClockLabel(minuteDomain.lowerBound)), at: 0)
