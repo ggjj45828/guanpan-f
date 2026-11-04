@@ -1,0 +1,104 @@
+workflows:
+  guanpan-f-ios-validation:
+    name: Guanpan F iOS validation
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      vars:
+        APP_SCHEME: GuanpanF
+        PROJECT_DIR: GuanpanFApp
+    triggering:
+      events: []
+    scripts:
+      - name: Show Apple toolchain
+        script: |
+          xcodebuild -version
+          swift --version
+      - name: Install XcodeGen
+        script: brew install xcodegen
+      - name: Run FCore tests
+        script: |
+          set -o pipefail
+          swift test 2>&1 | tee F-core-tests.log
+      - name: Generate Xcode project
+        script: |
+          cd "$PROJECT_DIR"
+          xcodegen generate --spec project.yml
+          xcodebuild -list -project GuanpanF.xcodeproj
+      - name: Build iOS device target
+        script: |
+          cd "$PROJECT_DIR"
+          set -o pipefail
+          xcodebuild build \
+            -project GuanpanF.xcodeproj \
+            -scheme "$APP_SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/Device \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-device.log
+      - name: Build iOS Simulator target
+        script: |
+          cd "$PROJECT_DIR"
+          set -o pipefail
+          xcodebuild build \
+            -project GuanpanF.xcodeproj \
+            -scheme "$APP_SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/Simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-simulator.log
+      - name: Run iPhone Simulator UI tests
+        script: |
+          cd "$PROJECT_DIR"
+          set -o pipefail
+          DEVICE_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); print(next((device["udid"] for group in data["devices"].values() for device in group if device.get("isAvailable") and device.get("name", "").startswith("iPhone")), ""))')"
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No available iPhone Simulator on this runner" >&2
+            exit 1
+          fi
+          xcodebuild test \
+            -project GuanpanF.xcodeproj \
+            -scheme "$APP_SCHEME" \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath build/UITests \
+            -resultBundlePath build/FApp-UI.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build-ui-tests.log
+      - name: Export Simulator screenshots
+        script: |
+          cd "$PROJECT_DIR"
+          if [ -d build/FApp-UI.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path build/FApp-UI.xcresult \
+              --output-path build/UI-Screenshots
+          fi
+      - name: Package unsigned IPA
+        script: |
+          cd "$PROJECT_DIR"
+          APP_PATH="$(find build/Device/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            echo "No device .app was produced" >&2
+            exit 1
+          fi
+          DISPLAY_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PATH/Info.plist")"
+          if [ "$DISPLAY_NAME" != "观盘max" ]; then
+            echo "Unexpected app display name: $DISPLAY_NAME" >&2
+            exit 1
+          fi
+          mkdir -p build/Package/Payload
+          cp -R "$APP_PATH" build/Package/Payload/
+          cd build/Package
+          ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
+          unzip -t ../观盘max.ipa
+    artifacts:
+      - F-core-tests.log
+      - GuanpanFApp/build-device.log
+      - GuanpanFApp/build-simulator.log
+      - GuanpanFApp/build-ui-tests.log
+      - GuanpanFApp/build/FApp-UI.xcresult
+      - GuanpanFApp/build/UI-Screenshots/**
+      - GuanpanFApp/build/观盘max.ipa
+      - /tmp/xcodebuild_logs/*.log
