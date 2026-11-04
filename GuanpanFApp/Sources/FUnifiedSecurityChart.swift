@@ -132,7 +132,7 @@ struct FUnifiedSecurityChart: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(height: height)
+        .frame(height: height + expandedMACDHeight)
         // Give the plot the full width available from the detail page. The old
         // nested card and 10pt inset consumed space without adding chart meaning.
         .padding(.vertical, 2)
@@ -140,6 +140,13 @@ struct FUnifiedSecurityChart: View {
         .accessibilityLabel("统一证券图表")
         .accessibilityValue("绘图区高度 \(Int(height)) pt")
         .accessibilityHint("双指缩放；放大后拖动平移；长按或点击十字按钮后拖动查看数据点。")
+    }
+
+    private var expandedMACDHeight: CGFloat {
+        guard subchartMode == "macd",
+              let series = model?.chart.series,
+              isDaily(series), series.count >= 26 else { return 0 }
+        return 38
     }
 
     @ViewBuilder
@@ -396,7 +403,9 @@ struct FUnifiedSecurityChart: View {
         let bottomAxis: CGFloat = 24
         let showVolume = isDaily(series) && subchartMode == "volume" && visibleLayers.contains("volume")
         let showMACD = subchartMode == "macd" && macd.count >= 26
-        let subchartHeight: CGFloat = (showVolume || showMACD) ? max(42, size.height * 0.22) : 0
+        let subchartHeight: CGFloat = showMACD
+            ? max(42, max(0, size.height - 38) * 0.22) + 38
+            : (showVolume ? max(42, size.height * 0.22) : 0)
         let subchartTop = size.height - bottomAxis - subchartHeight
         let priceTop = topInset
         let priceBottom = subchartTop - ((showVolume || showMACD) ? 8 : 0)
