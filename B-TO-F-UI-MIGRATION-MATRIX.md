@@ -32,3 +32,6 @@
 | AI Advisor | B共享DesignSystem与结构化区段；F保留真实DecisionContext | NAS可选文案清理 | DeepSeek实网/引用未验 |
 | 真实资产 | B页面组织可借鉴；F唯一真实Ledger | 本轮未改 | F不如B，真机未验 |
 | 设置/主题 | B `DesignSystem.swift` 全局tokens | F折叠低频区，主题选择保留 | 已编码未编译/截图；全主题跨页未验 |
+# Historical / Superseded — 2026-11-04
+
+This matrix records the former B→F donor plan. It is retained as historical audit context only. B Frozen is no longer the UI visual source of truth. Current UI acceptance follows user-approved mockups; see `F-MOCKUP-TO-SWIFTUI-MATRIX.md`.

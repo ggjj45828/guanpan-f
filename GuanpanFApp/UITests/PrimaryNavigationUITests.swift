@@ -1,8 +1,14 @@
 import XCTest
 
 final class PrimaryNavigationUITests: XCTestCase {
-    func testFivePrimaryDestinationsAreDistinctAndDiscoverable() {
+    private func makeIsolatedApp() -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments = ["-guanpan.ui-testing-reset-state"]
+        return app
+    }
+
+    func testFivePrimaryDestinationsAreDistinctAndDiscoverable() {
+        let app = makeIsolatedApp()
         app.launch()
 
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 5))
@@ -94,7 +100,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testSecurityDetailChartsUseExpandedPhoneHeight() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         XCUIDevice.shared.orientation = .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
@@ -133,7 +139,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testAdvisorExplainsUnavailableOnlineService() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         app.buttons["navigation.tab.AI顾问"].tap()
 
@@ -145,7 +151,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testWatchlistIsSeparateAndAppearsInItsOwnMarketFilter() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         XCUIDevice.shared.orientation = .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
@@ -196,7 +202,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testAdvisorExposesStructuredQuestionAndContextSections() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         app.buttons["navigation.tab.AI顾问"].tap()
 
@@ -219,7 +225,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testInvestorProfilePreferenceCanBeSavedAndClearedExplicitly() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         app.buttons["navigation.tab.我的"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
@@ -272,7 +278,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testCrossMarketIndexBoardIsDiscoverableAndListsConfiguredMarkets() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
 
         let crossMarketCard = app.descendants(matching: .any)["home.role.crossMarketPulse"]
@@ -303,7 +309,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testHomeMarketPulseOpensTheSelectedIndexDetailDirectly() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8), app.debugDescription)
 
@@ -320,7 +326,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testRealAssetsExposeCurrentClosedAndCashSections() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         app.buttons["navigation.tab.资产"].tap()
 
@@ -345,7 +351,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testEmptyLedgerOffersInlineCashAndHoldingsEntry() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         app.launch()
         app.buttons["navigation.tab.资产"].tap()
 
@@ -393,8 +399,8 @@ final class PrimaryNavigationUITests: XCTestCase {
             "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
-            let app = XCUIApplication()
-            app.launchArguments = ["-guanpan.f.homeTheme", theme]
+            let app = makeIsolatedApp()
+            app.launchArguments += ["-guanpan.f.homeTheme", theme]
             app.launch()
             XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8), "Home failed for theme \(theme)")
             let home = app.scrollViews["home.scroll"]
@@ -414,8 +420,8 @@ final class PrimaryNavigationUITests: XCTestCase {
             "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
-            let app = XCUIApplication()
-            app.launchArguments = ["-uiUserInterfaceStyle", "Dark", "-guanpan.f.homeTheme", theme]
+            let app = makeIsolatedApp()
+            app.launchArguments += ["-uiUserInterfaceStyle", "Dark", "-guanpan.f.homeTheme", theme]
             app.launch()
             XCTAssertTrue(app.navigationBars["首页"].waitForExistence(timeout: 8),
                           "Dark appearance failed for theme \(theme)")
@@ -425,7 +431,7 @@ final class PrimaryNavigationUITests: XCTestCase {
     }
 
     func testLandscapeRotationKeepsSecurityDetailAndChartAccessible() {
-        let app = XCUIApplication()
+        let app = makeIsolatedApp()
         defer { XCUIDevice.shared.orientation = .portrait }
         XCUIDevice.shared.orientation = .portrait
         app.launch()

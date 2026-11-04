@@ -60,3 +60,6 @@
 ## 验证边界
 
 `NativeNavigationTests.swift` 定义了主页面、证券详情、全屏图表、AI 深链和截图附件测试；当前快照的测试期望与导航实现不一致。没有运行产物，所以只能确认测试源码存在，不能声称 B 当前版本通过编译、UI 测试、Simulator 或真机视觉验收。
+# Historical / Superseded — 2026-11-04
+
+This source map is retained for historical B Frozen research. B is no longer the current visual acceptance baseline or a required UI donor. Current visual truth is the user-approved mockup set documented in `F-MOCKUP-TO-SWIFTUI-MATRIX.md`.
