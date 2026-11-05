@@ -876,7 +876,7 @@ final class FHomeModel: ObservableObject {
             investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
         } catch {
             guard operationGeneration == investorProfileLoadGeneration else { return }
-            investorProfileStatus = "画像保存失败：\\(error.localizedDescription)"
+            investorProfileStatus = "画像保存失败：\(error.localizedDescription)"
         }
     }
 
@@ -900,8 +900,8 @@ final class FHomeModel: ObservableObject {
             investorProfile = updated
             investorProfileStatus = "已清除该项画像；其他偏好和账本不变"
         } catch {
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "画像清除失败：\(error.localizedDescription)"
-            await loadInvestorProfile()
         }
     }
 
@@ -915,7 +915,6 @@ final class FHomeModel: ObservableObject {
             return
         }
         loadingInvestorProfile = true
-        loadingInvestorProfile = true
         do {
             let now = Date()
             let loaded = try await store.load(now: now) ?? FInvestorProfile()
@@ -927,6 +926,7 @@ final class FHomeModel: ObservableObject {
                 ? "尚未录入个人偏好；顾问不会自行猜测"
                 : "已读取 \(loaded.attributes.count) 项本机画像偏好"
         } catch {
+            guard loadGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "本机画像读取失败：\(error.localizedDescription)"
         }
     }
