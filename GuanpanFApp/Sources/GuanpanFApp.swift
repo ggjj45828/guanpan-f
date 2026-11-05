@@ -865,8 +865,9 @@ final class FHomeModel: ObservableObject {
             investorProfile = updated
             investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
         } catch {
-            investorProfileStatus = "画像保存失败：\(error.localizedDescription)"
+            let saveFailure = "画像保存失败：\(error.localizedDescription)"
             await loadInvestorProfile()
+            investorProfileStatus = saveFailure
         }
     }
 
