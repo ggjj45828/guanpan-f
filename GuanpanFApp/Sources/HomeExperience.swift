@@ -3026,9 +3026,6 @@ struct RealAssetsOverview: View {
                 .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.11))
             } else {
                 Section {
-                    Text("已清仓 / 历史持仓")
-                        .font(.headline)
-                        .accessibilityIdentifier("assets.closed.heading")
                     let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
                     if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(theme.manifest.tokens.secondaryForeground) }
                     ForEach(closed) { history in
