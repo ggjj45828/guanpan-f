@@ -2703,10 +2703,10 @@ private struct MarketIndexDetailOverview: View {
                     symbol: "chart.xyaxis.line",
                     value: quote?.latestPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "不可用",
                     valueLabel: "指数点位")
+                LabeledContent("指数代码", value: code)
+                    .accessibilityIdentifier("crossmarket.index.detail.identity")
                 if let quote {
                     VStack(alignment: .leading, spacing: 12) {
-                        LabeledContent("指数代码", value: quote.code)
-                            .accessibilityIdentifier("crossmarket.index.detail.identity")
                         LabeledContent("市场", value: quote.market)
                         LabeledContent("涨跌幅", value: quote.changePercent.map { String(format: "%+.2f%%", NSDecimalNumber(decimal: $0).doubleValue) } ?? "不可用")
                         LabeledContent("行情时间", value: quote.observedAt?.formatted(date: .numeric, time: .standard) ?? "未验证")
@@ -3020,7 +3020,7 @@ struct RealAssetsOverview: View {
                 }
                 .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.11))
             } else {
-                Section("已清仓 / 历史持仓") {
+                Section {
                     let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
                     if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(theme.manifest.tokens.secondaryForeground) }
                     ForEach(closed) { history in
@@ -3036,10 +3036,13 @@ struct RealAssetsOverview: View {
                             }
                         }
                     }
+                } header: {
+                    Text("已清仓 / 历史持仓")
+                        .accessibilityIdentifier("assets.closed.heading")
                 }
                 .listRowBackground(theme.manifest.tokens.highlightSurface.opacity(0.10))
             }
-            Section("现金与成交流水") {
+            Section {
                 Button("录入其他费用 / 现金对账差额") {
                     model.beginCashAdjustment()
                 }
@@ -3072,6 +3075,9 @@ struct RealAssetsOverview: View {
                         }
                     }
                 }
+            } header: {
+                Text("现金与成交流水")
+                    .accessibilityIdentifier("assets.cashflow.heading")
             }
             .listRowBackground(theme.manifest.tokens.marketSurface.opacity(0.085))
             Section("资产安全") {
@@ -4273,7 +4279,7 @@ struct FInitialLedgerSetupSheet: View {
     @State private var cashText = ""
     @State private var positions = [FInitialLedgerPositionDraft()]
     @State private var attemptedSave = false
-    @FocusState private var inputFocused: Bool
+    @FocusState private var focusedInput: FInitialLedgerInput?
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
         guard !positions.isEmpty else { return nil }
@@ -4339,6 +4345,7 @@ struct FInitialLedgerSetupSheet: View {
         Section("券商账户现金") {
             TextField("可用现金（没有现金填写 0）", text: $cashText)
                 .keyboardType(.decimalPad)
+                .focused($focusedInput, equals: .cash)
                 .accessibilityIdentifier("ledger.opening.cash")
             Text("按券商当前可用余额填写，用于计算真实账户总资产。")
                 .font(.footnote).foregroundStyle(.secondary)
@@ -4356,7 +4363,8 @@ struct FInitialLedgerSetupSheet: View {
                     draft: $position,
                     ordinal: ordinal,
                     canRemove: positions.count > 1,
-                    model: model
+                    model: model,
+                    focusedInput: $focusedInput
                 ) {
                     positions.removeAll { $0.id == positionID }
                 }
@@ -4422,11 +4430,20 @@ struct FInitialLedgerSetupSheet: View {
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("收起键盘") { inputFocused = false }
+                    Button("收起键盘") { focusedInput = nil }
                 }
             }
         }
     }
+}
+
+private enum FInitialLedgerPositionField: Hashable {
+    case code, name, units, unitCost
+}
+
+private enum FInitialLedgerInput: Hashable {
+    case cash
+    case position(UUID, FInitialLedgerPositionField)
 }
 
 private struct FInitialLedgerPositionRow: View {
@@ -4435,7 +4452,7 @@ private struct FInitialLedgerPositionRow: View {
     let canRemove: Bool
     @ObservedObject var model: FHomeModel
     let remove: () -> Void
-    @FocusState private var inputFocused: Bool
+    @FocusState.Binding var focusedInput: FInitialLedgerInput?
     @State private var lookupStatus = ""
     @State private var retryLookup = 0
     @State private var lastResolvedName: String?
@@ -4471,7 +4488,7 @@ private struct FInitialLedgerPositionRow: View {
                 }
             }
             TextField("6位证券代码", text: $draft.instrumentCode)
-                .keyboardType(.numberPad).focused($inputFocused)
+                .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .code))
                 .accessibilityIdentifier("ledger.opening.position.code")
                 .onChange(of: draft.instrumentCode) { code in
                     let digits = String(code.unicodeScalars
@@ -4483,7 +4500,7 @@ private struct FInitialLedgerPositionRow: View {
                 }
                 .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
-                .focused($inputFocused)
+                .focused($focusedInput, equals: .position(draft.id, .name))
                 .accessibilityIdentifier("ledger.opening.position.name")
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
@@ -4498,10 +4515,10 @@ private struct FInitialLedgerPositionRow: View {
                 }
             }
             TextField("当前持有份额", text: $draft.units)
-                .keyboardType(.numberPad).focused($inputFocused)
+                .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
-                .keyboardType(.decimalPad).focused($inputFocused)
+                .keyboardType(.decimalPad).focused($focusedInput, equals: .position(draft.id, .unitCost))
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)

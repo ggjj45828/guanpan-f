@@ -264,6 +264,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         wait(for: [saveEnabled], timeout: 10)
         XCTAssertTrue(save.isEnabled, app.debugDescription)
         save.tap()
+        let preferenceStatus = app.staticTexts["profile.preference.status"]
+        scrollUntilHittable(preferenceStatus, in: settingsForm)
+        let savedStatus = expectation(for: NSPredicate(format: "label CONTAINS %@", "画像偏好已保存"),
+                                      evaluatedWith: preferenceStatus)
+        wait(for: [savedStatus], timeout: 10)
         scrollUntilHittable(clear, in: settingsForm)
         let saved = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: clear)
         wait(for: [saved], timeout: 10)
@@ -337,7 +342,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let closedView = app.segmentedControls["assets.view-picker"].buttons["已清仓"]
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
-        let closedHeading = app.staticTexts["已清仓 / 历史持仓"]
+        let closedHeading = app.staticTexts["assets.closed.heading"]
         XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
         scrollUntilHittable(closedHeading, in: assetList)
         XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
@@ -345,7 +350,7 @@ final class PrimaryNavigationUITests: XCTestCase {
 
         app.buttons["当前持仓"].tap()
         XCTAssertTrue(app.staticTexts["当前持仓"].exists)
-        let cashFlowHeading = app.staticTexts["现金与成交流水"]
+        let cashFlowHeading = app.staticTexts["assets.cashflow.heading"]
         scrollUntilHittable(cashFlowHeading, in: assetList)
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
@@ -379,6 +384,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         if name.value as? String == "证券名称（自动识别，可修改）" {
             name.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
             name.typeText("TestETF")
         }
         let units = app.textFields["ledger.opening.position.units"]
