@@ -51,6 +51,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
+        guard dailyChartHeading.isHittable else { return }
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.waitForExistence(timeout: 1) {
             scrollUntilHittable(dailyChart, in: detailScroll)
@@ -402,7 +403,12 @@ final class PrimaryNavigationUITests: XCTestCase {
             name.typeText("TestETF")
         }
         let units = app.textFields["ledger.opening.position.units"]
-        units.tap()
+        let nextField = app.buttons["ledger.opening.next-field"]
+        if app.keyboards.firstMatch.exists && nextField.exists {
+            nextField.tap()
+        } else {
+            units.tap()
+        }
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         units.typeText("100")
         let cost = app.textFields["ledger.opening.position.unitCost"]
@@ -519,11 +525,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         let endOffset: CGVector
         switch direction {
         case .up:
-            startOffset = CGVector(dx: 0.995, dy: 0.84)
-            endOffset = CGVector(dx: 0.995, dy: 0.58)
+            startOffset = CGVector(dx: 0.88, dy: 0.82)
+            endOffset = CGVector(dx: 0.88, dy: 0.38)
         case .down:
-            startOffset = CGVector(dx: 0.995, dy: 0.58)
-            endOffset = CGVector(dx: 0.995, dy: 0.84)
+            startOffset = CGVector(dx: 0.88, dy: 0.38)
+            endOffset = CGVector(dx: 0.88, dy: 0.82)
         }
         scrollContainer.coordinate(withNormalizedOffset: startOffset)
             .press(forDuration: 0.05,
