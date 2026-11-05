@@ -489,14 +489,15 @@ final class PrimaryNavigationUITests: XCTestCase {
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
         for _ in 0..<30 {
-            if element.isHittable && element.frame.height >= minimumVisibleHeight { return }
+            let viewport = scrollContainer.frame
+            let target = element.frame
+            let fullyVisible = target.minY >= viewport.minY + 48 &&
+                target.maxY <= viewport.maxY - 48
+            if element.isHittable && target.height >= minimumVisibleHeight && fullyVisible { return }
             guard element.exists else {
                 dragScroll(scrollContainer, toward: .up)
                 continue
             }
-
-            let viewport = scrollContainer.frame
-            let target = element.frame
             // XCUIElement.frame is clipped to the visible portion of a
             // partially obscured SwiftUI chart. Large swipes oscillate between
             // clipping the chart at the top and bottom; use short drags so the
