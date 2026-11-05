@@ -4506,9 +4506,6 @@ private struct FInitialLedgerPositionRow: View {
                 .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
                 .focused($focusedInput, equals: .position(draft.id, .name))
-                .simultaneousGesture(TapGesture().onEnded {
-                    focusedInput = .position(draft.id, .name)
-                })
                 .accessibilityIdentifier("ledger.opening.position.name")
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
@@ -4524,15 +4521,9 @@ private struct FInitialLedgerPositionRow: View {
             }
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
-                .onTapGesture {
-                    focusedInput = .position(draft.id, .units)
-                }
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
                 .keyboardType(.decimalPad).focused($focusedInput, equals: .position(draft.id, .unitCost))
-                .onTapGesture {
-                    focusedInput = .position(draft.id, .unitCost)
-                }
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
