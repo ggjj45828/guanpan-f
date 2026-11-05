@@ -264,7 +264,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         wait(for: [saveEnabled], timeout: 10)
         XCTAssertTrue(save.isEnabled, app.debugDescription)
         save.tap()
-        let preferenceStatus = app.staticTexts["profile.preference.status"]
+        let preferenceStatus = app.descendants(matching: .any)["profile.preference.status"]
         scrollUntilHittable(preferenceStatus, in: settingsForm)
         let savedStatus = expectation(for: NSPredicate(format: "label CONTAINS %@", "画像偏好已保存"),
                                       evaluatedWith: preferenceStatus)
@@ -294,23 +294,30 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["crossmarket.refresh"].exists)
         let indexList = app.scrollViews["crossmarket.list"]
         XCTAssertTrue(indexList.waitForExistence(timeout: 3), app.debugDescription)
-        for code in ["sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX",
-                     "int_nikkei", "KOSPI", "hkHSI"] {
-            let indexCard = app.descendants(matching: .any)["crossmarket.index.\(code)"]
-            scrollUntilHittable(indexCard, in: indexList)
-            XCTAssertTrue(indexCard.isHittable, "Missing configured index card \(code).\n\(app.debugDescription)")
-            XCTAssertTrue(indexCard.label.contains("Regime"),
-                          "Missing Regime status for \(code).\n\(app.debugDescription)")
-            XCTAssertTrue(indexCard.label.contains("交易时段"),
-                          "Missing explicit or unverified trading-session status for \(code).\n\(app.debugDescription)")
-        }
+
+        // Verify the board's primary visible card navigates before list virtualization
+        // and repeated scrolling can recycle its accessibility element.
         let shanghaiIndex = app.descendants(matching: .any)["crossmarket.index.sh000001"]
         scrollUntilHittable(shanghaiIndex, in: indexList)
+        XCTAssertTrue(shanghaiIndex.isHittable, app.debugDescription)
         shanghaiIndex.tap()
         XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.buttons["crossmarket.index.refresh.sh000001"].exists, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["crossmarket.index.detail.identity"].exists,
                       "Index detail must expose its selected index identity.")
+        app.navigationBars["上证指数"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["跨市场脉搏"].waitForExistence(timeout: 5), app.debugDescription)
+
+        for code in ["sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX",
+                     "int_nikkei", "KOSPI", "hkHSI"] {
+            let indexCard = app.descendants(matching: .any)["crossmarket.index.\\(code)"]
+            scrollUntilHittable(indexCard, in: indexList)
+            XCTAssertTrue(indexCard.isHittable, "Missing configured index card \\(code).\\n\\(app.debugDescription)")
+            XCTAssertTrue(indexCard.label.contains("Regime"),
+                          "Missing Regime status for \\(code).\\n\\(app.debugDescription)")
+            XCTAssertTrue(indexCard.label.contains("交易时段"),
+                          "Missing explicit or unverified trading-session status for \\(code).\\n\\(app.debugDescription)")
+        }
     }
 
     func testHomeMarketPulseOpensTheSelectedIndexDetailDirectly() {
@@ -342,7 +349,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let closedView = app.segmentedControls["assets.view-picker"].buttons["已清仓"]
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
-        let closedHeading = app.staticTexts["assets.closed.heading"]
+        let closedHeading = app.descendants(matching: .any)["assets.closed.heading"]
         XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
         scrollUntilHittable(closedHeading, in: assetList)
         XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
@@ -350,7 +357,7 @@ final class PrimaryNavigationUITests: XCTestCase {
 
         app.buttons["当前持仓"].tap()
         XCTAssertTrue(app.staticTexts["当前持仓"].exists)
-        let cashFlowHeading = app.staticTexts["assets.cashflow.heading"]
+        let cashFlowHeading = app.descendants(matching: .any)["assets.cashflow.heading"]
         scrollUntilHittable(cashFlowHeading, in: assetList)
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
@@ -380,6 +387,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let code = app.textFields["ledger.opening.position.code"]
         code.tap()
         code.typeText("159352")
+        app.buttons["收起键盘"].tap()
         let name = app.textFields["ledger.opening.position.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         if name.value as? String == "证券名称（自动识别，可修改）" {
@@ -518,6 +526,5 @@ final class PrimaryNavigationUITests: XCTestCase {
         case down
     }
 }
-
 
 
