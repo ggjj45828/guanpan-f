@@ -3232,12 +3232,14 @@ struct SettingsOverview: View {
                                     .accessibilityIdentifier("profile.preference.clear.\(key.rawValue)")
                                 }
                             }
+                            if key == .investmentHorizon {
+                                Text(model.investorProfileStatus)
+                                    .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                                    .accessibilityIdentifier("profile.preference.status")
+                            }
                         }
                     }
                 }
-                Text(model.investorProfileStatus)
-                    .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                    .accessibilityIdentifier("profile.preference.status")
             }
             Section("可选同步与数据服务") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
@@ -4502,6 +4504,9 @@ private struct FInitialLedgerPositionRow: View {
                 .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
                 .focused($focusedInput, equals: .position(draft.id, .name))
+                .simultaneousGesture(TapGesture().onEnded {
+                    focusedInput = .position(draft.id, .name)
+                })
                 .accessibilityIdentifier("ledger.opening.position.name")
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
@@ -4658,4 +4663,3 @@ private struct FInitialCashEntrySheet: View {
         }
     }
 }
-
