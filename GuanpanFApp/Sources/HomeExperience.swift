@@ -2977,6 +2977,9 @@ struct RealAssetsOverview: View {
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("assets.view-picker")
                 if selectedView == 1 {
+                    Text("已清仓 / 历史持仓")
+                        .font(.headline)
+                        .accessibilityIdentifier("assets.closed.heading")
                 }
             }
             Section("本机真实账本") {
