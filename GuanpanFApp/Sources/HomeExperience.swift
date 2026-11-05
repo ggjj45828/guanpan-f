@@ -3216,7 +3216,9 @@ struct SettingsOverview: View {
                                     let value = investorProfileDrafts[key] ?? currentPreferenceText(key)
                                     Task {
                                         await model.saveExplicitInvestorPreference(key, value: value)
-                                        investorProfileDrafts[key] = nil
+                                        if model.investorProfileStatus.hasPrefix("画像偏好已保存") {
+                                            investorProfileDrafts[key] = nil
+                                        }
                                     }
                                 }
                                 .disabled(model.loadingInvestorProfile || model.savingInvestorProfile ||
@@ -4522,15 +4524,15 @@ private struct FInitialLedgerPositionRow: View {
             }
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
-                .simultaneousGesture(TapGesture().onEnded {
+                .onTapGesture {
                     focusedInput = .position(draft.id, .units)
-                })
+                }
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
                 .keyboardType(.decimalPad).focused($focusedInput, equals: .position(draft.id, .unitCost))
-                .simultaneousGesture(TapGesture().onEnded {
+                .onTapGesture {
                     focusedInput = .position(draft.id, .unitCost)
-                })
+                }
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
