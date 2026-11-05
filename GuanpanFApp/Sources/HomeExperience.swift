@@ -3045,6 +3045,9 @@ struct RealAssetsOverview: View {
                 .listRowBackground(theme.manifest.tokens.highlightSurface.opacity(0.10))
             }
             Section {
+                Text("现金与成交流水")
+                    .font(.headline)
+                    .accessibilityIdentifier("assets.cashflow.heading")
                 Button("录入其他费用 / 现金对账差额") {
                     model.beginCashAdjustment()
                 }
@@ -3077,9 +3080,6 @@ struct RealAssetsOverview: View {
                         }
                     }
                 }
-            } header: {
-                Text("现金与成交流水")
-                    .accessibilityIdentifier("assets.cashflow.heading")
             }
             .listRowBackground(theme.manifest.tokens.marketSurface.opacity(0.085))
             Section("资产安全") {
@@ -4374,6 +4374,13 @@ struct FInitialLedgerSetupSheet: View {
                 .accessibilityIdentifier("ledger.opening.cash")
             Text("按券商当前可用余额填写，用于计算真实账户总资产。")
                 .font(.footnote).foregroundStyle(.secondary)
+            if attemptedSave || canSave {
+                Text(validationMessage)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(canSave ? .green : Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("ledger.opening.validation")
+            }
         }
     }
 
@@ -4413,10 +4420,6 @@ struct FInitialLedgerSetupSheet: View {
 
     private var confirmationSection: some View {
         Section("保存前确认") {
-            Text(validationMessage)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(canSave ? .green : (attemptedSave ? Color.red : .secondary))
-                .accessibilityIdentifier("ledger.opening.validation")
             Text("这些数字会作为本机真实账本的起点，不代表历史成交。导入前的历史盈亏不会被虚构；保存后请用真实成交更新。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
@@ -4451,6 +4454,7 @@ struct FInitialLedgerSetupSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.writingInitialLedger ? "保存中…" : "保存账本起点") {
+                        guard !model.writingInitialLedger else { return }
                         guard canSave, let parsedPositions else {
                             attemptedSave = true
                             return
@@ -4462,7 +4466,6 @@ struct FInitialLedgerSetupSheet: View {
                             if saved { dismiss() }
                         }
                     }
-                    .disabled(model.writingInitialLedger)
                     .accessibilityIdentifier("ledger.opening.confirm")
                 }
                 ToolbarItemGroup(placement: .keyboard) {
