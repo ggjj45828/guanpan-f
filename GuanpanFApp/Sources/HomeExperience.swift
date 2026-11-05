@@ -4428,7 +4428,9 @@ struct FInitialLedgerSetupSheet: View {
                 confirmationSection
                 ledgerStatusSection
             }
-            .scrollDismissesKeyboard(.interactively)
+            // Keep the keyboard stable while focus moves between opening-balance fields.
+            // Interactive dismissal during Form auto-scrolling can drop focus on number pads.
+            .scrollDismissesKeyboard(.never)
             .navigationTitle("录入现有持仓")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -4530,15 +4532,17 @@ private struct FInitialLedgerPositionRow: View {
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
                 }
-            if !lookupStatus.isEmpty {
-                HStack(spacing: 8) {
-                    Text(lookupStatus).font(.caption).foregroundStyle(.secondary)
-                    if lookupStatus.hasPrefix("行情源") {
-                        Button("重试") { retryLookup += 1 }
-                            .font(.caption.weight(.semibold))
-                    }
+            HStack(spacing: 8) {
+                Text(lookupStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 16, alignment: .leading)
+                if lookupStatus.hasPrefix("行情源") {
+                    Button("重试") { retryLookup += 1 }
+                        .font(.caption.weight(.semibold))
                 }
             }
+            .frame(minHeight: 16, alignment: .leading)
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
                 .accessibilityIdentifier("ledger.opening.position.units")
