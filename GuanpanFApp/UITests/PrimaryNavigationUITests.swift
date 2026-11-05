@@ -350,8 +350,8 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
         let closedHeading = app.descendants(matching: .any)["assets.closed.heading"]
-        XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
         scrollUntilHittable(closedHeading, in: assetList)
+        XCTAssertTrue(closedHeading.exists, app.debugDescription)
         XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
         attachScreenshot("09-real-assets-closed", app: app)
 
@@ -397,9 +397,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         }
         let units = app.textFields["ledger.opening.position.units"]
         units.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         units.typeText("100")
         let cost = app.textFields["ledger.opening.position.unitCost"]
         cost.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         cost.typeText("1.00")
         app.buttons["收起键盘"].tap()
         XCTAssertTrue(confirm.isEnabled, app.debugDescription)
