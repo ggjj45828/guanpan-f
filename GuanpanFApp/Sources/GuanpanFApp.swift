@@ -906,6 +906,8 @@ final class FHomeModel: ObservableObject {
     }
 
     private func loadInvestorProfile() async {
+        // Never let a late refresh replace an in-flight save status or its result.
+        guard !savingInvestorProfile else { return }
         investorProfileLoadGeneration &+= 1
         let loadGeneration = investorProfileLoadGeneration
         defer { if loadGeneration == investorProfileLoadGeneration { loadingInvestorProfile = false } }
