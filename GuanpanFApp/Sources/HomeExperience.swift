@@ -4522,9 +4522,15 @@ private struct FInitialLedgerPositionRow: View {
             }
             TextField("当前持有份额", text: $draft.units)
                 .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
+                .simultaneousGesture(TapGesture().onEnded {
+                    focusedInput = .position(draft.id, .units)
+                })
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
                 .keyboardType(.decimalPad).focused($focusedInput, equals: .position(draft.id, .unitCost))
+                .simultaneousGesture(TapGesture().onEnded {
+                    focusedInput = .position(draft.id, .unitCost)
+                })
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
