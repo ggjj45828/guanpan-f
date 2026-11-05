@@ -4321,17 +4321,17 @@ struct FInitialLedgerSetupSheet: View {
 
     private func focusNextInput() {
         switch focusedInput {
-        case .cash:
+        case .some(.cash):
             if let firstPosition = positions.first {
                 focusedInput = .position(firstPosition.id, .code)
             }
-        case .position(let id, .code):
+        case .some(.position(let id, .code)):
             focusedInput = .position(id, .name)
-        case .position(let id, .name):
+        case .some(.position(let id, .name)):
             focusedInput = .position(id, .units)
-        case .position(let id, .units):
+        case .some(.position(let id, .units)):
             focusedInput = .position(id, .unitCost)
-        case .position(_, .unitCost), .none:
+        case .some(.position(_, .unitCost)), .none:
             focusedInput = nil
         }
     }
