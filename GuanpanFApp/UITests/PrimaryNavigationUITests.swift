@@ -359,8 +359,10 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
         attachScreenshot("09-real-assets-closed", app: app)
 
-        app.buttons["当前持仓"].tap()
-        XCTAssertTrue(app.staticTexts["当前持仓"].exists)
+        let currentView = app.segmentedControls["assets.view-picker"].buttons["当前持仓"]
+        XCTAssertTrue(currentView.waitForExistence(timeout: 3))
+        currentView.tap()
+        XCTAssertTrue(currentView.isSelected, app.debugDescription)
         let cashFlowHeading = app.descendants(matching: .any)["assets.cashflow.heading"]
         scrollUntilHittable(cashFlowHeading, in: assetList)
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
@@ -516,11 +518,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         let endOffset: CGVector
         switch direction {
         case .up:
-            startOffset = CGVector(dx: 0.12, dy: 0.84)
-            endOffset = CGVector(dx: 0.12, dy: 0.58)
+            startOffset = CGVector(dx: 0.995, dy: 0.84)
+            endOffset = CGVector(dx: 0.995, dy: 0.58)
         case .down:
-            startOffset = CGVector(dx: 0.12, dy: 0.58)
-            endOffset = CGVector(dx: 0.12, dy: 0.84)
+            startOffset = CGVector(dx: 0.995, dy: 0.58)
+            endOffset = CGVector(dx: 0.995, dy: 0.84)
         }
         scrollContainer.coordinate(withNormalizedOffset: startOffset)
             .press(forDuration: 0.05,
