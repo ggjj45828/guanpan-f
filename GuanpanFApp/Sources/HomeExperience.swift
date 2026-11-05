@@ -4364,10 +4364,11 @@ struct FInitialLedgerSetupSheet: View {
                     ordinal: ordinal,
                     canRemove: positions.count > 1,
                     model: model,
+                    remove: {
+                        positions.removeAll { $0.id == positionID }
+                    },
                     focusedInput: $focusedInput
-                ) {
-                    positions.removeAll { $0.id == positionID }
-                }
+                )
             }
             Button {
                 positions.append(FInitialLedgerPositionDraft())
@@ -4657,5 +4658,4 @@ private struct FInitialCashEntrySheet: View {
         }
     }
 }
-
 
