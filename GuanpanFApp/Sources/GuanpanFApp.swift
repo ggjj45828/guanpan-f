@@ -189,6 +189,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var investorProfileStatus = "正在读取本机画像"
     @Published private(set) var loadingInvestorProfile = true
     @Published private(set) var savingInvestorProfile = false
+    private var investorProfileLoadGeneration: UInt64 = 0
     @Published private(set) var advisorStatus = "尚未开始分析"
     @Published private(set) var candidateShadowJournalStatus = "建议成绩单尚未记录"
     @Published private(set) var candidateShadowSummary: FCandidateShadowSummary?
@@ -836,7 +837,7 @@ final class FHomeModel: ObservableObject {
     }
 
     func saveExplicitInvestorPreference(_ key: FInvestorProfileAttributeKey,
-                                        value rawValue: String) async {
+                                        value rawValue: String) {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
             investorProfileStatus = "偏好内容不能为空"
@@ -847,8 +848,12 @@ final class FHomeModel: ObservableObject {
             investorProfileStatus = "画像尚未就绪，暂不能保存"
             return
         }
+
+        investorProfileLoadGeneration &+= 1
+        let operationGeneration = investorProfileLoadGeneration
         savingInvestorProfile = true
-        defer { savingInvestorProfile = false }
+        investorProfileStatus = "正在保存投资者偏好…"
+
         let now = Date()
         var updated = investorProfile
         let prior = updated.attribute(key)?.current(at: now)
@@ -860,18 +865,33 @@ final class FHomeModel: ObservableObject {
             supersedesRevisionID: prior?.source == .explicit ? prior?.id : nil)
         do {
             _ = try updated.record(revision, for: key, now: now)
-            investorProfileDigest = try await store.save(updated,
-                expectedPriorDigest: investorProfileDigest, now: now)
-            investorProfile = updated
-            investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
         } catch {
-            let saveFailure = "画像保存失败：\(error.localizedDescription)"
-            await loadInvestorProfile()
-            investorProfileStatus = saveFailure
+            savingInvestorProfile = false
+            investorProfileStatus = "画像保存失败：\\(error.localizedDescription)"
+            return
+        }
+
+        let expectedPriorDigest = investorProfileDigest
+        Task {
+            do {
+                let digest = try await store.save(updated,
+                    expectedPriorDigest: expectedPriorDigest, now: now)
+                guard operationGeneration == investorProfileLoadGeneration else { return }
+                investorProfileDigest = digest
+                investorProfile = updated
+                investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
+            } catch {
+                guard operationGeneration == investorProfileLoadGeneration else { return }
+                investorProfileStatus = "画像保存失败：\\(error.localizedDescription)"
+            }
+            if operationGeneration == investorProfileLoadGeneration {
+                savingInvestorProfile = false
+            }
         }
     }
 
     func clearInvestorProfileAttribute(_ key: FInvestorProfileAttributeKey) async {
+        investorProfileLoadGeneration &+= 1
         guard !loadingInvestorProfile, !savingInvestorProfile,
               let store = investorProfileStore else {
             investorProfileStatus = "画像尚未就绪，暂不能清除"
@@ -894,6 +914,8 @@ final class FHomeModel: ObservableObject {
     }
 
     private func loadInvestorProfile() async {
+        investorProfileLoadGeneration &+= 1
+        let loadGeneration = investorProfileLoadGeneration
         guard let store = investorProfileStore else {
             loadingInvestorProfile = false
             investorProfileStatus = "本机画像存储不可用"
@@ -905,6 +927,7 @@ final class FHomeModel: ObservableObject {
             let now = Date()
             let loaded = try await store.load(now: now) ?? FInvestorProfile()
             let digest = try await store.currentDigest(now: now)
+            guard loadGeneration == investorProfileLoadGeneration else { return }
             investorProfile = loaded
             investorProfileDigest = digest
             investorProfileStatus = loaded.attributes.isEmpty
