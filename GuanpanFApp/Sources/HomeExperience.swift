@@ -2976,6 +2976,8 @@ struct RealAssetsOverview: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("assets.view-picker")
+                if selectedView == 1 {
+                }
             }
             Section("本机真实账本") {
                 assetSummaryRow("账本状态", value: model.ledgerStatus)
@@ -3210,10 +3212,12 @@ struct SettingsOverview: View {
                                 get: { investorProfileDrafts[key] ?? currentPreferenceText(key) },
                                 set: { investorProfileDrafts[key] = $0 }
                             ))
+                            .focused($settingsInputFocused)
                             .accessibilityIdentifier("profile.preference.\(key.rawValue)")
                             HStack {
                                 Button("保存") {
                                     let value = investorProfileDrafts[key] ?? currentPreferenceText(key)
+                                    settingsInputFocused = false
                                     Task {
                                         await model.saveExplicitInvestorPreference(key, value: value)
                                         if model.investorProfileStatus.hasPrefix("画像偏好已保存") {
@@ -4373,24 +4377,31 @@ struct FInitialLedgerSetupSheet: View {
         }
     }
 
-    private var positionsSection: some View {
+    private var positionsIntroSection: some View {
         Section("当前真实持仓") {
             Text("录入一只就可以；如有多只，再点下方添加。这里记录券商当前余额，不会伪造成交。")
                 .font(.footnote).foregroundStyle(.secondary)
-            ForEach($positions) { $position in
-                let positionID = position.id
-                let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
-                FInitialLedgerPositionRow(
-                    draft: $position,
-                    ordinal: ordinal,
-                    canRemove: positions.count > 1,
-                    model: model,
-                    remove: {
-                        positions.removeAll { $0.id == positionID }
-                    },
-                    focusedInput: $focusedInput
-                )
-            }
+        }
+    }
+
+    @ViewBuilder
+    private var positionSections: some View {
+        ForEach($positions) { $position in
+            let positionID = position.id
+            let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
+            FInitialLedgerPositionRow(
+                draft: $position,
+                ordinal: ordinal,
+                canRemove: positions.count > 1,
+                model: model,
+                remove: { positions.removeAll { $0.id == positionID } },
+                focusedInput: $focusedInput
+            )
+        }
+    }
+
+    private var addPositionSection: some View {
+        Section {
             Button {
                 positions.append(FInitialLedgerPositionDraft())
             } label: {
@@ -4424,7 +4435,9 @@ struct FInitialLedgerSetupSheet: View {
         NavigationStack {
             Form {
                 cashEntrySection
-                positionsSection
+                positionsIntroSection
+                positionSections
+                addPositionSection
                 confirmationSection
                 ledgerStatusSection
             }
@@ -4505,17 +4518,17 @@ private struct FInitialLedgerPositionRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Section {
             HStack {
                 Text("证券 \(ordinal)").font(.subheadline.weight(.semibold))
                 Spacer()
                 if canRemove {
-                    Button("移除", role: .destructive, action: remove)
-                        .font(.caption)
+                    Button("移除", role: .destructive, action: remove).font(.caption)
                 }
             }
             TextField("6位证券代码", text: $draft.instrumentCode)
-                .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .code))
+                .keyboardType(.numberPad)
+                .focused($focusedInput, equals: .position(draft.id, .code))
                 .accessibilityIdentifier("ledger.opening.position.code")
                 .onChange(of: draft.instrumentCode) { code in
                     let digits = String(code.unicodeScalars
@@ -4534,27 +4547,27 @@ private struct FInitialLedgerPositionRow: View {
                 }
             HStack(spacing: 8) {
                 Text(lookupStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
                     .frame(minHeight: 16, alignment: .leading)
                 if lookupStatus.hasPrefix("行情源") {
                     Button("重试") { retryLookup += 1 }
                         .font(.caption.weight(.semibold))
                 }
             }
-            .frame(minHeight: 16, alignment: .leading)
+            .frame(minHeight: 22, alignment: .leading)
             TextField("当前持有份额", text: $draft.units)
-                .keyboardType(.numberPad).focused($focusedInput, equals: .position(draft.id, .units))
+                .keyboardType(.numberPad)
+                .focused($focusedInput, equals: .position(draft.id, .units))
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
-                .keyboardType(.decimalPad).focused($focusedInput, equals: .position(draft.id, .unitCost))
+                .keyboardType(.decimalPad)
+                .focused($focusedInput, equals: .position(draft.id, .unitCost))
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
+        } header: {
+            Text("证券 \(ordinal)")
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("ledger.opening.position.\(draft.id.uuidString)")
     }
 }
 private extension FDecisionAction {
