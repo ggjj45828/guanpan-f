@@ -3021,6 +3021,9 @@ struct RealAssetsOverview: View {
                 .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.11))
             } else {
                 Section {
+                    Text("已清仓 / 历史持仓")
+                        .font(.headline)
+                        .accessibilityIdentifier("assets.closed.heading")
                     let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
                     if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(theme.manifest.tokens.secondaryForeground) }
                     ForEach(closed) { history in
@@ -3036,9 +3039,6 @@ struct RealAssetsOverview: View {
                             }
                         }
                     }
-                } header: {
-                    Text("已清仓 / 历史持仓")
-                        .accessibilityIdentifier("assets.closed.heading")
                 }
                 .listRowBackground(theme.manifest.tokens.highlightSurface.opacity(0.10))
             }
@@ -4319,6 +4319,23 @@ struct FInitialLedgerSetupSheet: View {
         )
     }
 
+    private func focusNextInput() {
+        switch focusedInput {
+        case .cash:
+            if let firstPosition = positions.first {
+                focusedInput = .position(firstPosition.id, .code)
+            }
+        case .position(let id, .code):
+            focusedInput = .position(id, .name)
+        case .position(let id, .name):
+            focusedInput = .position(id, .units)
+        case .position(let id, .units):
+            focusedInput = .position(id, .unitCost)
+        case .position(_, .unitCost), .none:
+            focusedInput = nil
+        }
+    }
+
     private var canSave: Bool {
         guard model.ledgerState == .notEstablished,
               let cash = Decimal(string: cashText, locale: Locale(identifier: "en_US_POSIX")),
@@ -4434,6 +4451,9 @@ struct FInitialLedgerSetupSheet: View {
                     .accessibilityIdentifier("ledger.opening.confirm")
                 }
                 ToolbarItemGroup(placement: .keyboard) {
+                    Button("下一项") { focusNextInput() }
+                        .accessibilityIdentifier("ledger.opening.next-field")
+                        .disabled(focusedInput == nil)
                     Spacer()
                     Button("收起键盘") { focusedInput = nil }
                 }
