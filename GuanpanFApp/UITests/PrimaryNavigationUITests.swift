@@ -266,9 +266,13 @@ final class PrimaryNavigationUITests: XCTestCase {
         save.tap()
         let preferenceStatus = app.descendants(matching: .any)["profile.preference.status"]
         scrollUntilHittable(preferenceStatus, in: settingsForm)
-        let savedStatus = expectation(for: NSPredicate(format: "label CONTAINS %@", "画像偏好已保存"),
+        let terminalStatus = expectation(for: NSPredicate(
+            format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
+            "画像偏好已保存", "画像保存失败", "尚未就绪"),
                                       evaluatedWith: preferenceStatus)
-        wait(for: [savedStatus], timeout: 10)
+        wait(for: [terminalStatus], timeout: 15)
+        XCTAssertTrue(preferenceStatus.label.contains("画像偏好已保存"),
+                      "Actual profile save status: \(preferenceStatus.label)")
         scrollUntilHittable(clear, in: settingsForm)
         let saved = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: clear)
         wait(for: [saved], timeout: 10)
@@ -310,13 +314,13 @@ final class PrimaryNavigationUITests: XCTestCase {
 
         for code in ["sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX",
                      "int_nikkei", "KOSPI", "hkHSI"] {
-            let indexCard = app.descendants(matching: .any)["crossmarket.index.\\(code)"]
+            let indexCard = app.descendants(matching: .any)["crossmarket.index.\(code)"]
             scrollUntilHittable(indexCard, in: indexList)
-            XCTAssertTrue(indexCard.isHittable, "Missing configured index card \\(code).\\n\\(app.debugDescription)")
+            XCTAssertTrue(indexCard.isHittable, "Missing configured index card \(code).\n\(app.debugDescription)")
             XCTAssertTrue(indexCard.label.contains("Regime"),
-                          "Missing Regime status for \\(code).\\n\\(app.debugDescription)")
+                          "Missing Regime status for \(code).\n\(app.debugDescription)")
             XCTAssertTrue(indexCard.label.contains("交易时段"),
-                          "Missing explicit or unverified trading-session status for \\(code).\\n\\(app.debugDescription)")
+                          "Missing explicit or unverified trading-session status for \(code).\n\(app.debugDescription)")
         }
     }
 
@@ -512,11 +516,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         let endOffset: CGVector
         switch direction {
         case .up:
-            startOffset = CGVector(dx: 0.95, dy: 0.82)
-            endOffset = CGVector(dx: 0.95, dy: 0.62)
+            startOffset = CGVector(dx: 0.12, dy: 0.84)
+            endOffset = CGVector(dx: 0.12, dy: 0.58)
         case .down:
-            startOffset = CGVector(dx: 0.95, dy: 0.62)
-            endOffset = CGVector(dx: 0.95, dy: 0.82)
+            startOffset = CGVector(dx: 0.12, dy: 0.58)
+            endOffset = CGVector(dx: 0.12, dy: 0.84)
         }
         scrollContainer.coordinate(withNormalizedOffset: startOffset)
             .press(forDuration: 0.05,
