@@ -837,7 +837,7 @@ final class FHomeModel: ObservableObject {
     }
 
     func saveExplicitInvestorPreference(_ key: FInvestorProfileAttributeKey,
-                                        value rawValue: String) {
+                                        value rawValue: String) async {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
             investorProfileStatus = "偏好内容不能为空"
@@ -849,10 +849,13 @@ final class FHomeModel: ObservableObject {
             return
         }
 
+        // Invalidate any startup read still in flight so it cannot overwrite
+        // this save's success or failure status with the earlier empty profile.
         investorProfileLoadGeneration &+= 1
         let operationGeneration = investorProfileLoadGeneration
         savingInvestorProfile = true
         investorProfileStatus = "正在保存投资者偏好…"
+        defer { savingInvestorProfile = false }
 
         let now = Date()
         var updated = investorProfile
@@ -865,38 +868,26 @@ final class FHomeModel: ObservableObject {
             supersedesRevisionID: prior?.source == .explicit ? prior?.id : nil)
         do {
             _ = try updated.record(revision, for: key, now: now)
+            let digest = try await store.save(updated,
+                expectedPriorDigest: investorProfileDigest, now: now)
+            guard operationGeneration == investorProfileLoadGeneration else { return }
+            investorProfileDigest = digest
+            investorProfile = updated
+            investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
         } catch {
-            savingInvestorProfile = false
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "画像保存失败：\\(error.localizedDescription)"
-            return
-        }
-
-        let expectedPriorDigest = investorProfileDigest
-        Task {
-            do {
-                let digest = try await store.save(updated,
-                    expectedPriorDigest: expectedPriorDigest, now: now)
-                guard operationGeneration == investorProfileLoadGeneration else { return }
-                investorProfileDigest = digest
-                investorProfile = updated
-                investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
-            } catch {
-                guard operationGeneration == investorProfileLoadGeneration else { return }
-                investorProfileStatus = "画像保存失败：\\(error.localizedDescription)"
-            }
-            if operationGeneration == investorProfileLoadGeneration {
-                savingInvestorProfile = false
-            }
         }
     }
 
     func clearInvestorProfileAttribute(_ key: FInvestorProfileAttributeKey) async {
-        investorProfileLoadGeneration &+= 1
         guard !loadingInvestorProfile, !savingInvestorProfile,
               let store = investorProfileStore else {
             investorProfileStatus = "画像尚未就绪，暂不能清除"
             return
         }
+        investorProfileLoadGeneration &+= 1
+        let operationGeneration = investorProfileLoadGeneration
         savingInvestorProfile = true
         defer { savingInvestorProfile = false }
         let now = Date()
@@ -905,6 +896,7 @@ final class FHomeModel: ObservableObject {
             try updated.clear(key, userConfirmed: true)
             investorProfileDigest = try await store.save(updated,
                 expectedPriorDigest: investorProfileDigest, now: now)
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfile = updated
             investorProfileStatus = "已清除该项画像；其他偏好和账本不变"
         } catch {
@@ -916,13 +908,14 @@ final class FHomeModel: ObservableObject {
     private func loadInvestorProfile() async {
         investorProfileLoadGeneration &+= 1
         let loadGeneration = investorProfileLoadGeneration
+        defer { if loadGeneration == investorProfileLoadGeneration { loadingInvestorProfile = false } }
         guard let store = investorProfileStore else {
             loadingInvestorProfile = false
             investorProfileStatus = "本机画像存储不可用"
             return
         }
         loadingInvestorProfile = true
-        defer { loadingInvestorProfile = false }
+        loadingInvestorProfile = true
         do {
             let now = Date()
             let loaded = try await store.load(now: now) ?? FInvestorProfile()
