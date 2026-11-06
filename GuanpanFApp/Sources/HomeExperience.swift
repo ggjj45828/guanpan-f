@@ -1950,12 +1950,6 @@ private struct AdvisorComposer: View {
         .padding(16)
         .modifier(FThemeSurfaceModifier(theme: theme, radius: 22))
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("收起键盘") { composerFocused = false }
-            }
-        }
     }
 }
 
@@ -3378,12 +3372,6 @@ struct SettingsOverview: View {
         .foregroundStyle(theme.ink)
         .listRowBackground(theme.manifest.tokens.surface)
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("收起键盘") { settingsInputFocused = false }
-            }
-        }
         .task {
             guard !hasAutoCheckedNAS else { return }
             hasAutoCheckedNAS = true
@@ -3665,10 +3653,6 @@ struct MarketOverview: View {
                         }
                         .disabled(!isValidSecurityCode)
                         .accessibilityIdentifier("market.watchlist.toggle")
-                        if securityLookupFocused {
-                            Button("收起键盘") { securityLookupFocused = false }
-                                .accessibilityIdentifier("market.security-code.dismiss")
-                        }
                     }
                     Text("自选只保存关注关系，不会创建真实持仓或改变账本。")
                         .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
@@ -4446,6 +4430,8 @@ struct FInitialLedgerSetupSheet: View {
             }
             // Keep the keyboard stable while focus moves between opening-balance fields.
             // Interactive dismissal during Form auto-scrolling can drop focus on number pads.
+            // iOS 惯例：数字键盘用「下一项」在字段间移动，完成后由导航栏的保存/取消结束，
+            // 因此不再需要单独的「收起键盘」按钮。
             .scrollDismissesKeyboard(.never)
             .navigationTitle("录入现有持仓")
             .toolbar {
@@ -4468,12 +4454,10 @@ struct FInitialLedgerSetupSheet: View {
                     }
                     .accessibilityIdentifier("ledger.opening.confirm")
                 }
-                ToolbarItemGroup(placement: .keyboard) {
+                ToolbarItem(placement: .keyboard) {
                     Button("下一项") { focusNextInput() }
                         .accessibilityIdentifier("ledger.opening.next-field")
                         .disabled(focusedInput == nil)
-                    Spacer()
-                    Button("收起键盘") { focusedInput = nil }
                 }
             }
         }

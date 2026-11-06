@@ -31,8 +31,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app)
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.isEnabled)
         openSecurity.tap()
@@ -112,8 +111,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app)
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
         openSecurity.tap()
@@ -179,8 +177,7 @@ final class PrimaryNavigationUITests: XCTestCase {
             }
         }
 
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app)
 
         let scope = app.segmentedControls["market.list.scope"]
         XCTAssertTrue(scope.waitForExistence(timeout: 3), app.debugDescription)
@@ -257,8 +254,6 @@ final class PrimaryNavigationUITests: XCTestCase {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
         }
         field.typeText("Long term")
-        let dismissKeyboard = app.buttons["收起键盘"]
-        if dismissKeyboard.exists { dismissKeyboard.tap() }
         let save = app.buttons["profile.preference.save.investmentHorizon"]
         scrollUntilHittable(save, in: settingsForm)
         let saveEnabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: save)
@@ -398,7 +393,6 @@ final class PrimaryNavigationUITests: XCTestCase {
         let code = app.textFields["ledger.opening.position.code"]
         code.tap()
         code.typeText("159352")
-        app.buttons["收起键盘"].tap()
         let name = app.textFields["ledger.opening.position.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         if name.value as? String == "证券名称（自动识别，可修改）" {
@@ -420,7 +414,6 @@ final class PrimaryNavigationUITests: XCTestCase {
         nextField.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         cost.typeText("1.00")
-        app.buttons["收起键盘"].tap()
         XCTAssertTrue(confirm.isEnabled, app.debugDescription)
         confirm.tap()
         XCTAssertFalse(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 5),
@@ -478,9 +471,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        XCTAssertTrue(dismissKeyboard.waitForExistence(timeout: 3))
-        dismissKeyboard.tap()
+        dismissKeyboardByScrolling(app)
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
         openSecurity.tap()
@@ -497,10 +488,26 @@ final class PrimaryNavigationUITests: XCTestCase {
         add(attachment)
     }
 
+    /// 数字键盘没有回车键；App 内不再提供「收起键盘」按钮，按 iOS 惯例用下拉手势收起。
+    private func dismissKeyboardByScrolling(_ app: XCUIApplication) {
+        guard app.keyboards.firstMatch.exists else { return }
+        guard let page = app.scrollViews.allElementsBoundByIndex
+            .first(where: { $0.exists && $0.frame.height > 200 }) else { return }
+        let start = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.30))
+        let end = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
         for _ in 0..<30 {
             let viewport = scrollContainer.frame
+            // SwiftUI 的 List/ScrollView 会回收离屏行；元素尚未实体化时不能读 .frame，
+            // 否则 XCTest 抛 "Failed to get matching snapshot"（这就是本用例之前的失败点）。
+            guard element.exists else {
+                dragScroll(scrollContainer, toward: .up)
+                continue
+            }
             let target = element.frame
             let fullyVisible = target.minY >= viewport.minY + 48 &&
                 target.maxY <= viewport.maxY - 48
