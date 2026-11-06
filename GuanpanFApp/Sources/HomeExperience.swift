@@ -55,10 +55,10 @@ private struct FThemePageHeader: View {
     private var cardRadius: CGFloat {
         if theme == .referenceDark { return 28 }
         switch theme.surfaceTreatment {
-        case .terminal, .minimal: 8
-        case .glass, .orbit: 28
-        case .bento, .adaptive: 24
-        default: 18
+        case .terminal, .minimal: return 8
+        case .glass, .orbit: return 28
+        case .bento, .adaptive: return 24
+        default: return 18
         }
     }
 
