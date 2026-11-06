@@ -31,184 +31,57 @@ private struct FThemePageHeader: View {
     private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
 
     var body: some View {
-        Group {
-            switch role {
-            case .security: securityHeader
-            case .advisor: advisorHeader
-            case .market: marketHeader
-            case .crossMarket: crossMarketHeader
-            case .assets: assetsHeader
-            case .settings: settingsHeader
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var editorialFamily: Bool {
-        theme.layoutFamily == .editorial || theme.layoutFamily == .inkEditorial || theme.layoutFamily == .magazine
-    }
-
-    private var terminalFamily: Bool {
-        theme.layoutFamily == .terminalDashboard || theme.layoutFamily == .minimalTerminal
-    }
-
-    private var cardRadius: CGFloat {
-        if theme == .referenceDark { return 16 }
-        switch theme.surfaceTreatment {
-        case .terminal, .minimal: return 8
-        case .glass, .orbit: return 28
-        case .bento, .adaptive: return 24
-        default: return 18
-        }
-    }
-
-    private var headerFont: Font {
-        if terminalFamily { return .system(size: 21, weight: .bold, design: .monospaced) }
-        if editorialFamily { return .system(size: 29, weight: .bold, design: .serif) }
-        return .system(size: 25, weight: .bold, design: .rounded)
-    }
-
-    private var securityHeader: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1.1)
-                    .foregroundStyle(tokens.accent)
-                Text(title).font(headerFont).foregroundStyle(tokens.foreground).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).lineLimit(2)
-                if let valueLabel { Text(valueLabel.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(tokens.secondaryForeground) }
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 5) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(eyebrow)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(tokens.accent)
+                Text(title)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(tokens.foreground)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(tokens.secondaryForeground)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
             if let value {
-                Text(value).font(.system(size: terminalFamily ? 20 : 27, weight: .bold,
-                                         design: terminalFamily ? .monospaced : .rounded))
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.68)
-                    .foregroundStyle(tokens.foreground)
-            } else {
-                Image(systemName: symbol).font(.title2.weight(.semibold)).foregroundStyle(tokens.accent)
-            }
-        }
-        .padding(theme.manifest.tokens.spacing.standard)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .market))
-    }
-
-    private var advisorHeader: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(tokens.accentForeground)
-                .frame(width: 48, height: 48)
-                .background(tokens.accent, in: RoundedRectangle(cornerRadius: theme.surfaceTreatment == .terminal ? 8 : 16, style: .continuous))
-            VStack(alignment: .leading, spacing: 8) {
-                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1)
-                    .foregroundStyle(tokens.secondaryForeground)
-                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
-                Text(subtitle).font(.subheadline.weight(.medium)).foregroundStyle(tokens.secondaryForeground)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            if let value {
-                Text(value).font(.caption.weight(.bold)).lineLimit(2).multilineTextAlignment(.trailing)
-                    .foregroundStyle(tokens.accentForeground)
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .background(tokens.accent, in: Capsule())
-            }
-        }
-        .padding(theme.manifest.tokens.spacing.standard)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .advisor))
-        .overlay(alignment: .leading) {
-            if editorialFamily { Rectangle().fill(tokens.accent).frame(width: 3).padding(.vertical, 12) }
-        }
-    }
-
-    private var marketHeader: some View {
-        VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1)
-                        .foregroundStyle(tokens.accent)
-                    Text(title).font(headerFont).foregroundStyle(tokens.foreground)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(tokens.accent)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if let value { Text(value).font(.system(size: 18, weight: .bold, design: terminalFamily ? .monospaced : .rounded)).foregroundStyle(tokens.foreground) }
-                if let valueLabel { Text(valueLabel).font(.caption.weight(.semibold)).foregroundStyle(tokens.secondaryForeground) }
-                Spacer(minLength: 0)
-            }
-            Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(theme.manifest.tokens.spacing.standard)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .market))
-    }
-
-    private var crossMarketHeader: some View {
-        HStack(alignment: .center, spacing: 14) {
-            ZStack {
-                Circle().stroke(tokens.accent.opacity(0.25), lineWidth: 1).frame(width: 54, height: 54)
-                Circle().fill(tokens.highlightSurface).frame(width: 42, height: 42)
-                Image(systemName: symbol).font(.system(size: 19, weight: .semibold)).foregroundStyle(tokens.accent)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(0.9).foregroundStyle(tokens.accent)
-                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
-                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            if let value {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(value).font(.system(size: 19, weight: .bold, design: terminalFamily ? .monospaced : .rounded))
-                        .monospacedDigit().foregroundStyle(tokens.foreground)
-                    Text(valueLabel ?? "指数").font(.caption2).foregroundStyle(tokens.secondaryForeground)
+                    Text(value)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(tokens.foreground)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let valueLabel {
+                        Text(valueLabel)
+                            .font(.system(size: 9))
+                            .foregroundStyle(tokens.secondaryForeground)
+                            .lineLimit(1)
+                    }
                 }
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tokens.accent)
+                    .frame(width: 32, height: 32)
+                    .background(tokens.accent.opacity(0.14),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         }
-        .padding(theme.manifest.tokens.spacing.standard)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .research))
-    }
-
-    private var assetsHeader: some View {
-        VStack(alignment: .leading, spacing: theme.manifest.tokens.spacing.compact) {
-            HStack {
-                Label(eyebrow, systemImage: symbol).font(.caption.weight(.semibold)).foregroundStyle(tokens.accent)
-                Spacer()
-                Image(systemName: "arrow.up.right").font(.caption.weight(.bold)).foregroundStyle(tokens.secondaryForeground)
-            }
-            Text(title).font(headerFont).foregroundStyle(tokens.foreground)
-            if let value {
-                Text(value).font(.system(size: terminalFamily ? 24 : 32, weight: .bold,
-                                         design: terminalFamily ? .monospaced : .rounded))
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(tokens.foreground)
-            }
-            if let valueLabel { Text(valueLabel).font(.caption.weight(.medium)).foregroundStyle(tokens.secondaryForeground) }
-            Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(theme.manifest.tokens.spacing.spacious)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .portfolio))
-    }
-
-    private var settingsHeader: some View {
-        HStack(alignment: .center, spacing: 13) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(eyebrow.uppercased()).font(.caption2.weight(.bold)).tracking(1).foregroundStyle(tokens.accent)
-                Text(title).font(headerFont).foregroundStyle(tokens.foreground)
-                Text(subtitle).font(.caption).foregroundStyle(tokens.secondaryForeground).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            VStack(spacing: 5) {
-                Image(systemName: symbol).font(.title3.weight(.semibold)).foregroundStyle(tokens.accentForeground)
-                if let value { Text(value).font(.caption2.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(tokens.accentForeground) }
-            }
-            .padding(10)
-            .background(tokens.accent, in: RoundedRectangle(cornerRadius: theme.surfaceTreatment == .terminal ? 4 : 14, style: .continuous))
-        }
-        .padding(theme.manifest.tokens.spacing.standard)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(FThemeSurfaceModifier(theme: theme, radius: cardRadius, role: .settings))
+        .background(tokens.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .stroke(tokens.foreground.opacity(0.08), lineWidth: 0.8))
+        .accessibilityElement(children: .combine)
     }
 
 }

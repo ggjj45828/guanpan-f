@@ -613,7 +613,23 @@ struct FRefBoardHome: View {
 
     private var totalAssets: Decimal? { valuation?.totalAssets }
     private var holdingsMarketValue: Decimal? { valuation?.holdingsMarketValue }
-    private var dayChange: Decimal? { valuation?.dayChange }
+
+    /// 只用「现价 − 昨收」× 份额，逐项可加；缺昨收的标的直接不参与，不做估算。
+    /// 估值结构本身不带当日盈亏，所以和旧首页一样在这里逐笔算。
+    private var dayChange: Decimal? {
+        var total: Decimal = 0
+        var covered = false
+        for holding in model.holdings {
+            let code = holding.instrumentCode
+            guard let latest = model.marketDataByCode[code]?.latestPrice
+                    ?? model.marketReferenceByCode[code]?.latestPrice,
+                  let previous = model.marketReferenceByCode[code]?.previousClose,
+                  previous > 0 else { continue }
+            total += (latest - previous) * Decimal(holding.units)
+            covered = true
+        }
+        return covered ? total : nil
+    }
 
     private var dayChangePercent: Decimal? {
         guard let dayChange, let totalAssets else { return nil }
