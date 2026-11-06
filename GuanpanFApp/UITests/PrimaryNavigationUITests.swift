@@ -31,8 +31,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app, in: app.scrollViews["market.screen.scroll"])
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.isEnabled)
         openSecurity.tap()
@@ -112,8 +111,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists && dismissKeyboard.isHittable { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app, in: app.scrollViews["market.screen.scroll"])
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
         openSecurity.tap()
@@ -179,8 +177,7 @@ final class PrimaryNavigationUITests: XCTestCase {
             }
         }
 
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        if dismissKeyboard.exists { dismissKeyboard.tap() }
+        dismissKeyboardByScrolling(app, in: app.scrollViews["market.screen.scroll"])
 
         let scope = app.segmentedControls["market.list.scope"]
         XCTAssertTrue(scope.waitForExistence(timeout: 3), app.debugDescription)
@@ -256,9 +253,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         if let current = field.value as? String, current != "投资期限", !current.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
         }
-        field.typeText("Long term")
-        let dismissKeyboard = app.buttons["收起键盘"]
-        if dismissKeyboard.exists { dismissKeyboard.tap() }
+        field.typeText("Long term\n")
         let save = app.buttons["profile.preference.save.investmentHorizon"]
         scrollUntilHittable(save, in: settingsForm)
         let saveEnabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: save)
@@ -398,7 +393,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let code = app.textFields["ledger.opening.position.code"]
         code.tap()
         code.typeText("159352")
-        app.buttons["收起键盘"].tap()
+        dismissKeyboardByScrolling(app, in: openingForm)
         let name = app.textFields["ledger.opening.position.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         if name.value as? String == "证券名称（自动识别，可修改）" {
@@ -420,7 +415,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         nextField.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         cost.typeText("1.00")
-        app.buttons["收起键盘"].tap()
+        dismissKeyboardByScrolling(app, in: openingForm)
         XCTAssertTrue(confirm.isEnabled, app.debugDescription)
         confirm.tap()
         XCTAssertFalse(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 5),
@@ -478,9 +473,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         lookup.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         lookup.typeText("159352")
-        let dismissKeyboard = app.buttons["market.security-code.dismiss"]
-        XCTAssertTrue(dismissKeyboard.waitForExistence(timeout: 3))
-        dismissKeyboard.tap()
+        dismissKeyboardByScrolling(app, in: app.scrollViews["market.screen.scroll"])
         let openSecurity = app.buttons["market.open-security"]
         XCTAssertTrue(openSecurity.waitForExistence(timeout: 3))
         openSecurity.tap()
@@ -495,6 +488,20 @@ final class PrimaryNavigationUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// 数字键盘没有回车键；沿用 iOS 原生的 ScrollView/Form 下拉收键盘手势。
+    private func dismissKeyboardByScrolling(_ app: XCUIApplication, in scrollContainer: XCUIElement) {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        XCTAssertTrue(scrollContainer.waitForExistence(timeout: 3), app.debugDescription)
+        let start = scrollContainer.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.28))
+        let end = scrollContainer.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.62))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        let dismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: keyboard)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 3), .completed,
+                       "The native interactive scroll gesture should dismiss the keyboard.")
     }
 
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
