@@ -500,34 +500,40 @@ final class PrimaryNavigationUITests: XCTestCase {
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
         for _ in 0..<30 {
+            // SwiftUI List/Form virtualizes off-screen rows. Reading frame before
+            // checking existence makes XCTest fail instead of allowing the
+            // container to scroll the row into its accessibility tree.
+            guard element.exists else {
+                dragScroll(scrollContainer, toward: .up)
+                continue
+            }
+
             let viewport = scrollContainer.frame
             let target = element.frame
             let fullyVisible = target.minY >= viewport.minY + 48 &&
                 target.maxY <= viewport.maxY - 48
             if element.isHittable && target.height >= minimumVisibleHeight && fullyVisible { return }
 
-            let direction: ScrollDirection
-            if !element.exists || target.maxY >= viewport.maxY - 48 || target.midY >= viewport.midY {
-                direction = .up
-            } else {
-                direction = .down
-            }
+            let direction: ScrollDirection =
+                (target.maxY >= viewport.maxY - 48 || target.midY >= viewport.midY) ? .up : .down
             dragScroll(scrollContainer, toward: direction)
         }
     }
 
     private func dragScroll(_ scrollContainer: XCUIElement, toward direction: ScrollDirection) {
-        // Start in the outer gutter, away from chart controls and row actions,
-        // so the owning Form/List receives the vertical gesture.
+        // Start near the left content gutter, outside chart plot gestures and
+        // row actions. The previous right-edge path landed on the chart/scroll
+        // indicator and left the owning vertical container stationary.
+        let gutterX: CGFloat = 0.04
         let start: CGVector
         let end: CGVector
         switch direction {
         case .up:
-            start = CGVector(dx: 0.96, dy: 0.82)
-            end = CGVector(dx: 0.96, dy: 0.48)
+            start = CGVector(dx: gutterX, dy: 0.82)
+            end = CGVector(dx: gutterX, dy: 0.48)
         case .down:
-            start = CGVector(dx: 0.96, dy: 0.48)
-            end = CGVector(dx: 0.96, dy: 0.82)
+            start = CGVector(dx: gutterX, dy: 0.48)
+            end = CGVector(dx: gutterX, dy: 0.82)
         }
         scrollContainer.coordinate(withNormalizedOffset: start)
             .press(forDuration: 0.05,
