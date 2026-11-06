@@ -176,6 +176,17 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent Payload ../观盘max.ipa
           unzip -t ../观盘max.ipa
 
+      # 只上传 IPA 的小包：整包 evidence 300+ MB（含 UI 截图与 xcresult），
+      # 每次只为拿 3.6 MB 的 IPA 去下整包要四十分钟，这里单独分一份。
+      - name: Upload unsigned IPA only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guanpan-f-ipa
+          path: GuanpanFApp/build/观盘max.ipa
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload iOS build artifacts
         if: always()
         uses: actions/upload-artifact@v4

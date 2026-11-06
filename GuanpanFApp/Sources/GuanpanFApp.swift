@@ -1958,7 +1958,11 @@ struct FHomeRoot: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             rootStack {
-                HomeLayout(model: model, theme: theme).navigationTitle("首页")
+                HomeLayout(model: model, theme: theme)
+                    .navigationTitle("首页")
+                    // 大标题会和首页内的「欢迎回来」叠成两行同义字，白占 60pt。
+                    // 观盘Pro 首页用的是 inline 小标题，这里对齐。
+                    .navigationBarTitleDisplayMode(.inline)
             }
             .tabItem { Label("首页", systemImage: "house") }
             .tag(FPrimaryTab.home)
@@ -2071,18 +2075,22 @@ private struct FBottomNavigationBar: View {
                                     .frame(width: compact ? 40 : 52, height: compact ? 40 : 52)
                                     .background {
                                         if theme == .referenceDark {
-                                            Circle().fill(LinearGradient(
-                                                colors: [Color.white, Color(red: 0.86, green: 0.90, blue: 1.0)],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            // 原先是纯白 + 白描边 + 白光晕，深色底栏上像贴了个灯泡。
+                                            // 改成深色球体 + 蓝色细描边，只靠图标本身发亮。
+                                            Circle().fill(Color(red: 0.110, green: 0.122, blue: 0.153))
                                         } else {
                                             Circle().fill(LinearGradient(
                                                 colors: [theme.manifest.tokens.advisorSurface, theme.accent],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                                         }
                                     }
-                                    .overlay(Circle().stroke(.white.opacity(theme == .referenceDark ? 0.30 : 0.82), lineWidth: 3))
-                                    .shadow(color: theme == .referenceDark ? Color.white.opacity(0.22) : theme.accent.opacity(0.34),
-                                            radius: 10, x: 0, y: 5)
+                                    .overlay(Circle().stroke(Color(red: 0.310, green: 0.550, blue: 1.0)
+                                        .opacity(theme == .referenceDark ? 0.55 : 0.82),
+                                        lineWidth: theme == .referenceDark ? 1.2 : 3))
+                                    .shadow(color: theme == .referenceDark
+                                            ? Color(red: 0.310, green: 0.550, blue: 1.0).opacity(0.28)
+                                            : theme.accent.opacity(0.34),
+                                            radius: theme == .referenceDark ? 6 : 10, x: 0, y: 3)
                                     .offset(y: compact ? -7 : (theme == .referenceDark ? -9 : -13))
                                 if theme != .referenceDark {
                                     Text(item.title)
@@ -2118,10 +2126,13 @@ private struct FBottomNavigationBar: View {
                             }
                             .background {
                                 if isSelected && usesPillSelection {
-                                    RoundedRectangle(cornerRadius: usesGlassNavigation ? 20 : 15,
+                                    // 原来铺满整格（只留 3pt），深色底上像一块蓝色方块压在图标下。
+                                    // 收窄成只包住图标的小药丸，选中态靠颜色而不是面积表达。
+                                    RoundedRectangle(cornerRadius: usesGlassNavigation ? 20 : 11,
                                                      style: .continuous)
                                         .fill(theme.accent.opacity(usesTerminalNavigation ? 0.18 : 0.12))
-                                        .padding(.horizontal, 3)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 7)
                                 }
                             }
                         }

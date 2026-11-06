@@ -246,18 +246,77 @@ struct FReferenceHome: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             greeting
+            indexStrip
             balanceCard
             statTiles
             insightCard
             quickActions
             holdingsSection
-            distributionCard
+            // 空账本时这张卡只有一句「暂无持仓可分配」，是页面上最空洞的一块，直接不画。
+            if !model.holdings.isEmpty {
+                distributionCard
+            }
             marketCard
             crossMarketStrip
             footer
         }
+    }
+
+    // MARK: - 顶部指数条
+
+    /// 横向指数条。行情不依赖账本，所以即使还没建账本，首页一进也有一屏真实数字，
+    /// 而不是三根「—」和两句「尚未建立」。
+    private var indexStrip: some View {
+        let quotes = model.marketIndexQuotes.filter { $0.latestPrice != nil }
+        return Group {
+            if quotes.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(model.refreshingMarketIndices ? "正在获取指数行情…" : "下拉刷新获取指数行情")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(FRef.muted)
+                .padding(.vertical, 4)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(quotes) { quote in
+                            NavigationLink(value: FHomeRoute.marketIndex(quote.code)) {
+                                indexChip(quote)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func indexChip(_ quote: FMarketIndexQuote) -> some View {
+        let change = quote.changePercent
+        let tone = (change ?? 0) >= 0 ? FRef.up : FRef.down
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(quote.name)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(FRef.muted)
+                .lineLimit(1)
+            Text(quote.latestPrice.map { FRefFormat.plain($0) } ?? "—")
+                .font(.system(size: 13, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(FRef.ink)
+                .lineLimit(1)
+            Text(change.map { FRefFormat.percent($0) } ?? "—")
+                .font(.system(size: 10.5, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(change == nil ? FRef.muted : tone)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .frame(minWidth: 96, alignment: .leading)
+        .fRefCard(radius: 14)
     }
 
     // MARK: - 顶部问候
@@ -304,29 +363,62 @@ struct FReferenceHome: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.reference.assets.open")
             }
-            Text(FRefFormat.money(totalAssets))
-                .font(.system(size: 34, weight: .semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-                .foregroundStyle(FRef.ink)
-            if let dayChange {
-                HStack(spacing: 5) {
-                    Image(systemName: dayChange >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(FRefFormat.signedMoney(dayChange))
-                    Text("(\(dayChangePercent.map { FRefFormat.percent($0) } ?? "—"))")
-                        .opacity(0.9)
+            if let totalAssets {
+                Text(FRefFormat.money(totalAssets))
+                    .font(.system(size: 34, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .foregroundStyle(FRef.ink)
+                if let dayChange {
+                    HStack(spacing: 5) {
+                        Image(systemName: dayChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(FRefFormat.signedMoney(dayChange))
+                        Text("(\(dayChangePercent.map { FRefFormat.percent($0) } ?? "—"))")
+                            .opacity(0.9)
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(dayChange >= 0 ? FRef.up : FRef.down)
+                } else {
+                    Text("今日涨跌待行情补齐")
+                        .font(.system(size: 11))
+                        .foregroundStyle(FRef.muted)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(dayChange >= 0 ? FRef.up : FRef.down)
             } else {
-                Text("今日涨跌需要每只持仓的昨收价，暂未取齐")
-                    .font(.system(size: 11))
-                    .foregroundStyle(FRef.muted)
+                // 没账本时原来这里是一条「—」，整张大卡空着最难看出问题在哪。
+                // 换成一个可以直接点的建账入口，且把「为什么需要」写在同一行里。
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("建立真实账本")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                            Text("录入持仓和现金，资产、涨跌与 AI 判断才有依据")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(LinearGradient(colors: FRef.gradient,
+                                                 startPoint: .leading, endPoint: .trailing))
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+                .accessibilityIdentifier("home.reference.setup-ledger")
             }
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fRefCard(radius: 20)
         .accessibilityElement(children: .contain)
@@ -336,9 +428,9 @@ struct FReferenceHome: View {
     private var statTiles: some View {
         HStack(spacing: 10) {
             statTile(title: "持仓市值", value: FRefFormat.money(holdingsMarketValue),
-                     symbol: "chart.pie.fill")
+                     symbol: "chart.pie")
             statTile(title: "可用现金", value: model.cashBalance.map { FRefFormat.money($0) } ?? "—",
-                     symbol: "banknote.fill")
+                     symbol: "banknote")
         }
     }
 
@@ -346,9 +438,9 @@ struct FReferenceHome: View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(FRef.ink)
+                .foregroundStyle(FRef.accent)
                 .frame(width: 32, height: 32)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(FRef.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 11)).foregroundStyle(FRef.muted).lineLimit(1)
                 Text(value)
@@ -418,14 +510,14 @@ struct FReferenceHome: View {
             NavigationLink {
                 FGridAssistantView(model: model)
             } label: {
-                actionTile(title: "网格", symbol: "square.grid.3x3.fill", badge: "新")
+                actionTile(title: "网格", symbol: "square.grid.2x2", badge: "新")
             }
             .buttonStyle(.plain)
 
             NavigationLink {
                 FDividendPoolView(model: model)
             } label: {
-                actionTile(title: "收息", symbol: "banknote.on.circle", badge: nil)
+                actionTile(title: "收息", symbol: "banknote", badge: nil)
             }
             .buttonStyle(.plain)
 
@@ -442,7 +534,7 @@ struct FReferenceHome: View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(FRef.ink)
+                .foregroundStyle(FRef.accent)
                 .frame(height: 22)
             Text(title)
                 .font(.system(size: 11, weight: .medium))
@@ -479,14 +571,32 @@ struct FReferenceHome: View {
                 .buttonStyle(.plain)
             }
             if focusedRows.isEmpty {
-                Text(model.ledgerState == .available
-                     ? "账本里还没有持仓。录入已成交买入后，这里会显示真实成本与今日涨跌。"
-                     : model.ledgerStatus)
-                    .font(.system(size: 12))
-                    .foregroundStyle(FRef.muted)
+                NavigationLink(value: FHomeRoute.portfolio) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 19))
+                            .foregroundStyle(FRef.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(model.ledgerState == .available ? "录入第一笔持仓" : "还没有本机账本")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(FRef.ink)
+                            Text(model.ledgerState == .available
+                                 ? "录入已成交买入，这里会显示真实成本与今日涨跌"
+                                 : "按券商当前余额和持仓建立起点，之后自动算盈亏")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(FRef.muted)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(FRef.muted)
+                    }
+                    .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .fRefCard(radius: 20)
+                    .fRefCard(radius: 16)
+                }
+                .buttonStyle(.plain)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(focusedRows.enumerated()), id: \.element.id) { index, holding in
@@ -711,14 +821,18 @@ struct FReferenceHome: View {
         .accessibilityIdentifier("home.role.marketObservation")
     }
 
+    @ViewBuilder
     private var crossMarketStrip: some View {
+        // 没有海外行情时不要只留一个「跨市场」标题加一片空白。
+        let quotes = model.marketIndexQuotes.filter { $0.market != "中国" && $0.latestPrice != nil }
+        if !quotes.isEmpty {
         VStack(alignment: .leading, spacing: 8) {
             Text("跨市场")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(FRef.muted)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(model.marketIndexQuotes.filter { $0.market != "中国" }) { quote in
+                    ForEach(quotes) { quote in
                         HStack(spacing: 6) {
                             Text(quote.name).font(.system(size: 11, weight: .medium)).foregroundStyle(FRef.ink)
                             Text(quote.changePercent.map { FRefFormat.percent($0) } ?? "—")
@@ -735,6 +849,7 @@ struct FReferenceHome: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.role.crossMarketPulse")
+        }
     }
 
     private var footer: some View {
