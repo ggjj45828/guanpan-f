@@ -13,12 +13,17 @@ import FAdvisor
 // 不为了好看编造数字。
 
 enum FRefBoardSkinID: String, CaseIterable, Identifiable {
-    case blue, terminal, aurora, night
+    case deepspace, blue, terminal, aurora, night
 
     var id: String { rawValue }
 
+    /// 产品只保留两套：深空灰（深色）与蓝海（浅色）。
+    /// 另外三套的色板留着做设计参照，但不再出现在选择器里。
+    static var allCases: [FRefBoardSkinID] { [.deepspace, .blue] }
+
     var title: String {
         switch self {
+        case .deepspace: return "科技黑"
         case .blue: return "蓝海资产"
         case .terminal: return "深空终端"
         case .aurora: return "极光全景"
@@ -28,6 +33,7 @@ enum FRefBoardSkinID: String, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
+        case .deepspace: return "近黑画布，蓝紫光晕，红涨绿跌"
         case .blue: return "温暖清晰，资产导向"
         case .terminal: return "专业高密，交易终端"
         case .aurora: return "多彩模块，全景洞察"
@@ -54,6 +60,10 @@ struct FRefBoardSkin {
     let aiIcon: Color
     let chipBg: Color
     let chipInk: Color
+    /// AI 判断卡的渐变；空数组表示用 card 底色。
+    let aiGradient: [Color]
+    /// AI 判断卡上的正文色。
+    let aiForeground: Color
 
     private static func c(_ r: Int, _ g: Int, _ b: Int) -> Color {
         Color(red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255)
@@ -61,6 +71,21 @@ struct FRefBoardSkin {
 
     static func palette(_ id: FRefBoardSkinID) -> FRefBoardSkin {
         switch id {
+        case .deepspace:
+            // 科技黑：参考稿的近黑画布 + 深灰浮卡 + 白标题 + 蓝紫光晕。
+            // 强调色取蓝紫而不是荧光绿，避免和「跌」的绿色撞语义；
+            // 涨跌仍守国内惯例：红涨、绿跌。
+            return FRefBoardSkin(
+                isLight: false,
+                canvasTop: c(10, 10, 10), canvasBottom: c(5, 5, 5),
+                card: c(23, 23, 23), cardAlt: c(31, 31, 31),
+                ink: c(255, 255, 255), muted: c(140, 140, 140), line: c(42, 42, 42),
+                accent: c(124, 92, 255), up: c(255, 77, 79), down: c(43, 217, 139),
+                assetGradient: [c(26, 26, 26), c(14, 14, 16), c(30, 27, 46)],
+                brandDark: c(255, 255, 255), brandWarm: c(124, 92, 255),
+                aiIcon: c(255, 255, 255), chipBg: c(38, 34, 56), chipInk: c(185, 169, 255),
+                aiGradient: [c(124, 92, 255), c(79, 140, 255)],
+                aiForeground: c(255, 255, 255))
         case .blue:
             return FRefBoardSkin(
                 isLight: true,
@@ -70,7 +95,8 @@ struct FRefBoardSkin {
                 accent: c(47, 107, 255), up: c(226, 59, 50), down: c(18, 154, 92),
                 assetGradient: [c(23, 58, 99), c(47, 111, 168), c(127, 183, 232)],
                 brandDark: c(23, 58, 99), brandWarm: c(240, 122, 42),
-                aiIcon: c(232, 72, 63), chipBg: c(253, 240, 230), chipInk: c(201, 122, 34))
+                aiIcon: c(232, 72, 63), chipBg: c(253, 240, 230), chipInk: c(201, 122, 34),
+                aiGradient: [], aiForeground: c(15, 31, 51))
         case .terminal:
             return FRefBoardSkin(
                 isLight: false,
@@ -80,7 +106,8 @@ struct FRefBoardSkin {
                 accent: c(53, 224, 161), up: c(255, 90, 82), down: c(53, 224, 161),
                 assetGradient: [c(6, 37, 27), c(12, 58, 42), c(16, 80, 58)],
                 brandDark: c(230, 242, 237), brandWarm: c(242, 160, 61),
-                aiIcon: c(232, 72, 63), chipBg: c(58, 42, 24), chipInk: c(232, 178, 105))
+                aiIcon: c(232, 72, 63), chipBg: c(58, 42, 24), chipInk: c(232, 178, 105),
+                aiGradient: [], aiForeground: c(230, 242, 237))
         case .aurora:
             return FRefBoardSkin(
                 isLight: true,
@@ -90,7 +117,8 @@ struct FRefBoardSkin {
                 accent: c(123, 92, 250), up: c(226, 59, 50), down: c(18, 154, 92),
                 assetGradient: [c(91, 72, 232), c(142, 107, 255), c(196, 168, 255)],
                 brandDark: c(59, 46, 140), brandWarm: c(240, 122, 42),
-                aiIcon: c(232, 72, 63), chipBg: c(241, 236, 255), chipInk: c(107, 83, 214))
+                aiIcon: c(232, 72, 63), chipBg: c(241, 236, 255), chipInk: c(107, 83, 214),
+                aiGradient: [], aiForeground: c(26, 22, 48))
         case .night:
             return FRefBoardSkin(
                 isLight: false,
@@ -100,8 +128,24 @@ struct FRefBoardSkin {
                 accent: c(47, 216, 160), up: c(255, 90, 82), down: c(47, 216, 160),
                 assetGradient: [c(3, 30, 24), c(10, 53, 42), c(14, 74, 56)],
                 brandDark: c(228, 239, 236), brandWarm: c(242, 160, 61),
-                aiIcon: c(232, 72, 63), chipBg: c(53, 39, 26), chipInk: c(224, 170, 99))
+                aiIcon: c(232, 72, 63), chipBg: c(53, 39, 26), chipInk: c(224, 170, 99),
+                aiGradient: [], aiForeground: c(228, 239, 236))
         }
+    }
+}
+
+/// 两套主题对应两套皮肤，所有页面的语义 token 都由这里派生。
+enum FRefBoardThemeStore {
+    static func skinID(for theme: FHomeTheme) -> FRefBoardSkinID {
+        theme == .modern ? .blue : .deepspace
+    }
+
+    static func skin(for theme: FHomeTheme) -> FRefBoardSkin {
+        FRefBoardSkin.palette(skinID(for: theme))
+    }
+
+    static var isBoardTheme: (FHomeTheme) -> Bool {
+        { $0 == .referenceDark || $0 == .modern }
     }
 }
 
@@ -267,13 +311,16 @@ struct FRefBoardHome: View {
     // MARK: AI 今日判断
 
     private var aiJudgementCard: some View {
-        NavigationLink(value: FHomeRoute.advisor) {
+        let gradient = !skin.aiGradient.isEmpty
+        let titleColor = gradient ? skin.aiForeground : skin.ink
+        let bodyColor = gradient ? skin.aiForeground.opacity(0.86) : skin.muted
+        return NavigationLink(value: FHomeRoute.advisor) {
             HStack(alignment: .top, spacing: 10) {
                 ZStack {
                     Circle().fill(skin.aiIcon)
                     Image(systemName: "sparkles")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(gradient ? skin.accent : .white)
                 }
                 .frame(width: 28, height: 28)
 
@@ -281,36 +328,43 @@ struct FRefBoardHome: View {
                     HStack(spacing: 6) {
                         Text("AI 今日判断")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(skin.ink)
+                            .foregroundStyle(titleColor)
                         Text(model.advisorResult == nil ? "等待" : "已生成")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(skin.chipInk)
+                            .foregroundStyle(gradient ? .white : skin.chipInk)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(skin.chipBg, in: Capsule())
+                            .background(gradient ? Color.white.opacity(0.22) : skin.chipBg, in: Capsule())
                         Spacer(minLength: 0)
                     }
                     Text(aiHeadline)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(skin.ink)
+                        .foregroundStyle(titleColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(aiBasis)
                         .font(.system(size: 10.5))
-                        .foregroundStyle(skin.muted)
+                        .foregroundStyle(bodyColor)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(skin.muted)
+                    .foregroundStyle(bodyColor)
                     .padding(.top, 6)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(skin.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(gradient
+                          ? AnyShapeStyle(LinearGradient(colors: skin.aiGradient,
+                                                         startPoint: .topLeading,
+                                                         endPoint: .bottomTrailing))
+                          : AnyShapeStyle(skin.card))
+            }
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(skin.line, lineWidth: 0.8))
+                .stroke(gradient ? Color.white.opacity(0.18) : skin.line, lineWidth: 0.8))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .contain)

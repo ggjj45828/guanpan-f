@@ -1937,8 +1937,10 @@ final class FHomeModel: ObservableObject {
 enum FHomeTheme: String, CaseIterable, Identifiable {
     case referenceDark, editorial, modern, dashboard, magazine, bento
     case inkModern, minimalTerminal, fluidGlass, dataStarMap, adaptiveBento
+    /// 产品只保留两套：科技黑与蓝海浅色。
+    /// 其余 case 保留用于解码历史取值，但不再出现在选择器里。
     static var allCases: [FHomeTheme] {
-        [.referenceDark, .editorial, .dashboard, .bento, .modern, .minimalTerminal, .adaptiveBento]
+        [.referenceDark, .modern]
     }
     var id: String { rawValue }
 }
@@ -2047,10 +2049,9 @@ private struct FBottomNavigationBar: View {
     let theme: FHomeTheme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     /// 参考稿首页板的四套皮肤；只有 referenceDark 用得到。
-    @AppStorage("guanpan.f.refBoardSkin") private var boardSkinRaw = FRefBoardSkinID.blue.rawValue
     private var boardSkin: FRefBoardSkin? {
-        guard theme == .referenceDark else { return nil }
-        return FRefBoardSkin.palette(FRefBoardSkinID(rawValue: boardSkinRaw) ?? .blue)
+        guard FRefBoardThemeStore.isBoardTheme(theme) else { return nil }
+        return FRefBoardThemeStore.skin(for: theme)
     }
     private var barCard: Color { boardSkin?.card ?? theme.manifest.tokens.surface }
     private var barLine: Color { boardSkin?.line ?? theme.manifest.tokens.foreground.opacity(0.10) }
@@ -2080,26 +2081,25 @@ private struct FBottomNavigationBar: View {
                         if item.id == .advisor {
                             VStack(spacing: 3) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: compact ? 19 : 22, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: compact ? 40 : 50, height: compact ? 40 : 50)
+                                    .font(.system(size: compact ? 19 : 21, weight: .bold))
+                                    .foregroundStyle(theme == .referenceDark ? barAccent : .white)
+                                    .frame(width: compact ? 40 : 48, height: compact ? 40 : 48)
                                     .background {
                                         if theme == .referenceDark {
-                                            // 参考稿中央是一颗紫色渐变球，不是白色发光球。
-                                            Circle().fill(LinearGradient(
-                                                colors: [Color(red: 0.545, green: 0.361, blue: 0.965),
-                                                         Color(red: 0.427, green: 0.231, blue: 0.933)],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            // 参考稿中央是白色圆球 + 一圈柔和光晕，图标用主色。
+                                            Circle().fill(Color.white)
                                         } else {
                                             Circle().fill(LinearGradient(
                                                 colors: [theme.manifest.tokens.advisorSurface, theme.accent],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                                         }
                                     }
-                                    .overlay(Circle().stroke(.white.opacity(theme == .referenceDark ? 0.22 : 0.82),
+                                    .overlay(Circle().stroke(.white.opacity(theme == .referenceDark ? 0.9 : 0.82),
                                                              lineWidth: theme == .referenceDark ? 1 : 3))
-                                    .shadow(color: Color(red: 0.427, green: 0.231, blue: 0.933).opacity(0.35),
-                                            radius: 8, x: 0, y: 4)
+                                    .shadow(color: theme == .referenceDark
+                                            ? barAccent.opacity(0.45)
+                                            : theme.accent.opacity(0.34),
+                                            radius: theme == .referenceDark ? 14 : 10, x: 0, y: 4)
                                     .offset(y: compact ? -7 : -11)
                                 Text(item.title)
                                     .font(.system(size: compact ? 9 : 9.5, weight: isSelected ? .bold : .medium))

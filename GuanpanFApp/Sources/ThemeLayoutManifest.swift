@@ -147,19 +147,22 @@ enum FThemeLayoutRegistry {
     static func manifest(for theme: FHomeTheme) -> FThemeManifest {
         let family = theme.layoutFamily
         let style = theme.surfaceTreatment
+        // 两套主题（科技黑 / 蓝海）的全部语义色都从皮肤派生，
+        // 这样首页之外的行情、资产、设置、详情页不用逐页改色也会跟着变。
+        let skin = FRefBoardThemeStore.skin(for: theme)
+        let isBoard = FRefBoardThemeStore.isBoardTheme(theme)
         let background: Color
         let surface: Color
         switch theme {
         case .referenceDark:
-            // 观盘Pro 深空灰：画布 #0E1016（渐变顶）→ #08090D，卡片 #1C1F27 明显亮一档。
-            background = adaptive(light: (0.055, 0.063, 0.086), dark: (0.055, 0.063, 0.086))
-            surface = adaptive(light: (0.110, 0.122, 0.153), dark: (0.110, 0.122, 0.153))
+            background = skin.canvasTop
+            surface = skin.card
         case .editorial:
             background = adaptive(light: (0.965, 0.953, 0.925), dark: (0.075, 0.068, 0.060))
             surface = adaptive(light: (0.995, 0.988, 0.968), dark: (0.13, 0.12, 0.11))
         case .modern:
-            background = adaptive(light: (0.942, 0.955, 0.972), dark: (0.055, 0.070, 0.090))
-            surface = adaptive(light: (0.990, 0.995, 1.0), dark: (0.12, 0.14, 0.17))
+            background = skin.canvasTop
+            surface = skin.card
         case .dashboard:
             background = adaptive(light: (0.018, 0.035, 0.075), dark: (0.018, 0.035, 0.075))
             surface = adaptive(light: (0.035, 0.075, 0.14), dark: (0.035, 0.075, 0.14))
@@ -193,12 +196,11 @@ enum FThemeLayoutRegistry {
         let surfaceGradient: [Color]
         switch theme {
         case .referenceDark:
-            portfolioSurface = adaptive(light: (0.137, 0.153, 0.192), dark: (0.137, 0.153, 0.192))
-            advisorSurface = adaptive(light: (0.420, 0.360, 1.0), dark: (0.420, 0.360, 1.0))
-            marketSurface = adaptive(light: (0.086, 0.098, 0.125), dark: (0.086, 0.098, 0.125))
-            highlightSurface = adaptive(light: (0.310, 0.550, 1.0), dark: (0.310, 0.550, 1.0))
-            surfaceGradient = [adaptive(light: (0.137, 0.153, 0.192), dark: (0.137, 0.153, 0.192)),
-                               adaptive(light: (0.063, 0.071, 0.094), dark: (0.063, 0.071, 0.094))]
+            portfolioSurface = skin.cardAlt
+            advisorSurface = skin.aiGradient.count > 1 ? skin.aiGradient[1] : skin.accent
+            marketSurface = skin.cardAlt
+            highlightSurface = skin.accent
+            surfaceGradient = [skin.cardAlt, skin.canvasBottom]
         case .editorial:
             portfolioSurface = adaptive(light: (0.08, 0.22, 0.60), dark: (0.08, 0.22, 0.60))
             advisorSurface = adaptive(light: (0.98, 0.34, 0.25), dark: (0.72, 0.19, 0.16))
@@ -230,11 +232,11 @@ enum FThemeLayoutRegistry {
             highlightSurface = adaptive(light: (1.0, 0.79, 0.25), dark: (0.55, 0.36, 0.06))
             surfaceGradient = [adaptive(light: (0.23, 0.13, 0.93), dark: (0.11, 0.09, 0.48)), adaptive(light: (0.04, 0.45, 0.98), dark: (0.02, 0.26, 0.66))]
         case .modern:
-            portfolioSurface = adaptive(light: (0.04, 0.34, 0.90), dark: (0.04, 0.34, 0.90))
-            advisorSurface = adaptive(light: (0.97, 0.32, 0.33), dark: (0.70, 0.13, 0.21))
-            marketSurface = adaptive(light: (0.98, 0.98, 1.0), dark: (0.11, 0.13, 0.19))
-            highlightSurface = adaptive(light: (0.22, 0.74, 0.62), dark: (0.04, 0.37, 0.31))
-            surfaceGradient = [adaptive(light: (0.05, 0.39, 0.98), dark: (0.04, 0.26, 0.62)), adaptive(light: (0.01, 0.20, 0.75), dark: (0.02, 0.12, 0.42))]
+            portfolioSurface = skin.cardAlt
+            advisorSurface = skin.accent
+            marketSurface = skin.cardAlt
+            highlightSurface = skin.accent
+            surfaceGradient = [skin.cardAlt, skin.canvasBottom]
         case .magazine:
             portfolioSurface = adaptive(light: (0.91, 0.34, 0.19), dark: (0.64, 0.20, 0.14))
             advisorSurface = adaptive(light: (0.70, 0.20, 0.31), dark: (0.52, 0.13, 0.25))
@@ -266,9 +268,9 @@ enum FThemeLayoutRegistry {
         }
         let accent: Color
         switch theme {
-        case .referenceDark: accent = adaptive(light: (0.310, 0.550, 1.0), dark: (0.310, 0.550, 1.0))
+        case .referenceDark: accent = skin.accent
         case .editorial, .inkModern: accent = adaptive(light: (0.68, 0.29, 0.18), dark: (0.92, 0.55, 0.39))
-        case .modern: accent = adaptive(light: (0.18, 0.39, 0.82), dark: (0.48, 0.65, 0.98))
+        case .modern: accent = skin.accent
         case .dashboard: accent = adaptive(light: (0.16, 0.53, 0.61), dark: (0.42, 0.77, 0.84))
         case .magazine: accent = adaptive(light: (0.69, 0.27, 0.19), dark: (0.95, 0.52, 0.40))
         case .bento: accent = adaptive(light: (0.31, 0.24, 0.87), dark: (0.67, 0.62, 1.0))
@@ -279,8 +281,8 @@ enum FThemeLayoutRegistry {
         }
         let accentForeground: Color
         switch theme {
-        case .referenceDark: accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (1.0, 1.0, 1.0))
-        case .editorial, .modern, .dashboard, .magazine, .bento, .inkModern:
+        case .referenceDark, .modern: accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (1.0, 1.0, 1.0))
+        case .editorial, .dashboard, .magazine, .bento, .inkModern:
             accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (0.08, 0.09, 0.11))
         case .adaptiveBento:
             accentForeground = adaptive(light: (0.07, 0.08, 0.22), dark: (0.04, 0.05, 0.15))
@@ -301,7 +303,7 @@ enum FThemeLayoutRegistry {
         let chart: String
         switch theme {
         case .referenceDark:
-            name = "深空灰"; useCase = "观盘Pro 经典深色：渐变画布、实色浮卡、深空蓝主色与克制的红涨绿跌。"
+            name = "科技黑"; useCase = "近黑画布、深灰浮卡、蓝紫光晕与红涨绿跌。"
             typography = "34pt 资产数字 + 13pt 灰标签 + 11pt 辅助信息"
             navigation = "纯图标底栏 + 中央悬浮球"
             advisor = "紫→蓝渐变 AI 洞察卡"
@@ -312,7 +314,7 @@ enum FThemeLayoutRegistry {
             name = "山水头版"; useCase = "暖纸色、山景资产主视觉与朱红今日判断。"; typography = "财经刊物式标题 + 靛蓝资产数字"
             navigation = "暖白底部导航"; advisor = "朱红主编判断面板"; market = "三栏指数速览"; assets = "山景叠层资产头版"; chart = "纸感内嵌图表"
         case .modern:
-            name = "蓝海资产"; useCase = "蓝色资产主卡、珊瑚顾问与轻量市场卡。"; typography = "大号资产数字 + 紧凑无衬线"; navigation = "明亮底部导航"
+            name = "蓝海浅色"; useCase = "白底蓝调、浅灰卡片，白天与强光下更清楚。"; typography = "大号资产数字 + 紧凑无衬线"; navigation = "明亮底部导航"
             advisor = "输入与快捷问题卡片"; market = "宽屏并列、窄屏堆叠的摘要卡片"; assets = "持仓列表摘要"; chart = "标准卡片容器"
         case .dashboard:
             name = "深空终端"; useCase = "暗色行情终端，市场、分时和自选同屏。"; typography = "紧凑终端数字 + 青绿图表"; navigation = "深色终端底部导航"
@@ -343,17 +345,17 @@ enum FThemeLayoutRegistry {
             background: background, surface: surface, portfolioSurface: portfolioSurface,
             advisorSurface: advisorSurface, marketSurface: marketSurface,
             highlightSurface: highlightSurface, surfaceGradient: surfaceGradient, foreground: foreground,
-            secondaryForeground: adaptive(light: (0.37, 0.40, 0.45), dark: (0.72, 0.75, 0.80)),
+            secondaryForeground: isBoard ? skin.muted : adaptive(light: (0.37, 0.40, 0.45), dark: (0.72, 0.75, 0.80)),
             accent: accent, accentForeground: accentForeground,
-            positive: adaptive(light: (0.78, 0.18, 0.17), dark: (1.0, 0.43, 0.40)),
-            negative: adaptive(light: (0.12, 0.55, 0.30), dark: (0.37, 0.78, 0.52)),
-            risk: adaptive(light: (0.78, 0.16, 0.16), dark: (1.0, 0.42, 0.40)),
+            positive: isBoard ? skin.up : adaptive(light: (0.78, 0.18, 0.17), dark: (1.0, 0.43, 0.40)),
+            negative: isBoard ? skin.down : adaptive(light: (0.12, 0.55, 0.30), dark: (0.37, 0.78, 0.52)),
+            risk: isBoard ? skin.up : adaptive(light: (0.78, 0.16, 0.16), dark: (1.0, 0.42, 0.40)),
             warning: adaptive(light: (0.82, 0.47, 0.06), dark: (1.0, 0.68, 0.27)),
             unavailable: adaptive(light: (0.48, 0.50, 0.54), dark: (0.68, 0.72, 0.78)),
             partial: adaptive(light: (0.72, 0.52, 0.05), dark: (0.94, 0.73, 0.25)),
             candidate: accent,
-            buyPoint: adaptive(light: (0.78, 0.18, 0.17), dark: (1.0, 0.43, 0.40)),
-            sellPoint: adaptive(light: (0.12, 0.55, 0.30), dark: (0.37, 0.78, 0.52)),
+            buyPoint: isBoard ? skin.up : adaptive(light: (0.78, 0.18, 0.17), dark: (1.0, 0.43, 0.40)),
+            sellPoint: isBoard ? skin.down : adaptive(light: (0.12, 0.55, 0.30), dark: (0.37, 0.78, 0.52)),
             episodeCost: adaptive(light: (0.10, 0.40, 0.78), dark: (0.42, 0.68, 1.0)),
             brokerCost: adaptive(light: (0.48, 0.32, 0.68), dark: (0.72, 0.59, 0.94)),
             intradayAverage: adaptive(light: (0.52, 0.28, 0.67), dark: (0.78, 0.56, 0.94)),
@@ -412,7 +414,7 @@ extension FHomeTheme {
     /// theme identifiers remain decodable for migration, but must not cause a
     /// different theme to reappear on a detail screen or chart.
     static func selected(_ rawValue: String) -> FHomeTheme {
-        guard let theme = FHomeTheme(rawValue: rawValue), allCases.contains(theme) else { return .editorial }
+        guard let theme = FHomeTheme(rawValue: rawValue), allCases.contains(theme) else { return .referenceDark }
         return theme
     }
 
