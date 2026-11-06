@@ -108,5 +108,25 @@ final class MACDAnalysisTests: XCTestCase {
         XCTAssertEqual(withEvidence.trend, withoutEvidence.trend)
         XCTAssertTrue(withEvidence.reasonCodes.contains("volume_state_is_descriptive_evidence_only"))
     }
+
+    func testCombineAssessesOptionalIntradaySeries() {
+        let dailyBars = (0..<50).map { index in
+            FMACDInputBar(timestamp: Date(timeIntervalSince1970: Double(index)),
+                          close: 10 + Double(index) * 0.1)
+        }
+        let intradayBars = (0..<50).map { index in
+            FMACDInputBar(timestamp: Date(timeIntervalSince1970: Double(index * 60)),
+                          close: 10 + Double(index) * 0.1)
+        }
+        let daily = FMACDEngine.calculate(bars: dailyBars, timeframe: .daily)
+        let intraday = FMACDEngine.calculate(bars: intradayBars, timeframe: .minutes120,
+                                             parameters: .responsive)
+
+        let combined = FMultiTimeframeMACDAnalyzer.combine(daily: daily, intraday: intraday)
+
+        XCTAssertEqual(combined.daily.timeframe, .daily)
+        XCTAssertEqual(combined.intraday?.timeframe, .minutes120)
+        XCTAssertFalse(combined.relationship.isEmpty)
+    }
 }
 

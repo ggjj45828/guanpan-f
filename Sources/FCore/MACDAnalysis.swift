@@ -248,7 +248,7 @@ public enum FMultiTimeframeMACDAnalyzer {
 
     public static func combine(daily: FMACDSeries, intraday: FMACDSeries?) -> FMultiTimeframeMACDAssessment {
         let dailyResult = assess(daily)
-        let intradayResult = intraday.map(assess)
+        let intradayResult = intraday.map { assess($0) }
         let relationship: String
         if let intradayResult {
             if dailyResult.trend == intradayResult.trend {

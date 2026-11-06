@@ -51,6 +51,7 @@ final class PrimaryNavigationUITests: XCTestCase {
         let dailyChartHeading = app.staticTexts["日 K 与均线"]
         scrollUntilHittable(dailyChartHeading, in: detailScroll)
         XCTAssertTrue(dailyChartHeading.isHittable, app.debugDescription)
+        guard dailyChartHeading.isHittable else { return }
         let dailyChart = app.descendants(matching: .any)["market.security-chart.daily"]
         if dailyChart.waitForExistence(timeout: 1) {
             scrollUntilHittable(dailyChart, in: detailScroll)
@@ -264,6 +265,15 @@ final class PrimaryNavigationUITests: XCTestCase {
         wait(for: [saveEnabled], timeout: 10)
         XCTAssertTrue(save.isEnabled, app.debugDescription)
         save.tap()
+        let preferenceStatus = app.descendants(matching: .any)["profile.preference.status"]
+        scrollUntilHittable(preferenceStatus, in: settingsForm)
+        let terminalStatus = expectation(for: NSPredicate(
+            format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
+            "画像偏好已保存", "画像保存失败", "尚未就绪"),
+                                      evaluatedWith: preferenceStatus)
+        wait(for: [terminalStatus], timeout: 15)
+        XCTAssertTrue(preferenceStatus.label.contains("画像偏好已保存"),
+                      "Actual profile save status: \(preferenceStatus.label)")
         scrollUntilHittable(clear, in: settingsForm)
         let saved = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: clear)
         wait(for: [saved], timeout: 10)
@@ -289,6 +299,20 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["crossmarket.refresh"].exists)
         let indexList = app.scrollViews["crossmarket.list"]
         XCTAssertTrue(indexList.waitForExistence(timeout: 3), app.debugDescription)
+
+        // Verify the board's primary visible card navigates before list virtualization
+        // and repeated scrolling can recycle its accessibility element.
+        let shanghaiIndex = app.descendants(matching: .any)["crossmarket.index.sh000001"]
+        scrollUntilHittable(shanghaiIndex, in: indexList)
+        XCTAssertTrue(shanghaiIndex.isHittable, app.debugDescription)
+        shanghaiIndex.tap()
+        XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.buttons["crossmarket.index.refresh.sh000001"].exists, app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["crossmarket.index.detail.identity"].exists,
+                      "Index detail must expose its selected index identity.")
+        app.navigationBars["上证指数"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["跨市场脉搏"].waitForExistence(timeout: 5), app.debugDescription)
+
         for code in ["sh000001", "sz399001", "sh000300", "sh000510", "sz399006", "usNDX",
                      "int_nikkei", "KOSPI", "hkHSI"] {
             let indexCard = app.descendants(matching: .any)["crossmarket.index.\(code)"]
@@ -299,13 +323,6 @@ final class PrimaryNavigationUITests: XCTestCase {
             XCTAssertTrue(indexCard.label.contains("交易时段"),
                           "Missing explicit or unverified trading-session status for \(code).\n\(app.debugDescription)")
         }
-        let shanghaiIndex = app.descendants(matching: .any)["crossmarket.index.sh000001"]
-        scrollUntilHittable(shanghaiIndex, in: indexList)
-        shanghaiIndex.tap()
-        XCTAssertTrue(app.navigationBars["上证指数"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.buttons["crossmarket.index.refresh.sh000001"].exists, app.debugDescription)
-        XCTAssertTrue(app.descendants(matching: .any)["crossmarket.index.detail.identity"].exists,
-                      "Index detail must expose its selected index identity.")
     }
 
     func testHomeMarketPulseOpensTheSelectedIndexDetailDirectly() {
@@ -337,15 +354,17 @@ final class PrimaryNavigationUITests: XCTestCase {
         let closedView = app.segmentedControls["assets.view-picker"].buttons["已清仓"]
         XCTAssertTrue(closedView.waitForExistence(timeout: 3))
         closedView.tap()
-        let closedHeading = app.staticTexts["已清仓 / 历史持仓"]
-        XCTAssertTrue(closedHeading.waitForExistence(timeout: 3))
+        let closedHeading = app.descendants(matching: .any)["assets.closed.heading"]
         scrollUntilHittable(closedHeading, in: assetList)
+        XCTAssertTrue(closedHeading.exists, app.debugDescription)
         XCTAssertTrue(closedHeading.isHittable, app.debugDescription)
         attachScreenshot("09-real-assets-closed", app: app)
 
-        app.buttons["当前持仓"].tap()
-        XCTAssertTrue(app.staticTexts["当前持仓"].exists)
-        let cashFlowHeading = app.staticTexts["现金与成交流水"]
+        let currentView = app.segmentedControls["assets.view-picker"].buttons["当前持仓"]
+        XCTAssertTrue(currentView.waitForExistence(timeout: 3))
+        currentView.tap()
+        XCTAssertTrue(currentView.isSelected, app.debugDescription)
+        let cashFlowHeading = app.descendants(matching: .any)["assets.cashflow.heading"]
         scrollUntilHittable(cashFlowHeading, in: assetList)
         XCTAssertTrue(cashFlowHeading.isHittable, app.debugDescription)
     }
@@ -361,7 +380,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
         let cash = app.textFields["ledger.opening.cash"]
         XCTAssertTrue(cash.exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
+        let openingForm = app.collectionViews.firstMatch
+        XCTAssertTrue(openingForm.waitForExistence(timeout: 3), app.debugDescription)
+        let addPosition = app.buttons["ledger.opening.position.add"]
+        scrollUntilHittable(addPosition, in: openingForm)
+        XCTAssertTrue(addPosition.isHittable, app.debugDescription)
         let confirm = app.buttons["ledger.opening.confirm"]
         XCTAssertTrue(confirm.exists)
         XCTAssertTrue(confirm.isEnabled, "The confirm action must remain tappable so incomplete fields can explain what is missing.")
@@ -375,17 +398,27 @@ final class PrimaryNavigationUITests: XCTestCase {
         let code = app.textFields["ledger.opening.position.code"]
         code.tap()
         code.typeText("159352")
+        app.buttons["收起键盘"].tap()
         let name = app.textFields["ledger.opening.position.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         if name.value as? String == "证券名称（自动识别，可修改）" {
             name.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
             name.typeText("TestETF")
         }
         let units = app.textFields["ledger.opening.position.units"]
-        units.tap()
+        let nextField = app.buttons["ledger.opening.next-field"]
+        if app.keyboards.firstMatch.exists && nextField.exists {
+            nextField.tap()
+        } else {
+            units.tap()
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         units.typeText("100")
         let cost = app.textFields["ledger.opening.position.unitCost"]
-        cost.tap()
+        XCTAssertTrue(nextField.isHittable, app.debugDescription)
+        nextField.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         cost.typeText("1.00")
         app.buttons["收起键盘"].tap()
         XCTAssertTrue(confirm.isEnabled, app.debugDescription)
@@ -467,51 +500,45 @@ final class PrimaryNavigationUITests: XCTestCase {
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
         for _ in 0..<30 {
-            if element.isHittable && element.frame.height >= minimumVisibleHeight { return }
-            guard element.exists else {
-                dragScroll(scrollContainer, toward: .up)
-                continue
-            }
-
             let viewport = scrollContainer.frame
             let target = element.frame
-            // XCUIElement.frame is clipped to the visible portion of a
-            // partially obscured SwiftUI chart. Large swipes oscillate between
-            // clipping the chart at the top and bottom; use short drags so the
-            // full chart can settle inside the viewport.
-            if target.minY <= viewport.minY + 48 {
-                dragScroll(scrollContainer, toward: .down)
-            } else if target.maxY >= viewport.maxY - 48 {
-                dragScroll(scrollContainer, toward: .up)
-            } else if target.midY < viewport.midY {
-                dragScroll(scrollContainer, toward: .down)
+            let fullyVisible = target.minY >= viewport.minY + 48 &&
+                target.maxY <= viewport.maxY - 48
+            if element.isHittable && target.height >= minimumVisibleHeight && fullyVisible { return }
+
+            let direction: ScrollDirection
+            if !element.exists || target.maxY >= viewport.maxY - 48 || target.midY >= viewport.midY {
+                direction = .up
             } else {
-                dragScroll(scrollContainer, toward: .up)
+                direction = .down
             }
+            dragScroll(scrollContainer, toward: direction)
         }
     }
 
     private func dragScroll(_ scrollContainer: XCUIElement, toward direction: ScrollDirection) {
-        let startOffset: CGVector
-        let endOffset: CGVector
+        // Start in the outer gutter, away from chart controls and row actions,
+        // so the owning Form/List receives the vertical gesture.
+        let start: CGVector
+        let end: CGVector
         switch direction {
         case .up:
-            startOffset = CGVector(dx: 0.95, dy: 0.82)
-            endOffset = CGVector(dx: 0.95, dy: 0.62)
+            start = CGVector(dx: 0.96, dy: 0.82)
+            end = CGVector(dx: 0.96, dy: 0.48)
         case .down:
-            startOffset = CGVector(dx: 0.95, dy: 0.62)
-            endOffset = CGVector(dx: 0.95, dy: 0.82)
+            start = CGVector(dx: 0.96, dy: 0.48)
+            end = CGVector(dx: 0.96, dy: 0.82)
         }
-        scrollContainer.coordinate(withNormalizedOffset: startOffset)
+        scrollContainer.coordinate(withNormalizedOffset: start)
             .press(forDuration: 0.05,
-                   thenDragTo: scrollContainer.coordinate(withNormalizedOffset: endOffset))
+                   thenDragTo: scrollContainer.coordinate(withNormalizedOffset: end))
     }
 
     private enum ScrollDirection {
         case up
         case down
     }
-}
 
+}
 
 

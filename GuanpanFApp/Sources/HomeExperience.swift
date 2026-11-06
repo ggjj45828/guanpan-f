@@ -2703,10 +2703,10 @@ private struct MarketIndexDetailOverview: View {
                     symbol: "chart.xyaxis.line",
                     value: quote?.latestPrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? "不可用",
                     valueLabel: "指数点位")
+                LabeledContent("指数代码", value: code)
+                    .accessibilityIdentifier("crossmarket.index.detail.identity")
                 if let quote {
                     VStack(alignment: .leading, spacing: 12) {
-                        LabeledContent("指数代码", value: quote.code)
-                            .accessibilityIdentifier("crossmarket.index.detail.identity")
                         LabeledContent("市场", value: quote.market)
                         LabeledContent("涨跌幅", value: quote.changePercent.map { String(format: "%+.2f%%", NSDecimalNumber(decimal: $0).doubleValue) } ?? "不可用")
                         LabeledContent("行情时间", value: quote.observedAt?.formatted(date: .numeric, time: .standard) ?? "未验证")
@@ -2976,6 +2976,11 @@ struct RealAssetsOverview: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("assets.view-picker")
+                if selectedView == 1 {
+                    Text("已清仓 / 历史持仓")
+                        .font(.headline)
+                        .accessibilityIdentifier("assets.closed.heading")
+                }
             }
             Section("本机真实账本") {
                 assetSummaryRow("账本状态", value: model.ledgerStatus)
@@ -3020,7 +3025,7 @@ struct RealAssetsOverview: View {
                 }
                 .listRowBackground(theme.manifest.tokens.portfolioSurface.opacity(0.11))
             } else {
-                Section("已清仓 / 历史持仓") {
+                Section {
                     let closed = model.instrumentHistories.filter { !$0.isCurrentlyHeld }
                     if closed.isEmpty { Text("暂无已清仓证券记录").foregroundStyle(theme.manifest.tokens.secondaryForeground) }
                     ForEach(closed) { history in
@@ -3039,7 +3044,10 @@ struct RealAssetsOverview: View {
                 }
                 .listRowBackground(theme.manifest.tokens.highlightSurface.opacity(0.10))
             }
-            Section("现金与成交流水") {
+            Section {
+                Text("现金与成交流水")
+                    .font(.headline)
+                    .accessibilityIdentifier("assets.cashflow.heading")
                 Button("录入其他费用 / 现金对账差额") {
                     model.beginCashAdjustment()
                 }
@@ -3204,13 +3212,17 @@ struct SettingsOverview: View {
                                 get: { investorProfileDrafts[key] ?? currentPreferenceText(key) },
                                 set: { investorProfileDrafts[key] = $0 }
                             ))
+                            .focused($settingsInputFocused)
                             .accessibilityIdentifier("profile.preference.\(key.rawValue)")
                             HStack {
                                 Button("保存") {
                                     let value = investorProfileDrafts[key] ?? currentPreferenceText(key)
+                                    settingsInputFocused = false
                                     Task {
                                         await model.saveExplicitInvestorPreference(key, value: value)
-                                        investorProfileDrafts[key] = nil
+                                        if model.investorProfileStatus.hasPrefix("画像偏好已保存") {
+                                            investorProfileDrafts[key] = nil
+                                        }
                                     }
                                 }
                                 .disabled(model.loadingInvestorProfile || model.savingInvestorProfile ||
@@ -3226,12 +3238,14 @@ struct SettingsOverview: View {
                                     .accessibilityIdentifier("profile.preference.clear.\(key.rawValue)")
                                 }
                             }
+                            if key == .investmentHorizon {
+                                Text(model.investorProfileStatus)
+                                    .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                                    .accessibilityIdentifier("profile.preference.status")
+                            }
                         }
                     }
                 }
-                Text(model.investorProfileStatus)
-                    .font(.caption).foregroundStyle(theme.manifest.tokens.secondaryForeground)
-                    .accessibilityIdentifier("profile.preference.status")
             }
             Section("可选同步与数据服务") {
                 TextField("NAS 地址，例如 http://192.168.1.20:8788", text: $nasBaseAddress)
@@ -4273,7 +4287,7 @@ struct FInitialLedgerSetupSheet: View {
     @State private var cashText = ""
     @State private var positions = [FInitialLedgerPositionDraft()]
     @State private var attemptedSave = false
-    @FocusState private var inputFocused: Bool
+    @FocusState private var focusedInput: FInitialLedgerInput?
 
     private var parsedPositions: [FInitialLedgerPositionInput]? {
         guard !positions.isEmpty else { return nil }
@@ -4309,6 +4323,23 @@ struct FInitialLedgerSetupSheet: View {
         )
     }
 
+    private func focusNextInput() {
+        switch focusedInput {
+        case .some(.cash):
+            if let firstPosition = positions.first {
+                focusedInput = .position(firstPosition.id, .code)
+            }
+        case .some(.position(let id, .code)):
+            focusedInput = .position(id, .name)
+        case .some(.position(let id, .name)):
+            focusedInput = .position(id, .units)
+        case .some(.position(let id, .units)):
+            focusedInput = .position(id, .unitCost)
+        case .some(.position(_, .unitCost)), .none:
+            focusedInput = nil
+        }
+    }
+
     private var canSave: Bool {
         guard model.ledgerState == .notEstablished,
               let cash = Decimal(string: cashText, locale: Locale(identifier: "en_US_POSIX")),
@@ -4339,28 +4370,45 @@ struct FInitialLedgerSetupSheet: View {
         Section("券商账户现金") {
             TextField("可用现金（没有现金填写 0）", text: $cashText)
                 .keyboardType(.decimalPad)
+                .focused($focusedInput, equals: .cash)
                 .accessibilityIdentifier("ledger.opening.cash")
             Text("按券商当前可用余额填写，用于计算真实账户总资产。")
+                .font(.footnote).foregroundStyle(.secondary)
+            if attemptedSave || canSave {
+                Text(validationMessage)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(canSave ? .green : Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("ledger.opening.validation")
+            }
+        }
+    }
+
+    private var positionsIntroSection: some View {
+        Section("当前真实持仓") {
+            Text("录入一只就可以；如有多只，再点下方添加。这里记录券商当前余额，不会伪造成交。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
-    private var positionsSection: some View {
-        Section("当前真实持仓") {
-            Text("录入一只就可以；如有多只，再点下方添加。这里记录券商当前余额，不会伪造成交。")
-                .font(.footnote).foregroundStyle(.secondary)
-            ForEach($positions) { $position in
-                let positionID = position.id
-                let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
-                FInitialLedgerPositionRow(
-                    draft: $position,
-                    ordinal: ordinal,
-                    canRemove: positions.count > 1,
-                    model: model
-                ) {
-                    positions.removeAll { $0.id == positionID }
-                }
-            }
+    @ViewBuilder
+    private var positionSections: some View {
+        ForEach($positions) { $position in
+            let positionID = position.id
+            let ordinal = (positions.firstIndex { $0.id == positionID } ?? 0) + 1
+            FInitialLedgerPositionRow(
+                draft: $position,
+                ordinal: ordinal,
+                canRemove: positions.count > 1,
+                model: model,
+                remove: { positions.removeAll { $0.id == positionID } },
+                focusedInput: $focusedInput
+            )
+        }
+    }
+
+    private var addPositionSection: some View {
+        Section {
             Button {
                 positions.append(FInitialLedgerPositionDraft())
             } label: {
@@ -4372,10 +4420,6 @@ struct FInitialLedgerSetupSheet: View {
 
     private var confirmationSection: some View {
         Section("保存前确认") {
-            Text(validationMessage)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(canSave ? .green : (attemptedSave ? Color.red : .secondary))
-                .accessibilityIdentifier("ledger.opening.validation")
             Text("这些数字会作为本机真实账本的起点，不代表历史成交。导入前的历史盈亏不会被虚构；保存后请用真实成交更新。")
                 .font(.footnote).foregroundStyle(.secondary)
         }
@@ -4394,11 +4438,15 @@ struct FInitialLedgerSetupSheet: View {
         NavigationStack {
             Form {
                 cashEntrySection
-                positionsSection
+                positionsIntroSection
+                positionSections
+                addPositionSection
                 confirmationSection
                 ledgerStatusSection
             }
-            .scrollDismissesKeyboard(.interactively)
+            // Keep the keyboard stable while focus moves between opening-balance fields.
+            // Interactive dismissal during Form auto-scrolling can drop focus on number pads.
+            .scrollDismissesKeyboard(.never)
             .navigationTitle("录入现有持仓")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -4406,6 +4454,7 @@ struct FInitialLedgerSetupSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.writingInitialLedger ? "保存中…" : "保存账本起点") {
+                        guard !model.writingInitialLedger else { return }
                         guard canSave, let parsedPositions else {
                             attemptedSave = true
                             return
@@ -4417,16 +4466,27 @@ struct FInitialLedgerSetupSheet: View {
                             if saved { dismiss() }
                         }
                     }
-                    .disabled(model.writingInitialLedger)
                     .accessibilityIdentifier("ledger.opening.confirm")
                 }
                 ToolbarItemGroup(placement: .keyboard) {
+                    Button("下一项") { focusNextInput() }
+                        .accessibilityIdentifier("ledger.opening.next-field")
+                        .disabled(focusedInput == nil)
                     Spacer()
-                    Button("收起键盘") { inputFocused = false }
+                    Button("收起键盘") { focusedInput = nil }
                 }
             }
         }
     }
+}
+
+private enum FInitialLedgerPositionField: Hashable {
+    case code, name, units, unitCost
+}
+
+private enum FInitialLedgerInput: Hashable {
+    case cash
+    case position(UUID, FInitialLedgerPositionField)
 }
 
 private struct FInitialLedgerPositionRow: View {
@@ -4435,7 +4495,7 @@ private struct FInitialLedgerPositionRow: View {
     let canRemove: Bool
     @ObservedObject var model: FHomeModel
     let remove: () -> Void
-    @FocusState private var inputFocused: Bool
+    @FocusState.Binding var focusedInput: FInitialLedgerInput?
     @State private var lookupStatus = ""
     @State private var retryLookup = 0
     @State private var lastResolvedName: String?
@@ -4461,17 +4521,17 @@ private struct FInitialLedgerPositionRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Section {
             HStack {
                 Text("证券 \(ordinal)").font(.subheadline.weight(.semibold))
                 Spacer()
                 if canRemove {
-                    Button("移除", role: .destructive, action: remove)
-                        .font(.caption)
+                    Button("移除", role: .destructive, action: remove).font(.caption)
                 }
             }
             TextField("6位证券代码", text: $draft.instrumentCode)
-                .keyboardType(.numberPad).focused($inputFocused)
+                .keyboardType(.numberPad)
+                .focused($focusedInput, equals: .position(draft.id, .code))
                 .accessibilityIdentifier("ledger.opening.position.code")
                 .onChange(of: draft.instrumentCode) { code in
                     let digits = String(code.unicodeScalars
@@ -4483,32 +4543,34 @@ private struct FInitialLedgerPositionRow: View {
                 }
                 .task(id: lookupTaskID) { await resolveName(for: draft.instrumentCode) }
             TextField("证券名称（自动识别，可修改）", text: $draft.name)
-                .focused($inputFocused)
+                .focused($focusedInput, equals: .position(draft.id, .name))
                 .accessibilityIdentifier("ledger.opening.position.name")
                 .onChange(of: draft.name) { name in
                     if name != lastResolvedName { lastResolvedName = nil }
                 }
-            if !lookupStatus.isEmpty {
-                HStack(spacing: 8) {
-                    Text(lookupStatus).font(.caption).foregroundStyle(.secondary)
-                    if lookupStatus.hasPrefix("行情源") {
-                        Button("重试") { retryLookup += 1 }
-                            .font(.caption.weight(.semibold))
-                    }
+            HStack(spacing: 8) {
+                Text(lookupStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(minHeight: 16, alignment: .leading)
+                if lookupStatus.hasPrefix("行情源") {
+                    Button("重试") { retryLookup += 1 }
+                        .font(.caption.weight(.semibold))
                 }
             }
+            .frame(minHeight: 22, alignment: .leading)
             TextField("当前持有份额", text: $draft.units)
-                .keyboardType(.numberPad).focused($inputFocused)
+                .keyboardType(.numberPad)
+                .focused($focusedInput, equals: .position(draft.id, .units))
                 .accessibilityIdentifier("ledger.opening.position.units")
             TextField("每份真实经济成本（含费用）", text: $draft.economicCostPerUnit)
-                .keyboardType(.decimalPad).focused($inputFocused)
+                .keyboardType(.decimalPad)
+                .focused($focusedInput, equals: .position(draft.id, .unitCost))
                 .accessibilityIdentifier("ledger.opening.position.unitCost")
             Text("本轮成本按当前份额 × 每份真实经济成本计算。")
                 .font(.caption).foregroundStyle(.secondary)
+        } header: {
+            Text("证券 \(ordinal)")
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("ledger.opening.position.\(draft.id.uuidString)")
     }
 }
 private extension FDecisionAction {
@@ -4640,5 +4702,3 @@ private struct FInitialCashEntrySheet: View {
         }
     }
 }
-
-

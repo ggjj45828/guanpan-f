@@ -83,7 +83,12 @@ struct FUnifiedSecurityChart: View {
                     // Allow the parent detail ScrollView to scroll when the user starts a
                     // vertical swipe over the chart; chart-specific pan/crosshair state is
                     // updated simultaneously and remains constrained to the chart data.
-                    .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { value in
+                    .simultaneousGesture(DragGesture(minimumDistance: 8).onChanged { value in
+                        // Vertical swipes belong to the surrounding detail ScrollView.
+                        // Chart interaction is limited to deliberate horizontal drags.
+                        let horizontal = abs(value.translation.width)
+                        let vertical = abs(value.translation.height)
+                        guard horizontal > vertical * 1.15 else { return }
                         if crosshairEnabled {
                             selectedTimestamp = timestamps[nearestIndex(
                                 at: value.location.x, width: proxy.size.width,

@@ -189,6 +189,7 @@ final class FHomeModel: ObservableObject {
     @Published private(set) var investorProfileStatus = "正在读取本机画像"
     @Published private(set) var loadingInvestorProfile = true
     @Published private(set) var savingInvestorProfile = false
+    private var investorProfileLoadGeneration: UInt64 = 0
     @Published private(set) var advisorStatus = "尚未开始分析"
     @Published private(set) var candidateShadowJournalStatus = "建议成绩单尚未记录"
     @Published private(set) var candidateShadowSummary: FCandidateShadowSummary?
@@ -847,8 +848,15 @@ final class FHomeModel: ObservableObject {
             investorProfileStatus = "画像尚未就绪，暂不能保存"
             return
         }
+
+        // Invalidate any startup read still in flight so it cannot overwrite
+        // this save's success or failure status with the earlier empty profile.
+        investorProfileLoadGeneration &+= 1
+        let operationGeneration = investorProfileLoadGeneration
         savingInvestorProfile = true
+        investorProfileStatus = "正在保存投资者偏好…"
         defer { savingInvestorProfile = false }
+
         let now = Date()
         var updated = investorProfile
         let prior = updated.attribute(key)?.current(at: now)
@@ -860,13 +868,15 @@ final class FHomeModel: ObservableObject {
             supersedesRevisionID: prior?.source == .explicit ? prior?.id : nil)
         do {
             _ = try updated.record(revision, for: key, now: now)
-            investorProfileDigest = try await store.save(updated,
+            let digest = try await store.save(updated,
                 expectedPriorDigest: investorProfileDigest, now: now)
+            guard operationGeneration == investorProfileLoadGeneration else { return }
+            investorProfileDigest = digest
             investorProfile = updated
             investorProfileStatus = "画像偏好已保存；只有显式录入的内容会作为用户偏好"
         } catch {
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "画像保存失败：\(error.localizedDescription)"
-            await loadInvestorProfile()
         }
     }
 
@@ -876,6 +886,8 @@ final class FHomeModel: ObservableObject {
             investorProfileStatus = "画像尚未就绪，暂不能清除"
             return
         }
+        investorProfileLoadGeneration &+= 1
+        let operationGeneration = investorProfileLoadGeneration
         savingInvestorProfile = true
         defer { savingInvestorProfile = false }
         let now = Date()
@@ -884,32 +896,39 @@ final class FHomeModel: ObservableObject {
             try updated.clear(key, userConfirmed: true)
             investorProfileDigest = try await store.save(updated,
                 expectedPriorDigest: investorProfileDigest, now: now)
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfile = updated
             investorProfileStatus = "已清除该项画像；其他偏好和账本不变"
         } catch {
+            guard operationGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "画像清除失败：\(error.localizedDescription)"
-            await loadInvestorProfile()
         }
     }
 
     private func loadInvestorProfile() async {
+        // Never let a late refresh replace an in-flight save status or its result.
+        guard !savingInvestorProfile else { return }
+        investorProfileLoadGeneration &+= 1
+        let loadGeneration = investorProfileLoadGeneration
+        defer { if loadGeneration == investorProfileLoadGeneration { loadingInvestorProfile = false } }
         guard let store = investorProfileStore else {
             loadingInvestorProfile = false
             investorProfileStatus = "本机画像存储不可用"
             return
         }
         loadingInvestorProfile = true
-        defer { loadingInvestorProfile = false }
         do {
             let now = Date()
             let loaded = try await store.load(now: now) ?? FInvestorProfile()
             let digest = try await store.currentDigest(now: now)
+            guard loadGeneration == investorProfileLoadGeneration else { return }
             investorProfile = loaded
             investorProfileDigest = digest
             investorProfileStatus = loaded.attributes.isEmpty
                 ? "尚未录入个人偏好；顾问不会自行猜测"
                 : "已读取 \(loaded.attributes.count) 项本机画像偏好"
         } catch {
+            guard loadGeneration == investorProfileLoadGeneration else { return }
             investorProfileStatus = "本机画像读取失败：\(error.localizedDescription)"
         }
     }
