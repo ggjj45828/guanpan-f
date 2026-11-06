@@ -1935,9 +1935,11 @@ final class FHomeModel: ObservableObject {
 }
 
 enum FHomeTheme: String, CaseIterable, Identifiable {
-    case editorial, modern, dashboard, magazine, bento
+    case referenceDark, editorial, modern, dashboard, magazine, bento
     case inkModern, minimalTerminal, fluidGlass, dataStarMap, adaptiveBento
-    static var allCases: [FHomeTheme] { [.editorial, .dashboard, .bento, .modern, .minimalTerminal, .adaptiveBento] }
+    static var allCases: [FHomeTheme] {
+        [.referenceDark, .editorial, .dashboard, .bento, .modern, .minimalTerminal, .adaptiveBento]
+    }
     var id: String { rawValue }
 }
 enum FHomeRoute: Hashable {
@@ -1949,7 +1951,7 @@ enum FHomeRoute: Hashable {
 struct FHomeRoot: View {
     @ObservedObject var model: FHomeModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     @State private var selectedTab = FPrimaryTab.home
     private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
@@ -2062,23 +2064,32 @@ private struct FBottomNavigationBar: View {
                     Group {
                         if item.id == .advisor {
                             VStack(spacing: 3) {
-                                Image(systemName: item.symbol)
+                                Image(systemName: theme == .referenceDark ? "sparkles" : item.symbol)
                                     .font(.system(size: compact ? 19 : 23, weight: .semibold))
                                     .symbolRenderingMode(.hierarchical)
                                     .foregroundStyle(theme.manifest.tokens.accentForeground)
                                     .frame(width: compact ? 40 : 52, height: compact ? 40 : 52)
                                     .background {
-                                        Circle().fill(LinearGradient(
-                                            colors: [theme.manifest.tokens.advisorSurface, theme.accent],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        if theme == .referenceDark {
+                                            Circle().fill(LinearGradient(
+                                                colors: [Color.white, Color(red: 0.86, green: 0.90, blue: 1.0)],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        } else {
+                                            Circle().fill(LinearGradient(
+                                                colors: [theme.manifest.tokens.advisorSurface, theme.accent],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        }
                                     }
-                                    .overlay(Circle().stroke(.white.opacity(0.82), lineWidth: 3))
-                                    .shadow(color: theme.accent.opacity(0.34), radius: 10, x: 0, y: 5)
-                                    .offset(y: compact ? -7 : -13)
-                                Text(item.title)
-                                    .font(.system(size: compact ? 9 : 10, weight: isSelected ? .bold : .semibold))
-                                    .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
-                                    .offset(y: compact ? -6 : -11)
+                                    .overlay(Circle().stroke(.white.opacity(theme == .referenceDark ? 0.30 : 0.82), lineWidth: 3))
+                                    .shadow(color: theme == .referenceDark ? Color.white.opacity(0.22) : theme.accent.opacity(0.34),
+                                            radius: 10, x: 0, y: 5)
+                                    .offset(y: compact ? -7 : (theme == .referenceDark ? -9 : -13))
+                                if theme != .referenceDark {
+                                    Text(item.title)
+                                        .font(.system(size: compact ? 9 : 10, weight: isSelected ? .bold : .semibold))
+                                        .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                                        .offset(y: compact ? -6 : -11)
+                                }
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: compact ? 43 : 59)
@@ -2089,10 +2100,12 @@ private struct FBottomNavigationBar: View {
                                                   weight: isSelected ? .semibold : .regular))
                                     .symbolRenderingMode(.hierarchical)
                                     .frame(height: compact ? 20 : 25)
-                                Text(item.title)
-                                    .font(.system(size: compact ? 9 : 10, weight: isSelected ? .semibold : .medium))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
+                                if theme != .referenceDark {
+                                    Text(item.title)
+                                        .font(.system(size: compact ? 9 : 10, weight: isSelected ? .semibold : .medium))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                }
                             }
                             .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
                             .frame(maxWidth: .infinity)
@@ -2153,9 +2166,10 @@ private struct FBottomNavigationBar: View {
                             Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                         }
                 case .card:
-                    Rectangle().fill(.ultraThinMaterial)
+                    Rectangle().fill(theme == .referenceDark ? Color(red: 0.043, green: 0.043, blue: 0.051) : theme.manifest.tokens.surface)
                         .overlay(alignment: .top) {
-                            Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
+                            Rectangle().fill(theme == .referenceDark ? Color.white.opacity(0.06) : theme.manifest.tokens.foreground.opacity(0.10))
+                                .frame(height: 0.7)
                         }
                 }
             }

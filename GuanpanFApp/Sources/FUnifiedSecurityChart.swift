@@ -13,7 +13,7 @@ private struct FChartMACDPoint {
 struct FUnifiedSecurityChart: View {
     let model: FChartOverlayModel?
     let height: CGFloat
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     @AppStorage("guanpan.f.chart.visibleLayers") private var visibleLayerKeysRaw = "ma5,ma10,ma20,ma60,ma250,volume,cost,brokerCost,intradayAverage,previousClose,candidateBuy,candidateSell,iopv"
     @AppStorage("guanpan.f.chart.subchart") private var subchartMode = "volume"
     @State private var zoomScale: CGFloat = 1

@@ -422,7 +422,7 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     func testSixApprovedVisualConceptsRenderHomeScreenshots() {
         let themes = [
-            "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
+            "referenceDark", "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
             let app = makeIsolatedApp()
@@ -443,7 +443,7 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     func testSixApprovedVisualConceptsRenderInSystemDarkAppearance() {
         let themes = [
-            "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
+            "referenceDark", "editorial", "dashboard", "bento", "modern", "minimalTerminal", "adaptiveBento"
         ]
         for theme in themes {
             let app = makeIsolatedApp()

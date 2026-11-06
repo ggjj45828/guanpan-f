@@ -53,6 +53,7 @@ private struct FThemePageHeader: View {
     }
 
     private var cardRadius: CGFloat {
+        if theme == .referenceDark { return 28 }
         switch theme.surfaceTreatment {
         case .terminal, .minimal: 8
         case .glass, .orbit: 28
@@ -449,6 +450,7 @@ private struct FDesignedThemeHome: View {
     var body: some View {
         Group {
             switch theme {
+            case .referenceDark: FReferenceHome(model: model)
             case .editorial: mountainCover
             case .dashboard: deepSpaceTerminal
             case .bento: coralCollage
@@ -2193,8 +2195,14 @@ private struct FThemeSurfaceModifier: ViewModifier {
                 .overlay(cornerStyle.stroke(roleTint.opacity(0.20), lineWidth: 0.8))
                 .shadow(color: theme.ink.opacity(0.035), radius: 8, y: 3)
         case .card:
-            content.background(coloredSurface, in: cornerStyle)
-                .overlay(cornerStyle.stroke(roleTint.opacity(0.24), lineWidth: 0.9))
+            if theme == .referenceDark {
+                content.background(tokens.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1))
+            } else {
+                content.background(coloredSurface, in: cornerStyle)
+                    .overlay(cornerStyle.stroke(roleTint.opacity(0.24), lineWidth: 0.9))
+            }
         }
     }
 }
@@ -2604,7 +2612,7 @@ struct HomeDestination: View {
 
 struct AdvisorOverview: View {
     @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
     var body: some View {
@@ -2940,7 +2948,7 @@ private struct CrossMarketOverview: View {
 
 struct RealAssetsOverview: View {
     @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     @State private var selectedView = 0
     private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
 
@@ -3144,7 +3152,7 @@ private extension FReadOnlyCashFlowKind {
 
 struct SettingsOverview: View {
     @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
     @State private var deepSeekKeyDraft = ""
     @State private var hasAutoCheckedNAS = false
@@ -3154,6 +3162,12 @@ struct SettingsOverview: View {
     @State private var showingProfileClearConfirmation = false
     @FocusState private var settingsInputFocused: Bool
     private var theme: FHomeTheme { FHomeTheme.selected(themeRaw) }
+
+    private var appVersionText: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(short) (\(build))"
+    }
 
     var body: some View {
         Form {
@@ -3288,6 +3302,27 @@ struct SettingsOverview: View {
                         .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            Section("投资工具") {
+                NavigationLink { FGridAssistantView(model: model) } label: {
+                    Label("网格助手", systemImage: "square.grid.3x3")
+                }
+                .accessibilityIdentifier("settings.tool.grid")
+                NavigationLink { FDividendPoolView(model: model) } label: {
+                    Label("收息池", systemImage: "banknote.on.circle")
+                }
+                .accessibilityIdentifier("settings.tool.dividend")
+                NavigationLink { FBenchmarkView(model: model) } label: {
+                    Label("跑赢基准", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .accessibilityIdentifier("settings.tool.benchmark")
+                Text("三个工具都只在本机测算：网格给区间/档距/份额，收息给股息率与目标买价，基准做当日与累计对比；都不会向券商下单，也不补造缺失数据。")
+                    .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Section("关于") {
+                LabeledContent("版本", value: appVersionText)
+                    .accessibilityIdentifier("settings.version")
             }
             Section("主题") {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -3541,7 +3576,7 @@ private enum FMarketListScope: String, CaseIterable, Identifiable {
 
 struct MarketOverview: View {
     @ObservedObject var model: FHomeModel
-    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.editorial.rawValue
+    @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
     @State private var securityLookupCode = ""
     @State private var securityLookupName = ""
     @State private var securityLookupStatus = ""
