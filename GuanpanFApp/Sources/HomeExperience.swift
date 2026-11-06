@@ -442,6 +442,10 @@ struct HomeLayout: View {
 private struct FDesignedThemeHome: View {
     @ObservedObject var model: FHomeModel
     let theme: FHomeTheme
+    /// 参考稿首页板的四套皮肤，只作用于 referenceDark。
+    @AppStorage("guanpan.f.refBoardSkin") private var boardSkinRaw = FRefBoardSkinID.blue.rawValue
+    private var boardSkinID: FRefBoardSkinID { FRefBoardSkinID(rawValue: boardSkinRaw) ?? .blue }
+    private var boardSkin: FRefBoardSkin { FRefBoardSkin.palette(boardSkinID) }
     private var tokens: FThemeSemanticTokens { theme.manifest.tokens }
     private var focusedCodes: [String] {
         Array(Set(model.holdings.map(\.instrumentCode) + model.watchlistCodes)).sorted().prefix(4).map { $0 }
@@ -450,7 +454,7 @@ private struct FDesignedThemeHome: View {
     var body: some View {
         Group {
             switch theme {
-            case .referenceDark: FReferenceHome(model: model)
+            case .referenceDark: FRefBoardHome(model: model, skinID: boardSkinID)
             case .editorial: mountainCover
             case .dashboard: deepSpaceTerminal
             case .bento: coralCollage
@@ -466,9 +470,11 @@ private struct FDesignedThemeHome: View {
         .frame(maxWidth: 760, alignment: .top)
         .frame(maxWidth: .infinity)
         .background {
-            // 深空灰用上下渐变画布；纯色黑会让卡片边界消失。
+            // 参考稿首页板自带四套画布；其余主题仍用主题 token。
             if theme == .referenceDark {
-                FRefCanvasBackground()
+                LinearGradient(colors: [boardSkin.canvasTop, boardSkin.canvasBottom],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
             } else {
                 tokens.background.ignoresSafeArea()
             }
@@ -3160,6 +3166,8 @@ private extension FReadOnlyCashFlowKind {
 struct SettingsOverview: View {
     @ObservedObject var model: FHomeModel
     @AppStorage("guanpan.f.homeTheme") private var themeRaw = FHomeTheme.referenceDark.rawValue
+    @AppStorage("guanpan.f.refBoardSkin") private var boardSkinRaw = FRefBoardSkinID.blue.rawValue
+    private var boardSkinID: FRefBoardSkinID { FRefBoardSkinID(rawValue: boardSkinRaw) ?? .blue }
     @AppStorage("guanpan.f.nas.baseURL") private var nasBaseAddress = ""
     @State private var deepSeekKeyDraft = ""
     @State private var hasAutoCheckedNAS = false
@@ -3367,6 +3375,39 @@ struct SettingsOverview: View {
                 }
                 Text("主题切换只改变信息编排与呈现。浅色/深色语义token跟随系统外观；护眼模式、动态字体和跨设备截图仍待Simulator验收。当前Tab与导航栈由各自的NavigationStack保留。")
                     .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+            }
+            if theme == .referenceDark {
+                Section("首页配色") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(FRefBoardSkinID.allCases) { item in
+                                let skin = FRefBoardSkin.palette(item)
+                                Button { boardSkinRaw = item.rawValue } label: {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(LinearGradient(colors: skin.assetGradient,
+                                                                 startPoint: .topLeading,
+                                                                 endPoint: .bottomTrailing))
+                                            .frame(width: 16, height: 16)
+                                            .overlay(Circle().stroke(skin.line, lineWidth: 0.8))
+                                        Text(item.title)
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .foregroundStyle(skin.ink)
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 8)
+                                    .background(skin.card, in: Capsule())
+                                    .overlay(Capsule().stroke(boardSkinID == item ? skin.accent : skin.line,
+                                                              lineWidth: boardSkinID == item ? 1.5 : 1))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("refBoard.skin.\(item.rawValue)")
+                            }
+                        }
+                    }
+                    Text("当前：\(boardSkinID.title) · \(boardSkinID.note)")
+                        .font(.footnote).foregroundStyle(theme.manifest.tokens.secondaryForeground)
+                }
             }
             Section("数据诊断") {
                 DisclosureGroup("查看账本、日历与行情请求状态") {

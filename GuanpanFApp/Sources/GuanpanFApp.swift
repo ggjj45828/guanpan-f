@@ -1960,9 +1960,9 @@ struct FHomeRoot: View {
             rootStack {
                 HomeLayout(model: model, theme: theme)
                     .navigationTitle("首页")
-                    // 大标题会和首页内的「欢迎回来」叠成两行同义字，白占 60pt。
-                    // 观盘Pro 首页用的是 inline 小标题，这里对齐。
                     .navigationBarTitleDisplayMode(.inline)
+                    // 参考稿首页顶部就是品牌栏，再压一条「首页」标题等于多一行同义字。
+                    .toolbar(theme == .referenceDark ? .hidden : .visible, for: .navigationBar)
             }
             .tabItem { Label("首页", systemImage: "house") }
             .tag(FPrimaryTab.home)
@@ -2046,6 +2046,17 @@ private struct FBottomNavigationBar: View {
     @Binding var selection: FPrimaryTab
     let theme: FHomeTheme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// 参考稿首页板的四套皮肤；只有 referenceDark 用得到。
+    @AppStorage("guanpan.f.refBoardSkin") private var boardSkinRaw = FRefBoardSkinID.blue.rawValue
+    private var boardSkin: FRefBoardSkin? {
+        guard theme == .referenceDark else { return nil }
+        return FRefBoardSkin.palette(FRefBoardSkinID(rawValue: boardSkinRaw) ?? .blue)
+    }
+    private var barCard: Color { boardSkin?.card ?? theme.manifest.tokens.surface }
+    private var barLine: Color { boardSkin?.line ?? theme.manifest.tokens.foreground.opacity(0.10) }
+    private var barAccent: Color { boardSkin?.accent ?? theme.accent }
+    private var barMuted: Color { boardSkin?.muted ?? theme.manifest.tokens.secondaryForeground }
+    private var showsTitle: Bool { true }
 
     private let items: [FBottomNavigationItem] = [
         .init(id: .home, title: "首页", symbol: "house.fill"),
@@ -2068,56 +2079,51 @@ private struct FBottomNavigationBar: View {
                     Group {
                         if item.id == .advisor {
                             VStack(spacing: 3) {
-                                Image(systemName: theme == .referenceDark ? "sparkles" : item.symbol)
-                                    .font(.system(size: compact ? 19 : 23, weight: .semibold))
-                                    .symbolRenderingMode(.hierarchical)
-                                    .foregroundStyle(theme.manifest.tokens.accentForeground)
-                                    .frame(width: compact ? 40 : 52, height: compact ? 40 : 52)
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: compact ? 19 : 22, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: compact ? 40 : 50, height: compact ? 40 : 50)
                                     .background {
                                         if theme == .referenceDark {
-                                            // 原先是纯白 + 白描边 + 白光晕，深色底栏上像贴了个灯泡。
-                                            // 改成深色球体 + 蓝色细描边，只靠图标本身发亮。
-                                            Circle().fill(Color(red: 0.110, green: 0.122, blue: 0.153))
+                                            // 参考稿中央是一颗紫色渐变球，不是白色发光球。
+                                            Circle().fill(LinearGradient(
+                                                colors: [Color(red: 0.545, green: 0.361, blue: 0.965),
+                                                         Color(red: 0.427, green: 0.231, blue: 0.933)],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
                                         } else {
                                             Circle().fill(LinearGradient(
                                                 colors: [theme.manifest.tokens.advisorSurface, theme.accent],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                                         }
                                     }
-                                    .overlay(Circle().stroke(Color(red: 0.310, green: 0.550, blue: 1.0)
-                                        .opacity(theme == .referenceDark ? 0.55 : 0.82),
-                                        lineWidth: theme == .referenceDark ? 1.2 : 3))
-                                    .shadow(color: theme == .referenceDark
-                                            ? Color(red: 0.310, green: 0.550, blue: 1.0).opacity(0.28)
-                                            : theme.accent.opacity(0.34),
-                                            radius: theme == .referenceDark ? 6 : 10, x: 0, y: 3)
-                                    .offset(y: compact ? -7 : (theme == .referenceDark ? -9 : -13))
-                                if theme != .referenceDark {
-                                    Text(item.title)
-                                        .font(.system(size: compact ? 9 : 10, weight: isSelected ? .bold : .semibold))
-                                        .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
-                                        .offset(y: compact ? -6 : -11)
-                                }
+                                    .overlay(Circle().stroke(.white.opacity(theme == .referenceDark ? 0.22 : 0.82),
+                                                             lineWidth: theme == .referenceDark ? 1 : 3))
+                                    .shadow(color: Color(red: 0.427, green: 0.231, blue: 0.933).opacity(0.35),
+                                            radius: 8, x: 0, y: 4)
+                                    .offset(y: compact ? -7 : -11)
+                                Text(item.title)
+                                    .font(.system(size: compact ? 9 : 9.5, weight: isSelected ? .bold : .medium))
+                                    .foregroundStyle(isSelected ? barAccent : barMuted)
+                                    .lineLimit(1)
+                                    .offset(y: compact ? -6 : -9)
                             }
                             .frame(maxWidth: .infinity)
-                            .frame(height: compact ? 43 : 59)
+                            .frame(height: compact ? 43 : 61)
                         } else {
-                            VStack(spacing: compact ? 2 : 5) {
+                            VStack(spacing: compact ? 2 : 4) {
                                 Image(systemName: item.symbol)
-                                    .font(.system(size: compact ? (isSelected ? 20 : 18) : (isSelected ? 23 : 21),
+                                    .font(.system(size: compact ? (isSelected ? 18 : 16) : (isSelected ? 20 : 19),
                                                   weight: isSelected ? .semibold : .regular))
                                     .symbolRenderingMode(.hierarchical)
-                                    .frame(height: compact ? 20 : 25)
-                                if theme != .referenceDark {
-                                    Text(item.title)
-                                        .font(.system(size: compact ? 9 : 10, weight: isSelected ? .semibold : .medium))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                }
+                                    .frame(height: compact ? 18 : 21)
+                                Text(item.title)
+                                    .font(.system(size: compact ? 8.5 : 9.5, weight: isSelected ? .semibold : .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                             }
-                            .foregroundStyle(isSelected ? theme.accent : theme.manifest.tokens.secondaryForeground)
+                            .foregroundStyle(isSelected ? barAccent : barMuted)
                             .frame(maxWidth: .infinity)
-                            .frame(height: compact ? 42 : 55)
+                            .frame(height: compact ? 42 : 61)
                             .overlay(alignment: .bottom) {
                                 if isSelected && usesTerminalNavigation {
                                     Capsule().fill(theme.accent).frame(width: 22, height: 2)
@@ -2130,7 +2136,7 @@ private struct FBottomNavigationBar: View {
                                     // 收窄成只包住图标的小药丸，选中态靠颜色而不是面积表达。
                                     RoundedRectangle(cornerRadius: usesGlassNavigation ? 20 : 11,
                                                      style: .continuous)
-                                        .fill(theme.accent.opacity(usesTerminalNavigation ? 0.18 : 0.12))
+                                        .fill(barAccent.opacity(usesTerminalNavigation ? 0.18 : 0.10))
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 7)
                                 }
@@ -2177,10 +2183,10 @@ private struct FBottomNavigationBar: View {
                             Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                         }
                 case .card:
-                    Rectangle().fill(theme == .referenceDark ? Color(red: 0.055, green: 0.063, blue: 0.086) : theme.manifest.tokens.surface)
+                    // 底栏底色跟首页板皮肤走：蓝海/极光是白卡，终端/暗夜是深卡。
+                    Rectangle().fill(barCard)
                         .overlay(alignment: .top) {
-                            Rectangle().fill(theme == .referenceDark ? Color.white.opacity(0.09) : theme.manifest.tokens.foreground.opacity(0.10))
-                                .frame(height: 0.7)
+                            Rectangle().fill(barLine).frame(height: 0.7)
                         }
                 }
             }
