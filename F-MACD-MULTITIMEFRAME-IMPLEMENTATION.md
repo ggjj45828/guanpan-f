@@ -44,6 +44,12 @@
 - 增加非有限DIF/DEA/Histogram结果的拒绝与重新预热，并以`macd_non_finite_intermediate_rejected`保留诊断事实。
 - 增加标准12/26/9在34根bar时首个输出应位于索引33的回归断言。当前本机无Swift/Xcode；新增/已有XCTest尚未运行，不能标为编译或测试通过。
 
+## 2026-11-06 Codemagic 编译修复（待重新运行）
+
+- Codemagic 的 `run_fcore_tests.log` 显示 `intraday.map(assess)` 函数引用参数数量不匹配；后续趋势枚举类型推断错误是同一问题的级联诊断。
+- 改为显式单参数闭包 `intraday.map { assess($0) }`，并增加日线 + 120分钟组合分析回归测试。
+- 此修复需由 Codemagic 对 `codemagic/ios-trial` 的新提交重新运行验证；当前不标记编译或测试通过。
+
 ## 决策边界
 
 MACD是Local Quant的一个独立、可解释因子，不拥有买卖决定权；它不能绕过Position Discipline、Risk Guard、现金缓冲、核心仓/T仓限制或Anti-Overtrading。AI收到的是FCore计算出的结构化指标，不允许模型自行估算DIF/DEA。没有真实数据、样本不足、周期未确认或来源不可信时保持Unavailable/低置信度；HOLD/WAIT仍是正式结果。
