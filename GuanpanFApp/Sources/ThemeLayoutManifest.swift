@@ -151,9 +151,9 @@ enum FThemeLayoutRegistry {
         let surface: Color
         switch theme {
         case .referenceDark:
-            // 严格对齐参考稿：近黑画布 #0B0B0D + 卡片 #151517，常暗不随系统外观变化。
-            background = adaptive(light: (0.043, 0.043, 0.051), dark: (0.043, 0.043, 0.051))
-            surface = adaptive(light: (0.082, 0.082, 0.090), dark: (0.082, 0.082, 0.090))
+            // 观盘Pro 深空灰：画布 #0E1016（渐变顶）→ #08090D，卡片 #1C1F27 明显亮一档。
+            background = adaptive(light: (0.055, 0.063, 0.086), dark: (0.055, 0.063, 0.086))
+            surface = adaptive(light: (0.110, 0.122, 0.153), dark: (0.110, 0.122, 0.153))
         case .editorial:
             background = adaptive(light: (0.965, 0.953, 0.925), dark: (0.075, 0.068, 0.060))
             surface = adaptive(light: (0.995, 0.988, 0.968), dark: (0.13, 0.12, 0.11))
@@ -193,12 +193,12 @@ enum FThemeLayoutRegistry {
         let surfaceGradient: [Color]
         switch theme {
         case .referenceDark:
-            portfolioSurface = adaptive(light: (0.102, 0.102, 0.114), dark: (0.102, 0.102, 0.114))
-            advisorSurface = adaptive(light: (0.55, 0.35, 0.95), dark: (0.55, 0.35, 0.95))
-            marketSurface = adaptive(light: (0.067, 0.067, 0.075), dark: (0.067, 0.067, 0.075))
-            highlightSurface = adaptive(light: (0.784, 0.969, 0.318), dark: (0.784, 0.969, 0.318))
-            surfaceGradient = [adaptive(light: (0.11, 0.11, 0.12), dark: (0.11, 0.11, 0.12)),
-                               adaptive(light: (0.055, 0.055, 0.062), dark: (0.055, 0.055, 0.062))]
+            portfolioSurface = adaptive(light: (0.137, 0.153, 0.192), dark: (0.137, 0.153, 0.192))
+            advisorSurface = adaptive(light: (0.420, 0.360, 1.0), dark: (0.420, 0.360, 1.0))
+            marketSurface = adaptive(light: (0.086, 0.098, 0.125), dark: (0.086, 0.098, 0.125))
+            highlightSurface = adaptive(light: (0.310, 0.550, 1.0), dark: (0.310, 0.550, 1.0))
+            surfaceGradient = [adaptive(light: (0.137, 0.153, 0.192), dark: (0.137, 0.153, 0.192)),
+                               adaptive(light: (0.063, 0.071, 0.094), dark: (0.063, 0.071, 0.094))]
         case .editorial:
             portfolioSurface = adaptive(light: (0.08, 0.22, 0.60), dark: (0.08, 0.22, 0.60))
             advisorSurface = adaptive(light: (0.98, 0.34, 0.25), dark: (0.72, 0.19, 0.16))
@@ -266,7 +266,7 @@ enum FThemeLayoutRegistry {
         }
         let accent: Color
         switch theme {
-        case .referenceDark: accent = adaptive(light: (0.784, 0.969, 0.318), dark: (0.784, 0.969, 0.318))
+        case .referenceDark: accent = adaptive(light: (0.310, 0.550, 1.0), dark: (0.310, 0.550, 1.0))
         case .editorial, .inkModern: accent = adaptive(light: (0.68, 0.29, 0.18), dark: (0.92, 0.55, 0.39))
         case .modern: accent = adaptive(light: (0.18, 0.39, 0.82), dark: (0.48, 0.65, 0.98))
         case .dashboard: accent = adaptive(light: (0.16, 0.53, 0.61), dark: (0.42, 0.77, 0.84))
@@ -279,7 +279,7 @@ enum FThemeLayoutRegistry {
         }
         let accentForeground: Color
         switch theme {
-        case .referenceDark: accentForeground = adaptive(light: (0.043, 0.043, 0.051), dark: (0.043, 0.043, 0.051))
+        case .referenceDark: accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (1.0, 1.0, 1.0))
         case .editorial, .modern, .dashboard, .magazine, .bento, .inkModern:
             accentForeground = adaptive(light: (1.0, 1.0, 1.0), dark: (0.08, 0.09, 0.11))
         case .adaptiveBento:
@@ -301,13 +301,13 @@ enum FThemeLayoutRegistry {
         let chart: String
         switch theme {
         case .referenceDark:
-            name = "深黑柠檬"; useCase = "严格对齐参考稿：近黑画布、悬浮暗卡、柠檬绿强调与超大资产数字。"
-            typography = "56pt 级数字 + 13pt 灰标签 + 单层无衬线"
-            navigation = "纯图标底栏 + 中央悬浮渐变 AI 球"
-            advisor = "橙粉紫蓝渐变 AI 洞察卡"
+            name = "深空灰"; useCase = "观盘Pro 经典深色：渐变画布、实色浮卡、深空蓝主色与克制的红涨绿跌。"
+            typography = "34pt 资产数字 + 13pt 灰标签 + 11pt 辅助信息"
+            navigation = "纯图标底栏 + 中央悬浮球"
+            advisor = "紫→蓝渐变 AI 洞察卡"
             market = "胶囊筛选 + 迷你走势行"
             assets = "资产总览大数字 + 环形占比行"
-            chart = "暗底细网格 + 柠檬绿主色"
+            chart = "暗底细网格 + 深空蓝主色"
         case .editorial:
             name = "山水头版"; useCase = "暖纸色、山景资产主视觉与朱红今日判断。"; typography = "财经刊物式标题 + 靛蓝资产数字"
             navigation = "暖白底部导航"; advisor = "朱红主编判断面板"; market = "三栏指数速览"; assets = "山景叠层资产头版"; chart = "纸感内嵌图表"

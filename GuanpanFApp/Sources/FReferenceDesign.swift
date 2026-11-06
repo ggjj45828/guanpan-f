@@ -2,25 +2,40 @@ import SwiftUI
 import FCore
 import FAdvisor
 
-/// 参考稿（Dribbble / Fintech Mobile App）的视觉常量。
-/// 只服务 `FHomeTheme.referenceDark`：近黑画布、悬浮暗卡、柠檬绿强调、
-/// 超大资产数字、橙粉紫蓝渐变 AI 卡、纯图标底栏 + 中央悬浮球。
+/// 视觉常量。只服务 `FHomeTheme.referenceDark`。
+///
+/// v1.2 起改用「观盘Pro」那套成熟的深色观感，不再照 Dribbble 概念稿：
+/// 概念稿是纯黑画布 + 高饱和柠檬绿，装到真机上层次糊成一片、点缀色与红绿数字抢注意力；
+/// Pro 的作法是**渐变画布 + 明显亮一档的卡片 + 极细描边 + 克制主色**。
+///
+/// 关键差别（数值不看名字看对比）：
+/// - 画布 top `#0E1016` → bottom `#08090D`，有上下深度而不是一块死黑；
+/// - 卡片 `#1C1F27` 比画布亮约 12%，卡片能「立」起来；
+/// - 主色由柠檬绿 `#C8F751` 换成深空蓝 `#4F8CFF`，红涨绿跌数字不再被抢；
+/// - 涨跌改用柔和红 `#ED4C5E` / 绿 `#12C48C`，近黑底上不刺眼。
 enum FRef {
-    static let canvas = Color(red: 0.043, green: 0.043, blue: 0.051)   // #0B0B0D
-    static let card = Color(red: 0.082, green: 0.082, blue: 0.090)     // #151517
-    static let raised = Color(red: 0.110, green: 0.110, blue: 0.122)   // #1C1C1F
-    static let ink = Color(red: 0.960, green: 0.960, blue: 0.970)
-    static let muted = Color(red: 0.545, green: 0.545, blue: 0.580)
-    static let lime = Color(red: 0.784, green: 0.969, blue: 0.318)     // #C8F751
-    /// 国内口径：红涨绿跌。
-    static let up = Color(red: 1.000, green: 0.400, blue: 0.400)
-    static let down = Color(red: 0.280, green: 0.820, blue: 0.560)
-    static let hairline = Color.white.opacity(0.07)
+    /// 画布顶部色（渐变起点）。
+    static let canvasTop = Color(red: 0.055, green: 0.063, blue: 0.086)     // #0E1016
+    /// 画布底部色（渐变终点）。
+    static let canvasBottom = Color(red: 0.031, green: 0.035, blue: 0.051)  // #08090D
+    /// 兼容旧调用点：取画布顶部色。
+    static let canvas = canvasTop
+    static let card = Color(red: 0.110, green: 0.122, blue: 0.153)          // #1C1F27
+    static let raised = Color(red: 0.153, green: 0.165, blue: 0.196)        // #272A32
+    static let ink = Color(red: 0.949, green: 0.957, blue: 0.969)           // #F2F4F7
+    static let muted = Color(red: 0.541, green: 0.561, blue: 0.604)         // #8A8F9A
+    /// 主色：深空蓝。
+    static let accent = Color(red: 0.310, green: 0.550, blue: 1.000)        // #4F8CFF
+    /// 兼容旧调用点：与 `accent` 同色。新代码请用 `accent`。
+    static let lime = accent
+    /// 国内口径：红涨绿跌。取 Pro 的柔和档位，近黑底上不扎眼。
+    static let up = Color(red: 0.930, green: 0.300, blue: 0.370)            // #ED4C5E
+    static let down = Color(red: 0.070, green: 0.770, blue: 0.550)          // #12C48C
+    static let hairline = Color.white.opacity(0.09)
+    /// AI 卡渐变：紫→蓝，与主色同族，比原来的橙粉紫蓝四色更克制。
     static let gradient = [
-        Color(red: 0.949, green: 0.627, blue: 0.239),
-        Color(red: 0.914, green: 0.361, blue: 0.549),
-        Color(red: 0.553, green: 0.361, blue: 0.953),
-        Color(red: 0.231, green: 0.510, blue: 0.965)
+        Color(red: 0.420, green: 0.360, blue: 1.000),
+        Color(red: 0.310, green: 0.550, blue: 1.000)
     ]
     static let avatarGradients: [[Color]] = [
         [Color(red: 0.35, green: 0.62, blue: 0.98), Color(red: 0.55, green: 0.36, blue: 0.95)],
@@ -75,7 +90,8 @@ enum FRefFormat {
 }
 
 private struct FRefCardModifier: ViewModifier {
-    var radius: CGFloat = 22
+    /// 统一 16pt：Pro 的卡片圆角就是 16，之前 22~28 在窄卡片上显得「肥」。
+    var radius: CGFloat = 16
     var fill: Color = FRef.card
 
     func body(content: Content) -> some View {
@@ -87,8 +103,46 @@ private struct FRefCardModifier: ViewModifier {
 }
 
 extension View {
-    func fRefCard(radius: CGFloat = 22, fill: Color = FRef.card) -> some View {
+    func fRefCard(radius: CGFloat = 16, fill: Color = FRef.card) -> some View {
         modifier(FRefCardModifier(radius: radius, fill: fill))
+    }
+}
+
+/// 画布底：上下渐变，给近黑界面一点深度。纯色黑会让卡片边界消失。
+struct FRefCanvasBackground: View {
+    var body: some View {
+        LinearGradient(colors: [FRef.canvasTop, FRef.canvasBottom],
+                       startPoint: .top,
+                       endPoint: .bottom)
+            .ignoresSafeArea()
+    }
+}
+
+/// 市场情绪量尺：绿（弱）→ 灰（中）→ 红（强）渐变条 + 白色指针。
+/// 沿用观盘Pro 的观感：±1.5% 打满两端，超出只把指针顶到头，不溢出色条。
+struct FRefMoodGauge: View {
+    /// 指数平均涨跌幅，单位是百分数（0.42 表示 +0.42%）。
+    let average: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let clamped = min(max(average / 1.5, -1), 1)
+            let x = geo.size.width * (0.5 + clamped * 0.5)
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(LinearGradient(colors: [FRef.down, Color.gray.opacity(0.45), FRef.up],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(height: 7)
+                    .offset(y: 4)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white)
+                    .frame(width: 3, height: 15)
+                    .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+                    .offset(x: max(0, min(geo.size.width - 3, x - 1.5)))
+            }
+        }
+        .frame(height: 15)
+        .accessibilityLabel("市场情绪量尺，指数平均涨跌幅 \(String(format: "%.2f", average))%")
     }
 }
 
@@ -212,7 +266,7 @@ struct FReferenceHome: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("欢迎回来")
-                    .font(.system(size: 27, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(FRef.ink)
                 Text("\(Date().formatted(date: .abbreviated, time: .omitted)) · 本机真实账本")
                     .font(.system(size: 12))
@@ -251,7 +305,7 @@ struct FReferenceHome: View {
                 .accessibilityIdentifier("home.reference.assets.open")
             }
             Text(FRefFormat.money(totalAssets))
-                .font(.system(size: 40, weight: .semibold))
+                .font(.system(size: 34, weight: .semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
@@ -274,7 +328,7 @@ struct FReferenceHome: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fRefCard(radius: 24)
+        .fRefCard(radius: 20)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.role.portfolio")
     }
@@ -308,7 +362,7 @@ struct FReferenceHome: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fRefCard(radius: 18)
+        .fRefCard(radius: 14)
     }
 
     // MARK: - AI 渐变卡
@@ -340,7 +394,7 @@ struct FReferenceHome: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(LinearGradient(colors: FRef.gradient, startPoint: .leading, endPoint: .trailing))
             }
         }
@@ -396,7 +450,7 @@ struct FReferenceHome: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .fRefCard(radius: 18)
+        .fRefCard(radius: 14)
         .overlay(alignment: .topTrailing) {
             if let badge {
                 Text(badge)
@@ -442,7 +496,7 @@ struct FReferenceHome: View {
                         }
                     }
                 }
-                .fRefCard(radius: 22)
+                .fRefCard(radius: 16)
             }
         }
     }
@@ -547,7 +601,7 @@ struct FReferenceHome: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fRefCard(radius: 22)
+        .fRefCard(radius: 16)
     }
 
     private func percentText(_ fraction: Decimal) -> String {
@@ -556,6 +610,30 @@ struct FReferenceHome: View {
     }
 
     // MARK: - 市场
+
+    /// 指数平均涨跌幅（百分数）。只统计真有涨跌幅的指数，取不到返回 nil。
+    private var marketMoodStrength: Double? {
+        let values = model.marketIndexQuotes.compactMap { $0.changePercent }
+        guard !values.isEmpty else { return nil }
+        let total = values.reduce(Decimal.zero) { $0 + $1 }
+        let average = total / Decimal(values.count)
+        let result = NSDecimalNumber(decimal: average).doubleValue
+        return result.isFinite ? result : nil
+    }
+
+    private func moodTone(_ strength: Double) -> Color {
+        if strength >= 0.3 { return FRef.up }
+        if strength <= -0.3 { return FRef.down }
+        return FRef.muted
+    }
+
+    private func moodLabel(_ strength: Double) -> String {
+        if strength >= 1.5 { return "偏强" }
+        if strength >= 0.3 { return "微暖" }
+        if strength > -0.3 { return "中性" }
+        if strength > -1.5 { return "偏弱" }
+        return "疲弱"
+    }
 
     private var marketCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -568,6 +646,30 @@ struct FReferenceHome: View {
                     Text("查看").font(.system(size: 11, weight: .medium)).foregroundStyle(FRef.muted)
                 }
                 .buttonStyle(.plain)
+            }
+            if let strength = marketMoodStrength {
+                let tone = moodTone(strength)
+                let strengthText = String(format: "%+.2f%%", strength)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("市场情绪")
+                            .font(.system(size: 11))
+                            .foregroundStyle(FRef.muted)
+                        Text(strengthText)
+                            .font(.system(size: 13, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(tone)
+                        Text(moodLabel(strength))
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(tone.opacity(0.18)))
+                            .foregroundStyle(tone)
+                        Spacer(minLength: 0)
+                    }
+                    FRefMoodGauge(average: strength)
+                }
+                .padding(.bottom, 2)
             }
             let quotes = Array(model.marketIndexQuotes.prefix(3))
             if quotes.isEmpty {
@@ -604,7 +706,7 @@ struct FReferenceHome: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fRefCard(radius: 22)
+        .fRefCard(radius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.role.marketObservation")
     }

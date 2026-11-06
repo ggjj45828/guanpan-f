@@ -53,7 +53,7 @@ private struct FThemePageHeader: View {
     }
 
     private var cardRadius: CGFloat {
-        if theme == .referenceDark { return 28 }
+        if theme == .referenceDark { return 16 }
         switch theme.surfaceTreatment {
         case .terminal, .minimal: return 8
         case .glass, .orbit: return 28
@@ -465,7 +465,14 @@ private struct FDesignedThemeHome: View {
         .padding(.bottom, 30)
         .frame(maxWidth: 760, alignment: .top)
         .frame(maxWidth: .infinity)
-        .background(tokens.background.ignoresSafeArea())
+        .background {
+            // 深空灰用上下渐变画布；纯色黑会让卡片边界消失。
+            if theme == .referenceDark {
+                FRefCanvasBackground()
+            } else {
+                tokens.background.ignoresSafeArea()
+            }
+        }
         .refreshable {
             await model.autoRefreshMarketData()
             await model.refreshMarketIndices()

@@ -2166,9 +2166,9 @@ private struct FBottomNavigationBar: View {
                             Rectangle().fill(theme.manifest.tokens.foreground.opacity(0.10)).frame(height: 0.7)
                         }
                 case .card:
-                    Rectangle().fill(theme == .referenceDark ? Color(red: 0.043, green: 0.043, blue: 0.051) : theme.manifest.tokens.surface)
+                    Rectangle().fill(theme == .referenceDark ? Color(red: 0.055, green: 0.063, blue: 0.086) : theme.manifest.tokens.surface)
                         .overlay(alignment: .top) {
-                            Rectangle().fill(theme == .referenceDark ? Color.white.opacity(0.06) : theme.manifest.tokens.foreground.opacity(0.10))
+                            Rectangle().fill(theme == .referenceDark ? Color.white.opacity(0.09) : theme.manifest.tokens.foreground.opacity(0.10))
                                 .frame(height: 0.7)
                         }
                 }

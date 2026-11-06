@@ -186,7 +186,7 @@ struct FGridAssistantView: View {
             }
             .padding(16)
         }
-        .background(FRef.canvas.ignoresSafeArea())
+        .background(FRefCanvasBackground())
         .navigationTitle("网格助手")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -489,7 +489,7 @@ struct FDividendPoolView: View {
             }
             .padding(16)
         }
-        .background(FRef.canvas.ignoresSafeArea())
+        .background(FRefCanvasBackground())
         .navigationTitle("收息池")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -692,7 +692,7 @@ struct FBenchmarkView: View {
             }
             .padding(16)
         }
-        .background(FRef.canvas.ignoresSafeArea())
+        .background(FRefCanvasBackground())
         .navigationTitle("跑赢基准")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { recordToday() }
