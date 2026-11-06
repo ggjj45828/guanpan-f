@@ -380,7 +380,11 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["录入现有持仓"].waitForExistence(timeout: 3))
         let cash = app.textFields["ledger.opening.cash"]
         XCTAssertTrue(cash.exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["ledger.opening.position.add"].exists)
+        let openingForm = app.collectionViews.firstMatch
+        XCTAssertTrue(openingForm.waitForExistence(timeout: 3), app.debugDescription)
+        let addPosition = app.buttons["ledger.opening.position.add"]
+        scrollUntilHittable(addPosition, in: openingForm)
+        XCTAssertTrue(addPosition.isHittable, app.debugDescription)
         let confirm = app.buttons["ledger.opening.confirm"]
         XCTAssertTrue(confirm.exists)
         XCTAssertTrue(confirm.isEnabled, "The confirm action must remain tappable so incomplete fields can explain what is missing.")
@@ -412,7 +416,8 @@ final class PrimaryNavigationUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         units.typeText("100")
         let cost = app.textFields["ledger.opening.position.unitCost"]
-        cost.tap()
+        XCTAssertTrue(nextField.isHittable, app.debugDescription)
+        nextField.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), app.debugDescription)
         cost.typeText("1.00")
         app.buttons["收起键盘"].tap()
@@ -494,28 +499,44 @@ final class PrimaryNavigationUITests: XCTestCase {
 
     private func scrollUntilHittable(_ element: XCUIElement, in scrollContainer: XCUIElement,
                                     minimumVisibleHeight: CGFloat = 1) {
-        for _ in 0..<20 {
+        for _ in 0..<30 {
             let viewport = scrollContainer.frame
             let target = element.frame
             let fullyVisible = target.minY >= viewport.minY + 48 &&
                 target.maxY <= viewport.maxY - 48
             if element.isHittable && target.height >= minimumVisibleHeight && fullyVisible { return }
-            guard element.exists else {
-                scrollContainer.swipeUp(velocity: .fast)
-                continue
-            }
-            // Use UIKit's native scroll gesture so the owning ScrollView receives
-            // the gesture even when a chart's plot has its own drag recognizer.
-            if target.minY <= viewport.minY + 48 {
-                scrollContainer.swipeDown(velocity: .fast)
-            } else if target.maxY >= viewport.maxY - 48 {
-                scrollContainer.swipeUp(velocity: .fast)
-            } else if target.midY < viewport.midY {
-                scrollContainer.swipeDown(velocity: .fast)
+
+            let direction: ScrollDirection
+            if !element.exists || target.maxY >= viewport.maxY - 48 || target.midY >= viewport.midY {
+                direction = .up
             } else {
-                scrollContainer.swipeUp(velocity: .fast)
+                direction = .down
             }
+            dragScroll(scrollContainer, toward: direction)
         }
+    }
+
+    private func dragScroll(_ scrollContainer: XCUIElement, toward direction: ScrollDirection) {
+        // Start in the outer gutter, away from chart controls and row actions,
+        // so the owning Form/List receives the vertical gesture.
+        let start: CGVector
+        let end: CGVector
+        switch direction {
+        case .up:
+            start = CGVector(dx: 0.96, dy: 0.82)
+            end = CGVector(dx: 0.96, dy: 0.48)
+        case .down:
+            start = CGVector(dx: 0.96, dy: 0.48)
+            end = CGVector(dx: 0.96, dy: 0.82)
+        }
+        scrollContainer.coordinate(withNormalizedOffset: start)
+            .press(forDuration: 0.05,
+                   thenDragTo: scrollContainer.coordinate(withNormalizedOffset: end))
+    }
+
+    private enum ScrollDirection {
+        case up
+        case down
     }
 
 }
